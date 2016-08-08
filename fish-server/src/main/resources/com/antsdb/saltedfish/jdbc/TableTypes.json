@@ -1,0 +1,16 @@
+{
+  "meta": {
+    "columns": [
+      {
+        "name": "TABLE_TYPE",
+        "type": 12,
+        "dbtype": "VARCHAR"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "TABLE_TYPE": "TABLE"
+    }
+  ]
+}

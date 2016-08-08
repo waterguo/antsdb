@@ -1,0 +1,659 @@
+/*-------------------------------------------------------------------------------------------------
+ _______ __   _ _______ _______ ______  ______
+ |_____| | \  |    |    |______ |     \ |_____]
+ |     | |  \_|    |    ______| |_____/ |_____]
+
+ Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
+
+ This program is free software: you can redistribute it and/or modify it under the terms of the
+ GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+
+ You should have received a copy of the GNU Affero General Public License along with this program.
+ If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+-------------------------------------------------------------------------------------------------*/
+package com.antsdb.saltedfish.sql.mysql;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.BailErrorStrategy;
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
+import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
+
+import com.antsdb.saltedfish.lexer.MysqlLexer;
+import com.antsdb.saltedfish.lexer.MysqlParser;
+import com.antsdb.saltedfish.lexer.MysqlParser.Bind_parameterContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Column_name_Context;
+import com.antsdb.saltedfish.lexer.MysqlParser.ExprContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_castContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_existContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_functionContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_selectContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_valuesContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_parenthesisContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_selectContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.System_variable_referenceContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Unary_operatorContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Variable_referenceContext;
+import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.planner.Planner;
+import com.antsdb.saltedfish.sql.planner.PlannerField;
+import com.antsdb.saltedfish.sql.vdm.BindParameter;
+import com.antsdb.saltedfish.sql.vdm.BytesValue;
+import com.antsdb.saltedfish.sql.vdm.CurrentTime;
+import com.antsdb.saltedfish.sql.vdm.CurrentTimestamp;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.ExprUtil;
+import com.antsdb.saltedfish.sql.vdm.FieldValue;
+import com.antsdb.saltedfish.sql.vdm.FuncAbs;
+import com.antsdb.saltedfish.sql.vdm.FuncBase64;
+import com.antsdb.saltedfish.sql.vdm.FuncCast;
+import com.antsdb.saltedfish.sql.vdm.FuncConcat;
+import com.antsdb.saltedfish.sql.vdm.FuncCount;
+import com.antsdb.saltedfish.sql.vdm.FuncCurrentUser;
+import com.antsdb.saltedfish.sql.vdm.FuncDatabase;
+import com.antsdb.saltedfish.sql.vdm.FuncDateFormat;
+import com.antsdb.saltedfish.sql.vdm.FuncDistinct;
+import com.antsdb.saltedfish.sql.vdm.FuncElt;
+import com.antsdb.saltedfish.sql.vdm.FuncEmptyClob;
+import com.antsdb.saltedfish.sql.vdm.FuncField;
+import com.antsdb.saltedfish.sql.vdm.FuncFindInSet;
+import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
+import com.antsdb.saltedfish.sql.vdm.FuncHex;
+import com.antsdb.saltedfish.sql.vdm.FuncLower;
+import com.antsdb.saltedfish.sql.vdm.FuncMax;
+import com.antsdb.saltedfish.sql.vdm.FuncMin;
+import com.antsdb.saltedfish.sql.vdm.FuncRand;
+import com.antsdb.saltedfish.sql.vdm.FuncSum;
+import com.antsdb.saltedfish.sql.vdm.FuncToTimestamp;
+import com.antsdb.saltedfish.sql.vdm.FuncUpper;
+import com.antsdb.saltedfish.sql.vdm.FuncUser;
+import com.antsdb.saltedfish.sql.vdm.FuncVersion;
+import com.antsdb.saltedfish.sql.vdm.Function;
+import com.antsdb.saltedfish.sql.vdm.LongValue;
+import com.antsdb.saltedfish.sql.vdm.NullValue;
+import com.antsdb.saltedfish.sql.vdm.NumericValue;
+import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.sql.vdm.OpAdd;
+import com.antsdb.saltedfish.sql.vdm.OpAnd;
+import com.antsdb.saltedfish.sql.vdm.OpBetween;
+import com.antsdb.saltedfish.sql.vdm.OpBinary;
+import com.antsdb.saltedfish.sql.vdm.OpConcat;
+import com.antsdb.saltedfish.sql.vdm.OpEqual;
+import com.antsdb.saltedfish.sql.vdm.OpEqualNull;
+import com.antsdb.saltedfish.sql.vdm.OpExists;
+import com.antsdb.saltedfish.sql.vdm.OpInSelect;
+import com.antsdb.saltedfish.sql.vdm.OpInValues;
+import com.antsdb.saltedfish.sql.vdm.OpIsNull;
+import com.antsdb.saltedfish.sql.vdm.OpLarger;
+import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
+import com.antsdb.saltedfish.sql.vdm.OpLess;
+import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
+import com.antsdb.saltedfish.sql.vdm.OpLike;
+import com.antsdb.saltedfish.sql.vdm.OpNegate;
+import com.antsdb.saltedfish.sql.vdm.OpNot;
+import com.antsdb.saltedfish.sql.vdm.OpOr;
+import com.antsdb.saltedfish.sql.vdm.OpRegexp;
+import com.antsdb.saltedfish.sql.vdm.OpSequenceValue;
+import com.antsdb.saltedfish.sql.vdm.OpSingleValueQuery;
+import com.antsdb.saltedfish.sql.vdm.Operator;
+import com.antsdb.saltedfish.sql.vdm.RowidValue;
+import com.antsdb.saltedfish.sql.vdm.StringLiteral;
+import com.antsdb.saltedfish.sql.vdm.SysDate;
+import com.antsdb.saltedfish.sql.vdm.SystemVariableValue;
+import com.antsdb.saltedfish.sql.vdm.UserVariableValue;
+import com.antsdb.saltedfish.util.BytesUtil;
+
+public class ExprGenerator {
+    public static Operator gen(GeneratorContext ctx, Planner planner, ExprContext rule) {
+        Operator op = gen_(ctx, planner, rule);
+        return op;
+    }
+    
+    static Operator gen_(GeneratorContext ctx, Planner cursorMeta, ExprContext rule)
+    throws OrcaException {
+        if (rule.getChildCount() == 1) {
+            return gen_sinlge_node(ctx, cursorMeta, rule);
+        }
+        else if (rule.expr_in_values() != null) {
+            Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+            return gen_in_values(ctx, cursorMeta, rule.expr_in_values(), left);
+        }
+        else if (rule.expr_in_select() != null) {
+            Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+            return gen_in_select(ctx, cursorMeta, rule.expr_in_select(), left);
+        }
+        else if (rule.unary_operator() != null) {
+            Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(1));
+            return gen_unary(ctx, cursorMeta, rule.unary_operator(), right);
+        }
+        else if (rule.K_REGEXP() != null) {
+        	// REGEXP operator
+        	Operator expr = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+        	String text = rule.pattern().getText();
+        	text = text.substring(1, text.length()-1);
+        	return new OpRegexp(expr, text);
+        }
+        else if (rule.K_BETWEEN() != null) {
+            Operator expr = gen(ctx, cursorMeta, rule.expr(0));
+            Operator from = gen(ctx, cursorMeta, rule.expr(1));
+            Operator to = gen(ctx, cursorMeta, rule.expr(2));
+        	return new OpBetween(expr, from, to);
+        }
+        else if (rule.getChild(1) instanceof TerminalNode) {
+            String op = rule.getChild(1).getText();
+            if ("=".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpEqual(left, right);
+            }
+            else if ("==".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpEqualNull(left, right);
+            }
+            else if ("+".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpAdd(left, right);
+            }
+            else if ("-".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpAdd(left, new OpNegate(right));
+            }
+            else if (">".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpLarger(left, right);
+            }
+            else if (">=".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpLargerEqual(left, right);
+            }
+            else if ("<".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpLess(left, right);
+            }
+            else if ("<=".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpLessEqual(left, right);
+            }
+            else if ("!=".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpNot(new OpEqual(left, right));
+            }
+            else if ("<>".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpNot(new OpEqual(left, right));
+            }
+            else if ("like".equalsIgnoreCase(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpLike(left, right);
+            }
+            else if ("or".equalsIgnoreCase(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpOr(left, right);
+            }
+            else if ("and".equalsIgnoreCase(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpAnd(left, right);
+            }
+            else if ("||".equalsIgnoreCase(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpConcat(left, right);
+            }
+            else if ("is".equalsIgnoreCase(op)) {
+                if (rule.getChild(2) instanceof ExprContext) {
+                    Operator upstream = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                    return new OpIsNull(upstream);
+                }
+                else if (rule.getChild(2) instanceof TerminalNode) {
+                    // IS NOT
+                    Operator upstream = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                    return new OpNot(new OpIsNull(upstream));
+                }
+                else {
+                    throw new NotImplementedException();
+                }
+            }
+            else {
+                throw new NotImplementedException();
+            }
+        }
+        else if (rule.K_DISTINCT() != null) {
+            Operator op = gen(ctx,cursorMeta, rule.expr(0));
+            return new FuncDistinct(op, ctx.allocVariable());
+        }
+        else {
+            String text = rule.getText();
+            throw new NotImplementedException(text);
+        }
+    }
+
+    private static Operator gen_unary(GeneratorContext ctx, Planner cursorMeta, Unary_operatorContext rule, Operator right) {
+        TerminalNode token = (TerminalNode)rule.getChild(0);
+        if (token.getSymbol().getType() == MysqlParser.K_NOT) {
+            return new OpNot(right);
+        }
+        else if (token.getSymbol().getType() == MysqlParser.MINUS) {
+            return new OpNegate(right);
+        }
+        else if (token.getSymbol().getType() == MysqlParser.K_BINARY) {
+            return new OpBinary(right);
+        }
+        else {
+            throw new NotImplementedException();
+        }
+    }
+
+    private static Operator gen_exists(GeneratorContext ctx, Planner cursorMeta, Expr_existContext rule) {
+        if (rule.select_stmt().select_or_values().size() != 1) {
+            throw new NotImplementedException();
+        }
+        CursorMaker select = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
+                ctx, 
+                rule.select_stmt(),
+                cursorMeta);
+        Operator in = new OpExists(select);
+        if (rule.K_NOT() != null) {
+            in = new OpNot(in);
+        }
+        return in;
+    }
+
+    private static Operator gen_in_select(GeneratorContext ctx, Planner cursorMeta, Expr_in_selectContext rule, Operator left) {
+        if (rule.select_stmt().select_or_values().size() != 1) {
+            throw new NotImplementedException();
+        }
+        /* workaround for topka query
+        CursorMaker select = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
+                ctx, 
+                rule.select_stmt(),
+                cursorMeta);
+        */
+        CursorMaker select = (CursorMaker)new Select_stmtGenerator().gen(ctx, rule.select_stmt());
+        Operator in = new OpInSelect(left, select);
+        if (rule.K_NOT() != null) {
+            in = new OpNot(in);
+        }
+        return in;
+    }
+
+    private static Operator gen_in_values(GeneratorContext ctx, Planner cursorMeta, Expr_in_valuesContext rule, Operator left) {
+        List<Operator> values = new ArrayList<Operator>();
+        for (ExprContext i:rule.expr()) {
+            Operator expr = gen(ctx, cursorMeta, i);
+            values.add(expr);
+        }
+        return new OpInValues(left, values);
+    }
+
+    private static Operator genSingleValueQuery(GeneratorContext ctx, Planner cursorMeta, Expr_selectContext rule) {
+        if (rule.select_stmt().select_or_values().size() != 1) {
+            throw new NotImplementedException();
+        }
+        CursorMaker select = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
+                ctx, 
+                rule.select_stmt(),
+                cursorMeta);
+        if (select.getCursorMeta().getColumnCount() != 1) {
+            throw new OrcaException("Operand should contain 1 column");
+        }
+        return new OpSingleValueQuery(select);
+    }
+
+    public static Operator gen_sinlge_node(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) {
+        ParseTree child = rule.getChild(0);
+        if (child instanceof Literal_valueContext) {
+            return genLiteralValue(ctx, (Literal_valueContext)child);
+        }
+        else if (child instanceof Bind_parameterContext) {
+            return genBindParameter(ctx, (Bind_parameterContext)child);
+        }
+        else if (child instanceof Column_name_Context) {
+            return genColumnValue(ctx, cursorMeta, (Column_name_Context)child);
+        }
+        else if (child instanceof Expr_functionContext) {
+            return genFunction(ctx, cursorMeta, (Expr_functionContext)child);
+        }
+        else if (child instanceof Expr_parenthesisContext) {
+            return gen(ctx, cursorMeta, ((Expr_parenthesisContext)child).expr());
+        }
+        else if (child instanceof Expr_selectContext) {
+            return genSingleValueQuery(ctx, cursorMeta, (Expr_selectContext)child);
+        }
+        else if (child instanceof Variable_referenceContext) {
+            return genUserVariableRef(ctx, cursorMeta, (Variable_referenceContext)child);
+        }
+        else if (child instanceof System_variable_referenceContext) {
+            return genSystemVariableRef(ctx, cursorMeta, (System_variable_referenceContext)child);
+        }
+        else if (rule.expr_exist() != null) {
+            return gen_exists(ctx, cursorMeta, rule.expr_exist());
+        }
+        else if (rule.expr_cast() != null) {
+            return gen_cast(ctx, cursorMeta, rule.expr_cast());
+        }
+        else {
+            throw new NotImplementedException();
+        }
+    }
+    
+    private static Operator gen_cast(GeneratorContext ctx, Planner cursorMeta, Expr_castContext rule) {
+        DataType type = DataType.parse(ctx.getTypeFactory(), rule.data_type());
+        Operator expr = gen(ctx, cursorMeta, rule.expr());
+        return new FuncCast(type, expr);
+    }
+
+    static Operator genSystemVariableRef(GeneratorContext ctx, Planner meta, System_variable_referenceContext rule) {
+        return new SystemVariableValue(rule.getText());
+    }
+
+    static Operator genUserVariableRef(GeneratorContext ctx, Planner meta, Variable_referenceContext rule) {
+        return new UserVariableValue(rule.getText());
+    }
+
+    private static Operator genFunction(GeneratorContext ctx, Planner cursorMeta, Expr_functionContext rule) {
+        Function op;
+        String name = rule.function_name().getText();
+        if (name.equalsIgnoreCase("totimestamp")) {
+            op = new FuncToTimestamp();
+        }
+        else if (name.equalsIgnoreCase("TO_TIMESTAMP")) {
+            op = new FuncToTimestamp();
+        }
+        else if (name.equalsIgnoreCase("count")) {
+            if (rule.expr_function_star_parameter() != null) {
+                op = new FuncCount(ctx.allocVariable());
+                op.addParameter(null);
+            }
+            else {
+                if (rule.expr_function_parameters().expr().size() != 1) {
+                    throw new OrcaException("count takes one and only one input parameter");
+                }
+                op = new FuncCount(ctx.allocVariable());
+            }
+        }
+        else if (name.equalsIgnoreCase("max")) {
+            op = new FuncMax(ctx.allocVariable());
+        }
+        else if (name.equalsIgnoreCase("min")) {
+            op = new FuncMin(ctx.allocVariable());
+        }
+        else if (name.equalsIgnoreCase("sum")) {
+            if (rule.expr_function_parameters() == null) {
+                throw new OrcaException("count takes one and only one input parameter");
+            }
+            if (rule.expr_function_parameters().expr().size() != 1) {
+                throw new OrcaException("count takes one and only one input parameter");
+            }
+            Operator expr = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
+            op = new FuncSum(ctx.allocVariable(), expr);
+        }
+        else if (name.equalsIgnoreCase("empty_clob")) {
+            op = new FuncEmptyClob();
+        }
+        else if (name.equalsIgnoreCase("user")) {
+            op = new FuncUser();
+        }
+        else if (name.equalsIgnoreCase("database")) {
+            op = new FuncDatabase();
+        }
+        else if (name.equalsIgnoreCase("field")) {
+            op = new FuncField();
+        }
+        else if (name.equalsIgnoreCase("elt")) {
+            op = new FuncElt();
+        }
+        else if (name.equalsIgnoreCase("upper")) {
+        	op = new FuncUpper();
+        }
+        else if (name.equalsIgnoreCase("lower")) {
+        	op = new FuncLower();
+        }
+        else if (name.equalsIgnoreCase("concat")) {
+            if (rule.expr_function_parameters().expr().size() != 2) {
+                throw new OrcaException("concat requires two input parameters");
+            }
+            Operator p1 = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
+            Operator p2 = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(1));
+        	op = new FuncConcat(p1, p2);
+        }
+        else if (name.equalsIgnoreCase("TO_BASE64")) {
+            if (rule.expr_function_parameters().expr().size() != 1) {
+                throw new OrcaException("TO_BASE64 requires one input parameter");
+            }
+        	op = new FuncBase64();
+        }
+        else if (name.equalsIgnoreCase("FIND_IN_SET")) {
+            if (rule.expr_function_parameters().expr().size() != 2) {
+                throw new OrcaException("FIND_IN_SET requires two input parameters");
+            }
+        	op = new FuncFindInSet();
+        }
+        else if (name.equalsIgnoreCase("DATE_FORMAT")) {
+            if (rule.expr_function_parameters().expr().size() != 2) {
+                throw new OrcaException("DATE_FORMAT requires two input parameters");
+            }
+        	op = new FuncDateFormat();
+        }
+        else if (name.equalsIgnoreCase("GROUP_CONCAT")) {
+            if (rule.expr_function_parameters().expr().size() != 1) {
+                throw new OrcaException("GROUP_CONCAT requires one input parameter");
+            }
+            FuncGroupConcat func = new FuncGroupConcat(ctx.allocVariable());
+        	op = func;
+        }
+        else if (name.equalsIgnoreCase("rand")) {
+        	op = new FuncRand();
+        }
+        else if (name.equalsIgnoreCase("abs")) {
+        	op = new FuncAbs();
+        }
+        else if (name.equalsIgnoreCase("hex")) {
+        	op = new FuncHex();
+        }
+        else if (name.equalsIgnoreCase("version")) {
+        	op = new FuncVersion();
+        }
+        else if (name.equalsIgnoreCase("current_user")) {
+        	op = new FuncCurrentUser();
+        }
+        else {
+            throw new NotImplementedException("function: " + name);
+        }
+        if (rule.expr_function_parameters() != null) {
+            for (ExprContext i:rule.expr_function_parameters().expr()) {
+                op.addParameter(ExprGenerator.gen(ctx, cursorMeta, i));
+            }
+        }
+        return op;
+    }
+
+    private static Operator genColumnValue(GeneratorContext ctx, Planner planner, Column_name_Context rule) {
+        if (planner == null) {
+            // why there is no cursor metadata
+            throw new OrcaException("missing query");
+        }
+        ObjectName tableName = TableName.parse(ctx, rule.table_name_());
+        String table = (tableName != null) ? tableName.getTableName() : null;
+        String column = Utils.getIdentifier(rule.column_name().identifier());
+        
+        // check built-in name
+        
+        if ("rowid".equalsIgnoreCase(column)) {
+            return new RowidValue();
+        }
+        if ("nextval".equalsIgnoreCase(column)) {
+            return genSequenceValue(ctx, rule);
+        }
+        
+        // check table columns
+        
+        PlannerField pos = planner.findField( it -> {
+            if (!column.equalsIgnoreCase(it.getName())) {
+                return false;
+            }
+            if (table != null) {
+                if (!StringUtils.equalsIgnoreCase(table, it.getTableAlias())) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        if (pos == null) {
+            throw new OrcaException("column not found: " + column);
+        }
+        FieldValue cv = new FieldValue(pos);
+        return cv;
+    }
+
+    private static Operator genSequenceValue(GeneratorContext ctx, Column_name_Context rule) {
+        ObjectName name = (rule.table_name_() != null) ? TableName.parse(ctx, rule.table_name_()) : null; 
+        return new OpSequenceValue(name);
+    }
+
+    public static Operator genLiteralValue(GeneratorContext ctx, Literal_valueContext rule) {
+        if (rule.literal_value_binary() != null) {
+            return new BytesValue(getBytes(rule.literal_value_binary()));
+        }
+        TerminalNode token = (TerminalNode)rule.getChild(0);
+        switch (token.getSymbol().getType()) {
+            case MysqlParser.NUMERIC_LITERAL: {
+            	BigDecimal bd = new BigDecimal(rule.getText());
+            	try {
+            		return new LongValue(bd.longValueExact());
+            	} 
+            	catch (Exception ignored) {}
+                return new NumericValue(new BigDecimal(rule.getText()));
+            }
+            case MysqlParser.STRING_LITERAL:
+                String value = rule.getText();
+                value = value.substring(1, value.length() - 1);
+                value = ExprUtil.unescape(value);
+                return new StringLiteral(value);
+            case MysqlParser.DOUBLE_QUOTED_LITERAL:
+                String val = rule.getText();
+                val = val.substring(1, val.length() - 1);
+                val = ExprUtil.unescape(val);
+                return new StringLiteral(val);
+            case MysqlParser.K_NULL:
+                return new NullValue();
+            case MysqlParser.K_CURRENT_DATE:
+                return new SysDate();
+            case MysqlParser.K_CURRENT_TIME:
+                return new CurrentTime();
+            case MysqlParser.K_CURRENT_TIMESTAMP:
+                return new CurrentTimestamp();
+            case MysqlParser.K_TRUE:
+                return new LongValue(1);
+            case MysqlParser.K_FALSE:
+                return new LongValue(0);
+            case MysqlParser.BLOB_LITERAL:
+            	String text = rule.BLOB_LITERAL().getText();
+            	return new BytesValue(mysqlXBinaryToBytes(text));
+            case MysqlParser.HEX_LITERAL:
+            	String hextxt = rule.HEX_LITERAL().getText();
+            	hextxt = hextxt.substring(2, hextxt.length());
+            	if (hextxt.length() == 0) {
+            		return new BytesValue(new byte[0]);
+            	}
+            	return new BytesValue(BytesUtil.hexToBytes(hextxt));
+            default:
+                throw new NotImplementedException();
+        }
+    }
+
+    private static byte[] mysqlXBinaryToBytes(String text) {
+    	if (text.length() < 3) {
+    		throw new IllegalArgumentException("invalid binary format: " + text);
+    	}
+    	if (text.length() % 2 != 1) {
+    		throw new IllegalArgumentException("invalid binary format: " + text);
+    	}
+    	byte[] bytes = new byte[(text.length() -3) / 2];
+    	for (int i=2; i<text.length()-1; i+=2) {
+    		int ch1 = text.charAt(i);
+    		int ch2 = text.charAt(i+1);
+    		ch1 = Character.digit(ch1, 16);
+    		ch2 = Character.digit(ch2, 16);
+    		int n = ch1 << 4 | ch2;
+    		bytes[i/2-1] = (byte)n;
+    	}
+    	return bytes;
+    }
+    
+    private static byte[] getBytes(Literal_value_binaryContext rule) {
+    	Token token = rule.STRING_LITERAL().getSymbol();
+    	byte[] bytes = new byte[token.getStopIndex() - token.getStartIndex() - 1];
+    	CharStream cs = token.getInputStream();
+    	int pos = cs.index();
+    	cs.seek(token.getStartIndex() + 1);
+    	int j = 0;
+    	for (int i=0; i<bytes.length; i++) {
+    		int ch = cs.LA(i+1);
+    		if (ch == '\\') {
+    			i++;
+    			ch = cs.LA(i+1);
+    			if (ch == '0') {
+    				ch = 0;
+    			}
+    			else if (ch == 'n') {
+    				ch = '\n';
+    			}
+    			else if (ch == 'r') {
+    				ch = '\r';
+    			}
+    			else if (ch == 'Z') {
+    				ch = '\032';
+    			}
+    		}
+    		bytes[j] = (byte)ch;
+    		j++;
+    	}
+    	cs.seek(pos);
+    	if (j != bytes.length) {
+    		// esacpe characters
+    		byte[] old = bytes;
+    		bytes = new byte[j];
+    		System.arraycopy(old, 0, bytes, 0, j);
+    	}
+		return bytes;
+	}
+
+	private static Operator genBindParameter(GeneratorContext ctx, Bind_parameterContext rule) {
+        return new BindParameter(ctx.getParameterPosition(rule.BIND_PARAMETER()));
+    }
+
+	public static Operator gen(GeneratorContext ctx, Planner cursorMeta, String expr) {
+        CharStream cs = new ANTLRInputStream(expr);
+        MysqlLexer lexer = new MysqlLexer(cs);
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        tokens.setTokenSource(lexer);
+        MysqlParser parser = new MysqlParser(tokens);
+        parser.setErrorHandler(new BailErrorStrategy());
+        MysqlParser.ExprContext rule = parser.expr();
+        return gen(ctx, cursorMeta, rule);
+	}
+}
