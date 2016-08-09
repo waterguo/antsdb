@@ -49,7 +49,7 @@ public class SaltedFish {
 
     public void start() throws Exception {
         startLogging();
-        this.configService = new ConfigService(new File(this.home, "conf.properties"));
+        this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
         startDatabase();
         startNetty();
     }
@@ -57,7 +57,7 @@ public class SaltedFish {
     public void startOrcaOnly() throws Exception {
         startLogging();
         
-        this.configService = new ConfigService(new File(this.home, "conf.properties"));
+        this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
         
         // disable hbase service by removing hbase conf
         Properties props = this.configService.getProperties();
@@ -67,7 +67,7 @@ public class SaltedFish {
     }
 
     void startLogging() {
-        File logConf = new File(this.home, "log4j.properties");
+        File logConf = new File(getConfigFolder(home), "log4j.properties");
         if (logConf.exists()) {
             System.out.println("using log configuration: " + logConf.getAbsolutePath());
             PropertyConfigurator.configure(logConf.getAbsolutePath());
@@ -134,4 +134,8 @@ public class SaltedFish {
 		return configService;
 	}
 
+	public File getConfigFolder(File home) {
+		File conf = new File(home, "conf");
+		return (conf.exists()) ? conf : home;
+	}
 }
