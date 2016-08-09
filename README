@@ -1,0 +1,36 @@
+Introduction
+------------
+
+AntsDB is a low latency, high concurrency virtual SQL layer for HBase. Unlike the other SQL on Hadoop solutions, AntsDB is aiming at making Hadoop a powerful OLTP database by providing complex transaction management capability, complete locking mechanism, sub millisecond latency and full compatibility with MySQL.
+
+
+Features
+--------
+- ACID compliant. AntsDB supports read-committed isolation. Transaction can cross multiple table and multiple rows with automatic or manual commit/rollback. Updates is versioned using MVCC. Both optimistic locking and pessimistic locking are supported at the granularity of either table or row level.
+- Core DML/DDL in MySQL flavour
+- Secondary index.
+- JDBC, ODBC, PHP, Python are supported using MySQL drivers
+- Kerberos as the security mechanism
+- Work with the popular MySQL frond-end such as MySQL Console, PhpMyAdmin, DBeaver, Squirrel SQL etc.
+
+Requirements
+------------
+AntsDB requires Java 1.8. It runs on a wide range of platforms such as Ubuntu, CentOS, Windows etc. It needs at leat 1G memory and 10G storage. 
+
+Installation
+------------
+AntsDB executable can be either built using the source code or downloaded directly from www.antsdb.com. For details, please refer to the installation page on our wiki.
+
+Security
+--------
+AntsDB shares the same security mechanism, Kerberos, with Hadoop/HBase. In order to enable the security. Your Hadoop/HBase cluster must be configure properly with Kerberos. When security is not enabled, user can log into AntsDB use any combination of user name and password.
+
+Compatibility
+-------------
+AntsDB is wire compatible with MySQL. Most MySQL applications can run directly without any changes. 
+
+
+Contact Us
+----------
+Please visit our website www.antsdb.com
+
