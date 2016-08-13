@@ -39,13 +39,12 @@ public class ForeignKeyMeta extends RuleMeta<ForeignKeyMeta> {
         row.set(ColumnId.sysrule_parent_table_id.getId(), tableId);
 	}
 	
-    public ForeignKeyMeta addColumn(Orca orca, ColumnMeta column, ColumnMeta parentColumn) {
+    public ForeignKeyMeta addColumn(Orca orca, ColumnMeta column) {
         int key = (int)orca.getIdentityService().getSequentialId(RULE_COL_SEQUENCE);
         SlowRow ruleColumn = new SlowRow(key);
         ruleColumn.set(ColumnId.sysrulecol_id.getId(), key);
         ruleColumn.set(ColumnId.sysrulecol_rule_id.getId(), getId());
         ruleColumn.set(ColumnId.sysrulecol_column_id.getId(), column.getId());
-        ruleColumn.set(ColumnId.sysrulecol_parent_column_id.getId(), parentColumn.getId());
         this.ruleColumns.add(ruleColumn);
         return this;
     }

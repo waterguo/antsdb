@@ -302,6 +302,9 @@ public class MemTabletReadOnly implements Closeable {
 		this.file = file;
 		this.tableId = getTableId(file);
 		this.tabletId = getTabletId(file);
+		if (this.file.length() <= (HEADER_SIZE + 8)) {
+			throw new IOException("file " + file + " has incorrect length");
+		}
 		this.mmap = new MemoryMappedFile(file, "r");
 		this.base = this.mmap.getAddress();
 		this.slist = new FishSkipList(null, this.base, HEADER_SIZE, _comp);

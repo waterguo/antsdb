@@ -336,7 +336,9 @@ public final class Humpback {
         for (GTable i:this.tableById.values()) {
         	i.close();
         }
-        this.sysmeta.close();
+        if (this.sysmeta != null) {
+        	this.sysmeta.close();
+        }
         
         // mark database properly closed
         
@@ -492,6 +494,18 @@ public final class Humpback {
         if (hbaseService != null) {
         	hbaseService.dropTable(namespace, tableName);
         }
+    }
+    
+    public synchronized void truncateTable(String ns, int id) throws HumpbackException {
+    	if (hbaseService != null) {
+    		
+    		long spNow = spaceman.getAllocationPointer();
+    		
+    		// write a bogus rollback so that spNow can be replayed
+    		this.getGobbler().logMessage("nothing");
+
+    		hbaseService.truncateTable(id, spNow);
+    	}
     }
     
     public Collection<GTable> getTables() {

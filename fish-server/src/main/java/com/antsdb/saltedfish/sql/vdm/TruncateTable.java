@@ -46,7 +46,11 @@ public class TruncateTable extends Statement {
             
             GTable gtable = ctx.getHumpback().getTable(this.tableName.getNamespace(), table.getId());
             gtable.truncate();
-            return null;
+
+	        Humpback humpback = ctx.getOrca().getStroageEngine();
+	        humpback.truncateTable(gtable.getNamespace(), gtable.getId());
+
+	        return null;
     	}
     	finally {
     		ctx.getSession().unlockTable(table.getId());
@@ -63,6 +67,9 @@ public class TruncateTable extends Statement {
 		for (IndexMeta i:table.getIndexes()) {
 			GTable gindex = humpback.getTable(i.getIndexTableId());
 			gindex.truncate();
+
+			// hbase truncate
+	        humpback.truncateTable(gindex.getNamespace(), gindex.getId());
 		}
 	}
 

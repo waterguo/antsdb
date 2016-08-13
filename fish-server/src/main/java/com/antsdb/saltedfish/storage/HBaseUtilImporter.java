@@ -166,7 +166,7 @@ public class HBaseUtilImporter {
 		System.out.println("*******************************************************************");
 		System.out.printf("Update SYNCPARAM to %d\n", currentSP);
 		System.out.println("*******************************************************************\n");
-    	CheckPoint.updateHBase(this.hbaseConn, currentSP, false, this.humpback.getServerId());
+    	CheckPoint.updateHBase(this.hbaseConn, currentSP, false, this.humpback.getServerId(), null);
     	
 		long importEnd = System.currentTimeMillis();
 		totalSeconds = (importEnd - importStart) / 1000;

@@ -48,6 +48,58 @@ public class CreateForeignKey extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
+    	// find out columns from child
+    	
+    	List<ColumnMeta> childColumns = new ArrayList<>();
+    	TableMeta child = Checks.tableExist(ctx.getSession(), childTableName);
+    	for (String i:this.childColumns) {
+    		ColumnMeta ii = child.getColumn(i);
+    		if (ii == null) {
+    			throw new OrcaException("column {} is not found on table {}", i, this.childTableName);
+    		}
+    		childColumns.add(ii);
+    	}
+
+    	checkParentTable(ctx, childColumns);
+    	
+    	ctx.getSession().lockTable(child.getId(), LockLevel.EXCLUSIVE, false);
+    	try {
+	    	// add the foreign key meta data
+	    	
+	    	Transaction trx = ctx.getTransaction();
+	    	String fkname = getDefaultForeignKeyName(child);
+	    	ForeignKeyMeta fk = new ForeignKeyMeta(ctx.getOrca(), child);
+	    	fk.setName(fkname);
+	    	StringBuilder spec = new StringBuilder();
+	    	spec.append(this.parentTableName.toString());
+	    	spec.append("(");
+	    	for (int i=0; i<childColumns.size(); i++) {
+	    		spec.append(childColumns.get(i).getColumnName());
+	    		spec.append(",");
+	        	fk.addColumn(ctx.getOrca(), childColumns.get(i));
+	    	}
+	    	spec.replace(spec.length()-1, spec.length(), ")");
+	    	ctx.getMetaService().addRule(trx, fk);
+	    	
+	        // create index on child columns if there is none
+	
+	    	if (!isIndexed(child, this.childColumns)) {
+	        	String indexName = getDefaultIndexName(child);
+	        	CreateIndex.createIndex(ctx, child, indexName, false, childColumns);
+	    	}
+    	}
+    	finally {
+    		ctx.getSession().unlockTable(child.getId());
+    	}
+    	
+    	return null;
+    }
+
+	private void checkParentTable(VdmContext ctx, List<ColumnMeta> childColumns) {
+		if (!isForeignKeyCheckEnabled(ctx)) {
+			return;
+		}
+		
     	// target column must be a unique key
     	
     	TableMeta parent = Checks.tableExist(ctx.getSession(), this.parentTableName);
@@ -73,18 +125,6 @@ public class CreateForeignKey extends Statement {
     	
     	List<ColumnMeta> parentColumns = rule.getColumns(parent);
     	
-    	// find out columns from child
-    	
-    	List<ColumnMeta> childColumns = new ArrayList<>();
-    	TableMeta child = Checks.tableExist(ctx.getSession(), childTableName);
-    	for (String i:this.childColumns) {
-    		ColumnMeta ii = child.getColumn(i);
-    		if (ii == null) {
-    			throw new OrcaException("column {} is not found on table {}", i, this.childTableName);
-    		}
-    		childColumns.add(ii);
-    	}
-    	
     	// parent columns and child columns must match in terms of data type
     	
     	if (parentColumns.size() != childColumns.size()) {
@@ -100,33 +140,15 @@ public class CreateForeignKey extends Statement {
     					columnP.getColumnName());
     		}
     	}
-    	
-    	ctx.getSession().lockTable(child.getId(), LockLevel.EXCLUSIVE, false);
-    	try {
-	    	// add the foreign key meta data
-	    	
-	    	Transaction trx = ctx.getTransaction();
-	    	String fkname = getDefaultForeignKeyName(child);
-	    	ForeignKeyMeta fk = new ForeignKeyMeta(ctx.getOrca(), child);
-	    	fk.setName(fkname);
-	    	for (int i=0; i<childColumns.size(); i++) {
-	        	fk.addColumn(ctx.getOrca(), childColumns.get(i), parentColumns.get(i));
-	    	}
-	    	ctx.getMetaService().addRule(trx, fk);
-	    	
-	        // create index on child columns if there is none
-	
-	    	if (!isIndexed(child, this.childColumns)) {
-	        	String indexName = getDefaultIndexName(child);
-	        	CreateIndex.createIndex(ctx, child, indexName, false, childColumns);
-	    	}
+	}
+
+	private boolean isForeignKeyCheckEnabled(VdmContext ctx) {
+    	Object value = ctx.getSession().getVariable("FOREIGN_KEY_CHECKS");
+    	if (value == null) {
+    		return true;
     	}
-    	finally {
-    		ctx.getSession().unlockTable(child.getId());
-    	}
-    	
-    	return null;
-    }
+		return Integer.valueOf(1).equals(value);
+	}
 
 	private boolean isIndexed(TableMeta table, List<String> columns) {
 		if (isMatch(table, table.getPrimaryKey(), columns)) {

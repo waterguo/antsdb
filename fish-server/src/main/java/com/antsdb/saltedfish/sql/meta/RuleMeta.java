@@ -50,6 +50,11 @@ public abstract class RuleMeta<T> extends UberObject {
         this.row = row;
     }
 
+	@Override
+	public String toString() {
+		return getName();
+	}
+	
     public void setType(Rule type) {
         row.set(ColumnId.sysrule_rule_type.getId(), type.ordinal());
     }
@@ -114,8 +119,11 @@ public abstract class RuleMeta<T> extends UberObject {
         return null;
     }
 
-	@Override
-	public String toString() {
-		return getName();
-	}
+    public String getSpec() {
+    	return (String)this.row.get(ColumnId.sysrule_spec.getId());
+    }
+    
+    public void setSpec(String value) {
+    	this.row.set(ColumnId.sysrule_spec.getId(), value);
+    }
 }

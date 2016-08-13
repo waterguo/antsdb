@@ -273,9 +273,13 @@ public final class Helper {
 
     	try {
     	
+        	TableName table = TableName.valueOf(namespace, tableName);
+        	
     		// get compression type
-	        HTableDescriptor table = new HTableDescriptor(TableName.valueOf(namespace, tableName));
-	        Algorithm compressionType = table.getColumnFamilies()[0].getCompression();
+    		Table htable = connection.getTable(table);  		
+	        HTableDescriptor tableDesc = htable.getTableDescriptor();
+	        HColumnDescriptor[] families = tableDesc.getColumnFamilies();
+	        Algorithm compressionType =  families[0].getCompression();
 	        
 	        // drop table
 	        dropTable(connection, namespace, tableName);
@@ -286,6 +290,10 @@ public final class Helper {
     	} catch (Exception ex) {
     		throw new OrcaHBaseException("Failed to truncate table - " + tableName, ex);
     	}
+    }
+    
+    public static void setTruncateTableSP(Connection connection, int tableid, long sp) {
+    	
     }
 
     public static Result exist(Connection conn, TableName tableName, byte[] key) throws IOException {

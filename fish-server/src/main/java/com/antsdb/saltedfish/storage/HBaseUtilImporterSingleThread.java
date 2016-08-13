@@ -119,7 +119,7 @@ public class HBaseUtilImporterSingleThread {
 		// write current SP to __SYS.SYNCPARAM
 		long currentSP = getCurrentSP();
 		System.out.println("==== Update SYNCPARAM to " + currentSP + "====\n");
-    	CheckPoint.updateHBase(this.hbaseConn, currentSP, false, this.humpback.getServerId());
+    	CheckPoint.updateHBase(this.hbaseConn, currentSP, false, this.humpback.getServerId(), null);
     	
 		long importEnd = System.currentTimeMillis(); 
 		

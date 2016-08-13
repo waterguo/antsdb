@@ -28,7 +28,6 @@ import java.util.concurrent.TimeoutException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.*;
-import org.apache.hadoop.hbase.client.BufferedMutator;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
@@ -66,9 +65,7 @@ public class HBaseStorageService {
     Humpback humpback = null;					// humpback for handler to use
     MetadataService metaService = null;			// MetadataService to get Table Meta from ANTSDB
     CheckPoint cp;
-    ConcurrentMap<Integer, Long> truncateTableSPList = new ConcurrentHashMap<>();
-
-
+ 
     int bufferSize = 2000;						// size of sync buffer 
     int maxColumnPerPut = 2500;					// maximum column included in one put(rows)
     
@@ -99,7 +96,7 @@ public class HBaseStorageService {
         this.hbaseConnection = ConnectionFactory.createConnection(hbaseConfig);
 		try {
 	        this.humpback = humpback;
-	        
+
 			_log.info("HBase is connected ");
 
 			// Initialize HBase database for antsdb
@@ -190,239 +187,46 @@ public class HBaseStorageService {
     	}
     }
     
-    public void createNamespace(String namespace) throws OrcaHBaseException {        
+    public synchronized void createNamespace(String namespace) throws OrcaHBaseException {        
     	Helper.createNamespace(this.hbaseConnection, namespace);
     }
 
-    public void dropNamespace(String namespace) throws OrcaHBaseException {        
+    public synchronized void dropNamespace(String namespace) throws OrcaHBaseException {        
     	Helper.dropNamespace(this.hbaseConnection, namespace);
     }
     
-    public void createTable(String namespace, String tableName) throws OrcaHBaseException {        
+    public synchronized void createTable(String namespace, String tableName) throws OrcaHBaseException {        
     	Helper.createTable(this.hbaseConnection, namespace, tableName, this.compressionType);
     }
-
-    public void createTable(int tableid) {
-    	TableMeta tableMeta = getTableMeta(tableid);
-    	if (tableMeta != null) {
-    		Helper.createTable(this.hbaseConnection, 
-    				tableMeta.getNamespace(), tableMeta.getTableName(), this.compressionType);
-        }
-    	else {
-    		throw new OrcaHBaseException("Table Meta not found - " + tableid);
-    	}
-    }
-    
+   
     public boolean existsTable(String namespace, String tableName) {
     	return Helper.existsTable(this.hbaseConnection, namespace, tableName);
     }
     
-    public void dropTable(String namespace, String tableName) {
+    public synchronized void dropTable(String namespace, String tableName) {
     	Helper.dropTable(this.hbaseConnection, namespace, tableName);
     }
-    
-    public void dropTable(int tableid) {
-    	TableMeta tableMeta = getTableMeta(tableid);
-    	if (tableMeta != null) {
-    		Helper.dropTable(this.hbaseConnection, tableMeta.getNamespace(), tableMeta.getTableName());
-        }
-    }
-
-    
-    public void truncateTable(int tableid, long sp) {
+        
+    public synchronized void truncateTable(int tableid, long sp) throws OrcaHBaseException {
     	TableName tableName = getTableName(tableid);
     	if (tableName != null) {
+    		try {
+            	// truncate table from hbase
+        		Helper.truncateTable(this.hbaseConnection, 
+        				tableName.getNamespaceAsString(), tableName.getQualifierAsString());
 
-    		// put into list first with a negative value
-        	truncateTableSPList.put(tableid, -sp);
-
-        	// truncate table from hbase
-    		Helper.truncateTable(this.hbaseConnection, tableName.getNamespaceAsString(), tableName.getNameAsString());
-    		
-    		// save SP in hbase truncate list
-    		// Helper.setTruncateTableSP(tableid, sp);
-    		
-    		// update truncate sp
-    		truncateTableSPList.put(tableid,  sp);
-    		
+        		// save truncate table sp list
+        		this.cp.setTruncateTableSp(tableid, sp);
+    		}
+    		catch (Exception ex) {
+                throw new OrcaHBaseException("Failed to truncate table - " + tableName, ex);
+    		}
         }
     	else {
     		throw new OrcaHBaseException("Truncate Table not found - " + tableid);
     	}
-    	
-		// clear expired truncate list from memory and hbase
-    	int id;
-    	Iterator<Integer> it = truncateTableSPList.keySet().iterator();
-    	while (it.hasNext()) {
-    		id = it.next();
-    		long truncateSP = truncateTableSPList.get(id);
-    		if (truncateSP > 0 && truncateSP <= this.getCurrentSP()) {
-    			// remove from memory
-    			it.remove();
-    			
-    			// remove from hbase
-    			// Helper.removeTruncateTableSP(id);
-    		}
-    	}
     }
     
-    public boolean isTruncatedData(int tableid, long sp) {
-    	Long truncateSP = truncateTableSPList.get(tableid);
-    	if (truncateSP == null) return false;
-
-    	// make sure hbase has finished truncate process 
-		while (truncateSP < 0) {
-			try {
-				Thread.sleep(500);
-			} catch(InterruptedException ex) {
-			}
-		}
-    	
-		return sp < truncateSP;
-    }
-    
-    public void put(List<Row> rows) throws IOException  {
-    	put(this.hbaseConnection, rows);
-    }
-    
-    public void put(Row row) throws IOException  { 
-    	put(this.hbaseConnection, row);
-    }
-
-    public void index(int indexTableid, long version, long rowKeyAddress, long indexKeyAddress)  {
-    	SysMetaRow meta = this.humpback.getTableInfo(indexTableid);
-    	if (meta != null) {
-    		String namespace = meta.getNamespace();
-    		String tableName = meta.getTableName();
-    		index(this.hbaseConnection, namespace, tableName, version, rowKeyAddress, indexKeyAddress);
-    	} else {
-	   		throw new OrcaHBaseException("Index Table not found - " + indexTableid);
-    	}
-    }
-    
-    public void delete(int tableid, long pkey, long trxid) throws IOException {
-    	delete(this.hbaseConnection, tableid, pkey, trxid);
-    }
-
-    private Table getHTable(Connection conn, int tableid) throws IOException  {  
-    	TableName tablename = getTableName(tableid);
-    	if (tablename == null) {
-    		return null;
-    	}
-		return conn.getTable(tablename);
-    }
-    
-    public void put(Connection conn, Row row) throws IOException  {  
-    	int tableId = row.getTableId();
-    	TableMeta tableMeta = getTable(tableId);
-
-    	Table htable = getHTable(conn, tableId);
-
-    	// skip data from already dropped table
-    	if (htable == null) {
-    		return;
-    	}
-    	
-        // populate row key
-    	
-		byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
-    	Put put = new Put(key);
-
-    	// populate version
-    	
-    	long version = this.humpback.getTrxMan().getTimestamp(Row.getVersion(row.getAddress()));
-    	if (version < 0) {
-    		throw new OrcaHBaseException("invalid version {}", version);
-    	}
-		put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
-    	
-		// populate size
-		
-		put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, version, Bytes.toBytes(row.getLength()));
-		
-    	// populate fields
-		
-		int maxColumnId = row.getMaxColumnId();
-		byte[] types = new byte[maxColumnId+1];
-        for (int i=0; i<=maxColumnId; i++) {
-        	long pValue = row.getFieldAddress(i); 
-			types[i] = Helper.getType(pValue);
-    		byte[] qualifier = getColumnName(tableMeta, i);
-    		if (qualifier == null) {
-    			continue;
-    		}
-    		byte[] value = Helper.toBytes(pValue);
-    		put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, qualifier, version, value);
-        }
-
-        // populate data types
-        
-		put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, version, types);
-		
-		// write to table
-		htable.put(put);
-		htable.close();
-    }
-    
-    public void index(List<HBaseStorageSyncBuffer.IndexData> indics) throws IOException {
-    	index(this.hbaseConnection, indics);
-    }
-    
-    public void put0(Connection conn, Row row) throws IOException  {  
-    	int tableId = row.getTableId();
-    	TableMeta tableMeta = getTable(tableId);
-    	TableName tableName = getTableName(tableId);
-
-    	BufferedMutator mutator = conn.getBufferedMutator(tableName);
-    	
-    	// skip data from already dropped table
-    	if (mutator == null) {
-    		return;
-    	}
-    	
-        // populate row key
-    	
-		byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
-    	Put put = new Put(key);
-
-    	// populate version
-    	
-    	long version = this.humpback.getTrxMan().getTimestamp(Row.getVersion(row.getAddress()));
-    	if (version < 0) {
-    		throw new OrcaHBaseException("invalid version {}", version);
-    	}
-		put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
-    	
-		// populate size
-		
-		put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, version, Bytes.toBytes(row.getLength()));
-		
-    	// populate fields
-		
-		int maxColumnId = row.getMaxColumnId();
-		byte[] types = new byte[maxColumnId+1];
-        for (int i=0; i<=maxColumnId; i++) {
-        	long pValue = row.getFieldAddress(i); 
-			types[i] = Helper.getType(pValue);
-    		byte[] qualifier = getColumnName(tableMeta, i);
-    		if (qualifier == null) {
-    			continue;
-    		}
-    		byte[] value = Helper.toBytes(pValue);
-    		put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, qualifier, version, value);
-        }
-
-        // populate data types
-        
-		put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, version, types);
-		
-		// write to table
-		mutator.mutate(put);
-		mutator.close();
-		//htable.put(put);
-		//htable.close();
-    }
-
 	List<byte[]> tableColumnQualifierList = new ArrayList<byte[]>();
 	byte[] tableColumnTypes = null;
 	void updateColumnInfo(Row row) {
@@ -453,7 +257,91 @@ public class HBaseStorageService {
 		}
  	}
 	
-	public void put(Connection conn, List<Row> rows) throws IOException  {    	
+	public synchronized void put(List<HBaseStorageSyncBuffer.RowData> rows) throws IOException  {    	
+    	int tableId = rows.get(0).getRow().getTableId();
+    	TableName tableName = getTableName(tableId);
+    	
+    	// skip data from already dropped table    	
+    	if (tableName == null) {
+    		return;
+    	}
+
+    	this.tableColumnQualifierList.clear();
+    	this.tableColumnTypes = null;
+
+    	Table htable = this.hbaseConnection.getTable(tableName);
+    	int totalColumns = 0;
+    	ArrayList<Put> puts = new ArrayList<Put>(100);
+    	
+    	Row row;
+    	for (HBaseStorageSyncBuffer.RowData rowData : rows) {
+ 
+    		// If table already truncated we'll skip this row
+    		if (this.cp.isTruncatedData(tableId, rowData.getSp())) {
+    			continue;
+    		}
+
+    		// get Row
+    		row = rowData.getRow();
+    		
+    		// update column info
+    		updateColumnInfo(row);
+    		
+	        // populate row key    	
+			byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
+	    	Put put = new Put(key);
+	
+	    	// populate version
+	    	
+	    	// long version = this.humpback.getTrxMan().getTimestamp(Row.getVersion(row.getAddress()));
+	    	long version = this.humpback.getTrxMan().getTimestamp(row.getVersion());
+	    	if (version < 0) {
+	    		throw new OrcaHBaseException("invalid version {}", version);
+	    	}
+			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
+	    	
+			// populate size
+			
+			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, version, Bytes.toBytes(row.getLength()));
+			
+	    	// populate fields
+			
+			int maxColumnId = row.getMaxColumnId();
+			byte[] types = new byte[maxColumnId+1];
+	        for (int i=0; i<=maxColumnId; i++) {
+				byte[] qualifier = tableColumnQualifierList.get(i);
+	    		if (qualifier == null) {
+	    			continue;
+	    		}
+	        	long pValue = row.getFieldAddress(i); 
+				types[i] = Helper.getType(pValue);
+	    		byte[] value = Helper.toBytes(pValue);
+	    		put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, qualifier, version, value);
+	        }
+	
+	        // populate data types
+			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, version, types);
+			puts.add(put);
+			totalColumns += put.size();
+			
+			// if total columns exceeds define maxColumnCount, we'll do one put
+			if (totalColumns >= this.maxColumnPerPut) {
+				htable.put(puts);
+				puts.clear();
+				totalColumns = 0;
+			}
+    	}
+
+    	// do last put
+		if (puts.size() > 0) {
+    		htable.put(puts);
+    		puts.clear();
+    		totalColumns = 0;
+    	}
+		htable.close();
+    }
+    
+	public void put1(List<Row> rows) throws IOException  {    	
     	int tableId = rows.get(0).getTableId();
     	TableName tableName = getTableName(tableId);
     	
@@ -465,7 +353,7 @@ public class HBaseStorageService {
     	this.tableColumnQualifierList.clear();
     	this.tableColumnTypes = null;
 
-    	Table htable = conn.getTable(tableName);
+    	Table htable = this.hbaseConnection.getTable(tableName);
     	int totalColumns = 0;
     	ArrayList<Put> puts = new ArrayList<Put>(100);
     	
@@ -528,8 +416,71 @@ public class HBaseStorageService {
 		htable.close();
     }
     
-    public void delete(Connection conn, int tableid, long pkey, long trxid) throws IOException {
-        // Get table object
+	public synchronized void index(List<HBaseStorageSyncBuffer.IndexData> indics) throws IOException {
+		
+       	int tableId = indics.get(0).getTableId();
+    	TableName tableName = getTableName(tableId);
+    	
+    	// skip data from already dropped table    	
+    	if (tableName == null) {
+    		return;
+    	}
+
+    	Table htable = this.hbaseConnection.getTable(tableName);
+    	int totalColumns = 0;
+    	ArrayList<Put> puts = new ArrayList<Put>(100);
+    	
+    	long version;
+    	for (HBaseStorageSyncBuffer.IndexData index : indics) {
+
+    		// If table already truncated we'll skip this row
+    		if (this.cp.isTruncatedData(tableId, index.getSp())) {
+    			continue;
+    		}
+    		
+ 			// convert antsdb's key to normal key value (HBase key is user-readable)
+			
+			byte[] rowkey = Helper.antsKeyToHBase(index.getRowKey());
+			byte[] indexKey = Helper.antsKeyToHBase(index.getIndexKey());
+
+			// Initiate put and delete object
+	    	Put put = new Put(indexKey);
+
+	    	// get version of the row
+	    	version = index.getTrxTs();
+
+	    	// version
+			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
+	    	// index key
+			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, version, rowkey);
+	    	
+			puts.add(put);
+			totalColumns += put.size();
+			
+			// if total columns exceeds define maxColumnCount, we'll do one put
+			if (totalColumns >= this.maxColumnPerPut) {
+				htable.put(puts);
+				puts.clear();
+				totalColumns = 0;
+			}
+        }
+    	
+		// do last put
+ 		if (puts.size() > 0) {
+    		htable.put(puts);
+    		puts.clear();
+    		totalColumns = 0;
+    	}
+		
+ 		htable.close();        	
+	}
+
+	public synchronized void delete(int tableid, long pkey, long trxid, long sp) throws IOException {
+
+		// If table already truncated we'll skip this delete
+		if (this.cp.isTruncatedData(tableid, sp)) return;
+		
+		// Get table object
 
     	TableName tableName = getTableName(tableid);
         if (tableName == null) {
@@ -547,7 +498,7 @@ public class HBaseStorageService {
         
         // Delete row
         
-        Table table = conn.getTable(tableName);
+        Table table = this.hbaseConnection.getTable(tableName);
 		table.delete(delete);
     }
     
@@ -637,100 +588,7 @@ public class HBaseStorageService {
 		}
 		return row;
     }
-    
-    private TableMeta getTableMeta(int tableid) {
-    	return this.metaService.getTable(Transaction.getSeeEverythingTrx(), tableid);
-    }
-
-    public static void index(Connection connection, String namespace, String tableName, 
-    			long version, long rowKeyAddress, long indexKeyAddress) {
-        try {
-			Table table = getTable(connection, namespace, tableName);
-			
-			// convert antsdb's key to normal key value (HBase key is user-readable)
-			
-			byte[] rowkey = Helper.antsKeyToHBase(rowKeyAddress);
-			byte[] indexKey = Helper.antsKeyToHBase(indexKeyAddress);
-	    	
-			// Initiate put and delete object
-	    	Put put = new Put(indexKey);
-
-	    	// get version of the row
-	    	// version
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
-	    	// index key
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, version, rowkey);
-	    	
-            // Add row
-            table.put(put);           
-        } catch (Exception ex) {
-            throw new OrcaHBaseException("Failed to put index row - " + version, ex);
-        }        
-    }
-
-	public void index(Connection connection, List<HBaseStorageSyncBuffer.IndexData> indics) throws IOException {
-		
-       	int tableId = indics.get(0).getTableId();
-    	TableName tableName = getTableName(tableId);
-    	
-    	// skip data from already dropped table    	
-    	if (tableName == null) {
-    		return;
-    	}
-
-    	Table htable = connection.getTable(tableName);
-    	int totalColumns = 0;
-    	ArrayList<Put> puts = new ArrayList<Put>(100);
-    	
-    	long version;
-    	for (HBaseStorageSyncBuffer.IndexData index : indics) {
-    		
- 			// convert antsdb's key to normal key value (HBase key is user-readable)
-			
-			byte[] rowkey = Helper.antsKeyToHBase(index.getRowKey());
-			byte[] indexKey = Helper.antsKeyToHBase(index.getIndexKey());
-
-			// Initiate put and delete object
-	    	Put put = new Put(indexKey);
-
-	    	// get version of the row
-	    	version = index.getTrxTs();
-
-	    	// version
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
-	    	// index key
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, version, rowkey);
-	    	
-			puts.add(put);
-			totalColumns += put.size();
-			
-			// if total columns exceeds define maxColumnCount, we'll do one put
-			if (totalColumns >= this.maxColumnPerPut) {
-				htable.put(puts);
-				puts.clear();
-				totalColumns = 0;
-			}
-        }
-    	
-		// do last put
- 		if (puts.size() > 0) {
-    		htable.put(puts);
-    		puts.clear();
-    		totalColumns = 0;
-    	}
-		
- 		htable.close();        	
-}
 	
-    private static Table getTable(Connection connection, String namespaceName, String tableName) throws IOException {
-    	try {
-    		return connection.getTable(TableName.valueOf(namespaceName, tableName));
-    	}
-    	catch (Exception e) {
-    	}
-    	return null;
-    }
-
 	public void setMetaService(MetadataService metaService) {
 		this.metaService = metaService;
 	}

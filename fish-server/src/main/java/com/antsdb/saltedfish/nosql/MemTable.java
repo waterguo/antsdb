@@ -17,7 +17,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -38,6 +40,7 @@ public final class MemTable extends MemTableReadOnly {
     MemTablet tablet;
 	private int tabletSize;
 	private boolean isClosed;
+	private Map<Integer, MemTabletReadOnly> retired = Collections.synchronizedMap(new HashMap<>());
 
     public MemTable(Humpback owner, File ns, int tableId, int tabletSize) {
     	super(owner.getSpaceManager(), tableId);
@@ -381,15 +384,20 @@ public final class MemTable extends MemTableReadOnly {
 		File babyFile = MemTablet.getFile(ns, this.tableId, babyTabletId);
 		if (babyFile.exists()) {
 			_log.error("compact failed due to existence of file {}", babyFile);
+			return;
 		}
 		
 		// start compacting
 		
 		MemTabletReadOnly x = node.next.data;
 		MemTabletReadOnly y = node.next.next.data;
+		long size = getSizeOfNextTwoTablets(node) * 3 / 2;
+		if (size >= Integer.MAX_VALUE) {
+			// file is too big, give up
+			return;
+		}
 		_log.debug("start merging {} and {} to {} ...", x.getTabletId(), y.getTabletId(),babyFile);
-		int size = (int)getSizeOfNextTwoTablets(node) * 3 / 2;
-		MemTabletReadOnly baby = new MemTablet(this.owner, this.ns, this.tableId, babyTabletId, size);
+		MemTabletReadOnly baby = new MemTablet(this.owner, this.ns, this.tableId, babyTabletId, (int)size);
 		boolean success = false;
 		try {
 			((MemTablet)baby).merge(node.next.data, node.next.next.data);
@@ -416,12 +424,16 @@ public final class MemTable extends MemTableReadOnly {
 		// update linked list
 		
 		ConcurrentLinkedList.Node<MemTabletReadOnly> babyNode = super.tablets.insert(node, baby);
+		this.retired.put(x.getTabletId(), x);
+		this.retired.put(y.getTabletId(), y);
 		super.tablets.deleteNext(babyNode);
 		super.tablets.deleteNext(babyNode);
 		this.owner.getJobManager().schedule(5, TimeUnit.MINUTES, () -> {
 			_log.debug("deleting {} due to compacting", x.getFile());
 			x.drop();
 			y.drop();
+			this.retired.remove(x.getTabletId());
+			this.retired.remove(y.getTabletId());
 		});
 	}
 		
@@ -457,8 +469,17 @@ public final class MemTable extends MemTableReadOnly {
 		if (node.next == null) {
 			return false;
 		}
+		int mergedTabletId = node.data.getTabletId() - 1;
 		MemTabletReadOnly nextTablet = node.next.data;
-		return (node.data.getTabletId() - nextTablet.getTabletId()) >= 2;
+		if (nextTablet.getTabletId() >= mergedTabletId) {
+			// there is no space between current node and next node
+			return false;
+		}
+		if (this.retired.containsKey(mergedTabletId)) {
+			// candidate id is taken by a retired tablet
+			return false;
+		}
+		return true;
 	}
 
 }

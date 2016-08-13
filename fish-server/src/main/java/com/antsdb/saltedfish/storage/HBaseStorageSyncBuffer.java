@@ -27,7 +27,8 @@ public class HBaseStorageSyncBuffer {
 	
 	HBaseStorageService hbaseService = null;
 	int bufferSize = 1000;
-	List<Row> rowList = new ArrayList<Row>();
+
+	List<RowData> rowList = new ArrayList<RowData>();
 	List<IndexData> indexList = new ArrayList<IndexData>();
 	
 	long currentSP = 0;
@@ -44,30 +45,33 @@ public class HBaseStorageSyncBuffer {
 		this.bufferedSP = currentSP;
 	}
 	
-	public void putRow(Row row) throws Exception {
+	public void putRow(Row row, long sp) throws Exception {
 
 		// check whether to flush
 		checkFlush();
 
 		// add to row buffer
-		rowList.add(row);
+		RowData rowData = new RowData(row, sp);
+		rowList.add(rowData);
 	}
 	
-	public void putIndex(int tableid, long trxts, long rowKey, long indexKey) throws Exception {
+	public void putIndex(int tableid, long trxts, long rowKey, long indexKey, long sp) throws Exception {
 
 		// check whether to flush
 		checkFlush();
 		
 		// add to index buffer
-		IndexData idx = new IndexData(tableid, trxts, rowKey, indexKey);
+		IndexData idx = new IndexData(tableid, trxts, rowKey, indexKey, sp);
 		indexList.add(idx);
 	}
 		
 	public boolean rowExists(int tableid, long pkey) {
 		byte[] key = com.antsdb.saltedfish.cpp.Bytes.get(null, pkey);
 		
-		for (Row i : rowList) {
-			if (i.getTableId() == tableid && key.equals(i.getKey())) {
+		Row row;
+		for (RowData i : rowList) {
+			row = i.getRow();
+			if (row.getTableId() == tableid && key.equals(row.getKey())) {
 				return true;
 			}
 		}
@@ -90,7 +94,7 @@ public class HBaseStorageSyncBuffer {
 		
 		Row row;
 		for (int i=rowList.size() - 1; i>=0; i--) {
-			row = rowList.get(i);
+			row = rowList.get(i).getRow();
 			if (row.getTableId() == tableid && key.equals(row.getKey())) {
 				rowList.remove(i);
 			}
@@ -170,9 +174,11 @@ public class HBaseStorageSyncBuffer {
     	if (rowList.size() == 0) return;
 
     	List<Integer> tableIds = new ArrayList<Integer>();
-    	for (Row i : rowList) {
-    		if (!tableIds.contains(i.getTableId())) {
-    			tableIds.add(i.getTableId());
+    	Row row;
+    	for (RowData i : rowList) {
+    		row = i.getRow();
+    		if (!tableIds.contains(row.getTableId())) {
+    			tableIds.add(row.getTableId());
     		}
     	}
     	
@@ -180,11 +186,11 @@ public class HBaseStorageSyncBuffer {
     		hbaseService.put(this.rowList);
     	}
     	else {
-	    	List<Row> rowsInOneTable = new ArrayList<Row>();
+	    	List<RowData> rowsInOneTable = new ArrayList<RowData>();
 	    	for (Integer id : tableIds) {
 	    		rowsInOneTable.clear();
-	    		for (Row i: this.rowList) {
-	    			if (i.getTableId() == id) {
+	    		for (RowData i: this.rowList) {
+	    			if (i.getRow().getTableId() == id) {
 	    				rowsInOneTable.add(i);
 	    			}
 	    		}
@@ -227,17 +233,36 @@ public class HBaseStorageSyncBuffer {
 		this.hbaseService.index(indexList);
     }
     
+    public class RowData {
+    	private Row row;
+    	private long sp;
+    	public RowData(Row row, long sp) {
+    		this.row = row;
+    		this.sp = sp;
+    	}
+    	
+    	public long getSp() {
+    		return this.sp;
+    	}
+    	
+    	public Row getRow() {
+    		return this.row;
+    	}
+    }
+    
 	public class IndexData {
 		private int tableid;
 		private long trxts;
 		private long rowKey;
 		private long indexKey;
+		private long sp;
 		
-		public IndexData(int tableid, long trxts, long rowKey, long indexKey) {
+		public IndexData(int tableid, long trxts, long rowKey, long indexKey, long sp) {
 			this.tableid = tableid;
 			this.trxts = trxts;
 			this.rowKey = rowKey;
 			this.indexKey = indexKey;
+			this.sp = sp;
 		}
 		
 		public int getTableId() {
@@ -255,5 +280,9 @@ public class HBaseStorageSyncBuffer {
 		public long getIndexKey() {
 			return this.indexKey;
 		}
+
+    	public long getSp() {
+    		return this.sp;
+    	}
 	}
 }

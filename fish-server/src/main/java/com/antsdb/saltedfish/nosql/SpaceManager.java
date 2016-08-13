@@ -40,7 +40,7 @@ import com.antsdb.saltedfish.util.UberUtil;
 public final class SpaceManager {
 	final static int SIG = 0x73746e61;
 	final static byte VERSION = 0;
-	final static int DEFAULT_FILE_SIZE = 1024*1024*256; 
+	final static int DEFAULT_FILE_SIZE = 1024*1024*64; 
 	final static int HEADER_SIZE = 1024;
 	final static int OFFSET_SIG = 0;
 	final static int OFFSET_VERSION = 4;

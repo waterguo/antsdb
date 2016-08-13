@@ -54,7 +54,8 @@ public enum ColumnId {
     sysrule_index_table_id(7),
     sysrule_index_external_name(8),
     sysrule_parent_table_id(9),
-    sysrule_end_of_columns(10),
+    sysrule_spec(10),
+    sysrule_end_of_columns(11),
     /* sysrulecol */
     sysrulecol_id(1),
     sysrulecol_rule_id(2),

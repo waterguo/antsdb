@@ -119,6 +119,10 @@ public class HBaseStorageHandler extends ReplayHandler {
 			this.syncBuffer.flush();
 			throw ex;
 		}
+		catch (HBaseStopJumpException ex) {
+			// do nothing
+			_log.debug(ex.getMessage());
+		}
 		catch (JumpException je) {
 			// got a waiting to close trxid here or paused, shutdown...
 			this.syncBuffer.flush();
@@ -134,11 +138,11 @@ public class HBaseStorageHandler extends ReplayHandler {
 	}
 	
 	private void checkPaused() {
-		if (this.paused) throw new JumpException();
+		if (this.paused) throw new HBaseStopJumpException("hbase paused");
 	}
 	
 	private void checkShutdown() {
-		if (this.shuttingdown) throw new JumpException();
+		if (this.shuttingdown) throw new HBaseStopJumpException("hbase shutting down...");
 	}
 
 	@Override
@@ -179,7 +183,7 @@ public class HBaseStorageHandler extends ReplayHandler {
 		if (tableId != Integer.MAX_VALUE) {
 			Row row = Row.fromSpacePointer(this.spaceman, spRow, version);
 			try {
-				this.syncBuffer.putRow(row);				
+				this.syncBuffer.putRow(row, sp);				
 			}
 			catch (Exception ex) {
 				// _log.error("failed to put @ {} trxid={}", sp, trxid, ex);
@@ -244,7 +248,7 @@ public class HBaseStorageHandler extends ReplayHandler {
 			_log.trace("delete @ {} tableId={} trxid={}", sp, tableid, trxid);
 			
 			// Delete from hbase table 
-			this.hbaseStorageService.delete(tableid, pkey, trxid);
+			this.hbaseStorageService.delete(tableid, pkey, trxid, sp);
 
 			this.deleteRowCount++;
 			this.rowCount++;
@@ -320,8 +324,7 @@ public class HBaseStorageHandler extends ReplayHandler {
 
 			try {
 				// Save to hbase table
-				this.syncBuffer.putIndex(tableid, trxts, rowKey, indexKey);
-				// this.hbaseStorageService.index(tableid, trxts, rowKey, indexKey);
+				this.syncBuffer.putIndex(tableid, trxts, rowKey, indexKey, sp);
 			}
 			catch (Exception ex) {
 				// _log.error("failed to put @ {} trxid={}", sp, trxid, ex);

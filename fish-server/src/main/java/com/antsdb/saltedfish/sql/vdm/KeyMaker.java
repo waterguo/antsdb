@@ -709,7 +709,7 @@ public final class KeyMaker {
 	}
 	
 	public static byte[] make(long value) {
-		try (BluntHeap heap = new BluntHeap(100)) {
+		try (BluntHeap heap = new BluntHeap()) {
 			long pValue = Int8.allocSet(heap, value);
 			long[] values = new long[] {pValue};
 			long pKey = _integerMaker.make(heap, values);
@@ -718,10 +718,7 @@ public final class KeyMaker {
 	}
 
 	public static byte[] make(String value) {
-		if (value.length() >= 50) {
-			throw new IllegalArgumentException();
-		}
-		try (BluntHeap heap = new BluntHeap(400)) {
+		try (BluntHeap heap = new BluntHeap()) {
 			long pValue = FishUtf8.allocSet(heap, value);
 			long[] values = new long[] {pValue};
 			long pKey = _stringMaker.make(heap, values);
