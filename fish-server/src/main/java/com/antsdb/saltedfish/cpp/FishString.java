@@ -118,7 +118,20 @@ public final class FishString {
 	}
 
 	public static int getLength(long pValue) {
-		int len = Unicode16.getLength(Value.FORMAT_UNICODE16, pValue);
+		if (pValue == 0) {
+			return 0;
+		}
+		int format = Value.getFormat(null, pValue);
+		int len;
+		if (format == Value.FORMAT_UNICODE16) {
+			len = Unicode16.getLength(format, pValue);
+		}
+		else if (format == Value.FORMAT_UTF8){
+			len = FishUtf8.getLength(format, pValue);
+		}
+		else {
+			throw new IllegalArgumentException();
+		}
 		return len;
 	}
 

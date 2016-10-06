@@ -19,6 +19,7 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.Orca;
 
 /**
  * this is mysql specific
@@ -38,6 +39,9 @@ public class SystemVariableValue extends Operator {
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         if (this.name.equalsIgnoreCase("@@session.auto_increment_increment")) {
             return Int4.allocSet(heap, 1);
+        }
+        else if (this.name.equalsIgnoreCase("@@version")) {
+        	return Unicode16.allocSet(heap, Orca.VERSION);
         }
         else if (this.name.equalsIgnoreCase("@@version_comment")) {
         	return Unicode16.allocSet(heap, "Source distribution");

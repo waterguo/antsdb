@@ -11,29 +11,24 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.sql.vdm;
+package com.antsdb.saltedfish.sql.mysql;
 
-import com.antsdb.saltedfish.cpp.FishObject;
-import com.antsdb.saltedfish.cpp.Heap;
-import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.lexer.MysqlParser.Show_grantsContext;
+import com.antsdb.saltedfish.sql.Generator;
+import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.ShowGrants;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class FuncCurrentUser extends Function {
+public class Show_grantsGenerator extends Generator<Show_grantsContext>{ 
 
-    @Override
-    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	String user = ctx.getSession().getUser();
-    	// mysql always append "@<host>". phpMyAdmin is depending on "@<host>"
-    	user += "@%";
-        long addr = FishObject.allocSet(heap, user);
-        return addr;
-    }
+	@Override
+	public Instruction gen(GeneratorContext ctx, Show_grantsContext rule) throws OrcaException {
+		return new ShowGrants();
+	}
 
-    @Override
-    public DataType getReturnType() {
-        return DataType.varchar();
-    }
 }

@@ -27,6 +27,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.ColumnsContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Data_typeContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.IdentifierContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Index_columnsContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.String_valueContext;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.DataTypeFactory;
@@ -34,6 +35,7 @@ import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.vdm.ColumnAttributes;
+import com.antsdb.saltedfish.sql.vdm.ExprUtil;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.TypeUtil;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -184,4 +186,13 @@ class Utils {
     	return planner.findOutputField(name);    	
     }
 
+    static String getQuotedLiteralValue(Literal_valueContext rule) {
+    	if (rule == null) {
+    		return null;
+    	}
+        String value = rule.getText();
+        value = value.substring(1, value.length() - 1);
+        value = ExprUtil.unescape(value);
+        return value;
+    }
 }

@@ -56,6 +56,9 @@ public class ToTimestampRelaxed extends UnaryOperator {
         if (val instanceof byte[]) {
             val = new String((byte[])val);
         }
+        if (val instanceof BigDecimal) {
+        	val = ((BigDecimal)val).longValueExact();
+        }
         if (val == null) {
         }
         else if (val instanceof Timestamp) {
@@ -64,19 +67,24 @@ public class ToTimestampRelaxed extends UnaryOperator {
         	long pResult = AutoCaster.toTimestamp(heap, pValue);
         	return pResult;
         }
-        else if (val instanceof BigDecimal) {
-        	long n = ((BigDecimal)val).longValueExact();
-        	int sec = (int)(n % 100);
-        	n = n / 100;
-        	int min = (int)(n % 100);
-        	n = n / 100;
-        	int hour = (int)(n % 100);
-        	n = n / 100;
-        	int day = (int)(n % 100);
-        	n = n / 100;
-        	int month = (int)(n % 100);
-        	int year = (int)(n / 100);
-        	val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
+        else if (val instanceof Long) {
+        	long n = (Long)val;
+        	if (n == 0) {
+        		val = new Timestamp(Long.MIN_VALUE);
+        	}
+        	else {
+	        	int sec = (int)(n % 100);
+	        	n = n / 100;
+	        	int min = (int)(n % 100);
+	        	n = n / 100;
+	        	int hour = (int)(n % 100);
+	        	n = n / 100;
+	        	int day = (int)(n % 100);
+	        	n = n / 100;
+	        	int month = (int)(n % 100);
+	        	int year = (int)(n / 100);
+	        	val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
+        	}
         }
         else {
             throw new CodingError();

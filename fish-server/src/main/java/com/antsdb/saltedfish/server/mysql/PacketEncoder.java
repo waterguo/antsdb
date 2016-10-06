@@ -22,8 +22,10 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.Duration;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.commons.lang.time.FastDateFormat;
 import org.slf4j.Logger;
 
@@ -526,6 +528,11 @@ public final class PacketEncoder {
                 // null mark is 251
                 buffer.writeByte((byte) 251);
             } 
+            else if (fv instanceof Duration) {
+            	Duration t = (Duration)fv;
+            	String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
+            	BufferUtils.writeLenString(buffer, text);
+            }
             else if (fv instanceof Timestamp) {
                 // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
                 // to get a Date from a datetime column

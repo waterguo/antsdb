@@ -54,7 +54,6 @@ import com.antsdb.saltedfish.sql.vdm.BytesValue;
 import com.antsdb.saltedfish.sql.vdm.CurrentTime;
 import com.antsdb.saltedfish.sql.vdm.CurrentTimestamp;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.ExprUtil;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.FuncAbs;
 import com.antsdb.saltedfish.sql.vdm.FuncBase64;
@@ -71,10 +70,14 @@ import com.antsdb.saltedfish.sql.vdm.FuncField;
 import com.antsdb.saltedfish.sql.vdm.FuncFindInSet;
 import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
 import com.antsdb.saltedfish.sql.vdm.FuncHex;
+import com.antsdb.saltedfish.sql.vdm.FuncLength;
+import com.antsdb.saltedfish.sql.vdm.FuncLocate;
 import com.antsdb.saltedfish.sql.vdm.FuncLower;
 import com.antsdb.saltedfish.sql.vdm.FuncMax;
 import com.antsdb.saltedfish.sql.vdm.FuncMin;
+import com.antsdb.saltedfish.sql.vdm.FuncNow;
 import com.antsdb.saltedfish.sql.vdm.FuncRand;
+import com.antsdb.saltedfish.sql.vdm.FuncSubstringIndex;
 import com.antsdb.saltedfish.sql.vdm.FuncSum;
 import com.antsdb.saltedfish.sql.vdm.FuncToTimestamp;
 import com.antsdb.saltedfish.sql.vdm.FuncUpper;
@@ -480,6 +483,18 @@ public class ExprGenerator {
         else if (name.equalsIgnoreCase("current_user")) {
         	op = new FuncCurrentUser();
         }
+        else if (name.equalsIgnoreCase("SUBSTRING_INDEX")) {
+        	op = new FuncSubstringIndex();
+        }
+        else if (name.equalsIgnoreCase("LOCATE")) {
+        	op = new FuncLocate();
+        }
+        else if (name.equalsIgnoreCase("NOW")) {
+        	op = new FuncNow();
+        }
+        else if (name.equalsIgnoreCase("LENGTH")) {
+        	op = new FuncLength();
+        }
         else {
             throw new NotImplementedException("function: " + name);
         }
@@ -549,15 +564,9 @@ public class ExprGenerator {
                 return new NumericValue(new BigDecimal(rule.getText()));
             }
             case MysqlParser.STRING_LITERAL:
-                String value = rule.getText();
-                value = value.substring(1, value.length() - 1);
-                value = ExprUtil.unescape(value);
-                return new StringLiteral(value);
             case MysqlParser.DOUBLE_QUOTED_LITERAL:
-                String val = rule.getText();
-                val = val.substring(1, val.length() - 1);
-                val = ExprUtil.unescape(val);
-                return new StringLiteral(val);
+                String value = Utils.getQuotedLiteralValue(rule);
+                return new StringLiteral(value);
             case MysqlParser.K_NULL:
                 return new NullValue();
             case MysqlParser.K_CURRENT_DATE:

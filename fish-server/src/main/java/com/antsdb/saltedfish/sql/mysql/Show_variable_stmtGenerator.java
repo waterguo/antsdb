@@ -13,16 +13,22 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
+import com.antsdb.saltedfish.lexer.MysqlParser.Show_variable_like_clauseContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Show_variable_stmtContext;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.planner.Planner;
+import com.antsdb.saltedfish.sql.planner.PlannerField;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.FieldMeta;
+import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.OpLike;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.ShowVariables;
+import com.antsdb.saltedfish.sql.vdm.StringLiteral;
 
 public class Show_variable_stmtGenerator extends Generator<Show_variable_stmtContext>{
 
@@ -34,6 +40,18 @@ public class Show_variable_stmtGenerator extends Generator<Show_variable_stmtCon
         	Planner planner = new Planner(ctx);
         	planner.addCursor("", maker);
             Operator filter = ExprGenerator.gen(ctx, planner, rule.where_clause().expr());
+            maker = new Filter(maker, filter, ctx.getNextMakerId());
+        }
+        else if (rule.show_variable_like_clause() != null) {
+        	Show_variable_like_clauseContext like = rule.show_variable_like_clause();
+        	Planner planner = new Planner(ctx);
+        	planner.addCursor("", maker);
+        	PlannerField pf = planner.findField((FieldMeta it) -> {
+        		return it.getName().equals("Variable_name");
+        	});
+        	FieldValue fv = new FieldValue(pf);
+        	String likeExpr = (Utils.getQuotedLiteralValue(like.literal_value()));
+            Operator filter = new OpLike(fv, new StringLiteral(likeExpr));
             maker = new Filter(maker, filter, ctx.getNextMakerId());
         }
         return maker;

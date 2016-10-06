@@ -13,35 +13,53 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
-import java.sql.Time;
+import java.time.Duration;
 
 public final class FishTime {
-	public final static Time get(Heap heap, long address) {
+	static final int SIZE = 9;
+	
+	public final static Duration get(Heap heap, long address) {
 		long lvalue = Unsafe.getLong(address+1);
-		Time value = new Time(lvalue);
+		Duration value = Duration.ofMillis(lvalue);
 		return value;
 	}
 
-	public static final long allocSet(Heap heap, Time value) {
+	public static final long allocSet(Heap heap, Duration value) {
 		long address = heap.alloc(9);
 		set(heap, address, value);
 		return address;
 	}
 
+	/**
+	 * 
+	 * @param heap
+	 * @param value milliseconds
+	 * @return
+	 */
 	public static final long allocSet(Heap heap, long value) {
 		long address = heap.alloc(9);
 		set(heap, address, value);
 		return address;
 	}
 
-	public static final void set(Heap heap, long address, Time value) {
+	public static final void set(Heap heap, long address, Duration value) {
 		Unsafe.putByte(address, Value.FORMAT_TIME);
-		Unsafe.putLong(address+1, value.getTime());
+		Unsafe.putLong(address+1, value.toMillis());
 	}
 
+	/**
+	 * 
+	 * @param heap
+	 * @param address
+	 * @param value milliseconds
+	 */
 	public static final void set(Heap heap, long address, long value) {
 		Unsafe.putByte(address, Value.FORMAT_TIME);
 		Unsafe.putLong(address+1, value);
+	}
+
+	public static int getSize(long pValue) {
+		return SIZE;
 	}
 
 }

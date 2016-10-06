@@ -28,6 +28,7 @@ import com.antsdb.saltedfish.sql.TypeDouble;
 import com.antsdb.saltedfish.sql.TypeFloat;
 import com.antsdb.saltedfish.sql.TypeInteger;
 import com.antsdb.saltedfish.sql.TypeString;
+import com.antsdb.saltedfish.sql.TypeTime;
 import com.antsdb.saltedfish.sql.TypeTimestamp;
 
 /**
@@ -69,6 +70,9 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
         }
         else if ("timestamp".equals(name)) {
             type = new TypeTimestamp("timestamp", 0);
+        }
+        else if ("time".equals(name)) {
+            type = new TypeTime("time");
         }
         else if ("text".equals(name)) {
             type = new TypeClob("text", Types.CLOB, 0xffff);

@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.mysql;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Create_table_like_stmtContext;
@@ -54,6 +55,7 @@ public class Create_table_like_stmtGenerator extends Generator<Create_table_like
 		createColumns(ctx, flow, table, name);
 		createPrimaryKey(ctx, flow, table, name);
 		createIndexes(ctx, flow, table, name);
+        flow.add(new SyncTableSequence(name, Collections.emptyMap()));
 	}
 
 	private void createColumns(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {

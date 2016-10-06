@@ -108,7 +108,15 @@ public final class Humpback {
     }
     
     public void open() throws Exception {
-        this.config = new ConfigService(new File(this.home, "conf.properties"));
+        File conf = new File(this.home, "conf"); 
+        if (conf.exists()) {
+            // new style, conf folder under home
+            this.config = new ConfigService(new File(conf, "conf.properties"));
+        }
+        else {
+            // old style
+            this.config = new ConfigService(new File(this.home, "conf.properties"));
+        }
         if (forceDisableHBase) {
         	this.config.props.remove("hbase_conf");
         }
@@ -207,6 +215,9 @@ public final class Humpback {
         // background jobs
         
         this.jobman.schedule(10, TimeUnit.SECONDS, ()-> {
+        	if (this.isClosed) {
+        		return;
+        	}
             this.carbonizer = this.jobman.scheduleWithFixedDelay(new Carbonizer(this), 2, TimeUnit.SECONDS);
             this.compactor = this.jobman.scheduleWithFixedDelay(30, TimeUnit.SECONDS, new Compactor(this));
         });
@@ -281,6 +292,7 @@ public final class Humpback {
         if (this.isClosed) {
             return;
         }
+        this.isClosed = true;
         
         // close write ahead logger
         
@@ -353,10 +365,6 @@ public final class Humpback {
         // close job manager
         
         this.jobman.close();
-        
-        // done
-        
-        this.isClosed = true;
         
         // memory report
         

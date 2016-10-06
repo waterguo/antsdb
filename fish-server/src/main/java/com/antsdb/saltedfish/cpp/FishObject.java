@@ -64,6 +64,9 @@ public class FishObject {
 		else if (type == Value.FORMAT_TIMESTAMP) {
 			result = FishTimestamp.get(heap, addr);
 		}
+		else if (type == Value.FORMAT_TIME) {
+			result = FishTime.get(heap, addr);
+		}
 		else if (type == Value.FORMAT_BYTES) {
 			result = Bytes.get(heap, addr);
 		}
@@ -309,6 +312,8 @@ public class FishObject {
 			return FishDecimal.getSize(pValue);
 		case Value.FORMAT_TIMESTAMP:
 			return FishTimestamp.getSize(pValue);
+		case Value.FORMAT_TIME:
+			return FishTime.getSize(pValue);
 		case Value.FORMAT_FLOAT4:
 			return Float4.getSize(pValue);
 		case Value.FORMAT_FLOAT8:

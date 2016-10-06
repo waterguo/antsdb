@@ -36,7 +36,8 @@ public enum ColumnId {
     syscolumn_auto_increment(12),
     syscolumn_collation(13),
     syscolumn_enum_values(14),
-    syscolumn_end_of_columns(15),
+    syscolumn_seq(15),
+    syscolumn_end_of_columns(16),
     /* syssequence */
     syssequence_id(1),
     syssequence_namespace(2),

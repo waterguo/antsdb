@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 import com.antsdb.saltedfish.cpp.FishBool;
 import com.antsdb.saltedfish.cpp.FishNumber;
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.FishTime;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.cpp.Value;
@@ -37,6 +38,12 @@ public class AutoCaster {
 	static Pattern _ptnDate = Pattern.compile("(\\d+)-(\\d+)-(\\d+)");
 	static Pattern _ptnTimestamp = Pattern.compile(
 			"(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+)(\\.\\d+)?");
+	static Pattern _ptnTimeDHMS = Pattern.compile(
+			"(\\d+) (\\d+):(\\d+):(\\d+)");
+	static Pattern _ptnTimeHMS = Pattern.compile(
+			"(\\d{2}+)(\\d{2}+)(\\d{2}+)");
+	static Pattern _ptnTimeHMSC = Pattern.compile(
+			"(\\d+):(\\d+):(\\d+)(\\.(\\d+))?");
 	/**
 	 * WARNING: Integer.MIN_VALUE means NULL
 	 * 
@@ -267,5 +274,54 @@ public class AutoCaster {
 		else {
 			throw new IllegalArgumentException();
 		}
+	}
+
+	public static long toTime(Heap heap, long pValue) {
+		if (pValue == 0) {
+			return 0;
+		}
+		int type = Value.getType(heap, pValue);
+		if (type == Value.TYPE_TIME) {
+			return pValue;
+		}
+		if (type == Value.TYPE_NUMBER) {
+			long time = FishNumber.longValue(pValue);
+			return FishTime.allocSet(heap, time);
+		}
+		else if (type == Value.TYPE_STRING) {
+			String text = (String)FishObject.get(heap, pValue);
+			long time = parseTime(text);
+			return FishTime.allocSet(heap, time);
+		}
+		else {
+			throw new IllegalArgumentException();
+		}
+	}
+
+	private static long parseTime(String text) {
+		Matcher m = _ptnTimeHMSC.matcher(text);
+		if (m.matches()) {
+			long hh = Integer.parseInt(m.group(1));
+			long mm = Integer.parseInt(m.group(2));
+			long ss = Integer.parseInt(m.group(3));
+			long sss = (m.group(5) == null) ? 0 : Integer.parseInt(m.group(5));
+			return hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000 + sss;
+		}
+		m = _ptnTimeHMS.matcher(text);
+		if (m.matches()) {
+			long hh = Integer.parseInt(m.group(1));
+			long mm = Integer.parseInt(m.group(2));
+			long ss = Integer.parseInt(m.group(3));
+			return hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
+		}
+		m = _ptnTimeDHMS.matcher(text);
+		if (m.matches()) {
+			long dd = Integer.parseInt(m.group(1));
+			long hh = Integer.parseInt(m.group(2));
+			long mm = Integer.parseInt(m.group(3));
+			long ss = Integer.parseInt(m.group(4));
+			return dd * 24 * 3600 * 1000 + hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
+		}
+		throw new IllegalArgumentException();
 	}
 }

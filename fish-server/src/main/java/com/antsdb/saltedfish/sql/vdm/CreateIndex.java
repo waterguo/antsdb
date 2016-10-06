@@ -139,6 +139,7 @@ public class CreateIndex extends Statement {
 		try (BluntHeap heap = new BluntHeap()) {
 			RowIterator scanner = gtable.scan(trx.getTrxId(), trx.getTrxTs());
 			while (scanner.next()) {
+				heap.reset(0);
 				Row row = scanner.getRow();
 				long pIndexKey = keyMaker.make(heap, row);
 				gindex.insertIndex(trx.getTrxId(), pIndexKey, row.getKeyAddress(), 0);

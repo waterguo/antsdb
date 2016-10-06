@@ -255,7 +255,7 @@ public class MetadataService {
             list.add(columnMeta);
         }
         list.sort((col1, col2)-> {
-            long delta = col1.getTimeId() - col2.getTimeId();
+            float delta = col1.getSequence() - col2.getSequence();
             if (delta > 0) {
                 return 1;
             }
@@ -280,12 +280,12 @@ public class MetadataService {
         trx.setDdl(true);
     }
 
-    GTable getSysTable() {
+    public GTable getSysTable() {
         Humpback humpback = this.orca.getStroageEngine();
         return humpback.getTable(Orca.SYSNS, TABLEID_SYSTABLE);
     }
 
-    GTable getSysColumn() {
+    public GTable getSysColumn() {
         Humpback humpback = this.orca.getStroageEngine();
         return humpback.getTable(Orca.SYSNS, TABLEID_SYSCOLUMN);
     }

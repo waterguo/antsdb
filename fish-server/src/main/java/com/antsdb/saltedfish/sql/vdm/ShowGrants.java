@@ -13,27 +13,30 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import com.antsdb.saltedfish.cpp.FishObject;
-import com.antsdb.saltedfish.cpp.Heap;
+import java.util.Collections;
+
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class FuncCurrentUser extends Function {
+public class ShowGrants extends CursorMaker {
+    CursorMeta meta = new CursorMeta();
 
-    @Override
-    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	String user = ctx.getSession().getUser();
-    	// mysql always append "@<host>". phpMyAdmin is depending on "@<host>"
-    	user += "@%";
-        long addr = FishObject.allocSet(heap, user);
-        return addr;
+    public ShowGrants() {
+        meta.addColumn(new FieldMeta("Grants", DataType.varchar()));
     }
 
     @Override
-    public DataType getReturnType() {
-        return DataType.varchar();
+    public CursorMeta getCursorMeta() {
+        return this.meta;
+    }
+
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
+        return c;
     }
 }

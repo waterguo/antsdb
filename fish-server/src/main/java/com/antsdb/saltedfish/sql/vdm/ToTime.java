@@ -13,7 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
@@ -21,19 +20,21 @@ import com.antsdb.saltedfish.sql.DataType;
  * 
  * @author *-xguo0<@
  */
-public class FuncCurrentUser extends Function {
+public class ToTime extends UnaryOperator {
+    public ToTime(Operator upstream) {
+        super(upstream);
+        this.upstream = upstream;
+    }
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	String user = ctx.getSession().getUser();
-    	// mysql always append "@<host>". phpMyAdmin is depending on "@<host>"
-    	user += "@%";
-        long addr = FishObject.allocSet(heap, user);
-        return addr;
+        long pValue = this.upstream.eval(ctx, heap, params, pRecord);
+        long pResult = AutoCaster.toTime(heap, pValue);
+        return pResult;
     }
 
     @Override
     public DataType getReturnType() {
-        return DataType.varchar();
+        return DataType.timestamp();
     }
 }

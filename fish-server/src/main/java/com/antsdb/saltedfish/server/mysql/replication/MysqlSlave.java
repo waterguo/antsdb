@@ -216,6 +216,17 @@ public class MysqlSlave implements BinlogEventListener {
         }
         catch (Exception x) {
         	_log.error("replication failed: {}", event, x);
+        	StringBuffer buf = new StringBuffer();
+        	this.tableById.forEach((id, name) -> {
+        		buf.append(id);
+        		buf.append("=[");
+        		buf.append(name[0]);
+        		buf.append(",");
+        		buf.append(name[1]);
+        		buf.append("],");
+        	});
+        	buf.deleteCharAt(buf.length()-1);
+        	_log.error("table map: {}", buf.toString());
         	stop();
         }
 	}
@@ -279,6 +290,14 @@ public class MysqlSlave implements BinlogEventListener {
 		if (sql.equalsIgnoreCase("BEGIN")) {
 			return;
 		}
+		if (StringUtils.startsWithIgnoreCase(sql, "grant ")) {
+			// dont process grants. 
+			return;
+		}
+		if (StringUtils.startsWithIgnoreCase(sql, "flush ")) {
+			// dont process flush privileges. 
+			return;
+		}
 		String dbname = event.getDatabaseName().toString();
 		if (!StringUtils.isEmpty(dbname)) {
 			this.session.run("USE " + dbname);
@@ -299,7 +318,6 @@ public class MysqlSlave implements BinlogEventListener {
 		name[1] = event.getTableName().toString();
 		long tableId = event.getTableId();
 		this.tableById.put(tableId, name);
-		
 	};
 
 	private TableMeta getTable(long tableId) {

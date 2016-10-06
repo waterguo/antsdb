@@ -21,8 +21,8 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.sql.Date;
-import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.Calendar;
 
 import org.apache.commons.lang.NotImplementedException;
@@ -134,14 +134,12 @@ public final class BufferUtils {
         return src == null ? null : new BigDecimal(src);
     }
 
-    public static java.sql.Time readTime(ByteBuf in) {
+    public static Duration readTime(ByteBuf in) {
         in.readBytes(6);
         int hour = readInt(in);
         int minute = readInt(in);
         int second = readInt(in);
-        Calendar cal = getLocalCalendar();
-        cal.set(0, 0, 0, hour, minute, second);
-        return new Time(cal.getTimeInMillis());
+        return Duration.ofSeconds(hour * 3600 + minute * 60 + second);
     }
 
     public static Date readDate(ByteBuf in) {

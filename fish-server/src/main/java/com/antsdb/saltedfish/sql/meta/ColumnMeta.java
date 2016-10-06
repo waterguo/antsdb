@@ -261,4 +261,13 @@ public class ColumnMeta extends MetaObject {
 	public void setEnumValues(String value) {
 		row.set(ColumnId.syscolumn_enum_values.getId(), value);
 	}
+	
+	public float getSequence() {
+		Float value = (Float)row.get(ColumnId.syscolumn_seq.getId());
+		return (value == null) ? getId() : value;
+	}
+	
+	public void setSequence(float value) {
+		row.set(ColumnId.syscolumn_seq.getId(), value);
+	}
 }

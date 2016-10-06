@@ -205,4 +205,13 @@ public final class FishUtf8 {
 		return buf.toString();
 	}
 
+	public static int getLength(int format, long pValue) {
+		Scanner scanner = scan(pValue);
+		int length = 0;
+		while (scanner.getNext() >= 0) {
+			length++;
+		}
+		return length;
+	}
+
 }

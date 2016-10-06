@@ -50,8 +50,10 @@ sql_stmt
  | show_charset
  | show_collation
  | show_columns_stmt
+ | show_create_table_stmt
  | show_databases
  | show_engines
+ | show_grants
  | show_index_stmt
  | show_tables_stmt
  | show_variable_stmt
@@ -104,6 +106,7 @@ alter_table_options
  | alter_table_modify
  | alter_table_rename
  | alter_table_drop
+ | alter_table_drop_index
  ;
 
 alter_table_add
@@ -173,6 +176,10 @@ alter_table_drop
  : K_DROP K_COLUMN? identifier
  ;
  
+alter_table_drop_index
+ : K_DROP (K_INDEX | K_KEY) identifier
+ ;
+ 
 change_master_stmt
  : K_CHANGE K_MASTER K_TO (change_master_stmt_option (',' change_master_stmt_option)*) 
  ;
@@ -198,7 +205,7 @@ indexed_column_def
  : indexed_column ('(' signed_number ')')?
  ;
   
-create_table_stmt: K_CREATE K_TABLE table_name_ '(' create_defs ')' table_options ;
+create_table_stmt: K_CREATE K_TABLE table_name_ '(' create_defs  ','? ')' table_options ;
 
 create_defs
  : create_def (',' create_def)*
@@ -212,7 +219,8 @@ create_def
  ;
  
 column_def
- : column_name data_type K_UNSIGNED? K_SIGNED? K_BINARY? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)? 
+ : column_name data_type K_UNSIGNED? K_SIGNED? K_BINARY? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)?
+   (K_AFTER identifier)? 
    (K_COMMENT (STRING_LITERAL | DOUBLE_QUOTED_LITERAL))? 
  ;
  
@@ -268,7 +276,7 @@ column_constraint_collate: K_COLLATE any_name;
 column_constraint_character_set: K_CHARACTER K_SET any_name;
 
 primary_key_def
- : K_PRIMARY K_KEY '(' columns ')'
+ : K_PRIMARY K_KEY '(' index_columns ')'
  ;
  
 index_def
@@ -367,7 +375,7 @@ set_stmt
  ;
 
 set_stmt_names
- : K_NAMES names_value (name_collate)?
+ : (K_NAMES | (K_CHARACTER K_SET)) names_value (name_collate)?
  ;
 
 name_collate
@@ -500,6 +508,10 @@ show_engines
  : K_SHOW K_ENGINES
  ;
  
+show_grants
+ : K_SHOW K_GRANTS
+ ;
+ 
 show_index_stmt
  : K_SHOW (K_INDEX | K_INDEXES | K_KEYS) (K_FROM | K_IN) table_name_ ((K_FROM | K_IN) identifier)?
  ;
@@ -511,17 +523,25 @@ show_tables_stmt
 show_columns_stmt
  : K_SHOW K_FULL? (K_COLUMNS | K_FIELDS) K_FROM table_name_ (K_FROM identifier)? (K_LIKE string_value)?
  ;
-  
+
+show_create_table_stmt
+ : K_SHOW K_CREATE K_TABLE table_name_
+ ;
+   
 show_variable_stmt
- : K_SHOW K_VARIABLES where_clause?
+ : K_SHOW K_GLOBAL? K_VARIABLES (where_clause | show_variable_like_clause)?  
  ;
 
+show_variable_like_clause
+ : K_LIKE literal_value
+ ;
+ 
 show_warnings_stmt
  : K_SHOW K_WARNINGS
  ;
  
 truncate_table_stmt
- : K_TRUNCATE K_TABLE table_name_
+ : K_TRUNCATE K_TABLE? table_name_
  ;
 
 unlock_table_stmt: K_UNLOCK K_TABLES;
@@ -730,7 +750,7 @@ any_name
 
 name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
- | K_MATCH | K_BINARY
+ | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION
  ;
  
 identifier
@@ -876,6 +896,7 @@ K_ELSE : E L S E;
 K_ENABLE : E N A B L E;
 K_END : E N D;
 K_ENGINES : E N G I N E S;
+K_GRANTS : G R A N T S;
 K_ESCAPE : E S C A P E;
 K_EXCEPT : E X C E P T;
 K_EXCLUSIVE : E X C L U S I V E;

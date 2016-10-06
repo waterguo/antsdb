@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql;
 
 import java.math.BigDecimal;
 import java.sql.Date;
+import java.sql.Time;
 
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.vdm.NullIfEmpty;
@@ -28,6 +29,7 @@ import com.antsdb.saltedfish.sql.vdm.ToFloat;
 import com.antsdb.saltedfish.sql.vdm.ToInteger;
 import com.antsdb.saltedfish.sql.vdm.ToLong;
 import com.antsdb.saltedfish.sql.vdm.ToString;
+import com.antsdb.saltedfish.sql.vdm.ToTime;
 import com.antsdb.saltedfish.util.CodingError;
 
 public class Util {
@@ -70,6 +72,9 @@ public class Util {
         }
         else if (type == Double.class) {
         	newone = new ToDouble(expr);
+        }
+        else if (type == Time.class) {
+        	newone = new ToTime(expr);
         }
         else {
             throw new CodingError();

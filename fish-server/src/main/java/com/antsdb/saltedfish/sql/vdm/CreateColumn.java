@@ -25,6 +25,7 @@ public class CreateColumn extends Statement implements ColumnAttributes {
     public String defaultValue;
 	public boolean autoIncrement = false;
     public String enumValues;
+	private String after;
     
     @Override
     public Object run(VdmContext ctx, Parameters params) {
@@ -45,9 +46,21 @@ public class CreateColumn extends Statement implements ColumnAttributes {
         columnMeta.setTimeId(ctx.getOrca().getIdentityService().getTimeId());
         columnMeta.setAutoIncrement(this.autoIncrement);
         columnMeta.setEnumValues(this.enumValues);
-        ctx.getOrca().getMetaService().addColumn(trx, columnMeta);
+
+        // after. if there is after, sequence number of the new column is between the after and after after column
+        
+        if (this.after != null) {
+        	ColumnMeta afterColumn = Checks.columnExist(table, this.after);
+        	int idxAfterAfter = table.getColumns().indexOf(afterColumn) + 1;
+        	float seqAfterAfter =  afterColumn.getSequence() + 0.5f;
+        	if (idxAfterAfter < table.getColumns().size()) {
+        		seqAfterAfter = table.getColumns().get(idxAfterAfter).getSequence();
+        	}
+        	columnMeta.setSequence((afterColumn.getSequence() + seqAfterAfter) / 2);
+        }
         
         // done
+        ctx.getOrca().getMetaService().addColumn(trx, columnMeta);
         
         return null;
     }
@@ -113,6 +126,10 @@ public class CreateColumn extends Statement implements ColumnAttributes {
 
 	public void setEnumValues(String enumValues) {
 		this.enumValues = enumValues;
+	}
+
+	public void setAfter(String after) {
+		this.after = after;
 	}
 
 }

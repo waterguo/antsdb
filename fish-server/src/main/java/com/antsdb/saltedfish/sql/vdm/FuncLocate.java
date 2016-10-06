@@ -13,27 +13,35 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
- * 
+ * @see http://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_locate
  * @author *-xguo0<@
  */
-public class FuncCurrentUser extends Function {
+public class FuncLocate extends Function {
+	@Override
+	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pString = this.parameters.get(1).eval(ctx, heap, params, pRecord);
+        if (pString == 0) {
+        	return 0;
+        }
+        long pSubstr = this.parameters.get(0).eval(ctx, heap, params, pRecord);
+        if (pSubstr == 0) {
+        	return 0;
+        }
+        String str = (String)FishObject.get(heap, AutoCaster.toString(heap, pString));
+        String substr = (String)FishObject.get(heap, AutoCaster.toString(heap, pSubstr));
+        int pos = StringUtils.indexOf(str, substr)+1;
+        return FishObject.allocSet(heap, pos);
+	}
 
-    @Override
-    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	String user = ctx.getSession().getUser();
-    	// mysql always append "@<host>". phpMyAdmin is depending on "@<host>"
-    	user += "@%";
-        long addr = FishObject.allocSet(heap, user);
-        return addr;
-    }
-
-    @Override
-    public DataType getReturnType() {
-        return DataType.varchar();
-    }
+	@Override
+	public DataType getReturnType() {
+		return DataType.integer();
+	}
 }

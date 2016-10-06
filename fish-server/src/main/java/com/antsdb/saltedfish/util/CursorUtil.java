@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.util;
 
 import java.lang.reflect.Field;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -149,6 +150,15 @@ public class CursorUtil {
             }
             else if (i.getType() == long.class) {
                 column.setType(DataType.longtype());
+            }
+            else if (i.getType() == Long.class) {
+                column.setType(DataType.longtype());
+            }
+            else if (i.getType() == Timestamp.class) {
+                column.setType(DataType.timestamp());
+            }
+            else if (i.getType() == byte[].class) {
+                column.setType(DataType.blob());
             }
             else {
                 throw new NotImplementedException();

@@ -132,7 +132,7 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
     }
 
 	private Instruction createPrimrayKey(GeneratorContext ctx, ObjectName tableName, Primary_key_defContext rule) {
-        List<String> columns = Utils.getColumns(rule.columns());
+        List<String> columns = Utils.getColumns(rule.index_columns());
         CreatePrimaryKey step = new CreatePrimaryKey(tableName, columns);
         return step;
     }

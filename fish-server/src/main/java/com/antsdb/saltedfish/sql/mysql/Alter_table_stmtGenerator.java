@@ -25,6 +25,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_add_constraint_pkCont
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_add_indexContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_add_primary_keyContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_dropContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_drop_indexContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_modifyContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_optionsContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_renameContext;
@@ -40,6 +41,7 @@ import com.antsdb.saltedfish.sql.vdm.CreateForeignKey;
 import com.antsdb.saltedfish.sql.vdm.CreateIndex;
 import com.antsdb.saltedfish.sql.vdm.CreatePrimaryKey;
 import com.antsdb.saltedfish.sql.vdm.DeleteColumn;
+import com.antsdb.saltedfish.sql.vdm.DropIndex;
 import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ModifyColumn;
@@ -96,6 +98,9 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
     	        else if (it.alter_table_add_index() != null) {
     	        	flow.add(addIndex(ctx, it.alter_table_add_index(), tableName));
     	        }
+    	        else if (it.alter_table_drop_index() != null) {
+    	        	flow.add(dropIndex(ctx, it.alter_table_drop_index(), tableName));
+    	        }
     	        else {
     	            throw new NotImplementedException();
     	        }
@@ -106,6 +111,12 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
         flow.add(new SyncTableSequence(tableName, null));
         return flow;
     }
+
+	private Instruction dropIndex(GeneratorContext ctx, Alter_table_drop_indexContext rule, ObjectName tableName) {
+        String indexName = Utils.getIdentifier(rule.identifier());
+        Instruction result = new DropIndex(tableName, indexName);
+		return result;
+	}
 
 	private Instruction addIndex(GeneratorContext ctx, Alter_table_add_indexContext rule, ObjectName tableName) {
         String indexName = Utils.getIdentifier(rule.index_name().identifier());
@@ -138,6 +149,10 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
     		String sql = String.format("UPDATE %s SET %s=%s", tableName, cc.columnName, cc.defaultValue);
     		flow.add(new RunScript(sql, new Object[0]));
     		flow.add(new Commit());
+    	}
+    	if (rule.K_AFTER() != null) {
+    		String after = Utils.getIdentifier(rule.identifier());
+    		cc.setAfter(after);
     	}
     	if (pkColumns.size() != 0) {
     		CreatePrimaryKey cpk = new CreatePrimaryKey(tableName, pkColumns);

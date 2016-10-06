@@ -13,7 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import java.sql.Time;
+import java.time.Duration;
+import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
@@ -26,8 +27,9 @@ public class CurrentTime extends Operator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        Time time =  new Time(System.currentTimeMillis());
-        long addr = FishTime.allocSet(heap, time);
+    	LocalTime time = LocalTime.now();
+    	Duration duration = Duration.ofSeconds(time.getHour() * 3600 + time.getMinute() * 60 + time.getSecond());
+        long addr = FishTime.allocSet(heap, duration);
         return addr;
     }
 
