@@ -37,7 +37,8 @@ public class Create_index_stmtGenerator extends DdlGenerator<Create_index_stmtCo
         rule.indexed_column_def().forEach((it) -> columns.add(Utils.getIdentifier(it.indexed_column().identifier())));
         boolean isUnique = rule.K_UNIQUE() != null;
         boolean createIfNotExists = rule.K_IF() != null && rule.K_NOT() != null && rule.K_EXISTS() != null;
-        Instruction result = new CreateIndex(indexName, isUnique, createIfNotExists, tableName, columns);
+        boolean isFullText = rule.K_FULLTEXT() != null;
+        Instruction result = new CreateIndex(indexName, isFullText, isUnique, createIfNotExists, tableName, columns);
         if (isUnique) {
         	Flow flow = new Flow();
         	flow.add(result);

@@ -24,8 +24,10 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.BluntHeap;
+import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int8;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
@@ -92,11 +94,12 @@ public class LogReplayer extends ReplayHandler implements ConsoleHelper {
 		if (line.getOptionValue("rowid") != null) {
 			this.rowid = Long.parseLong(line.getOptionValue("rowid"));
 		}
+		Heap heap = new BluntHeap();
 		if (line.getOptionValue("key") != null) {
 			String keyText = line.getOptionValue("key");
 			byte[] keyBytes = Base64.getDecoder().decode(keyText);
-			this.pKey = Unsafe.allocateMemory(keyBytes.length + 4);
-			Bytes.set(this.pKey, keyBytes);
+			KeyBytes key = KeyBytes.allocSet(heap, keyBytes);
+			this.pKey = key.getAddress();
 		}
 		
 		// start offset
@@ -184,7 +187,9 @@ public class LogReplayer extends ReplayHandler implements ConsoleHelper {
 			}
 		}
 		if (this.pKey != 0) {
-			if (Bytes.compare(this.pKey, row.getKeyAddress()) != 0) {
+			KeyBytes x = KeyBytes.create(this.pKey);
+			KeyBytes y = KeyBytes.create(row.getKeyAddress());
+			if (x.compare(y) != 0) {
 				return;
 			}
 		}
@@ -205,7 +210,9 @@ public class LogReplayer extends ReplayHandler implements ConsoleHelper {
 			}
 		}
 		if (this.pKey != 0) {
-			if (Bytes.compare(this.pKey, entry.getRowKeyAddress()) != 0) {
+			KeyBytes x = KeyBytes.create(this.pKey);
+			KeyBytes y = KeyBytes.create(entry.getRowKeyAddress());
+			if (x.compare(y) != 0) {
 				return;
 			}
 		}
@@ -228,7 +235,9 @@ public class LogReplayer extends ReplayHandler implements ConsoleHelper {
 			}
 		}
 		if (this.pKey != 0) {
-			if (Bytes.compare(this.pKey, pKey) != 0) {
+			KeyBytes x = KeyBytes.create(this.pKey);
+			KeyBytes y = KeyBytes.create(pKey);
+			if (x.compare(y) != 0) {
 				return;
 			}
 		}

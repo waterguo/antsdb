@@ -15,12 +15,14 @@ package com.antsdb.saltedfish.nosql;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
+import java.nio.channels.FileLock;
 import java.nio.file.StandardOpenOption;
 
 import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.util.UberTimer;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class CheckPoint {
@@ -46,7 +48,7 @@ public class CheckPoint {
 	
     File file;
     FileChannel ch;
-    ByteBuffer buf;
+    MappedByteBuffer buf;
     long addr;
     
     public CheckPoint(File file) throws IOException {
@@ -57,16 +59,37 @@ public class CheckPoint {
                 StandardOpenOption.CREATE, 
                 StandardOpenOption.WRITE, 
                 StandardOpenOption.READ);
-        this.ch.lock();
-        this.buf = this.ch.map(MapMode.READ_WRITE, 0, 512);
-        this.addr = UberUtil.getAddress(buf);
-        if (getServerId() == 0) {
-        	Unsafe.putLong(this.addr + OFFSET_SERVER_ID, System.nanoTime());
+        try {
+	        for (UberTimer timer = new UberTimer(60 * 1000); !timer.isExpired();) {
+	            FileLock lock = this.ch.tryLock();
+	            if (lock != null) {
+	                this.buf = this.ch.map(MapMode.READ_WRITE, 0, 512);
+	                this.addr = UberUtil.getAddress(buf);
+	                if (getServerId() == 0) {
+	                	Unsafe.putLong(this.addr + OFFSET_SERVER_ID, System.nanoTime());
+	                }
+	            	return;
+	            }
+	            try {
+					Thread.sleep(1000);
+				}
+				catch (InterruptedException ignored) {
+				}
+	        }
         }
+        finally {
+        	this.ch.close();
+        }
+        throw new IOException("unable to acquire lock on " + file.getAbsolutePath());
     }
     
     void close() throws IOException {
-        this.ch.close();
+    	if (this.buf != null) {
+    		Unsafe.unmap(buf);
+    	}
+    	if (this.ch != null) {
+    		this.ch.close();
+    	}
     }
     
     boolean isDatabaseOpen() {

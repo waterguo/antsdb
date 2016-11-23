@@ -42,4 +42,9 @@ public class FuncBase64 extends Function {
 		return DataType.varchar();
 	}
 
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
+
 }

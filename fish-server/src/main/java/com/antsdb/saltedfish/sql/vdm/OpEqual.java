@@ -34,6 +34,9 @@ public class OpEqual extends BinaryOperator {
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long xAddr = this.left.eval(ctx, heap, params, pRecord);
         long yAddr = this.right.eval(ctx, heap, params, pRecord);
+        if ((xAddr == 0) || (yAddr == 0)) {
+        	return 0;
+        }
         boolean result = AutoCaster.equals(heap, xAddr, yAddr);
         return FishBool.allocSet(heap, result);
     }

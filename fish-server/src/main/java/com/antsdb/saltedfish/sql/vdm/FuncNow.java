@@ -34,4 +34,9 @@ public class FuncNow  extends Function {
         return DataType.timestamp();
     }
 
+	@Override
+	public int getMinParameters() {
+		return 0;
+	}
+
 }

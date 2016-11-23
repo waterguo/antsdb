@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
@@ -35,10 +36,15 @@ final class IndexEntryHandlers {
 	IndexEntryHandlers(Orca orca, TableMeta table) {
     	Humpback humpback = orca.getHumpback();
     	for (IndexMeta i:table.getIndexes()) {
-    		IndexEntryHandler handler = new IndexEntryHandler();
+    		IndexEntryHandler handler;
+    		GTable gindex = humpback.getTable(i.getIndexTableId());
+    		if (i.isFullText()) {
+    			handler = new FullTextIndexEntryHandler(gindex, table, i);
+    		} 
+    		else {
+    			handler = new IndexEntryHandler(gindex, table, i);
+    		}
     		handlers.add(handler);
-    		handler.gtable = humpback.getTable(i.getIndexTableId());
-    		handler.index = i;
     		handler.keyMaker = i.getKeyMaker();
     	}
 	}

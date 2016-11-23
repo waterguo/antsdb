@@ -42,7 +42,7 @@ public class OpIncrementColumnValue extends UnaryOperator {
 			if (pValue != 0) {
 				long pNumber = AutoCaster.toNumber(heap, pValue);
 				long val = FishNumber.longValue(pNumber);
-				if (val != 0) {
+				if (val != 0 || ctx.getSession().getParameters().isNoAutoValueOnZero()) {
 					// if user set a value to an auto_increment column, we need to remember it
 					SequenceMeta seq = getSequence(ctx);
 					if (val > seq.getLastNumber()) {

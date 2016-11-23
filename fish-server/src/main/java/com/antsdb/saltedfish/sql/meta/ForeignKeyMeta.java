@@ -41,10 +41,9 @@ public class ForeignKeyMeta extends RuleMeta<ForeignKeyMeta> {
 	
     public ForeignKeyMeta addColumn(Orca orca, ColumnMeta column) {
         int key = (int)orca.getIdentityService().getSequentialId(RULE_COL_SEQUENCE);
-        SlowRow ruleColumn = new SlowRow(key);
-        ruleColumn.set(ColumnId.sysrulecol_id.getId(), key);
-        ruleColumn.set(ColumnId.sysrulecol_rule_id.getId(), getId());
-        ruleColumn.set(ColumnId.sysrulecol_column_id.getId(), column.getId());
+        RuleColumnMeta ruleColumn = new RuleColumnMeta(key);
+        ruleColumn.setRuleId(this.getId());
+        ruleColumn.setColumnId(column.getId());
         this.ruleColumns.add(ruleColumn);
         return this;
     }

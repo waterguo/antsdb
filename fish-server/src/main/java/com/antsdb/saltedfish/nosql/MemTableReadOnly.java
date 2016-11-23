@@ -19,16 +19,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
+import com.antsdb.saltedfish.util.ScalableData;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class MemTableReadOnly {
+public class MemTableReadOnly extends ScalableData<MemTabletReadOnly> {
     final static int MAGIC = 0x0211;
     final static int VERSION = 1;
 
@@ -167,6 +169,21 @@ public class MemTableReadOnly {
 		public boolean isRow() {
 			return this.lastFetched.isRow();
 		}
+
+		@Override
+		public long getIndexSuffix() {
+			return this.lastFetched.getIndexSuffix();
+		}
+
+		@Override
+		public boolean eof() {
+			return this.eof;
+		}
+
+		@Override
+		public byte getMisc() {
+			return this.lastFetched.getMisc();
+		}
     }
     
     public MemTableReadOnly(SpaceManager spaceman, File ns, int tableId) {
@@ -285,7 +302,6 @@ public class MemTableReadOnly {
     	// must ordered by tablet id
     	
     	Collections.sort(files);
-    	Collections.reverse(files);
     	
     	// load tablets
 
@@ -335,6 +351,11 @@ public class MemTableReadOnly {
 			startTrxId = Math.max(startTrxId, tabletStartTrxId);
 		}
 		return startTrxId;
+	}
+
+	@Override
+	protected MemTabletReadOnly extend(MemTabletReadOnly filled) {
+		throw new NotImplementedException();
 	}
 
 }

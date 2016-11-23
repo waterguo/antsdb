@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishSkipList;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.util.AtomicUtil;
 import com.antsdb.saltedfish.util.BytesUtil;
@@ -230,6 +230,7 @@ public final class MemTablet extends MemTabletReadOnly implements ConsoleHelper 
 			long pRowKey, 
 			Collection<MemTabletReadOnly> pastTablets, 
 			long sp, 
+			byte misc,
 			int timeout) {
 		try {
 			this.gate.incrementAndGet();
@@ -241,7 +242,8 @@ public final class MemTablet extends MemTabletReadOnly implements ConsoleHelper 
 				HumpbackError error = check(rowState, false, true);
 				if (error == HumpbackError.SUCCESS) {
 					ListNode node = ListNode.allocIndex(heap, sp, version, pRowKey, oHeadValue);
-					this.humpback.getGobbler().logIndex(this.tableId, version, pIndexKey, pRowKey);
+					node.setMisc(misc);
+					this.humpback.getGobbler().logIndex(this.tableId, version, pIndexKey, pRowKey, misc);
 					if (!casHead(pHead, oHeadValue, node.getOffset())) {
 						this.casRetries.incrementAndGet();
 						continue;
@@ -394,25 +396,21 @@ public final class MemTablet extends MemTabletReadOnly implements ConsoleHelper 
 	 * @param force force rendering even if the tablet is not frozen
 	 * @return
 	 */
-	synchronized void render(boolean force) {
+	synchronized void render(long lastClosed) {
 		if (isCarbonized()) {
-			return;
-		}
-		if (!(force || isFrozen())) {
 			return;
 		}
 		
 		// check if there is any data available for rendering
 		
-		long lastClosed = this.humpback.getLastClosedTransactionId();
 		long startTrxId = this.startTrx.get();
 		if ((startTrxId == Long.MIN_VALUE) || (startTrxId < lastClosed)) {
 			return;
 		}
-		_log.trace("rendering {} start {}...", this.file, startTrxId);
 
 		// reset startTrx and endTrx
 		
+        _log.trace("rendering {} from {} to {} ...", this.file, lastClosed);
 		this.startTrx.compareAndSet(startTrxId, Long.MIN_VALUE);
 		long endTrxId = this.endTrx.get();
 		this.endTrx.compareAndSet(endTrxId, 0);
@@ -429,34 +427,38 @@ public final class MemTablet extends MemTabletReadOnly implements ConsoleHelper 
 			// track start sprow and end sprow
 			
 			ListNode node = new ListNode(this.base, offset);
+            long version = node.getVersion();
 			long spRow = node.getSpacePointer();
 			AtomicUtil.max(endSprow, spRow);
 			AtomicUtil.min(startSprow, spRow);
+
+			// skip if this node is already rendered
 			
-			// render trxid
+			if (version >= -10) {
+			    return true;
+			}
 			
-			long version = node.getVersion();
-    		if (version < -10) {
-        		long trxts = getTrxMan().getTimestamp(version);
-        		if (trxts < -10) {
-        			if (!force) {
-        				throw new HumpbackException("trxts not found for trxid: " + version);
-        			}
-        			AtomicUtil.max(startTrx, version);
-        			AtomicUtil.min(endTrx, version);
-        		}
-        		else {
-            		if (trxts > now) {
-            			if (!force) {
-            				throw new HumpbackException("incorrect trxts: " + trxts);
-            			}
-            		}
-            		//_log.debug("render @{} trxid={} to version {}", node.getOffset(), version, trxts);
-            		node.setVersion(trxts);
-            		count.incrementAndGet();
-        		}
-    		}
-			return true;
+			// render it
+			
+			if (version >= lastClosed) {
+	            long trxts = getTrxMan().getTimestamp(version);
+			    if (trxts >= -10) {
+		            if (trxts <= now) {
+		                node.setVersion(trxts);
+		                count.incrementAndGet();
+		                return true;
+		            }
+		            else {
+		                _log.warn("trxts is newer than current timestamp: ", trxts);
+		            }
+			    }
+			    else {
+	                _log.warn("trxts not found for trxid: {}", version);
+			    }
+			}
+            AtomicUtil.max(startTrx, version);
+            AtomicUtil.min(endTrx, version);
+            return true;
 		});
 		
 		// update 
@@ -510,7 +512,7 @@ public final class MemTablet extends MemTabletReadOnly implements ConsoleHelper 
 			return false;
 		}
 		
-		render(false);
+		render(this.humpback.getLastClosedTransactionId());
 		setCarbonized(true);
 		
 		// write to disk
@@ -598,7 +600,7 @@ public final class MemTablet extends MemTabletReadOnly implements ConsoleHelper 
 				_log.info(
 				    "failed to acquire row lock file={} pKey={} oHeadValue={} timeout={} trxid={}",
 						   this.file,
-						   BytesUtil.toCompactHex(Bytes.get(heap, pKey)),
+						   BytesUtil.toCompactHex(KeyBytes.create(pKey).get()),
 						   oHeadValue,
 						   timer.getTimeOut(),
 						   trxid);

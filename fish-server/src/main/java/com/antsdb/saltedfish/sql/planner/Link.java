@@ -18,6 +18,7 @@ import java.util.List;
 
 import com.antsdb.saltedfish.sql.vdm.CursorIndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.CursorPrimaryKeySeek;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
@@ -96,6 +97,9 @@ class Link {
     	float score = 10000;
         if (maker instanceof TableSeek) {
             score = 1;
+        }
+        else if (maker instanceof CursorPrimaryKeySeek) {
+        	score = 1.05f;
         }
         else if (maker instanceof IndexSeek) {
         	score = 1.1f;

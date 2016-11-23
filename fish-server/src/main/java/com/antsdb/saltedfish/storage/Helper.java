@@ -41,6 +41,7 @@ import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
@@ -313,7 +314,7 @@ public final class Helper {
 
 	public static void getRowKey(BluntHeap heap, TableMeta table, Result r) {
 		byte[] key = hbaseKeyToAnts(r.getRow());
-		com.antsdb.saltedfish.cpp.Bytes.allocSet(heap, key);
+		KeyBytes.allocSet(heap, key);
 	}
 
 	public static long getVersion(Result r) {
@@ -457,6 +458,9 @@ public final class Helper {
 		else if (dataType == Value.FORMAT_TIMESTAMP) {
 			length = 8;
 		}
+		else if (dataType == Value.FORMAT_TIME) {
+			length = 8;
+		}
 		else if (dataType == Value.FORMAT_DECIMAL) {
 			BigDecimal bigDecimal = (BigDecimal)FishObject.get(null, pValue);
 			return Bytes.toBytes(bigDecimal);
@@ -494,7 +498,7 @@ public final class Helper {
 	}
 
     public static byte[] antsKeyToHBase(long pkey) {
-    	byte[] bytes = com.antsdb.saltedfish.cpp.Bytes.get(null, pkey);
+    	byte[] bytes = KeyBytes.create(pkey).get();
     	KeyMaker.flipEndian(bytes);
     	return bytes;
     }

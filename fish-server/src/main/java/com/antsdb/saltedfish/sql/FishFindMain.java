@@ -24,6 +24,7 @@ import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FishSkipList;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.SkipListScanner;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
@@ -50,6 +51,7 @@ public class FishFindMain extends FishCommandLine {
 
 	private HumpbackReadOnly humpback;
 	private int tableId;
+	private boolean isIndex = false;
 
 	protected Options getOptions() {
 		Options options = new Options();
@@ -57,6 +59,7 @@ public class FishFindMain extends FishCommandLine {
 		options.addOption("t", "table", true, "table id");
 		options.addOption("r", "row", true, "find row by HEX");
 		options.addOption("x", "rindex", true, "find index by row key");
+		options.addOption(null, "index", false, "talbe is an index");
 		return options;
 	}
 	
@@ -76,6 +79,7 @@ public class FishFindMain extends FishCommandLine {
 		}
 		
 		this.humpback = getHumpbackReadOnly();
+		this.isIndex  = cmd.hasOption("index");
 		if (cmd.hasOption('r')) {
 			findRow(cmd.getOptionValue('r'));
 			return;
@@ -189,33 +193,47 @@ public class FishFindMain extends FishCommandLine {
 		RowIterator it = table.scan(0, Long.MAX_VALUE);
 		while (it.next()) {
 			long pKey = it.getKeyPointer();
-			long spRow = table.get(0, Long.MAX_VALUE, pKey);
-			Row row = it.getRow();
-			printRow(table, row, spRow);
-			printRowHistory(table, row.getKeyAddress());
+			if (this.isIndex) {
+				printIndex(it);
+			}
+			else {
+				long spRow = table.get(0, Long.MAX_VALUE, pKey);
+				Row row = it.getRow();
+				printRow(table, row, spRow);
+				printRowHistory(table, row.getKeyAddress());
+			}
 		}
 	}
 
 	private void findSingleRow(GTableReadOnly table, String value) {
 		byte[] key = BytesUtil.hexToBytes(value);
 		try (BluntHeap heap = new BluntHeap()){
-			long pKey = Bytes.allocSet(heap, key);
+			long pKey = KeyBytes.allocSet(heap, key).getAddress();
 			Row row = table.getRow(0, Long.MAX_VALUE, pKey);
 			long spRow = table.get(0, Long.MAX_VALUE, pKey);
 			if (spRow != 0) {
 				printRow(table, row, spRow);
 			}
 			else {
-				println("error: row is not found");
+		        println("%s: row is not found", BytesUtil.toHex8(key));
 			}
 			printRowHistory(table, pKey);
 		}
 	}
 	
+	private void printIndex(RowIterator it) {
+		long pIndexKey = it.getKeyPointer();
+		long pRowKey = it.getRowKeyPointer();
+		String indexKey = BytesUtil.toHex8(KeyBytes.get(pIndexKey));
+		String rowKey = BytesUtil.toHex8(KeyBytes.get(pRowKey));
+		println("%s", indexKey);
+		println("  rowkey:%s", rowKey);
+		println("  misc:%d", it.getMisc() & 0xff);
+	}
+	
 	private void printRow(GTableReadOnly table, Row row, long spRow) {
-		println("%s", this.humpback.getSpaceManager().getLocation(spRow));
+		println("%s", BytesUtil.toHex8(row.getKey()));
 		println("  columns");
-		println("    %d:%s", -1, getColumnText(row, -1));
 		for (int i=0; i<=row.getMaxColumnId(); i++) {
 			String text = getColumnText(row, i);
 			println("    %d:%s", i, text);

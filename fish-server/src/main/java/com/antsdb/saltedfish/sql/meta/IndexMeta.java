@@ -79,4 +79,13 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
 	public void setExternalName(String value) {
 		row.set(ColumnId.sysrule_index_external_name.getId(), value);
 	}
+	
+	public void setFullText(boolean value) {
+		row.set(ColumnId.sysrule_is_fulltext.getId(), value);
+	}
+	
+	public boolean isFullText() {
+		Boolean value = (Boolean)row.get(ColumnId.sysrule_is_fulltext.getId());
+		return value != null ? value : false;
+	}
 }

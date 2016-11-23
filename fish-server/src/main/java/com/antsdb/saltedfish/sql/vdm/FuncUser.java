@@ -37,4 +37,9 @@ public class FuncUser extends Function {
         return DataType.varchar();
     }
 
+	@Override
+	public int getMinParameters() {
+		return 0;
+	}
+
 }

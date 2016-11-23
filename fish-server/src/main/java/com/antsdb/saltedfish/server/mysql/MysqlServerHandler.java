@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.commons.codec.Charsets;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.charset.Codecs;
@@ -66,10 +67,15 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     QueryHandler queryHandler;
     PacketEncoder packetEncoder;
     Map<Integer, MysqlPreparedStatement> prepared = new HashMap<>();
+    String charset;
+	private Decoder decoder;
+	int packetSequence;
     
     public MysqlServerHandler(SaltedFish fish) {
         this.fish = fish;
         packetEncoder = new PacketEncoder();
+		this.decoder = Codecs.ISO8859;
+		this.packetEncoder.setCodec(Charsets.ISO_8859_1, MYSQL_CHARSET_NAME_binary);
     }
 
     @Override
@@ -186,7 +192,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
 	@Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // Close the connection when an exception is raised.
-        cause.printStackTrace();
+		_log.warn("exceptionCaught", cause);
         ctx.close();
     }
 
@@ -219,8 +225,38 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         ctx.writeAndFlush(bufferArray);
 	}
 
+    private void resetCharset() throws Exception {
+        if (this.charset != getSession().getProtocolCharset()) {
+        	// reset encoder and decoder
+        	String name = getSession().getProtocolCharset();
+        	if (name.equals("latin1")) {
+        		this.decoder = Codecs.ISO8859;
+        		this.packetEncoder.setCodec(Charsets.ISO_8859_1, MYSQL_CHARSET_NAME_binary);
+        	}
+        	else if (name.equals("cp1250")) {
+        		this.decoder = Codecs.ISO8859;
+        		this.packetEncoder.setCodec(Charsets.ISO_8859_1, MYSQL_CHARSET_NAME_binary);
+        	}
+        	else if (name.equals("utf8")) {
+        		this.decoder = Codecs.UTF8;
+        		this.packetEncoder.setCodec(Charsets.UTF_8, MYSQL_CHARSET_NAME_utf8);
+        	}
+        	else if (name.equals("utf8mb4")) {
+        		this.decoder = Codecs.UTF8;
+        		this.packetEncoder.setCodec(Charsets.UTF_8, MYSQL_CHARSET_NAME_utf8);
+        	}
+        	else {
+        		throw new Exception("unknown charset: " + name);
+        	}
+        	this.charset = name;
+        }
+    }
+    
     private void query(ChannelHandlerContext ctx, QueryPacket request) throws Exception {
         queryHandler.query(ctx, request);
+        if (this.charset != getSession().getProtocolCharset()) {
+        	this.resetCharset();
+        }
     }
 
     private void stmtPrepare(ChannelHandlerContext ctx, StmtPreparePacket pstmtPacket) throws SQLException {
@@ -280,11 +316,13 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     }
 
     private void close(ChannelHandlerContext ctx) {
-        ctx.writeAndFlush(PacketEncoder.OK_PACKET);
+    	ctx.close();
     }
 
     private void ping(ChannelHandlerContext ctx) {
-        ctx.writeAndFlush(PacketEncoder.OK_PACKET);
+        ByteBuf bufferArray = ctx.alloc().buffer();
+        bufferArray.writeBytes(PacketEncoder.OK_PACKET);
+        ctx.writeAndFlush(bufferArray);
     }
 
     private void unknown(ChannelHandlerContext ctx) {
@@ -324,16 +362,14 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
 	}
 
 	public Decoder getDecoder() {
-		if (this.session != null) {
-			return this.session.getDecoder();
-		}
-		else {
-			return Codecs.ISO8859;
-		}
+		return this.decoder != null ? this.decoder : Codecs.ISO8859;
 	}
 
 	public SaltedFish getFish() {
 		return this.fish;
 	}
 
+	byte getNextPacketSequence() {
+		return (byte)++this.packetSequence;
+	}
 }

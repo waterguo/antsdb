@@ -56,24 +56,31 @@ class IndexCursor extends CursorWithHeap {
     	if (isClosed) {
     		return 0;
     	}
-    	boolean hasNext = iter.next();
-    	if (!hasNext) {
-    		return 0;
+    	for (;;) {
+        	boolean hasNext = iter.next();
+        	if (!hasNext) {
+        		return 0;
+        	}
+        	long pRecord = newRecord();
+            long pRowKey = iter.getRowKeyPointer();
+            if (pRowKey == 0) {
+                return 0;
+            }
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+            if (pRow == 0) {
+            	// at rare occasions, row cannot be found. we just ignore it. it could happen for example full text 
+            	// index. indexing rows are not deleted completely due to analyzer change
+            	continue;
+            }
+            Row row = Row.fromSpacePointer(this.memman, pRow, 0);
+            Record.setKey(pRecord, row.getKeyAddress());
+            for (int i=0; i<this.meta.getColumnCount(); i++) {
+            	long pValue = row.getFieldAddress(this.mapping[i]);
+            	Record.set(pRecord, i, pValue);
+            }
+            this.counter.incrementAndGet();
+            return pRecord;
     	}
-    	long pRecord = newRecord();
-        long pRowKey = iter.getRowKeyPointer();
-        if (pRowKey == 0) {
-            return 0;
-        }
-        long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
-        Row row = Row.fromSpacePointer(this.memman, pRow, 0);
-        Record.setKey(pRecord, row.getKeyAddress());
-        for (int i=0; i<this.meta.getColumnCount(); i++) {
-        	long pValue = row.getFieldAddress(this.mapping[i]);
-        	Record.set(pRecord, i, pValue);
-        }
-        this.counter.incrementAndGet();
-        return pRecord;
     }
 
     @Override

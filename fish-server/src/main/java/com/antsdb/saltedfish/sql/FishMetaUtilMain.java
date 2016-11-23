@@ -70,6 +70,9 @@ public class FishMetaUtilMain extends FishCommandLine {
 		}
 		
 		this.humpback = getHumpbackReadOnly();
+		if (this.humpback == null) {
+		    return;
+		}
 		if (line.hasOption('t')) {
 			findTable(line.getOptionValue('t'));
 			return;
@@ -108,11 +111,14 @@ public class FishMetaUtilMain extends FishCommandLine {
 			SysTableRow row = new SysTableRow(i.getRow());
 			if (String.valueOf(row.getId()).equals(name)) {
 				dump(row);
+				return;
 			}
 			if ((row.getNamespace() + "." + row.getTableName()).equalsIgnoreCase(name)) {
 				dump(row);
+                return;
 			}
 		}
+		println("error: table not found");
 	}
 
 	private void dump(SysTableRow table) {

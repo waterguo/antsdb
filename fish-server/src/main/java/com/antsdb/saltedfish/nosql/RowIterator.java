@@ -32,6 +32,19 @@ public interface RowIterator extends Closeable {
     public abstract long getRowKeyPointer();
     
     /**
+     * index suffix. only applicable to non-unique index
+     * 
+     * @return
+     */
+    public abstract long getIndexSuffix();
+    
+    /**
+     * if the iterator has reached eof
+     * @return
+     */
+    public abstract boolean eof();
+    
+    /**
      * pointer to the row, only applicable to row entry
      * @return
      */
@@ -43,6 +56,13 @@ public interface RowIterator extends Closeable {
      * @return
      */
     public abstract long getKeyPointer();
+    
+    /**
+     * get the misc byte for the index entry
+     * 
+     * @return
+     */
+    public abstract byte getMisc();
     
 	default public long getVersion() {
 		return Row.getVersion(getRowPointer());

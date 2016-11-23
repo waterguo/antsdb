@@ -28,7 +28,7 @@ import com.antsdb.saltedfish.util.UberUtil;
 public final class TrxMan {
 	static Logger _log = UberUtil.getThisLogger();
 
-	final static int MARK_ROLLED_BACK = -1;
+	public final static int MARK_ROLLED_BACK = -1;
 	final static int MARK_ROW_LOCK = -3;
 	
     Map<Long, Long> trx = new ConcurrentHashMap<Long, Long>(1000);
@@ -150,5 +150,11 @@ public final class TrxMan {
 	public long getStartTrxId() {
 		return this.oldest;
 	}
+
+    public void reset() {
+        this.isClosed = false;
+        this.trx.clear();
+        this.oldest = -10;
+    }
 
 }

@@ -61,4 +61,9 @@ public class FuncToTimestamp extends Function {
         return null;
     }
 
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
+
 }

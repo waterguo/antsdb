@@ -28,6 +28,7 @@ import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
@@ -506,7 +507,7 @@ public class HBaseUtilDataComparer {
 				throw new Exception("row is null");
 			}
 			
-			byte[] antsKey = com.antsdb.saltedfish.cpp.Bytes.get(null, row.getKeyAddress());	
+			byte[] antsKey = KeyBytes.create(row.getKeyAddress()).get();	
 			if (r == null || r.isEmpty()) {
 				throw new Exception("Row can't be found in hbase - key: " + bytesToHex(antsKey));
 			}

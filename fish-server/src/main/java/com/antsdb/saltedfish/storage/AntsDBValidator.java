@@ -21,6 +21,7 @@ import javax.xml.bind.DatatypeConverter;
 
 import org.apache.hadoop.hbase.TableName;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
@@ -124,7 +125,7 @@ public class AntsDBValidator {
 			}
 			
 			Row row = scanner.getRow();
-			byte[] antsKey = com.antsdb.saltedfish.cpp.Bytes.get(null, row.getKeyAddress());
+			byte[] antsKey = KeyBytes.create(row.getKeyAddress()).get();
 			if (Arrays.equals(antsKey, key)) {
 				count++;
 				long version = row.getVersion();

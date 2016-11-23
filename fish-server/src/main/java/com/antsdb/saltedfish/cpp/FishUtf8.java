@@ -47,6 +47,9 @@ public final class FishUtf8 {
 	}
 	
 	public final static long alloc(Heap heap, int size) {
+		if (size > 0xffffff) {
+			throw new IllegalArgumentException();
+		}
 		long pResult = heap.alloc(HEADER_SIZE + size);;
 		Unsafe.putByte(pResult, Value.FORMAT_UTF8);
 		Unsafe.putInt3(pResult + 1, size);
@@ -64,8 +67,11 @@ public final class FishUtf8 {
 		if (pValue == 0) {
 			return 0;
 		}
-		long pResult = heap.alloc(HEADER_SIZE + size);;
-		long pData = pResult + 4;;
+		if (size > 0xffffff) {
+			throw new IllegalArgumentException();
+		}
+		long pResult = heap.alloc(HEADER_SIZE + size);
+		long pData = pResult + 4;
 		Unsafe.putByte(pResult, Value.FORMAT_UTF8);
 		Unsafe.putInt3(pResult + 1, size);
 		Unsafe.copyMemory(pValue, pData, size);
@@ -83,7 +89,11 @@ public final class FishUtf8 {
 		Utf8.encode(string, n -> {
 			Unsafe.putByte(pData.getAndIncrement(), (byte)n);
 		});
-		Unsafe.putInt3(pResult + 1, (int)(pData.get() - pResult - HEADER_SIZE));
+		long realSize = pData.get() - pResult - HEADER_SIZE;
+		if (realSize > 0xffffff) {
+			throw new IllegalArgumentException();
+		}
+		Unsafe.putInt3(pResult + 1, (int)realSize);
 		return pResult;
 	}
 	

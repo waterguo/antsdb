@@ -76,4 +76,9 @@ public class FuncCount extends Function {
     Operator getParameter() {
         return this.parameters.get(0);
     }
+
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
 }

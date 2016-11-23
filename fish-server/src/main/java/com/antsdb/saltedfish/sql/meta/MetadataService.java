@@ -234,7 +234,7 @@ public class MetadataService {
             if (ruleId != (int)row.get(ColumnId.sysrulecol_rule_id.getId())) {
                 continue;
             }
-            rule.ruleColumns.add(row);
+            rule.ruleColumns.add(new RuleColumnMeta(row));
         }
     }
 
@@ -327,7 +327,7 @@ public class MetadataService {
         GTable ruleTable = this.orca.getStroageEngine().getTable(Orca.SYSNS, TABLEID_SYSRULE);
         GTable ruleColumnTable = this.orca.getStroageEngine().getTable(Orca.SYSNS, TABLEID_SYSRULECOL);
         ruleTable.delete(trxid, pk.row.getKey(), 1000);
-        for (SlowRow i:pk.ruleColumns) {
+        for (RuleColumnMeta i:pk.ruleColumns) {
             ruleColumnTable.delete(trxid, i.getKey(), 1000);
         }
         
@@ -436,9 +436,9 @@ public class MetadataService {
         rule.row.setTrxTimestamp(trx.getGuaranteedTrxId());
         ruleTable.insert(rule.row, 0);
         GTable ruleColumnTable = this.orca.getStroageEngine().getTable(Orca.SYSNS, TABLEID_SYSRULECOL);
-        for (SlowRow i:rule.ruleColumns) {
+        for (RuleColumnMeta i:rule.ruleColumns) {
         	i.setTrxTimestamp(trx.getGuaranteedTrxId());
-            ruleColumnTable.insert(i, 0);
+            ruleColumnTable.insert(i.getRow(), 0);
         }
 
         // doh, this is a ddl transaction, remember it
@@ -451,9 +451,9 @@ public class MetadataService {
         rule.row.setTrxTimestamp(trx.getGuaranteedTrxId());
         ruleTable.update(trx.getGuaranteedTrxId(), rule.row, 0);
         GTable ruleColumnTable = this.orca.getStroageEngine().getTable(Orca.SYSNS, TABLEID_SYSRULECOL);
-        for (SlowRow i:rule.ruleColumns) {
+        for (RuleColumnMeta i:rule.ruleColumns) {
         	i.setTrxTimestamp(trx.getGuaranteedTrxId());
-            ruleColumnTable.update(trx.getGuaranteedTrxId(), i, 0);
+            ruleColumnTable.update(trx.getGuaranteedTrxId(), i.getRow(), 0);
         }
 
         // doh, this is a ddl transaction, remember it
@@ -482,7 +482,7 @@ public class MetadataService {
         GTable sysRule = getSysRule();
         sysRule.delete(trxid, rule.row.getKey(), 0);
         GTable ruleColumnTable = this.orca.getStroageEngine().getTable(Orca.SYSNS, TABLEID_SYSRULECOL);
-        for (SlowRow i:rule.ruleColumns) {
+        for (RuleColumnMeta i:rule.ruleColumns) {
             ruleColumnTable.delete(trx.getGuaranteedTrxId(), i.getKey(), 0);
         }
 
@@ -491,7 +491,7 @@ public class MetadataService {
         trx.setDdl(true);
 	}
 
-	public void deleteRuleColumn(Transaction trx, SlowRow ruleColumn) {
+	public void deleteRuleColumn(Transaction trx, RuleColumnMeta ruleColumn) {
 		trx.setDdl(true);
 		GTable sysRuleColumn = getSysRuleColumn();
 		sysRuleColumn.delete(trx.getGuaranteedTrxId(), ruleColumn.getKey(), 0);

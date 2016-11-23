@@ -16,8 +16,8 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackError;
@@ -33,23 +33,25 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * 
  * @author wgu0
  */
-final class IndexEntryHandler {
+class IndexEntryHandler {
 	GTable gtable;
 	IndexMeta index;
 	KeyMaker keyMaker;
+	TableMeta table;
 	
-	IndexEntryHandler() {
+	IndexEntryHandler(GTable gindex, TableMeta table, IndexMeta index) {
+		this.gtable = gindex;
+		this.table = table;
+		this.index = index;
+		this.keyMaker = index.getKeyMaker();
 	}
 	
 	static List<IndexEntryHandler> create(Orca orca, TableMeta table) {
 		List<IndexEntryHandler> handlers = new ArrayList<>();
     	Humpback humpback = orca.getHumpback();
     	for (IndexMeta i:table.getIndexes()) {
-    		IndexEntryHandler handler = new IndexEntryHandler();
+    		IndexEntryHandler handler = new IndexEntryHandler(humpback.getTable(i.getIndexTableId()), table, i);
     		handlers.add(handler);
-    		handler.gtable = humpback.getTable(i.getIndexTableId());
-    		handler.index = i;
-    		handler.keyMaker = i.getKeyMaker();
     	}
 		return handlers;
 	}
@@ -57,22 +59,22 @@ final class IndexEntryHandler {
 	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout) {
     	long pIndexKey = keyMaker.make(heap, row);
     	long pRowKey = row.getKeyAddress();
-    	insert(heap, trx, pIndexKey, pRowKey, timeout);
+    	insert(heap, trx, pIndexKey, pRowKey, (byte)0, timeout);
 	}
 	
-	void insert(Heap heap, Transaction trx, long pIndexKey, long pRowKey, int timeout) {
+	void insert(Heap heap, Transaction trx, long pIndexKey, long pRowKey, byte misc, int timeout) {
     	for (;;) {
-	    	HumpbackError error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, timeout);
+	    	HumpbackError error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
 	        if (error == HumpbackError.SUCCESS) {
 	        	return;
 	        }
 	        else {
-		    	error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, timeout);
+		    	error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
 	        	throw new OrcaException(
 	        			"{} rowkey={} indexkey={}", 
 	        			error, 
-	        			Bytes.toString(pRowKey), 
-	        			Bytes.toString(pIndexKey));
+	        			KeyBytes.toString(pRowKey), 
+	        			KeyBytes.toString(pIndexKey));
 	        }
     	}
 	}
@@ -99,6 +101,6 @@ final class IndexEntryHandler {
 		}
 		long pRowKey = newRow.getKeyAddress();
 		delete(heap, trx, pOldIndexKey, timeout);
-		insert(heap, trx, pNewIndexKey, pRowKey, timeout);
+		insert(heap, trx, pNewIndexKey, pRowKey, (byte)0, timeout);
 	}
 }

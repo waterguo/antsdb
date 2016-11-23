@@ -1,4 +1,4 @@
 #!/bin/bash
 
-java $OPTIONS -cp target/salted-fish-*.jar  com.antsdb.saltedfish.storage.HBaseUtilMain "$@"
-
+mvn -q exec:exec -Dexec.executable=java -Dexec.async=true \
+  -Dexec.args="-cp %classpath com.antsdb.saltedfish.storage.HBaseUtilMain $*"

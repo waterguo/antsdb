@@ -59,6 +59,8 @@ public class Value {
 	public static final byte FORMAT_BOOL = TYPE_BOOL;
 	/** bytes */
 	public static final byte FORMAT_BYTES = TYPE_BYTES;
+	/** key bytes */
+	public static final byte FORMAT_KEY_BYTES = TYPE_BYTES + 1;
 	/** boundary is a combination of key and inclusive indicator */
 	public static final byte FORMAT_BOUNDARY = TYPE_UNKNOWN + 0;
 	public static final byte FORMAT_ROW = TYPE_UNKNOWN + 0x10;

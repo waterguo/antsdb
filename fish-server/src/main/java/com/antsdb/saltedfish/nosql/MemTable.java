@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
 import com.antsdb.saltedfish.nosql.ConcurrentLinkedList.Node;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -94,15 +94,15 @@ public final class MemTable extends MemTableReadOnly {
     	}
 	}
 
-	public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, int timeout) {
+	public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, byte misc, int timeout) {
 		if (this.tablet == null) {
 			grow(null);
 		}
 		for (;;) {
 			MemTablet current = this.tablet;
 			try {
-				long sp = this.owner.getGobbler().logIndex(tableId, trxid, pIndexKey, pRowKey);
-		    	return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, sp, timeout);
+				long sp = this.owner.getGobbler().logIndex(tableId, trxid, pIndexKey, pRowKey, misc);
+		    	return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, sp, misc, timeout);
 			}
 			catch (OutOfHeapMemory x) {
 				grow(current);
@@ -110,14 +110,20 @@ public final class MemTable extends MemTableReadOnly {
 		}
 	}
 	
-	public HumpbackError insertIndex_nologging(long trxid, long pIndexKey, long pRowKey, long sp, int timeout) {
+	public HumpbackError insertIndex_nologging(
+			long trxid, 
+			long pIndexKey, 
+			long pRowKey, 
+			long sp, 
+			byte misc, 
+			int timeout) {
 		if (this.tablet == null) {
 			grow(null);
 		}
 		for (;;) {
 			MemTablet current = this.tablet;
 			try {
-		    	return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, sp, timeout);
+		    	return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, sp, misc, timeout);
 			}
 			catch (OutOfHeapMemory x) {
 				grow(current);
@@ -217,7 +223,7 @@ public final class MemTable extends MemTableReadOnly {
 	}
 	
     private long logDelete(long trxid, long pKey) {
-    	int length = Bytes.getRawSize(pKey);
+    	int length = KeyBytes.getRawSize(pKey);
     	return this.owner.getGobbler().logDelete(trxid, this.tableId, pKey, length);
     }
     
@@ -251,6 +257,7 @@ public final class MemTable extends MemTableReadOnly {
     
     public void truncate() {
         drop();
+        resetGrowth();
 		grow(null);
     }
 
@@ -278,27 +285,23 @@ public final class MemTable extends MemTableReadOnly {
 		this.tablet = null;
 	}
 
-    private void grow(MemTablet current) {
-    	synchronized(this) {
-    		if (this.tablet != current) {
-    			// race condition
-    			return;
-    		}
-			try {
-				int tabletId = 0;
-				if (getTablets().size > 0) {
-					tabletId = getTablets().getFirst().getTabletId() + 2;
-				}
-		    	MemTablet newone;
-		    	int filesize = (tabletId == 0) ? INITIAL_FILE_SIZE : this.tabletSize;
-				newone = new MemTablet(owner, this.ns, this.tableId, tabletId, filesize);
-		    	this.tablet = newone;
-		    	this.tablets.addFirst(newone);
+	@Override
+	protected MemTabletReadOnly extend(MemTabletReadOnly filled) {
+		try {
+			int tabletId = 0;
+			if (getTablets().size > 0) {
+				tabletId = getTablets().getFirst().getTabletId() + 2;
 			}
-			catch (IOException x) {
-				throw new HumpbackException(x);
-			}
-    	}
+	    	MemTablet newone;
+	    	int filesize = (tabletId == 0) ? INITIAL_FILE_SIZE : this.tabletSize;
+			newone = new MemTablet(owner, this.ns, this.tableId, tabletId, filesize);
+	    	this.tablet = newone;
+	    	this.tablets.addFirst(newone);
+	    	return newone;
+		}
+		catch (IOException x) {
+			throw new HumpbackException(x);
+		}
 	}
     
     boolean validate() {
@@ -325,12 +328,12 @@ public final class MemTable extends MemTableReadOnly {
 		return text;
 	}
 
-	public void render(boolean force) {
+	public void render(long endTrxId) {
 		for (MemTabletReadOnly tablet:getTabletsReadOnly()) {
 			if (!(tablet instanceof MemTablet)) {
 				continue;
 			}
-			((MemTablet)tablet).render(force);
+			((MemTablet)tablet).render(endTrxId);
 		}
 	}
 

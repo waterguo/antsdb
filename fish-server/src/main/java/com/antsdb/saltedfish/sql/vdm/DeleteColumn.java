@@ -130,7 +130,7 @@ public class DeleteColumn extends Statement {
 				for (IndexMeta index:affected) {
 					List<String> indexColumns = deleteColumnFromRule(table, index, column);
 					new DropIndex(this.tableName, index.getName()).run(ctx, params);
-					new CreateIndex(index.getName(), index.isUnique(), false, this.tableName, indexColumns);
+					new CreateIndex(index.getName(), index.isUnique(), false, false, this.tableName, indexColumns);
 				}
 			}
 		}

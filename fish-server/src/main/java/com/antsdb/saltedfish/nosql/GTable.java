@@ -17,7 +17,7 @@ import java.io.File;
 import java.io.IOException;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 
 public final class GTable implements AutoCloseable {
     String namespace;
@@ -53,12 +53,18 @@ public final class GTable implements AutoCloseable {
      * @param pKey
      * @return
      */
-	public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, int timeout) {
-		return this.memtable.insertIndex(trxid, pIndexKey, pRowKey, timeout);
+	public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, byte misc, int timeout) {
+		return this.memtable.insertIndex(trxid, pIndexKey, pRowKey, misc, timeout);
 	}
     
-	public HumpbackError insertIndex_nologging(long trxid, long pIndexKey, long pRowKey, long sp, int timeout) {
-		return this.memtable.insertIndex_nologging(trxid, pIndexKey, pRowKey, sp, timeout);
+	public HumpbackError insertIndex_nologging(
+			long trxid, 
+			long pIndexKey, 
+			long pRowKey, 
+			long sp, 
+			byte misc, 
+			int timeout) {
+		return this.memtable.insertIndex_nologging(trxid, pIndexKey, pRowKey, sp, misc, timeout);
 	}
     
     public HumpbackError update(long trxid, SlowRow row, int timeout) {
@@ -92,7 +98,7 @@ public final class GTable implements AutoCloseable {
 	
     public HumpbackError delete(long trxid, byte[] key, int timeout) {
     	try (BluntHeap heap = new BluntHeap()) {
-    		long pKey = Bytes.allocSet(heap, key);
+    		long pKey = KeyBytes.allocSet(heap, key).getAddress();
     		return delete(trxid, pKey, timeout);
     	}
     }
@@ -107,7 +113,7 @@ public final class GTable implements AutoCloseable {
     
 	public long getIndex(long trxid, long trxts, byte[] indexKey) {
 		try (BluntHeap heap = new BluntHeap()) {
-			long pKey = Bytes.allocSet(heap, indexKey);
+			long pKey = KeyBytes.allocSet(heap, indexKey).getAddress();
 	        long row = this.memtable.getIndex(trxid, trxts, pKey);
 	        return row;
 		}
@@ -119,7 +125,7 @@ public final class GTable implements AutoCloseable {
 	
     public long get(long trxid, long trxts, byte[] key) {
 		try (BluntHeap heap = new BluntHeap()) {
-			long pKey = Bytes.allocSet(heap, key);
+			long pKey = KeyBytes.allocSet(heap, key).getAddress();
 	        long row = this.memtable.get(trxid, trxts, pKey);
 	        return row;
 		}
@@ -133,7 +139,7 @@ public final class GTable implements AutoCloseable {
     public Row getRow(long trxid, long trxts, byte[] key) {
     	Row row = null;
 		try (BluntHeap heap = new BluntHeap()) {
-			long pKey = Bytes.allocSet(heap, key);
+			long pKey = KeyBytes.allocSet(heap, key).getAddress();
 	        row = this.memtable.getRow(trxid, trxts, pKey);
 	        /*
 			if ((row == null) && (this.humpback.getHBaseService() != null)) {
@@ -157,8 +163,8 @@ public final class GTable implements AutoCloseable {
             boolean toInclusive, 
             boolean isAscending) {
     	try (BluntHeap heap = new BluntHeap()) {
-    		long pKeyStart = Bytes.allocSet(heap, from);
-    		long pKeyEnd = Bytes.allocSet(heap, to);
+    		long pKeyStart = (from != null) ? KeyBytes.allocSet(heap, from).getAddress() : 0;
+    		long pKeyEnd = (to != null) ? KeyBytes.allocSet(heap, to).getAddress() : 0;
             RowIterator result = scan(
                     trxid,
                     trxts,

@@ -15,9 +15,9 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import org.apache.commons.lang.NotImplementedException;
 
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.Row;
@@ -152,7 +152,7 @@ public abstract class Record {
     	if (pKey == 0) {
     		return null;
     	}
-    	return Bytes.get(null, pKey);
+    	return KeyBytes.create(pKey).get();
     }
     
     public final static void setKey(long pRecord, long pKey) {
@@ -161,7 +161,7 @@ public abstract class Record {
     }
     
 	public static void setKey(Heap heap, long pRecord, byte[] bytes) {
-    	long pBytes = bytes != null ? Bytes.allocSet(heap, bytes) : 0;
+    	long pBytes = bytes != null ? KeyBytes.allocSet(heap, bytes).getAddress() : 0;
     	setKey(pRecord, pBytes);
 	}
 	

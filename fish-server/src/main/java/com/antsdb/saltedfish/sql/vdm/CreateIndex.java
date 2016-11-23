@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.LockLevel;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
@@ -33,15 +34,21 @@ public class CreateIndex extends Statement {
     List<String> columns;
     boolean isUnique;
     boolean createIfNotExists;
+	private boolean isFullText;
     
-    public CreateIndex(String indexName, boolean isUnique, boolean createIfNotExists, 
-    					ObjectName tableName, List<String> columns) {
+    public CreateIndex(String indexName,
+    		           boolean isFullText,
+    		           boolean isUnique, 
+    		           boolean createIfNotExists, 
+    				   ObjectName tableName, 
+    				   List<String> columns) {
         super();
         this.indexName = indexName;
         this.tableName = tableName;
         this.columns = columns;
         this.isUnique = isUnique;
         this.createIfNotExists = createIfNotExists;
+        this.isFullText = isFullText;
     }
     
     @Override
@@ -94,13 +101,14 @@ public class CreateIndex extends Statement {
             }
             columns.add(col);
         }
-        createIndex(ctx, table, indexName, isUnique, columns);
+        createIndex(ctx, table, indexName, isFullText, isUnique, columns);
     }
 
 	static IndexMeta createIndex(
 			VdmContext ctx, 
 			TableMeta table, 
 			String indexName, 
+			boolean isFullText,
 			boolean isUnique, 
 			List<ColumnMeta> columns) {
         // create new index
@@ -109,6 +117,7 @@ public class CreateIndex extends Statement {
         index.setUnique(isUnique);
         index.setIndexTableId((int)ctx.getOrca().getIdentityService().getSequentialId(TableMeta.SEQ_NAME));
         index.setExternalName(table, indexName);
+        index.setFullText(isFullText);
         for (ColumnMeta col:columns) {
             index.addColumn(ctx.getOrca(), col);
         }
@@ -120,7 +129,8 @@ public class CreateIndex extends Statement {
         humpback.createTable(
         		table.getNamespace(),
         		index.getExternalName(),
-        		index.getIndexTableId());
+        		index.getIndexTableId(),
+        		TableType.INDEX);
         
         // if table is not empty, lots of shit to do
         
@@ -142,7 +152,7 @@ public class CreateIndex extends Statement {
 				heap.reset(0);
 				Row row = scanner.getRow();
 				long pIndexKey = keyMaker.make(heap, row);
-				gindex.insertIndex(trx.getTrxId(), pIndexKey, row.getKeyAddress(), 0);
+				gindex.insertIndex(trx.getTrxId(), pIndexKey, row.getKeyAddress(), (byte)0, 0);
 			}
 		}
 	}

@@ -44,4 +44,9 @@ public class FuncLocate extends Function {
 	public DataType getReturnType() {
 		return DataType.integer();
 	}
+
+	@Override
+	public int getMinParameters() {
+		return 2;
+	}
 }

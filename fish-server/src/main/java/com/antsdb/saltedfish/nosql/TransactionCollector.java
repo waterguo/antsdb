@@ -103,7 +103,7 @@ class TransactionCollector implements Runnable {
 			return 0;
 		}
 		// _log.debug("start rendering {} ", oldest.getId());
-		oldest.render(true);
+		oldest.render(humpback.getLastClosedTransactionId());
 		long currentStartTrxId = oldest.getStartTrxId();
 		_log.trace(
 			"activeSessionStartTrxId={} hbaseStartTrxId={} currentStartTrxId={} oldestTrxId={} secondOldestTrxId={}",

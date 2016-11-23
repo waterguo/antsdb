@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
@@ -52,13 +53,18 @@ public class CreateTable extends Statement {
 
         if (Orca.SYSNS.equals(tableName.getNamespace())) {
             if (humpback.getTable(tableName.getNamespace(), tableMeta.getId()) == null) {
-                humpback.createTable(tableName.getNamespace(), tableMeta.getExternalName(), tableMeta.getId());
+                humpback.createTable(
+                		tableName.getNamespace(), 
+                		tableMeta.getExternalName(), 
+                		tableMeta.getId(),
+                		TableType.DATA);
             }
         }
         else {
             humpback.createTable(tableName.getNamespace(), 
             					 tableMeta.getExternalName(), 
-            		             tableMeta.getId());
+            		             tableMeta.getId(),
+            		             TableType.DATA);
         }
         
         // done

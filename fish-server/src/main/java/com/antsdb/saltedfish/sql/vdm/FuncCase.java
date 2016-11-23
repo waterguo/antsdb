@@ -31,4 +31,9 @@ public class FuncCase extends Function {
 		return null;
 	}
 
+	@Override
+	public int getMinParameters() {
+		return -1;
+	}
+
 }

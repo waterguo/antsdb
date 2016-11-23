@@ -30,6 +30,7 @@ import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
 import com.antsdb.saltedfish.sql.vdm.OpLess;
 import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
 import com.antsdb.saltedfish.sql.vdm.OpLike;
+import com.antsdb.saltedfish.sql.vdm.OpMatch;
 import com.antsdb.saltedfish.sql.vdm.OpOr;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 
@@ -99,6 +100,13 @@ class Analyzer {
             	FieldValue field = (FieldValue)upstream;
             	return analyze_binary(planner, FilterOp.EQUALNULL, field, new NullValue(), expr, scope);
             }
+        }
+        else if (expr instanceof OpMatch) {
+        	OpMatch match = (OpMatch)expr;
+        	ColumnFilter cf = new ColumnFilter(null, FilterOp.MATCH, match, null);
+        	Node node = ((OpMatch) expr).getColumns().get(0).getField().owner;
+        	node.addFilter(cf);
+        	return true;
         }
         return false;
 	}

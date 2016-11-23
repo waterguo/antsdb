@@ -103,4 +103,19 @@ class HBaseScanResult implements RowIterator {
 	public boolean isRow() {
 		throw new NotImplementedException();
 	}
+
+	@Override
+	public long getIndexSuffix() {
+		throw new NotImplementedException();
+	}
+
+	@Override
+	public boolean eof() {
+		throw new NotImplementedException();
+	}
+
+	@Override
+	public byte getMisc() {
+		throw new NotImplementedException();
+	}
 }

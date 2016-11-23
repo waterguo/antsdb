@@ -36,7 +36,7 @@ public abstract class RuleMeta<T> extends UberObject {
     }
     
     SlowRow row;
-    List<SlowRow> ruleColumns = new ArrayList<SlowRow>();
+    List<RuleColumnMeta> ruleColumns = new ArrayList<>();
 
     public RuleMeta(Orca orca, Rule type) {
         int id = (int)orca.getIdentityService().getSequentialId(RULE_SEQUENCE);
@@ -84,22 +84,21 @@ public abstract class RuleMeta<T> extends UberObject {
     @SuppressWarnings("unchecked")
     public T addColumn(Orca orca, ColumnMeta column) {
         int key = (int)orca.getIdentityService().getSequentialId(RULE_COL_SEQUENCE);
-        SlowRow ruleColumn = new SlowRow(key);
-        ruleColumn.set(ColumnId.sysrulecol_id.getId(), key);
-        ruleColumn.set(ColumnId.sysrulecol_rule_id.getId(), getId());
-        ruleColumn.set(ColumnId.sysrulecol_column_id.getId(), column.getId());
+        RuleColumnMeta ruleColumn = new RuleColumnMeta(key);
+        ruleColumn.setRuleId(getId());
+        ruleColumn.setColumnId(column.getId());
         this.ruleColumns.add(ruleColumn);
         return (T)this;
     }
 
-    public List<SlowRow> getRuleColumns() {
+    public List<RuleColumnMeta> getRuleColumns() {
     	return this.ruleColumns;
     }
     
     public List<ColumnMeta> getColumns(TableMeta table) {
         List<ColumnMeta> list = new ArrayList<ColumnMeta>();
-        for (SlowRow i:this.ruleColumns) {
-            int columnId = (int)i.get(ColumnId.sysrulecol_column_id.getId());
+        for (RuleColumnMeta i:this.ruleColumns) {
+            int columnId = i.getColumnId();
             ColumnMeta col = table.getColumn(columnId);
             if (col == null) {
                 throw new CodingError();
@@ -109,9 +108,9 @@ public abstract class RuleMeta<T> extends UberObject {
         return list;
     }
 
-    public SlowRow findRuleColumn(ColumnMeta column) {
-        for (SlowRow i:this.ruleColumns) {
-            int columnId = (int)i.get(ColumnId.sysrulecol_column_id.getId());
+    public RuleColumnMeta findRuleColumn(ColumnMeta column) {
+        for (RuleColumnMeta i:this.ruleColumns) {
+            int columnId = i.getColumnId();
             if (columnId == column.getId()) {
             	return i;
             }

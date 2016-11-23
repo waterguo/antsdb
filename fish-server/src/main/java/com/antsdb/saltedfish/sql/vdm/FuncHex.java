@@ -51,4 +51,9 @@ public class FuncHex extends Function {
 		return this.parameters.get(0);
 	}
 
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
+
 }

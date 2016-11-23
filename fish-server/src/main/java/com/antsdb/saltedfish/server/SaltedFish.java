@@ -14,7 +14,11 @@
 package com.antsdb.saltedfish.server;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
@@ -67,14 +71,39 @@ public class SaltedFish {
     }
 
     void startLogging() {
+    	Pattern ptn = Pattern.compile("log4j\\.appender\\..+\\.file");
+        Properties props = getLoggingConf();
+        for (Map.Entry<Object, Object> i:props.entrySet()) {
+        	String key = (String)i.getKey();
+        	if (!ptn.matcher(key).matches()) {
+        		continue;
+        	}
+        	String value = (String)i.getValue();
+        	File file = new File(this.home, value);
+        	i.setValue(file.getAbsolutePath());
+        	System.out.println("log file: " + file.getAbsolutePath());
+        }
+        PropertyConfigurator.configure(props);
+    }
+    
+    Properties getLoggingConf() {
         File logConf = new File(getConfigFolder(home), "log4j.properties");
+        Properties props = new Properties();
         if (logConf.exists()) {
             System.out.println("using log configuration: " + logConf.getAbsolutePath());
-            PropertyConfigurator.configure(logConf.getAbsolutePath());
+            try (FileInputStream in=new FileInputStream(logConf)) {
+                props.load(in);
+                return props;
+            } 
+            catch (Exception ignored) {}
         }
-        else {
+        try (InputStream in=getClass().getResourceAsStream("/log4j.properties")) {
             System.out.println("using log configuration: " + getClass().getResource("/log4j.properties"));
+        	props.load(in);
+        	return props;
         }
+        catch (Exception ignored) {}
+        return props;
     }
     
     public void run() throws Exception {

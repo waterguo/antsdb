@@ -15,7 +15,7 @@ package com.antsdb.saltedfish.nosql;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
@@ -84,7 +84,7 @@ class Recoverer extends ReplayHandler {
 		GTable table = this.humpback.getTable(tableId);
 		long pKey = Row.getKeyAddress(pRow);
 		if (_log.isTraceEnabled()) {
-			_log.trace("put @ {} tableId={} version={} key={}", sp, tableId, version, Bytes.toString(pKey));
+			_log.trace("put @ {} tableId={} version={} key={}", sp, tableId, version, KeyBytes.create(pKey).toString());
 		}
 		if (table == null) {
 			_log.warn("unable to recover row @ {}. table {} not found", sp, tableId);
@@ -123,7 +123,7 @@ class Recoverer extends ReplayHandler {
 		long pKey = entry.getKeyAddress();
 		
 		if (_log.isTraceEnabled()) {
-			_log.trace("delete @ {} tableId={} version={} key={}", sp, tableId, trxid, Bytes.toString(pKey));
+			_log.trace("delete @ {} tableId={} version={} key={}", sp, tableId, trxid, KeyBytes.create(pKey).toString());
 		}
 		GTable table = this.humpback.getTable(tableId);
 		if (table == null) {
@@ -171,7 +171,7 @@ class Recoverer extends ReplayHandler {
 					   entry.getSpacePointer(), 
 					   entry.getTableId(), 
 					   entry.getTrxid(), 
-					   Bytes.toString(entry.getIndexKeyAddress()));
+					   KeyBytes.create(entry.getIndexKeyAddress()).toString());
 		}
 		GTable table = this.humpback.getTable(entry.getTableId());
 		if (table == null) {
@@ -187,6 +187,7 @@ class Recoverer extends ReplayHandler {
 				                                entry.getIndexKeyAddress(), 
 				                                entry.getRowKeyAddress(),
 				                                entry.getSpacePointer(),
+				                                entry.getMisc(),
 				                                0);
 		if (HumpbackError.SUCCESS != error) {
 			_log.warn("unable to recover index @ {} due to {}", entry.getSpacePointer(), error);

@@ -40,6 +40,40 @@ public interface MysqlConstant {
     public static final int MYSQL_COLLATION_INDEX_utf8_general_ci = 33;
     public static final int MYSQL_COLLATION_INDEX_binary = 63;
     public static final int MYSQL_COLLATION_INDEX_utf8_bin = 83;
+
+    // mysql charset index see com.mysql.jdbc.CharsetMapping
+    public static final int MYSQL_CHARSET_NAME_binary = 63;
+    public static final int MYSQL_CHARSET_NAME_utf8 = 83;
+    
     public static final int SERVER_STATUS_IN_TRANS = 1;
     public static final int SERVER_STATUS_AUTOCOMMIT = 2; // Server in auto_commit mode
+
+    // Data Types
+    static final int FIELD_TYPE_DECIMAL = 0;
+    static final int FIELD_TYPE_DOUBLE = 5;
+    static final int FIELD_TYPE_ENUM = 247;
+    static final int FIELD_TYPE_FLOAT = 4;
+    static final int FIELD_TYPE_GEOMETRY = 255;
+    static final int FIELD_TYPE_INT24 = 9;
+    static final int FIELD_TYPE_LONG = 3;
+    static final int FIELD_TYPE_LONG_BLOB = 251;
+    static final int FIELD_TYPE_LONGLONG = 8;
+    static final int FIELD_TYPE_MEDIUM_BLOB = 250;
+    static final int FIELD_TYPE_NEW_DECIMAL = 246;
+    static final int FIELD_TYPE_NEWDATE = 14;
+    static final int FIELD_TYPE_NULL = 6;
+    static final int FIELD_TYPE_SET = 248;
+    static final int FIELD_TYPE_SHORT = 2;
+    static final int FIELD_TYPE_STRING = 254;
+    static final int FIELD_TYPE_TIME = 11;
+    static final int FIELD_TYPE_TIMESTAMP = 7;
+    static final int FIELD_TYPE_TINY = 1;
+    static final int FIELD_TYPE_TINY_BLOB = 249;
+    static final int FIELD_TYPE_VAR_STRING = 253;
+    static final int FIELD_TYPE_VARCHAR = 15;
+    static final int FIELD_TYPE_YEAR = 13;
+    static final int FIELD_TYPE_BIT = 16;
+    static final int FIELD_TYPE_BLOB = 252;
+    static final int FIELD_TYPE_DATE = 10;
+    static final int FIELD_TYPE_DATETIME = 12;
 }

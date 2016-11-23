@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OPTIONS="$ANTSDB_OPTS -server" 
-# OPTIONS="$OPTIONS -XX:+PrintGCDetails"
 echo $OPTIONS
-java $OPTIONS -cp target/salted-fish-*.jar com.antsdb.saltedfish.server.SaltedFishMain $@
 
+mvn -q exec:exec -Dexec.executable=java -Dexec.async=true \
+  -Dexec.args="-cp %classpath $OPTIONS com.antsdb.saltedfish.server.SaltedFishMain $*"

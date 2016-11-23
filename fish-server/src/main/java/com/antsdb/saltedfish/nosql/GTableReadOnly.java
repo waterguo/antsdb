@@ -17,7 +17,7 @@ import java.io.File;
 import java.io.IOException;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 
 /**
  * 
@@ -60,7 +60,7 @@ public class GTableReadOnly implements AutoCloseable {
 
 	public long getIndex(long trxid, long trxts, byte[] indexKey) {
 		try (BluntHeap heap = new BluntHeap()) {
-			long pKey = Bytes.allocSet(heap, indexKey);
+			long pKey = KeyBytes.allocSet(heap, indexKey).getAddress();
 	        long row = this.memtable.getIndex(trxid, trxts, pKey);
 	        return row;
 		}
@@ -72,7 +72,7 @@ public class GTableReadOnly implements AutoCloseable {
 	
     public long get(long trxid, long trxts, byte[] key) {
 		try (BluntHeap heap = new BluntHeap()) {
-			long pKey = Bytes.allocSet(heap, key);
+			long pKey = KeyBytes.allocSet(heap, key).getAddress();
 	        long row = this.memtable.get(trxid, trxts, pKey);
 	        return row;
 		}
@@ -86,7 +86,7 @@ public class GTableReadOnly implements AutoCloseable {
     public Row getRow(long trxid, long trxts, byte[] key) {
     	Row row = null;
 		try (BluntHeap heap = new BluntHeap()) {
-			long pKey = Bytes.allocSet(heap, key);
+			long pKey = KeyBytes.allocSet(heap, key).getAddress();
 	        row = this.memtable.getRow(trxid, trxts, pKey);
 	        /*
 			if ((row == null) && (this.humpback.getHBaseService() != null)) {
@@ -110,8 +110,8 @@ public class GTableReadOnly implements AutoCloseable {
             boolean toInclusive, 
             boolean isAscending) {
     	try (BluntHeap heap = new BluntHeap()) {
-    		long pKeyStart = Bytes.allocSet(heap, from);
-    		long pKeyEnd = Bytes.allocSet(heap, to);
+    		long pKeyStart = KeyBytes.allocSet(heap, from).getAddress();
+    		long pKeyEnd = KeyBytes.allocSet(heap, to).getAddress();
             RowIterator result = scan(
                     trxid,
                     trxts,

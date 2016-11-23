@@ -15,6 +15,9 @@ package com.antsdb.saltedfish.cpp;
 
 public class FishBool {
 	public static final boolean get(Heap heap, long address) {
+		if (address == 0) {
+			return false;
+		}
 		byte value = Unsafe.getByte(address + 1);
 		return value != 0;
 	}

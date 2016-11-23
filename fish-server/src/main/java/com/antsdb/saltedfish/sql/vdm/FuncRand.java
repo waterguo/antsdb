@@ -36,4 +36,9 @@ public class FuncRand extends Function {
 		return DataType.floatType();
 	}
 
+	@Override
+	public int getMinParameters() {
+		return 0;
+	}
+
 }

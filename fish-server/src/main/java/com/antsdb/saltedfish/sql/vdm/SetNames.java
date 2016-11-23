@@ -15,8 +15,6 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.charset.Iso8859;
-import com.antsdb.saltedfish.charset.Utf8;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -38,16 +36,16 @@ public class SetNames extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
     	if (name.equals("latin1")) {
-    		ctx.getSession().setDecoder(new Iso8859());
+    		ctx.getSession().setProtocolCharset("latin1");
     	}
     	else if (name.equals("cp1250")) {
-    		ctx.getSession().setDecoder(new Iso8859());
+    		ctx.getSession().setProtocolCharset("cp1250");
     	}
     	else if (name.equals("utf8")) {
-    		ctx.getSession().setDecoder(new Utf8());
+    		ctx.getSession().setProtocolCharset("utf8");
     	}
     	else if (name.equals("utf8mb4")) {
-    		ctx.getSession().setDecoder(new Utf8());
+    		ctx.getSession().setProtocolCharset("utf8mb4");
     	}
     	else {
     		_log.warn("unknown codec: {}", this.name);

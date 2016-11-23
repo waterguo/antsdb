@@ -43,7 +43,7 @@ public class OpLike extends BinaryOperator {
         String textLeft = (String)FishObject.get(heap, addrTextLeft);
         textRight = textRight.replaceAll("_", ".");
         textRight = textRight.replaceAll("%", ".*");
-        Pattern p = Pattern.compile(textRight);
+        Pattern p = Pattern.compile(textRight, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         boolean result = p.matcher(textLeft).matches();
         return FishBool.allocSet(heap, result);
     }

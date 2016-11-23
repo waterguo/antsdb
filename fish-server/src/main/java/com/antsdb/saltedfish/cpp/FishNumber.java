@@ -47,6 +47,124 @@ public class FishNumber extends Value {
 		}
 	}
 	
+	public static final long multiply(Heap heap, long addr1, long addr2) {
+		int type1 = getFormat(heap, addr1);
+		int type2 = getFormat(heap, addr2);
+		if (type1 >= type2) {
+			return multiply(heap, type1, addr1, type2, addr2);
+		}
+		else {
+			return multiply(heap, type2, addr2, type1, addr1);
+		}
+	}
+	private static long multiply(Heap heap, int type2, long addr2, int type1, long addr1) {
+		if (type1 == Value.FORMAT_INT4) {
+			int value = Int4.get(heap, addr1);
+			return multiply_int4(heap, value, type2, addr2);
+		}
+		else if (type1 == Value.FORMAT_INT8) {
+			long value = Int8.get(heap, addr1);
+			return multiply_int8(heap, value, type2, addr2);
+		}
+		else if (type1 == Value.FORMAT_FAST_DECIMAL) {
+			BigDecimal value = FastDecimal.get(heap, addr1);
+			return multiply_decimal(heap, value, type2, addr2);
+		}
+		else if (type1 == Value.FORMAT_DECIMAL) {
+			BigDecimal value = FishDecimal.get(heap, addr1);
+			return multiply_decimal(heap, value, type2, addr2);
+		}
+		else {
+			throw new CodingError();
+		}
+	}
+
+	private static long multiply_decimal(Heap heap, BigDecimal value, int type2, long addr2) {
+		BigDecimal value2;
+		if (type2 == Value.FORMAT_INT4) {
+			value2 = BigDecimal.valueOf(Int4.get(heap, addr2));
+		}
+		else if (type2 == Value.FORMAT_INT8) {
+			value2 = BigDecimal.valueOf(Int8.get(heap, addr2));
+		}
+		else if (type2 == Value.FORMAT_BIGINT) {
+			value2 = new BigDecimal(BigInt.get(heap, addr2));
+		}
+		else if (type2 == Value.FORMAT_FAST_DECIMAL) {
+			int scale2 = FastDecimal.getScale(heap, addr2);
+			long unscaled2 = FastDecimal.getUnscaledLong(heap, addr2);
+			value2 = BigDecimal.valueOf(unscaled2, scale2);
+		}
+		else if (type2 == Value.FORMAT_DECIMAL) {
+			value2 = FishDecimal.get(heap, addr2);
+		}
+		else {
+			throw new CodingError(); 
+		}
+		BigDecimal result = value.multiply(value2);
+		return FishNumber.allocSet(heap, result);
+	}
+
+	private static long multiply_int8(Heap heap, long value1, int type2, long addr2) {
+		long value2;
+		if (type2 == Value.FORMAT_INT4) {
+			value2 = Int4.get(heap, addr2);
+		}
+		else if (type2 == Value.FORMAT_INT8) {
+			value2 = Int8.get(heap, addr2);
+		}
+		else {
+			throw new CodingError(); 
+		}
+		long result = value1 * value2;
+        if ( (((result ^ value1) & (result ^ value2))) >= 0L) {
+        	// not overflow
+        	long addr = Int8.allocSet(heap, result);
+            return addr;
+        }
+        else {
+        	// overflow
+        	return multiply_bigint(heap, BigInteger.valueOf(value1), type2, addr2);
+        }
+	}
+
+	private static long multiply_bigint(Heap heap, BigInteger value, int type2, long addr2) {
+		BigInteger value2;
+		if (type2 == Value.FORMAT_INT4) {
+			value2 = BigInteger.valueOf(Int4.get(heap, addr2));
+		}
+		else if (type2 == Value.FORMAT_INT8) {
+			value2 = BigInteger.valueOf(Int8.get(heap, addr2));
+		}
+		else if (type2 == Value.FORMAT_BIGINT) {
+			value2 = BigInt.get(heap, addr2);
+		}
+		else {
+			throw new CodingError(); 
+		}
+		BigInteger result = value.multiply(value2);
+		return BigInt.allocSet(heap, result);
+	}
+
+	private static long multiply_int4(Heap heap, int value1, int type2, long addr2) {
+		if (type2 == Value.FORMAT_INT4) {
+			int value2 = Int4.get(heap, addr2);
+			int result = value1 * value2;
+	        if ( (((result ^ value1) & (result ^ value2))) >= 0L) {
+	        	// not overflow
+	        	long addr = Int4.allocSet(heap, result);
+	            return addr;
+	        }
+	        else {
+	        	// overflow
+		        return multiply_int8(heap, value1, type2, addr2);
+	        }
+		}
+		else {
+			throw new CodingError();
+		}
+	}
+
 	private static final long add(Heap heap, int type1, long addr1, int type2, long addr2) {
 		if (type1 == Value.FORMAT_INT4) {
 			int value = Int4.get(heap, addr1);

@@ -42,7 +42,7 @@ public final class FishSkipList implements ConsoleHelper {
 	
 	static {
 		Unsafe.putLong(KEY_NULL, 0);
-		Unsafe.putByte(KEY_NULL, Value.FORMAT_BYTES);
+		Unsafe.putByte(KEY_NULL, Value.FORMAT_KEY_BYTES);
 	}
 	
 	static class IndexNode {
@@ -144,7 +144,7 @@ public final class FishSkipList implements ConsoleHelper {
 		private final static int OFFSET_KEY = OFFSET_NEXT_OFFSET + 4;
 
 		final static int alloc(BluntHeap heap, long pKey, int oNext ) {
-			int size = (pKey != 0) ? Bytes.getRawSize(pKey) : 0;
+			int size = (pKey != 0) ? KeyBytes.getRawSize(pKey) : 0;
 			int result = heap.allocOffset(OFFSET_KEY + size);
 			setValue(heap, result, 0);
 			setNext(heap, result, oNext);
@@ -203,13 +203,14 @@ public final class FishSkipList implements ConsoleHelper {
 			buf.append(" next:");
 			buf.append(getNext(base, offset));
 			buf.append(" key:");
-			buf.append(BytesUtil.toHex8(Bytes.get(null, getKeyPointer(base, offset))));
+			KeyBytes key = KeyBytes.create(getKeyPointer(base, offset));
+			buf.append(BytesUtil.toHex8(key.get()));
 			buf.append(']');
 			return buf.toString();
 		}
 	}
 	
-	public FishSkipList(BluntHeap heap, long base, int offset, KeyComparator comp) {
+	public FishSkipList(long base, int offset, KeyComparator comp) {
 		this.base = base;
 		this.addr = base + offset;
 		if (comp != null) {

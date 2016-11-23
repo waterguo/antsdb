@@ -63,6 +63,9 @@ public class SetSystemParameter extends Statement {
             // calculate the value
             value = Util.eval(ctx, this.expr, params, 0);
         }
+        else {
+        	value = this.constant;
+        }
         if (this.name.equalsIgnoreCase("autocommit")) {
             if (!(value instanceof Number)) {
                 throw new OrcaException("autocommit must be 1 or 0");
@@ -74,9 +77,7 @@ public class SetSystemParameter extends Statement {
             ctx.getSession().setAutoCommit(autoCommit == 1);
         }
         else if (this.name.equals("character_set_results")) {
-        	if (!"utf8".equals(this.constant)) {
-        		_log.warn("setting character_set_results to {} is ignored", this.constant);
-        	}
+            // lets ignore character_set_results for now
         }
         else {
         	ctx.getSession().setParameter(name, value);

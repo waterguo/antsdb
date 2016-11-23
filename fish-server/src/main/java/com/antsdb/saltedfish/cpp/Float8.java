@@ -61,4 +61,31 @@ public class Float8 {
 		return 9;
 	}
 
+	public static long multiply(Heap heap, long pX, long pY) {
+		int typex = Value.getFormat(heap, pX);
+		int typey = Value.getFormat(heap, pY);
+		double x;
+		if (typex == Value.FORMAT_FLOAT4) {
+			x = Float4.get(null, pX);
+		}
+		else if (typex == Value.FORMAT_FLOAT8) {
+			x = Float8.get(null, pX);
+		}
+		else {
+			throw new IllegalArgumentException();
+		}
+		double y;
+		if (typey == Value.FORMAT_FLOAT4) {
+			y = Float4.get(null, pY);
+		}
+		else if (typey == Value.FORMAT_FLOAT8) {
+			y = Float8.get(null, pY);
+		}
+		else {
+			throw new IllegalArgumentException();
+		}
+		double z = x * y;
+		return allocSet(heap, z);
+	}
+
 }

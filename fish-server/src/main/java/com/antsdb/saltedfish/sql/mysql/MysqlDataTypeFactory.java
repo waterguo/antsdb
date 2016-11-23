@@ -87,13 +87,13 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             type = new TypeClob("longtext", Types.CLOB, 0xffffffffl);
         }
         else if ("blob".equals(name)) {
-            type = new TypeClob("blob", Types.BLOB, 0xffff);
+            type = new TypeBlob("blob", Types.BLOB, 0xffff);
         }
         else if ("tinyblob".equals(name)) {
-            type = new TypeClob("tinyblob", Types.BLOB, 0xff);
+            type = new TypeBlob("tinyblob", Types.BLOB, 0xff);
         }
         else if ("mediumblob".equals(name)) {
-            type = new TypeClob("mediumblob", Types.BLOB, 0xffffff);
+            type = new TypeBlob("mediumblob", Types.BLOB, 0xffffff);
         }
         else if ("longblob".equals(name)) {
             type = new TypeBlob("longblob", Types.BLOB, 0xffffffffl);

@@ -13,8 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.sql.DataType;
 
 public class FuncKeyMax extends BinaryOperator {
@@ -27,8 +27,8 @@ public class FuncKeyMax extends BinaryOperator {
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long addr1 = this.left.eval(ctx, heap, params, pRecord);
         long addr2 = this.right.eval(ctx, heap, params, pRecord);
-        byte[] value1 = Bytes.get(heap, addr1);
-        byte[] value2 = Bytes.get(heap, addr2);
+        byte[] value1 = KeyBytes.create(addr1).get();
+        byte[] value2 = KeyBytes.create(addr2).get();
         byte[] result = KeyUtil.max(value1, value2);
         return (result == value1) ? addr1 : addr2; 
     }

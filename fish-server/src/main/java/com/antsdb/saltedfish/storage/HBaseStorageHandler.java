@@ -27,6 +27,7 @@ import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.ReplayHandler;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SpaceManager;
+import com.antsdb.saltedfish.nosql.TransactionReplayer;
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.util.JumpException;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -83,23 +84,15 @@ public class HBaseStorageHandler extends ReplayHandler {
 	}
 
 	public void run() throws Exception {
-		Gobbler gobbler = getGobbler();
-		if (gobbler == null) {
-			// gobbler clould be null in the initialization stage when humpback is not ready
-			return;
-		}
-
 		if (this.paused) return;
 
 		// start sync from last point
 		
 		long spStart = this.syncBuffer.getBufferedSP();
-		long end = gobbler.getPersistencePointer().get();
 		try {
 			// log
-			_log.trace("start hbase sync from {} to {}", spStart, end);
-			lastClosedTrxId = this.humpback.getLastClosedTransactionId();
-			gobbler.replay(spStart, end, false, this);		// do sp in [spStart, end)
+			_log.trace("start hbase sync from {}", spStart);
+			TransactionReplayer.replay(humpback, spStart, false, this);
 
 			this.syncBuffer.flush();
 			
@@ -129,14 +122,6 @@ public class HBaseStorageHandler extends ReplayHandler {
 		}
 	}
 	
-	private void checkTrxid(long trxid) {
-		if (this.lastClosedTrxId != 0) {
-			if (trxid < this.lastClosedTrxId) {
-				throw new JumpException();
-			}
-		}
-	}
-	
 	private void checkPaused() {
 		if (this.paused) throw new HBaseStopJumpException("hbase paused");
 	}
@@ -159,8 +144,7 @@ public class HBaseStorageHandler extends ReplayHandler {
 		long spRow = entry.getRowSpacePointer();
 
 		// check if the row is OK to go
-		long trxid = Row.getVersion(pRow);
-		checkTrxid(trxid);
+		long trxid = entry.getTrxId();
 		
 		long trxts = this.trxman.getTimestamp(trxid);
 		if (trxts < 0 && trxts >= -10) {
@@ -220,8 +204,6 @@ public class HBaseStorageHandler extends ReplayHandler {
 		long trxid = entry.getTrxid();
 		long pkey = entry.getKeyAddress();
 
-		checkTrxid(trxid);
-
 		long trxts = this.trxman.getTimestamp(trxid);
 		if (trxts < 0 && trxts >= -10) {
 			// Rolled back transaction or other, we'll return directly
@@ -264,8 +246,6 @@ public class HBaseStorageHandler extends ReplayHandler {
 		long trxid = entry.getTrxid();
 		long trxts = entry.getVersion();
 		
-		checkTrxid(trxid);
-
 		_log.trace("commit @ {} trxid={} trxts={}", sp, trxid, trxts);
 		
 		// do nothing
@@ -281,8 +261,6 @@ public class HBaseStorageHandler extends ReplayHandler {
 		long sp = entry.getSpacePointer();
 		long trxid = entry.getTrxid();
 		
-		checkTrxid(trxid);
-
 		_log.trace("rollback @ {} trxid={}", sp, trxid);
 		
 		// do nothing for now
@@ -293,18 +271,12 @@ public class HBaseStorageHandler extends ReplayHandler {
 	    this.trxCount++;
 	}
 	
-	private Gobbler getGobbler() {
-		return this.humpback.getGobbler();
-	}
-	
 	@Override
 	public void index(IndexEntry entry) {
 		long sp = entry.getSpacePointer();
 		int tableid = entry.getTableId();
 		long trxid = entry.getTrxid();
 		
-		checkTrxid(trxid);
-
 		long trxts = this.trxman.getTimestamp(trxid);
 		if (trxts < 0 && trxts >= -10) {
 			// Rolled back transaction or other, we'll return directly

@@ -22,6 +22,7 @@ public class SysMetaRow {
     final static int COLUMN_NAMESPACE = 3;
     final static int COLUMN_COMPARATOR = 4;
     final static int COLUMN_TABLE_NAME = 5;
+    final static int COLUMN_TABLE_TYPE = 6;
     
 	SlowRow row;
 
@@ -56,5 +57,13 @@ public class SysMetaRow {
 
 	public String getTableName() {
 		return (String)this.row.get(COLUMN_TABLE_NAME);
+	}
+
+	public void setType(TableType type) {
+		this.row.set(COLUMN_TABLE_TYPE, type.toString());
+	}
+	
+	public TableType getType() {
+		return TableType.valueOf((String)this.row.get(COLUMN_TABLE_TYPE));
 	}
 }

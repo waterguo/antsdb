@@ -26,12 +26,11 @@ import io.netty.channel.ChannelHandlerContext;
  */
 class Helper {
 	static void writeCursor(ByteBuf bufferArray, MysqlServerHandler serverHandler, Cursor result, boolean text) {
-        byte packetId = 0;
         try (Cursor cursor = (Cursor) result) {
         	int nColumns = getColumnCount(cursor.getMetadata());
             PacketEncoder.writePacket(
                     bufferArray, 
-                    ++packetId, 
+                    serverHandler.getNextPacketSequence(), 
                     () -> serverHandler.packetEncoder.writeResultSetHeaderBody(
                     		bufferArray, 
                     		nColumns));
@@ -42,13 +41,13 @@ class Helper {
             	FieldMeta column = cursor.getMetadata().getColumn(i);
                 PacketEncoder.writePacket(
                         bufferArray, 
-                        ++packetId, 
+                        serverHandler.getNextPacketSequence(), 
                         () -> serverHandler.packetEncoder.writeColumnDefBody(bufferArray, column));
             }
     
             PacketEncoder.writePacket(
                     bufferArray, 
-                    ++packetId, 
+                    serverHandler.getNextPacketSequence(), 
                     () -> serverHandler.packetEncoder.writeEOFBody(bufferArray, serverHandler.getSession()));
     
             // output row
@@ -60,7 +59,7 @@ class Helper {
                 if (text) {
                     PacketEncoder.writePacket(
                             bufferArray, 
-                            ++packetId, 
+                            serverHandler.getNextPacketSequence(), 
                             () -> serverHandler.packetEncoder.writeRowTextBody(
                             		bufferArray, 
                             		pRecord, 
@@ -69,7 +68,7 @@ class Helper {
                 else {
                     PacketEncoder.writePacket(
                             bufferArray, 
-                            ++packetId, 
+                            serverHandler.getNextPacketSequence(), 
                             () -> serverHandler.packetEncoder.writeRowBinaryBody(
                             		bufferArray, 
                             		pRecord, 
@@ -81,7 +80,7 @@ class Helper {
             // end row
             PacketEncoder.writePacket(
                     bufferArray, 
-                    ++packetId, 
+                    serverHandler.getNextPacketSequence(), 
                     () -> serverHandler.packetEncoder.writeEOFBody(bufferArray, serverHandler.getSession()));
         }
 	}
@@ -116,11 +115,10 @@ class Helper {
         	Helper.writeCursor(bufferArray, handler, (Cursor) result, text);
         }
         else if (result instanceof Integer) {
-            byte packetId = 0;
             Integer count = (Integer) result;
             PacketEncoder.writePacket(
                     bufferArray, 
-                    ++packetId, 
+                    handler.getNextPacketSequence(), 
                     () -> handler.packetEncoder.writeOKBody(
                     		bufferArray, 
                     		count, 

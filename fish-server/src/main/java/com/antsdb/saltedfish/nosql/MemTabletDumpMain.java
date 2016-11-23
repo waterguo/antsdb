@@ -15,8 +15,8 @@ package com.antsdb.saltedfish.nosql;
 
 import java.io.File;
 
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishSkipList;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.nosql.MemTabletReadOnly.ListNode;
 import com.antsdb.saltedfish.util.BytesUtil;
@@ -64,7 +64,7 @@ public class MemTabletDumpMain implements ConsoleHelper {
 		for (int i=oSkipHead; i!= 0; i=FishSkipList.Node.getNext(base, i)) {
 			int oNode = i;
 			int oKey = FishSkipList.Node.getKeyOffset(oNode);
-			byte[] key = Bytes.get(null, base + oKey);
+			byte[] key = KeyBytes.create(base + oKey).get();
 			println("%08x:%s", oNode, BytesUtil.toHex8(key));
 			int oValue = FishSkipList.Node.getValueOffset(oNode);
 			if (oValue == 0) {
@@ -81,7 +81,7 @@ public class MemTabletDumpMain implements ConsoleHelper {
 							version, 
 							spRow, 
 							type,
-							BytesUtil.toHex8(Bytes.get(null, j.getRowKeyAddress())));
+							BytesUtil.toHex8(KeyBytes.create(j.getRowKeyAddress()).get()));
 	    		}
 	    		else {
 					println("\t%08x [version=%d sprow=%08x type=%02x]", j.getOffset(), version, spRow, type);

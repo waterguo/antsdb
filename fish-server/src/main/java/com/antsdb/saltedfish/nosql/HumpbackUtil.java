@@ -22,7 +22,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.lang.time.DurationFormatUtils;
 
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Gobbler.EntryType;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
 import com.antsdb.saltedfish.util.CommandLineHelper;
@@ -96,7 +96,7 @@ public class HumpbackUtil implements CommandLineHelper {
 					}
 					else {
 						long pKey = scanner.getRowKeyPointer();
-						Bytes.get(null, pKey);
+						KeyBytes.create(pKey);
 					}
 				}
 			}

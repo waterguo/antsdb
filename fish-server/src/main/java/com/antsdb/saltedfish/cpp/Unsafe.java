@@ -52,13 +52,13 @@ public final class Unsafe {
 	
 	/** get 3 bytes integer */
 	public final static int getInt3(long addr) {
-		int value = getByte(addr+2) << 16;
+		int value = (getByte(addr+2) & 0xff) << 16;
 		value = value | (getShort(addr) & 0xffff);
 		return value;
 	}
 	
 	public final static int getInt3Volatile(long addr) {
-		int value = getByteVolatile(addr+2) << 16;
+		int value = (getByteVolatile(addr+2) & 0xff) << 16;
 		value = value | (getShortVolatile(addr) & 0xffff);
 		return value;
 	}
@@ -157,7 +157,7 @@ public final class Unsafe {
 		return unsafe.compareAndSwapInt(null, ix(addr), expected, value);
 	}
 
-	public static long allocateMemory(int size) {
+	public static long allocateMemory(long size) {
 		return unsafe.allocateMemory(size);
 	}
 

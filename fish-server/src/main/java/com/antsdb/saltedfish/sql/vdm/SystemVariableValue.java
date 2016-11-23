@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.function.Consumer;
 
+import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.cpp.Unicode16;
@@ -47,7 +48,9 @@ public class SystemVariableValue extends Operator {
         	return Unicode16.allocSet(heap, "Source distribution");
         }
         else {
-            return 0;
+        	String name = this.name.substring(2, this.name.length());
+        	Object value = ctx.getSession().getParameters().get(name);
+            return FishObject.allocSet(heap, value);
         }
     }
 

@@ -14,8 +14,8 @@
 package com.antsdb.saltedfish.nosql;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 
 /**
@@ -44,7 +44,8 @@ public class MutableRow extends Row {
 	}
 
 	public MutableRow setKey(byte[] value) {
-		long pKey = Bytes.allocSet(heap, value);
+		KeyBytes key = KeyBytes.allocSet(heap, value);
+		long pKey = key.getAddress();
     	Unsafe.putInt(this.addr + OFFSET_KEY_OFFSET, (int)(pKey - this.addr));
     	updateSize();
     	return this;

@@ -24,6 +24,11 @@ public class FishTimestamp {
 		return value;
 	}
 
+	public final static long getEpochMillisecond(Heap heap, long address) {
+		long epoch = Unsafe.getLong(address+1);
+		return epoch;
+	}
+	
 	public static final long allocSet(Heap heap, Timestamp value) {
 		long address = heap.alloc(SIZE);
 		set(heap, address, value);
@@ -54,6 +59,13 @@ public class FishTimestamp {
 	
 	public final static int getSize(long pValue) {
 		return SIZE;
+	}
+
+	public static long add(Heap heap, long pX, long pY) {
+		long x = getEpochMillisecond(heap, pX);
+		long y = getEpochMillisecond(heap, pY);
+		long z = x + y;
+		return allocSet(heap, z);
 	}
 
 }

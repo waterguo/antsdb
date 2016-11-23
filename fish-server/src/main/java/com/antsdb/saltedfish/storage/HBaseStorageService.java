@@ -233,14 +233,6 @@ public class HBaseStorageService {
 		
 		if (this.tableColumnQualifierList.size() < maxColumnId + 1) {
 			TableMeta tableMeta = getTable(id);
-	    	TableName tableName = getTableName(id);
-	    	
-	    	int oldMaxColumnId = this.tableColumnQualifierList.size() - 1;
-	    	if (oldMaxColumnId > 0 &&  oldMaxColumnId < maxColumnId) {
-	    		_log.info("Table {}  - max column id changed from {} to {}",
-	    						tableName.toString(), oldMaxColumnId, maxColumnId);
-	    	}
-	    	
 			this.tableColumnQualifierList.clear();
 			this.tableColumnTypes = new byte[maxColumnId+1];
 

@@ -29,8 +29,6 @@ import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.charset.Codecs;
-import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
@@ -50,15 +48,13 @@ public class Session {
     String user;
     int resetAutoCommit = 0;
     ConcurrentMap<Integer, TableLock> tableLocks = new ConcurrentHashMap<>();
-    // oracle default is 30 minutes
-	// mysql default is 50 seconds. innodb_lock_wait_timeout
-    int lockTimeOut = 50 * 1000;
 
     private Transaction trx;
 	private boolean isClosed = false;
-	private Decoder decoder = Codecs.ISO8859;
 	private long lastInsertId;
 	private int id = _id.incrementAndGet();
+	private String protocolCharset = "latin1";
+	private SessionParameters parameters = new SessionParameters();
     
     public Session(Orca orca, SqlParserFactory fac, String user) {
         this.orca = orca;
@@ -277,23 +273,7 @@ public class Session {
     }
 
     public void setParameter(String name, Object value) {
-    	if (value == null) {
-    		this.variables.remove(name);
-    	}
-    	else {
-    		this.variables.put(name, value);
-    	}
-        if (name.equalsIgnoreCase("DDL_LOCK_TIMEOUT") || name.equalsIgnoreCase("innodb_lock_wait_timeout")) {
-        	if (value == null) {
-        		this.lockTimeOut = 50 * 1000;
-        	}
-        	else if (value instanceof Number) {
-                this.lockTimeOut = ((Number)value).intValue() * 1000; 
-            }
-            else {
-            	throw new IllegalArgumentException();
-            }
-        }
+    	this.parameters.setParameter(name, value);
     }
 
     public int getId() {
@@ -323,16 +303,17 @@ public class Session {
     }
 
     public int getLockTimeoutMilliSeconds() {
-    	return this.lockTimeOut;
+    	return this.parameters.getLockTimeout();
     }
 
-	public Decoder getDecoder() {
-		return this.decoder;
+	public String getProtocolCharset() {
+		return this.protocolCharset;
 	}
-	public void setDecoder(Decoder decoder) {
-		this.decoder = decoder;
+	
+	public void setProtocolCharset(String cs) {
+		this.protocolCharset = cs;
 	}
-
+	
 	/**
 	 * last insert id is the last value generated for a auto_increment column.
 	 * 
@@ -446,5 +427,9 @@ public class Session {
 				unlockTable(getId(), tableId);
 			}
 		}
+	}
+	
+	public SessionParameters getParameters() {
+		return this.parameters;
 	}
 }

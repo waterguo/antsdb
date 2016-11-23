@@ -155,6 +155,8 @@ public enum PacketType {
     FISH_RESULT_SET_HEADER(0x110),
     FISH_RESULT_SET_COLUMN(0x111),
     FISH_RESULT_SET_ROW(0x112),
+    /**/
+    VERY_LARGE_PACKET(0x10000);
     ;
 
 	static Map<Integer, PacketType> _typeById = new HashMap<>();

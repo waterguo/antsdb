@@ -42,4 +42,14 @@ public class FuncElt extends Function {
 		}
 	}
 
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
+
+	@Override
+	public int getMaxParameters() {
+		return -1;
+	}
+
 }

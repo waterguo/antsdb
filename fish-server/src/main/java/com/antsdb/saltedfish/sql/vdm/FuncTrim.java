@@ -11,27 +11,36 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.cpp;
+package com.antsdb.saltedfish.sql.vdm;
+
+import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.sql.DataType;
 
 /**
  * 
- * @author wgu0
+ * @author *-xguo0<@
  */
-public class SkipListKey {
-	public final static long allocSet(byte[] bytes) {
-		if (bytes == null) {
-			return 0;
-		}
-		int length = bytes.length;
-		int allocLength = length + 2;
-		if (length > Short.MAX_VALUE) {
-			throw new RuntimeException("key exceeds 32767 bytes");
-		}
-		long p = Unsafe.allocateMemory(allocLength);
-		Unsafe.putShort(p, (short)length);
-		for (int i=0; i<bytes.length; i++) {
-			Unsafe.putByte(p + 2 + i, bytes[i]);
-		}
-		return p;
+public class FuncTrim extends Function {
+
+	@Override
+	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        String str = (String)Util.eval(ctx, this.parameters.get(0), params, pRecord);
+        if (str == null) {
+        	return 0;
+        }
+        str = str.trim();
+        long addr = FishObject.allocSet(heap, str);
+        return addr;
+	}
+
+	@Override
+	public DataType getReturnType() {
+        return DataType.varchar();
+	}
+
+	@Override
+	public int getMinParameters() {
+		return 1;
 	}
 }

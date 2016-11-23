@@ -29,8 +29,8 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishSkipList;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.SkipListScanner;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
@@ -84,6 +84,7 @@ public class MemTabletReadOnly implements Closeable {
 		private final static int OFFSET_TRX_VERSION = 0;
 		private final static int OFFSET_NEXT = 0x8; 
 		private final static int OFFSET_TYPE = 0xc; 
+		private final static int OFFSET_MISC = 0xd; 
 		private final static int OFFSET_SPACE_POINTER = 0xe;
 		private final static int OFFSET_ROW_KEY = 0x16;
 		private final static int OFFSET_END = 0x16;
@@ -118,7 +119,7 @@ public class MemTabletReadOnly implements Closeable {
 		}
 		
 		public static ListNode allocIndex(BluntHeap heap, long sp, long version, long pRowKey, int next) {
-			int keySize = (pRowKey != 0) ? Bytes.getRawSize(pRowKey) : 0;
+			int keySize = (pRowKey != 0) ? KeyBytes.getRawSize(pRowKey) : 0;
 			int offset = heap.allocOffset(OFFSET_END + keySize);
 			ListNode node = new ListNode(heap.getAddress(0), offset);
 			node.setVersion(version);
@@ -195,11 +196,20 @@ public class MemTabletReadOnly implements Closeable {
 			return getType() == TYPE_ROW;
 		}
 		
-		int getType() {
-			int type = Unsafe.getByteVolatile(this.base + this.offset + OFFSET_TYPE);
+		byte getType() {
+			byte type = Unsafe.getByteVolatile(this.base + this.offset + OFFSET_TYPE);
 			return type;
 		}
 
+		byte getMisc() {
+			byte misc = Unsafe.getByteVolatile(this.base + this.offset + OFFSET_MISC);
+			return misc;
+		}
+		
+		void setMisc(byte value) {
+			Unsafe.putByteVolatile(this.base + this.offset + OFFSET_MISC, value);
+		}
+		
 		@Override
 		public String toString() {
 			String str = String.format(
@@ -214,7 +224,7 @@ public class MemTabletReadOnly implements Closeable {
 		public int copy(BluntHeap heap) {
 			int size = OFFSET_END;
 			if (getType() == TYPE_INDEX) {
-				size = size + Bytes.getRawSize(getRowKeyAddress());
+				size = size + KeyBytes.getRawSize(getRowKeyAddress());
 			}
 			int offset = heap.allocOffset(OFFSET_END + size);
 			long pTarget = heap.getAddress(offset);
@@ -226,6 +236,7 @@ public class MemTabletReadOnly implements Closeable {
 	}
 	
 	static class Scanner {
+		MemTabletReadOnly tablet;
 		SkipListScanner upstream;
 		long version;
 		long trxid;
@@ -296,6 +307,20 @@ public class MemTabletReadOnly implements Closeable {
 			return this.type == TYPE_ROW;
 		}
 
+		public long getIndexSuffix() {
+			long pKey = getKeyPointer();
+			if (pKey == 0) {
+				return 0;
+			}
+			long suffix = KeyBytes.create(pKey).getSuffix();
+			return suffix;
+		}
+
+		public byte getMisc() {
+			ListNode node = new ListNode(base, oNext);
+			return node.getMisc();
+		}
+
 	}
 	
 	public MemTabletReadOnly(File file) throws IOException {
@@ -307,7 +332,7 @@ public class MemTabletReadOnly implements Closeable {
 		}
 		this.mmap = new MemoryMappedFile(file, "r");
 		this.base = this.mmap.getAddress();
-		this.slist = new FishSkipList(null, this.base, HEADER_SIZE, _comp);
+		this.slist = new FishSkipList(this.base, HEADER_SIZE, _comp);
 		this.tableId = getTableId();
 		if (getSig() != SIG) {
 			throw new IOException("SIG is not found: " + file);
@@ -463,6 +488,7 @@ public class MemTabletReadOnly implements Closeable {
 			return null;
 		}
 		Scanner scanner = new Scanner();
+		scanner.tablet = this;
 		scanner.upstream = upstream;
 		scanner.base = base;
 		scanner.trxman = getTrxMan();
@@ -617,7 +643,7 @@ public class MemTabletReadOnly implements Closeable {
 	}
 
 	String dumpKey(long pKey) {
-		byte[] key = Bytes.get(null, pKey);
+		byte[] key = KeyBytes.create(pKey).get();
 		return BytesUtil.toHex(key);
 	}
 

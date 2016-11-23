@@ -63,4 +63,9 @@ public class FuncMin extends Function {
         return this.parameters.get(0).getReturnType();
     }
 
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
+
 }

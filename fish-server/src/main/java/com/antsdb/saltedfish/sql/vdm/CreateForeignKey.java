@@ -85,7 +85,7 @@ public class CreateForeignKey extends Statement {
 	
 	    	if (!isIndexed(child, this.childColumns)) {
 	        	String indexName = getDefaultIndexName(child);
-	        	CreateIndex.createIndex(ctx, child, indexName, false, childColumns);
+	        	CreateIndex.createIndex(ctx, child, indexName, false, false, childColumns);
 	    	}
     	}
     	finally {

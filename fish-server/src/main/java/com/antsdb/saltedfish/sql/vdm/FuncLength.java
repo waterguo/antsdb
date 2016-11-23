@@ -13,9 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishString;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
@@ -26,11 +28,21 @@ public class FuncLength extends Function {
 	
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long pString = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-        if (pString == 0) {
+        long pValue = this.parameters.get(0).eval(ctx, heap, params, pRecord);
+        if (pValue == 0) {
         	return 0;
         }
-        int length = FishString.getLength(pString);
+        int type = Value.getType(heap, pValue);
+        int length;
+        if (type == Value.TYPE_STRING) {
+        	length = FishString.getLength(pValue);
+        }
+        else if (type == Value.TYPE_BYTES) {
+        	length = Bytes.getLength(pValue);
+        }
+        else {
+        	throw new IllegalArgumentException();
+        }
         return Int4.allocSet(heap, length);
     }
 
@@ -38,5 +50,10 @@ public class FuncLength extends Function {
     public DataType getReturnType() {
         return DataType.integer();
     }
+
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
 
 }

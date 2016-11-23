@@ -23,11 +23,6 @@ import com.antsdb.saltedfish.sql.DataType;
  */
 public class FuncConcat extends Function {
 
-	public FuncConcat(Operator p1, Operator p2) {
-		addParameter(p1);
-		addParameter(p2);
-	}
-
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
 		long p1 = this.parameters.get(0).eval(ctx, heap, params, pRecord);
@@ -41,6 +36,11 @@ public class FuncConcat extends Function {
 	@Override
 	public DataType getReturnType() {
 		return DataType.varchar();
+	}
+
+	@Override
+	public int getMinParameters() {
+		return 2;
 	}
 
 }

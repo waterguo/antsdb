@@ -16,7 +16,7 @@ package com.antsdb.saltedfish.cpp;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-final class FishDecimal {
+public final class FishDecimal {
 
 	final static int compare(long addrx, byte typey, long addry) {
 		BigDecimal x = get(null, addrx);

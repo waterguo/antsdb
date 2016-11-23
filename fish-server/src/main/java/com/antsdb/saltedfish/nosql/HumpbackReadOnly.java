@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -129,6 +130,15 @@ public class HumpbackReadOnly {
         return list;
     }
     
+    public SysMetaRow getTableMeta(int id) {
+        byte[] key = KeyMaker.make(id);
+        Row row = this.sysmeta.getRow(0, Long.MAX_VALUE, key);
+        if (row == null) {
+            return null;
+        }
+        return new SysMetaRow(SlowRow.from(row));
+    }
+    
     public GTableReadOnly getTable(int id) {
         if (id == Integer.MAX_VALUE) {
             return this.sysmeta;
@@ -144,5 +154,15 @@ public class HumpbackReadOnly {
 	public SpaceManager getSpaceManager() {
 		return this.spaceman;
 	}
+
+    public List<SysMetaRow> getTablesMeta() {
+        List<SysMetaRow> result = new ArrayList<>();
+        RowIterator it = this.sysmeta.scan(0, Long.MAX_VALUE);
+        while (it.next()) {
+            SysMetaRow row = new SysMetaRow(SlowRow.from(it.getRow()));
+            result.add(row);
+        }
+        return result;
+    }
 
 }

@@ -40,4 +40,14 @@ public class FuncField extends Function {
 		return DataType.integer();
 	}
 
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
+
+	@Override
+	public int getMaxParameters() {
+		return -1;
+	}
+
 }

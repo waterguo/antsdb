@@ -1,5 +1,4 @@
 #!/bin/bash
 
-# java $OPTIONS -cp target/salted-fish-*.jar com.antsdb.saltedfish.sql.FishMetaUtilMain "$@"
-
-mvn -q exec:java -Dexec.mainClass=com.antsdb.saltedfish.sql.FishMetaUtilMain -Dexec.args="$*"
+mvn -q exec:exec -Dexec.executable=java -Dexec.async=true \
+  -Dexec.args="-cp %classpath com.antsdb.saltedfish.sql.FishMetaUtilMain $*"

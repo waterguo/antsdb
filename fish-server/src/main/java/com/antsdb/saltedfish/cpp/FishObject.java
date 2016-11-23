@@ -70,6 +70,9 @@ public class FishObject {
 		else if (type == Value.FORMAT_BYTES) {
 			result = Bytes.get(heap, addr);
 		}
+		else if (type == Value.FORMAT_KEY_BYTES) {
+			result = KeyBytes.create(addr).get();
+		}
 		else if (type == Value.FORMAT_BOUNDARY) {
 			result = new FishBoundary(addr);
 		}
@@ -187,11 +190,34 @@ public class FishObject {
 		else if (typex == Value.TYPE_FLOAT) {
 			return Float8.add(heap, addrx, addry);
 		}
+		else if (typex == Value.TYPE_TIMESTAMP) {
+			return FishTimestamp.add(heap, addrx, addry);
+		}
 		else {
 			throw new IllegalArgumentException();	
 		}
 	}
 
+	public static long multiply(Heap heap, long addrx, long addry) {
+		if ((addrx == 0) || (addry == 0)) {
+			throw new IllegalArgumentException();
+		}
+		byte typex = Value.getType(heap, addrx);
+		byte typey = Value.getType(heap, addry);
+		if (typex != typey) {
+			throw new IllegalArgumentException();
+		}
+		if (typex == Value.TYPE_NUMBER) {
+			return FishNumber.multiply(heap, addrx, addry);
+		}
+		else if (typex == Value.TYPE_FLOAT) {
+			return Float8.multiply(heap, addrx, addry);
+		}
+		else {
+			throw new IllegalArgumentException();	
+		}
+	}
+	
 	public static long minus(Heap heap, long addrx, long addry) {
 		throw new IllegalArgumentException();	
 	}
@@ -267,10 +293,22 @@ public class FishObject {
 			Timestamp ts = FishTimestamp.get(heap, addr);
 			return ts.getTime();
 		case Value.FORMAT_UTF8:
-			long n = Long.parseLong(FishUtf8.get(addr));
-			return n;
+			try {
+				long n = Long.parseLong(FishUtf8.get(addr));
+				return n;
+			}
+			catch (Exception x) {
+				// mysql treats illegal string literal as 0
+				return 0;
+			}
 		case Value.FORMAT_UNICODE16:
-			return Long.parseLong(Unicode16.get(null, addr));
+			try {
+				return Long.parseLong(Unicode16.get(null, addr));
+			}
+			catch (Exception x) {
+				// mysql treats illegal string literal as 0
+				return 0;
+			}
 		default:
 			throw new IllegalArgumentException(String.valueOf(format));
 		}
@@ -304,6 +342,8 @@ public class FishObject {
 			return FishUtf8.getSize(format, pValue);
 		case Value.FORMAT_UNICODE16:
 			return Unicode16.getSize(format, pValue);
+		case Value.FORMAT_KEY_BYTES:
+			return KeyBytes.getRawSize(pValue);
 		case Value.FORMAT_BYTES:
 			return Bytes.getRawSize(pValue);
 		case Value.FORMAT_BOOL:
@@ -363,6 +403,9 @@ public class FishObject {
 			byte[] bytes = Bytes.get(heap, pValue);
 			return Unicode16.allocSet(heap, new String(bytes, Charsets.UTF_8));
 		}
+		case Value.FORMAT_KEY_BYTES: {
+			return Unicode16.allocSet(heap, KeyBytes.create(pValue).toString());
+		}
 		default:
 			throw new IllegalArgumentException();
 		}
@@ -390,6 +433,9 @@ public class FishObject {
 			break;
 		case Value.FORMAT_BYTES:
 			buf.append(Bytes.toString(pValue));
+			break;
+		case Value.FORMAT_KEY_BYTES:
+			buf.append(KeyBytes.create(pValue).toString());
 			break;
 		case Value.FORMAT_FLOAT4:
 			buf.append(Float4.get(null, pValue));

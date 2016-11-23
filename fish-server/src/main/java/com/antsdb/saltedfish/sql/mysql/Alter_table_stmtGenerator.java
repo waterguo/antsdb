@@ -119,11 +119,18 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
 	}
 
 	private Instruction addIndex(GeneratorContext ctx, Alter_table_add_indexContext rule, ObjectName tableName) {
-        String indexName = Utils.getIdentifier(rule.index_name().identifier());
         List<String> columns = new ArrayList<String>();
         rule.indexed_column_def().forEach((it) -> columns.add(Utils.getIdentifier(it.indexed_column().identifier())));
+        String indexName = null;
+        if (rule.index_name() != null) {
+        	indexName = Utils.getIdentifier(rule.index_name().identifier());
+        }
+        else {
+        	indexName = columns.get(0); 
+        }
         boolean isUnique = rule.K_UNIQUE() != null;
-        Instruction result = new CreateIndex(indexName, isUnique, false, tableName, columns);
+        boolean isFullText = rule.K_FULLTEXT() != null;
+        Instruction result = new CreateIndex(indexName, isFullText, isUnique, false, tableName, columns);
         if (isUnique) {
         	Flow flow = new Flow();
         	flow.add(result);

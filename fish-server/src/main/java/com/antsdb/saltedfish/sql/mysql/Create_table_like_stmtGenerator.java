@@ -90,7 +90,13 @@ public class Create_table_like_stmtGenerator extends Generator<Create_table_like
 			for (ColumnMeta column:index.getColumns(table)) {
 				columns.add(column.getColumnName());
 			}
-			CreateIndex ci = new CreateIndex(index.getName(), index.isUnique(), false, name, columns);
+			CreateIndex ci = new CreateIndex(
+					index.getName(), 
+					index.isFullText(), 
+					index.isUnique(), 
+					false, 
+					name, 
+					columns);
 			flow.add(ci);
 		}
 	}

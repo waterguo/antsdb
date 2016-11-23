@@ -439,11 +439,11 @@ public final class Humpback {
         return new ArrayList<String>(this.namespaces.values());
     }
     
-    public synchronized GTable createTable(String ns, String name, int id) {
-        return createTable(ns, name, id, true);
+    public synchronized GTable createTable(String ns, String name, int id, TableType type) {
+        return createTable(ns, name, id, true, type);
     }
     
-    private synchronized GTable createTable(String ns, String name, int id, boolean createMeta) {
+    private synchronized GTable createTable(String ns, String name, int id, boolean createMeta, TableType type) {
         // create table space
         
         ns = this.namespaces.get(ns.toLowerCase());
@@ -465,6 +465,7 @@ public final class Humpback {
 	        	row.setTableId(id);
 	        	row.setNamespace(ns);
 	        	row.setTableName(name);
+	        	row.setType(type);
 	            this.sysmeta.put(1, row.row);
 	        }
 
@@ -583,13 +584,15 @@ public final class Humpback {
     	Recoverer recoverer = new Recoverer(this, this.gobbler);
     	recoverer.run();
     	this.trxMan.close();
-    	this.sysmeta.getMemTable().render(false);
-    	this.tableById.values().forEach(it->it.getMemTable().render(false));
-    	this.trxMan = new TrxMan();
+    	this.sysmeta.getMemTable().render(Long.MIN_VALUE);
+    	for (GTable table:this.tableById.values()) {
+    	    table.getMemTable().render(Long.MIN_VALUE);
+    	}
         if (sp != this.spaceman.getAllocationPointer()) {
         	_log.error("unpexpected write operation detected {} {}", sp, this.spaceman.getAllocationPointer());
         	throw new CodingError();
         }
+        this.trxMan.reset();
     }
     
     /**
@@ -625,7 +628,7 @@ public final class Humpback {
             int tableId = row.getTableId();
             if (getTable(tableId) == null) {
                 String ns = row.getNamespace();
-                createTable(ns, row.getTableName(), tableId, false);
+                createTable(ns, row.getTableName(), tableId, false, row.getType());
             }
             validIds.add(tableId);
         }

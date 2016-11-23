@@ -38,5 +38,9 @@ public abstract class Function extends Operator {
             }
         }
     }
-    
+
+    public abstract int getMinParameters();
+    public int getMaxParameters() {
+    	return getMinParameters();
+    }
 }

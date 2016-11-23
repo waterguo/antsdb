@@ -20,8 +20,9 @@ import java.util.Set;
 
 import org.apache.commons.lang.NotImplementedException;
 
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.util.BytesUtil;
@@ -188,7 +189,7 @@ public class Row extends UberObject implements Map<Integer, Object> {
     	if (offset >= 1000) {
     		throw new IllegalArgumentException();
     	}
-        byte[] bytes = Bytes.get(null, this.addr + offset);
+        byte[] bytes = KeyBytes.create(this.addr + offset).get();
         return bytes;
     }
     
@@ -403,6 +404,10 @@ public class Row extends UberObject implements Map<Integer, Object> {
 		return result;
 	}
 
+	public static void setVersion(long pRow, long version) {
+		Unsafe.putLong(pRow + OFFSET_TRX_TS, version);
+	}
+	
 	public static int getTableId(long pRow) {
 		return Unsafe.getInt(pRow + OFFSET_TABLE_ID);
 	}
@@ -424,4 +429,17 @@ public class Row extends UberObject implements Map<Integer, Object> {
 		return this.version;
 	}
 
+	/**
+	 * clone the row in the target heap
+	 * @param heap
+	 * @return offset in the specified heap
+	 */
+	public int clone(BluntHeap heap) {
+		int size = getLength();
+		int offset = heap.allocOffset(size());
+		long addr = heap.getAddress(offset);
+		Unsafe.copyMemory(getAddress(), addr, size);
+		Row.setVersion(addr, getVersion());
+		return offset;
+	}
 }

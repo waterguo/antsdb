@@ -42,7 +42,7 @@ public class ShowVariables extends CursorMaker {
         // Map<String, Object> variables = session.getVariables();
         Map<String, Object> variables = new HashMap<String, Object>();
         variables.put("character_set_results", "utf8");
-        variables.put("max_allowed_packet", "4194304");
+        variables.put("max_allowed_packet", 32 * 1024 * 1024);
         variables.put("tx_isolation", "READ-COMMITTED");
         variables.put("sql_mode", "STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION");
         List<Record> list = new ArrayList<>();

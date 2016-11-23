@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.Timestamp;
 
 import com.antsdb.saltedfish.cpp.FishObject;
@@ -85,6 +86,9 @@ public class ToTimestampRelaxed extends UnaryOperator {
 	        	int year = (int)(n / 100);
 	        	val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
         	}
+        }
+        else if (val instanceof Date) {
+        	val = new Timestamp(((Date)val).getTime());
         }
         else {
             throw new CodingError();

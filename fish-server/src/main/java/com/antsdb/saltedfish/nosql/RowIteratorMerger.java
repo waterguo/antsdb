@@ -150,4 +150,19 @@ class RowIteratorMerger implements RowIterator {
 		return this.lastFetched.isRow();
 	}
 
+	@Override
+	public long getIndexSuffix() {
+		return this.lastFetched.getIndexSuffix();
+	}
+
+	@Override
+	public boolean eof() {
+		return this.lower.eof() && this.upper.eof();
+	}
+
+	@Override
+	public byte getMisc() {
+		return this.lastFetched.getMisc();
+	}
+
 }

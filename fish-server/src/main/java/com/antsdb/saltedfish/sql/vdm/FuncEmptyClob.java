@@ -48,4 +48,9 @@ public class FuncEmptyClob extends Function {
         visitor.accept(this);
     }
 
+	@Override
+	public int getMinParameters() {
+		return 0;
+	}
+
 }

@@ -135,7 +135,7 @@ alter_table_add_constraint_pk
  ;
  
 alter_table_add_index
- : K_ADD K_UNIQUE? K_INDEX index_name '(' indexed_column_def ( ',' indexed_column_def )* ')'
+ : K_ADD ((K_UNIQUE? K_INDEX) | K_FULLTEXT) index_name? '(' indexed_column_def ( ',' indexed_column_def )* ')'
  ;
  
 alter_table_add_primary_key
@@ -197,7 +197,7 @@ create_database_stmt
  ;
  
 create_index_stmt:
-   K_CREATE K_UNIQUE? K_FULLTEXT? K_INDEX ( K_IF K_NOT K_EXISTS )?
+   K_CREATE ((K_UNIQUE? K_FULLTEXT?) | K_FULLTEXT) K_INDEX ( K_IF K_NOT K_EXISTS )?
    index_name K_ON table_name_ '(' indexed_column_def ( ',' indexed_column_def )* ')'
  ;
 
@@ -280,7 +280,7 @@ primary_key_def
  ;
  
 index_def
- : K_UNIQUE? (K_INDEX | K_KEY) identifier '(' index_columns ')'
+ : K_UNIQUE? K_FULLTEXT? (K_INDEX | K_KEY) identifier? '(' index_columns ')'
  ;
  
 index_columns
@@ -627,6 +627,7 @@ expr
  | system_variable_reference
  | column_reference
  | unary_operator expr
+ | expr_match
  | expr_exist 
  | expr_function
  | expr_parenthesis
@@ -637,6 +638,7 @@ expr
  | expr ( '<<' | '>>' | '&' | '|' ) expr
  | expr ( '<' | '<=' | '>' | '>=' ) expr
  | expr ( '=' | '==' | '!=' | '<>' | K_IS K_NOT | K_IS | K_LIKE | K_GLOB | K_MATCH ) expr
+ | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) literal_value ( K_ESCAPE expr )?
  | expr expr_in_select
  | expr expr_in_values
  | expr expr_in_table 
@@ -644,7 +646,6 @@ expr
  | expr K_AND expr
  | expr K_REGEXP pattern
  | expr K_OR expr
- | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) expr ( K_ESCAPE expr )?
  | expr ( K_ISNULL | K_NOTNULL | K_NOT K_NULL )
  | expr K_IS K_NOT? expr
  | K_CASE expr? ( K_WHEN expr K_THEN expr )+ ( K_ELSE expr )? K_END
@@ -680,6 +681,10 @@ expr_function_star_parameter
  : '*'
  ; 
   
+expr_match
+ : K_MATCH '(' column_name_ ( ',' column_name_)* ')' K_AGAINST (expr)
+ ;
+ 
 expr_parenthesis
  : '(' expr ')'
  ;
@@ -741,7 +746,7 @@ table_alias
  ;
 
 function_name
- : any_name 
+ : any_name | K_LEFT
  ;
 
 any_name
@@ -750,7 +755,8 @@ any_name
 
 name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
- | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION
+ | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
+ | K_MATCH | K_AGAINST
  ;
  
 identifier
@@ -795,6 +801,7 @@ literal_value
  | BLOB_LITERAL
  | HEX_LITERAL
  | literal_value_binary
+ | literal_interval
  | K_NULL
  | K_CURRENT_TIME
  | K_CURRENT_DATE
@@ -803,6 +810,10 @@ literal_value
  | K_FALSE
  ;
 
+literal_interval
+ : K_INTERVAL expr WORD
+ ;
+ 
 literal_value_binary
  : K__BINARY STRING_LITERAL
  ;
@@ -845,6 +856,7 @@ K_ABORT : A B O R T;
 K_ACTION : A C T I O N;
 K_ADD : A D D;
 K_AFTER : A F T E R;
+K_AGAINST : A G A I N S T;
 K_ALL : A L L;
 K_ALTER : A L T E R;
 K_ANALYZE : A N A L Y Z E;
@@ -927,6 +939,7 @@ K_INNER : I N N E R;
 K_INSERT : I N S E R T;
 K_INSTEAD : I N S T E A D;
 K_INTERSECT : I N T E R S E C T;
+K_INTERVAL : I N T E R V A L;
 K_INTO : I N T O;
 K_IS : I S;
 K_ISNULL : I S N U L L;
@@ -1025,7 +1038,7 @@ VARIABLE: '@' [a-zA-Z_] [a-zA-Z_0-9]* ;
 SYSTEM_VARIABLE: '@' '@' [$.a-zA-Z_] [$.a-zA-Z_0-9]* ;
  
 WORD
- : [a-zA-Z_] [a-zA-Z_0-9]*
+ : [a-zA-Z_] [a-zA-Z_0-9\u00c0-\u00ff]*
  ;
  
 BACKTICK_QUOTED_IDENTIFIER

@@ -216,6 +216,9 @@ public final class SpaceManager {
 	}
 
 	public final long alloc(int size) {
+		if (size < 0) {
+			throw new IllegalArgumentException();
+		}
 		for (;;) {
 			int index = this.top;
 			Space space = this.spaces[index];
@@ -340,6 +343,7 @@ public final class SpaceManager {
 			try {
 				MappedByteBuffer b = space.buf;
 				space.buf = null;
+		        _log.debug(String.format("%s at 0x%016x is unmounted", space.file.toString(), space.addr));
 				Unsafe.unmap(b);
 				if (space.allocPointer != null) {
 					if (space.allocPointer.get() != space.raf.length()) {

@@ -155,4 +155,9 @@ public class FuncSum extends Function {
     public DataType getReturnType() {
         return DataType.number();
     }
+
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
 }

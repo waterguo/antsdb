@@ -91,7 +91,7 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
 		if (this.current.next != null) {
 			Node next = this.current.next;
 			if (next.buffer.capacity() >= size) {
-				next.buffer.reset();
+				next.buffer.clear();
 				result = next;
 			}
 		}

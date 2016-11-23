@@ -34,4 +34,9 @@ public class FuncVersion extends Function{
     public DataType getReturnType() {
         return DataType.varchar();
     }
+
+	@Override
+	public int getMinParameters() {
+		return 0;
+	}
 }

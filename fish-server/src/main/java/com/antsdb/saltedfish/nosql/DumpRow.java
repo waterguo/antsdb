@@ -28,8 +28,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishSkipList;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.nosql.MemTabletReadOnly.ListNode;
@@ -92,7 +92,7 @@ public class DumpRow implements CommandLineHelper {
 		}
 		this.tableId = Integer.parseInt(line.getArgList().get(0));
 		this.key = Base64.getDecoder().decode(line.getArgList().get(1));
-		this.pKey = Bytes.allocSet(this.heap, this.key);
+		this.pKey = KeyBytes.allocSet(this.heap, this.key).getAddress();
 		
 		// options
 		

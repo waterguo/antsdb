@@ -1,4 +1,4 @@
 #!/bin/bash
 
-java $OPTIONS -cp target/salted-fish-*.jar com.antsdb.saltedfish.nosql.MemTabletDumpMain "$@"
-
+mvn -q exec:exec -Dexec.executable=java -Dexec.async=true \
+  -Dexec.args="-cp %classpath com.antsdb.saltedfish.nosql.MemTabletDumpMain $*"

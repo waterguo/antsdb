@@ -476,12 +476,12 @@ public final class BufferUtils {
         buf.writeByte((byte) (i >>> 56));
     }
 
-    public static void writeLenString(ByteBuf buf, String s) {
+    public static void writeLenString(ByteBuf buf, String s, Charset encoder) {
         if (s == null) {
             writeFieldLength(buf, 0);
             return;
         }
-        ByteBuffer bb = Charset.defaultCharset().encode(s);
+        ByteBuffer bb = encoder.encode(s);
         writeFieldLength(buf, bb.remaining());
         buf.writeBytes(bb);
     }

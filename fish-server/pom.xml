@@ -27,6 +27,19 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.1</version>
                 <configuration>
@@ -47,22 +60,6 @@
                         <configuration>
                             <visitor>true</visitor>
                         </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>2.3</version>
-                <configuration>
-                    <!-- put your configurations here -->
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
                     </execution>
                 </executions>
             </plugin>
@@ -94,6 +91,11 @@
                 <version>2.18.1</version>
                 <configuration>
                     <argLine>-agentlib:jdwp=transport=dt_socket,server=y,address=8000,suspend=n</argLine>
+                    <properties>
+                        <property>
+                            <name>listener</name><value>MemoryMonitor</value>
+                        </property>
+                    </properties>
                     <excludes>
                         <exclude>
                             oracle/jdbc/driver/OracleDriverTest.java
@@ -110,6 +112,7 @@
                         <exclude>
                             com/antsdb/saltedfish/storage/TestHBaseImport.*
                         </exclude>
+                        <exclude>${testExcludes}</exclude>
                         <!-- exclude root test cases. they are not part of the automation -->
                         <exclude>
                             *
@@ -250,7 +253,7 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
-            <version>4.0.29.Final</version>
+            <version>4.1.5.Final</version>
         </dependency>
         <dependency>
             <groupId>mysql</groupId>
@@ -267,6 +270,11 @@
 		    <groupId>com.zendesk</groupId>
 		    <artifactId>open-replicator</artifactId>
 		    <version>1.4.2</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.apache.lucene</groupId>
+		    <artifactId>lucene-core</artifactId>
+		    <version>6.2.1</version>
 		</dependency>
     </dependencies>
 </project>

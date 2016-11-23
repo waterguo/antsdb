@@ -33,9 +33,9 @@ public final class FishBoundary {
 	}
 	
 	public byte[] getKey() {
-		long pKey = getKeyAddress();
-		byte[] key = Bytes.get(null, pKey);
-		return key;
+		KeyBytes key = KeyBytes.create(getKeyAddress());
+		byte[] bytes = key.get();
+		return bytes;
 	}
 	
 	public long getKeyAddress() {
@@ -75,7 +75,8 @@ public final class FishBoundary {
 		buf.append(isInclusive());
 		buf.append(" ");
 		buf.append("key=");
-		buf.append(Bytes.toString(getKeyAddress()));
+		KeyBytes key = KeyBytes.create(getKeyAddress());
+		buf.append(key.toString());
 		return buf.toString();
 	}
 }

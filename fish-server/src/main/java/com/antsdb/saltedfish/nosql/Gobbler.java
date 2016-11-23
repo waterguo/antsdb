@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.codec.Charsets;
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -142,6 +142,12 @@ public class Gobbler {
 		public long getRowSpacePointer() {
 			return this.sp + ENTRY_HEADER_SIZE;
 		}
+		
+		public long getTrxId() {
+			long pRow = getRowPointer();
+			long trxid = Row.getVersion(pRow);
+			return trxid;
+		}
     }
     
     public final static class DeleteEntry extends LogEntry {
@@ -185,7 +191,8 @@ public class Gobbler {
     }
     
     public final static class IndexEntry extends LogEntry {
-    	protected final static int OFFSET_INDEX_KEY = 0x12;
+    	protected final static int OFFSET_MISC = 0x12;
+    	protected final static int OFFSET_INDEX_KEY = 0x13;
     	
     	static IndexEntry alloc(SpaceManager spaceman, int size) {
     		long sp = spaceman.alloc(HEADER_SIZE + size);
@@ -195,12 +202,19 @@ public class Gobbler {
     		return entry;
     	}
     	
-		static IndexEntry alloc(SpaceManager spaceman, int tableId, long trxid, long pIndexKey, long pRowKey) {
-			int indexKeySize = Bytes.getRawSize(pIndexKey);
-			int rowKeySize = (pRowKey != 0) ? Bytes.getRawSize(pRowKey) : 1;
-			IndexEntry entry = alloc(spaceman, 8 + 4 + indexKeySize + rowKeySize);
+		static IndexEntry alloc(
+				SpaceManager spaceman, 
+				int tableId, 
+				long trxid, 
+				long pIndexKey, 
+				long pRowKey, 
+				byte misc) {
+			int indexKeySize = KeyBytes.getRawSize(pIndexKey);
+			int rowKeySize = (pRowKey != 0) ? KeyBytes.getRawSize(pRowKey) : 1;
+			IndexEntry entry = alloc(spaceman, 8 + 4 + 1 + indexKeySize + rowKeySize);
 			entry.setTableId(tableId);
 			entry.setTrxId(trxid);
+			entry.setMisc(misc);
 			Unsafe.copyMemory(pIndexKey, entry.getIndexKeyAddress(), indexKeySize);
 			if (pRowKey != 0) {
 				Unsafe.copyMemory(pRowKey, entry.getIndexKeyAddress() + indexKeySize, rowKeySize);
@@ -241,7 +255,7 @@ public class Gobbler {
     	
     	public long getRowKeyAddress() {
     		long p = getIndexKeyAddress();
-    		int indexKeySize = Bytes.getRawSize(p);
+    		int indexKeySize = KeyBytes.getRawSize(p);
     		long pRowKey = p + indexKeySize;
     		if (Value.getFormat(null, pRowKey) == Value.FORMAT_NULL) {
     			return 0;
@@ -249,6 +263,15 @@ public class Gobbler {
     		else {
     			return pRowKey;
     		}
+    	}
+    	
+    	public byte getMisc() {
+    		byte value =  Unsafe.getByte(this.addr + OFFSET_MISC);
+    		return value;
+    	}
+    	
+    	public void setMisc(byte value) {
+    		Unsafe.putByte(this.addr + OFFSET_MISC, value);
     	}
     }
     
@@ -366,7 +389,6 @@ public class Gobbler {
     
     public Gobbler(SpaceManager spaceman, boolean enableWriter) throws IOException {
     	this.spaceman = spaceman;
-    	this.spPersistence.set(spaceman.getAllocationPointer());
     	if (!this.spaceman.isReadOnly() && enableWriter) {
         	this.writer = new LogWriter(spaceman, this);
         	this.writer.start();
@@ -409,8 +431,8 @@ public class Gobbler {
     	updatePersistencePointer(sp);
     }
 
-	long logIndex(int tableId, long trxid, long pIndexKey, long pRowKey) {
-		IndexEntry entry = IndexEntry.alloc(spaceman, tableId, trxid, pIndexKey, pRowKey);
+	long logIndex(int tableId, long trxid, long pIndexKey, long pRowKey, byte misc) {
+		IndexEntry entry = IndexEntry.alloc(spaceman, tableId, trxid, pIndexKey, pRowKey, misc);
 		long sp = entry.getSpacePointer();
     	updatePersistencePointer(sp);
     	return sp + ENTRY_HEADER_SIZE;
@@ -462,6 +484,11 @@ public class Gobbler {
 	public long replay(long spStart, long spEnd, boolean inclusive, ReplayHandler handler) throws Exception {
 		long end = -1;
 		
+		if (this.spaceman.getAllocationPointer() <= spStart) {
+			// log is empty
+			return spStart;
+		}
+		
 		// start point must be valid
 		
 		long p = this.spaceman.toMemory(spStart);
@@ -502,40 +529,46 @@ public class Gobbler {
 			}
 			if ((sp != spStart) || inclusive) {
 				end = sp;
-				handler.all(e);
 				switch (type) {
 					case ROW: {
 						PutEntry entry = new PutEntry(sp, p);
+						handler.all(entry);
 						handler.put(entry);
 						break;
 					}
 					case DELETE: {
 						DeleteEntry entry = new DeleteEntry(sp, p);
+						handler.all(entry);
 						handler.delete(entry);
 						break;
 					}
 					case COMMIT: {
 						CommitEntry entry = new CommitEntry(sp, p);
+						handler.all(entry);
 						handler.commit(entry);
 						break;
 					}
 					case ROLLBACK: {
 						RollbackEntry entry = new RollbackEntry(sp, p);
+						handler.all(entry);
 						handler.rollback(entry);
 						break;
 					}
 					case INDEX: {
 						IndexEntry entry = new IndexEntry(sp, p);
+						handler.all(entry);
 						handler.index(entry);
 						break;
 					}
 					case MESSAGE: {
 						MessageEntry entry = new MessageEntry(sp, p);
+						handler.all(entry);
 						handler.message(entry);
 						break;
 					}
 					case TRXWINDOW: {
 						TransactionWindowEntry entry = new TransactionWindowEntry(sp, p);
+						handler.all(entry);
 						handler.transactionWindow(entry);
 						break;
 					}

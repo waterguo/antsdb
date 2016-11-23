@@ -145,9 +145,16 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
 
     private Instruction createIndex(GeneratorContext ctx, ObjectName tableName, Index_defContext rule) {
     	boolean isUnique = rule.K_UNIQUE() != null;
-    	String indexName = Utils.getIdentifier(rule.identifier());
+    	String indexName = null;
         List<String> columns = Utils.getColumns(rule.index_columns());
-        CreateIndex step = new CreateIndex(indexName, isUnique, false, tableName, columns);
+    	if (rule.identifier() != null) {
+    		indexName = Utils.getIdentifier(rule.identifier());
+    	}
+    	else {
+    		indexName = columns.get(0); 
+    	}
+        boolean isFullText = rule.K_FULLTEXT() != null;
+        CreateIndex step = new CreateIndex(indexName, isFullText, isUnique, false, tableName, columns);
         return step;
 	}
 

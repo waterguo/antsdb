@@ -31,6 +31,7 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
+import com.antsdb.saltedfish.sql.meta.RuleColumnMeta;
 import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Aggregator;
@@ -43,6 +44,7 @@ import com.antsdb.saltedfish.sql.vdm.DumbSorter;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Filter;
+import com.antsdb.saltedfish.sql.vdm.FullTextIndexMergeScan;
 import com.antsdb.saltedfish.sql.vdm.GroupByPostProcesser;
 import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.MasterRecordCursorMaker;
@@ -57,6 +59,7 @@ import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
 import com.antsdb.saltedfish.sql.vdm.OpLess;
 import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
 import com.antsdb.saltedfish.sql.vdm.OpLike;
+import com.antsdb.saltedfish.sql.vdm.OpMatch;
 import com.antsdb.saltedfish.sql.vdm.OpOr;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.RangeScannable;
@@ -194,12 +197,27 @@ public class Planner {
     }
     
     public OutputField addOutputField(String name, Operator expr) {
+    	adjustOpMatch(expr);
     	OutputField field = new OutputField(name, expr);
         this.fields.add(field);
         return field;
     }
     
-    public CursorMaker run() {
+    /**
+     * inform OpMatch that it is not in where clause. this same expression in where clause returns a boolean but in
+     * aggregator returns a float
+     * 
+     * @param expr
+     */
+    private void adjustOpMatch(Operator expr) {
+		expr.visit(it -> {
+			if (it instanceof OpMatch) {
+				((OpMatch)it).setWhere(false);
+			}
+		});
+	}
+
+	public CursorMaker run() {
         analyze();
         Link path = build();
         
@@ -655,12 +673,12 @@ public class Planner {
         Link best = null;
         PrimaryKeyMeta pk = node.table.getPrimaryKey();
         if (pk != null) {
-        	best = tryKey(previous, node, pk, true);
+        	best = tryKey(previous, node, pk, true, false);
         }
         
     	// compare all indexes for the best match 
     	for (IndexMeta index:node.table.getIndexes()) {
-    		Link link = tryKey(previous, node, index, index.isUnique());
+    		Link link = tryKey(previous, node, index, index.isUnique(), index.isFullText());
     		if (link == null) {
     			continue;
     		}
@@ -681,13 +699,13 @@ public class Planner {
 		return best;
 	}
 
-	private Link tryKey(Link previous, Node node, RuleMeta<?> key, boolean isUnique) {
+	private Link tryKey(Link previous, Node node, RuleMeta<?> key, boolean isUnique, boolean isFullText) {
         // no filters, can't do table range scan
         
         if (!hasFilters(node)) {
             return null;
         }
-
+        
         // match the key columns with the table filters one by one following the sequence defined in the key.
         
         Link link = new Link(node);
@@ -700,6 +718,22 @@ public class Planner {
         	ColumnMeta column = columns.get(i);
             boolean found = false;
             for (ColumnFilter filter:node.getFilters()) {
+                // is full text
+                
+                if (filter.op == FilterOp.MATCH) {
+                	if (isFullText) {
+                		link.maker = createFullTextScanner(node.table, (IndexMeta)key, filter);
+                		if (link.maker == null) {
+                			return null;
+                		}
+                		link.consumed.add(filter);
+                		return link;
+                	}
+                	continue;
+                }
+                
+                // is the same column?
+                
                 if (filter.field.column != column) {
                     continue;
                 }
@@ -726,6 +760,28 @@ public class Planner {
         
         link.maker = range.createMaker(node.table, key, ctx);
         return (link.maker == null) ? null : link;
+	}
+
+	private CursorMaker createFullTextScanner(TableMeta table, IndexMeta index, ColumnFilter filter) {
+		OpMatch match = (OpMatch)filter.operand;
+		if (match.getColumns().size() != index.getRuleColumns().size()) {
+			return null;
+		}
+		for (FieldValue fv:match.getColumns()) {
+			boolean found = false;
+			for (RuleColumnMeta ruleColumn:index.getRuleColumns()) {
+				if (fv.getField().getColumn().getId() == ruleColumn.getColumnId()) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				return null;
+			}
+		}
+		FullTextIndexMergeScan scan = new FullTextIndexMergeScan(table, index, ctx.getNextMakerId());
+		scan.setQueryTerm(match.getAgainst());
+		return scan;
 	}
 
 	@SuppressWarnings("unused")

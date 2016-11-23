@@ -19,6 +19,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -66,7 +67,7 @@ public class HBaseStorageSyncBuffer {
 	}
 		
 	public boolean rowExists(int tableid, long pkey) {
-		byte[] key = com.antsdb.saltedfish.cpp.Bytes.get(null, pkey);
+		byte[] key = KeyBytes.create(pkey).get();
 		
 		Row row;
 		for (RowData i : rowList) {
@@ -79,7 +80,7 @@ public class HBaseStorageSyncBuffer {
 		// check for index
 		for (IndexData i : indexList) {
 			if (i.getTableId() == tableid) {
-				byte[] rowKey = com.antsdb.saltedfish.cpp.Bytes.get(null, i.getRowKey());
+				byte[] rowKey = KeyBytes.create(i.getRowKey()).get();
 				if (key.equals(rowKey)) {
 					return true;
 				}
@@ -90,7 +91,7 @@ public class HBaseStorageSyncBuffer {
 	}
 	
 	public void delete(int tableid, long pkey) {
-		byte[] key = com.antsdb.saltedfish.cpp.Bytes.get(null, pkey);
+		byte[] key = KeyBytes.create(pkey).get();
 		
 		Row row;
 		for (int i=rowList.size() - 1; i>=0; i--) {

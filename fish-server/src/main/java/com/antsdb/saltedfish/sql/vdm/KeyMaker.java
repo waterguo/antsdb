@@ -22,20 +22,20 @@ import java.util.List;
 import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int8;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.UnsafeBigEndian;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
-import com.antsdb.saltedfish.util.CodingError;
 import com.google.common.primitives.UnsignedLongs;
 
 /**
@@ -44,6 +44,7 @@ import com.google.common.primitives.UnsignedLongs;
  * @author wgu0
  */
 public final class KeyMaker {
+	static KeyMaker _fullIndexKeyMaker = null;
 	static KeyMaker _integerMaker;
 	static KeyMaker _stringMaker;
 	
@@ -59,23 +60,30 @@ public final class KeyMaker {
 		_rowid.setType(DataType.longtype());
 		_rowid.setColumnId(0);
 		*/
-		_integerMaker = new KeyMaker(new VariableLengthIntegerField(null), 9);
-		_stringMaker = new KeyMaker(new VariablLengthStringField(null), 100);
+		_integerMaker = new KeyMaker(new VariableLengthIntegerField(0));
+		_stringMaker = new KeyMaker(new VariablLengthStringField(0, 100));
+		_fullIndexKeyMaker = new KeyMaker(
+				new VariablLengthStringField(1, 100),
+				new RowidField());
 	}
 	
 	private static interface Callback {
 		int writeValue(long pTarget, int index, KeyField field);
 	}
 	
-	static abstract class KeyField {
-		ColumnMeta column;
+	public static abstract class KeyField {
+		int columnId;
+		
+		KeyField(int columnId) {
+			this.columnId = columnId;
+		}
 		
 		KeyField(ColumnMeta column) {
-			this.column = column;
+			this.columnId = column.getColumnId();
 		}
 		
 		int getColumndId() {
-			return this.column.getColumnId();
+			return this.columnId;
 		}
 		
 		abstract boolean isVariableLength();
@@ -86,6 +94,11 @@ public final class KeyMaker {
 	}
 	
 	static class VariableLengthIntegerField extends KeyField {
+		int length;
+		
+		VariableLengthIntegerField(int columnId) {
+			super(columnId);
+		}
 		
 		VariableLengthIntegerField(ColumnMeta column) {
 			super(column);
@@ -220,7 +233,7 @@ public final class KeyMaker {
 	static class RowidField extends VariableLengthIntegerField {
 
 		RowidField() {
-			super(null);
+			super(0);
 		}
 
 		@Override
@@ -365,8 +378,27 @@ public final class KeyMaker {
 	
 	static final class VariablLengthStringField extends KeyField {
 
+		int length;
+		
+		/**
+		 * 
+		 * @param size number of characters
+		 */
+		VariablLengthStringField(int columnId, int size) {
+			super(columnId);
+			this.length = size * 3 + 1;
+		}
+		
 		VariablLengthStringField(ColumnMeta column) {
 			super(column);
+			// assume we cover 3 bytes utf at most
+			if (column.getTypeLength() > 0) {
+				this.length = column.getTypeLength() * 3 + 1;
+			}
+			else {
+				// text column doesnt have length
+				this.length = 16 * 1024;
+			}
 		}
 
 		@Override
@@ -376,8 +408,7 @@ public final class KeyMaker {
 
 		@Override
 		int getLength() {
-			// assume we cover 3 bytes utf at most
-			return this.column.getTypeLength() * 3 + 1;
+			return this.length;
 		}
 
 		@Override
@@ -400,6 +431,9 @@ public final class KeyMaker {
 			
 			// neither
 			
+			if (size >= this.length) {
+				throw new OrcaException("string length exceeds buffer size");
+			}
 			Unsafe.copyMemory(pValue + FishUtf8.HEADER_SIZE, pTarget, size);
 			Unsafe.putByte(pTarget + size, (byte)0);
 			return size + 1;
@@ -419,10 +453,19 @@ public final class KeyMaker {
 		}
 	}
 	
-    private KeyMaker(KeyField field, int  size) {
+    private KeyMaker(KeyField field) {
     	this.isUnique = true;
     	this.keyFields.add(field);
-    	this.size = size;
+    	this.size = field.getLength();
+    }
+    
+    private KeyMaker(KeyField ... fields) {
+    	this.isUnique = false;
+    	for (KeyField field:fields) {
+    		this.keyFields.add(field);
+    		this.size += field.getLength();
+    		this.isVariableLength = this.isVariableLength | field.isVariableLength();
+    	}
     }
     
     public KeyMaker(List<ColumnMeta> columns, boolean isUnique) {
@@ -494,20 +537,25 @@ public final class KeyMaker {
 	}
 	
 	public long make(Heap heap, int nFields, long pRowid, boolean fillMax, boolean fillMin, Callback callback) {
-		int allocSize = this.size + 4 + 8;
-		long p = heap.alloc(allocSize);
-		long pResult = p;
-		p += 4;
+		KeyBytes key = KeyBytes.alloc(heap, this.size + 4 + 8);
+		long pStart = key.getAddress() + 4;
+		long p = pStart;
 		boolean hasNull = false;
 		
 		// key fields
 		
+		int posRowid = 0;
+		int sizeRowid = 0;
 		for (int i=0; i<nFields; i++) {
 			KeyField ii = this.keyFields.get(i);
 			int nBytes = callback.writeValue(p, i, ii);
 			if (nBytes == 0) {
 				// callback wants to exit
 				return 0;
+			}
+			if (!this.isUnique && (i == nFields-1) && (ii instanceof RowidField)) {
+				posRowid = (int)(p - pStart);
+				sizeRowid = nBytes;
 			}
 			if (nBytes < 0) {
 				// meaning it is null
@@ -555,27 +603,31 @@ public final class KeyMaker {
 		
 		// 8 bytes alignment
 		
-		Unsafe.putByte(pResult, Value.FORMAT_BYTES);
-		int length = (int)(p - pResult - 4);
+		int length = (int)(p - key.getAddress() - 4);
 		int mod = length % 8;
 		if (mod != 0) {
 			int delta = 8 - mod;
 			Unsafe.setMemory(p, delta, (byte)0);
 			length += delta;
 		}
-		Unsafe.putInt3(pResult + 1, length);
-		if (length + 4 > allocSize) {
-			throw new CodingError();
-		}
 		
 		// flip to little endian
 		
-		flipEndian(pResult + 4, this.size);
+		flipEndian(key.getAddress() + 4, this.size);
+
+		// tell the keybytes position of rowid suffix
 		
-		return pResult;
+		key.resize(length);
+		if (!this.isUnique) {
+			key.setSuffixPostion(posRowid, sizeRowid);
+		}
+		
+		// done
+		
+		return key.getAddress();
 	}
 	
-	public long make(Heap heap, long[] values) {
+	public long make(Heap heap, long ... values) {
 		long pResult = make(heap, values.length, 0, false, true, (long pTarget, int i, KeyField field) -> {
 			long pValue = values[i];
 			int nBytes = field.writeValue(heap, pTarget, pValue);
@@ -584,7 +636,7 @@ public final class KeyMaker {
 		return pResult;
 	}
 	
-	public long makeMax(Heap heap, long[] values) {
+	public long makeMax(Heap heap, long ... values) {
 		long pResult = make(heap, values.length, 0, true, false, (long pTarget, int i, KeyField field) -> {
 			long pValue = values[i];
 			int nBytes = field.writeValue(heap, pTarget, pValue);
@@ -713,7 +765,8 @@ public final class KeyMaker {
 			long pValue = Int8.allocSet(heap, value);
 			long[] values = new long[] {pValue};
 			long pKey = _integerMaker.make(heap, values);
-			return Bytes.get(heap, pKey);
+			KeyBytes key = new KeyBytes(pKey);
+			return key.get();
 		}
 	}
 
@@ -722,7 +775,23 @@ public final class KeyMaker {
 			long pValue = FishUtf8.allocSet(heap, value);
 			long[] values = new long[] {pValue};
 			long pKey = _stringMaker.make(heap, values);
-			return Bytes.get(heap, pKey);
+			KeyBytes key = new KeyBytes(pKey);
+			return key.get();
 		}
+	}
+	
+	public static long make(Heap heap, String value) {
+		long pValue = FishUtf8.allocSet(heap, value);
+		long[] values = new long[] {pValue};
+		long pKey = _stringMaker.make(heap, values);
+		return pKey;
+	}	
+	
+	public static KeyMaker getSingleStringMaker() {
+		return _stringMaker;
+	}
+	
+	public static KeyMaker getFullTextIndexKeyMaker() {
+		return _fullIndexKeyMaker;
 	}
 }

@@ -26,5 +26,6 @@ public enum FilterOp {
 	LARGEREQUAL,
 	LESS,
 	LESSEQUAL,
-	LIKE
+	LIKE,
+	MATCH,
 }

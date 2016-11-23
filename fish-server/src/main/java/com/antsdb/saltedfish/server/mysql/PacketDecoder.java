@@ -38,10 +38,12 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 
 class PacketDecoder extends ByteToMessageDecoder{
+	static final int MAX_PACKET_SIZE = 0xffffff;  
     static final int COMMAND_HANDSKAE= -1; // mysql doesn't have this code
     
     boolean isHandshaken = false;
     MysqlServerHandler handler;
+    ByteBuf largePacket;
     
     public PacketDecoder(MysqlServerHandler handler) {
         super();
@@ -59,8 +61,9 @@ class PacketDecoder extends ByteToMessageDecoder{
         // do we have entire packet in the buffer?
         
         in.markReaderIndex();
-        int size = BufferUtils.readLongInt(in) + 1;
-        if (size == (0x00ffffff+1)) {
+        int size = BufferUtils.readLongInt(in);
+        int sequence = in.readByte() & 0xff;
+        if (size == 0) {
             out.add(new ShutdownPacket());
             return;
         }
@@ -69,23 +72,41 @@ class PacketDecoder extends ByteToMessageDecoder{
             return;
         }
 
-        int pos = in.readerIndex(); 
-        try {
-            RecievePacket packet = readPacket(in, size - 2);
+        // is very large packet?
+        
+        this.handler.packetSequence = sequence;
+        if (size == MAX_PACKET_SIZE) {
+        	if (this.largePacket == null) {
+        		this.largePacket = ctx.alloc().directBuffer();
+        	}
+        	this.largePacket.writeBytes(in, MAX_PACKET_SIZE);
+        	return;
+        }
+        if (this.largePacket != null) {
+        	this.largePacket.writeBytes(in, size);
+        }
+
+        // parse packet
+        
+    	if (this.largePacket == null) {
+            int pos = in.readerIndex(); 
+            try {
+	            RecievePacket packet = readPacket(in, size);
+	            out.add(packet);
+            }
+            finally {
+            	in.readerIndex(pos + size);
+            }
+    	}
+    	else {
+            RecievePacket packet = readPacket(this.largePacket, size);
             out.add(packet);
-        }
-        finally {
-            int currentPos = in.readerIndex();
-            in.skipBytes(size - (currentPos - pos));
-        }
+            this.largePacket.release();
+            this.largePacket = null;
+    	}
     }
 
     private RecievePacket readPacket(ByteBuf in, int size) {
-        // packet sequence number for multiple packets
-        
-        // byte packetSequence = in.readByte();
-        in.readByte();
-        
         // handshake
         
         RecievePacket packet = null;
@@ -101,6 +122,7 @@ class PacketDecoder extends ByteToMessageDecoder{
                 // command 
                 
                 byte command = in.readByte();
+                size--;
                 switch (command) {
                 case MySQLPacket.COM_QUERY:
                     packet = new QueryPacket(command);

@@ -20,11 +20,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.antsdb.saltedfish.cpp.FishBool;
+import com.antsdb.saltedfish.cpp.FishDate;
+import com.antsdb.saltedfish.cpp.FishDecimal;
 import com.antsdb.saltedfish.cpp.FishNumber;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FishTime;
+import com.antsdb.saltedfish.cpp.FishTimestamp;
+import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
+import com.antsdb.saltedfish.cpp.Int8;
+import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.OrcaException;
 
@@ -62,6 +68,9 @@ public class AutoCaster {
 			int type = max(typex, typey);
 			addrx = cast(heap, type, typex, addrx);
 			addry = cast(heap, type, typey, addry);
+		}
+		if ((addrx == 0) || (addry == 0)) {
+			return Integer.MIN_VALUE;
 		}
 		return FishObject.compare(heap, addrx, addry);
 	}
@@ -153,11 +162,16 @@ public class AutoCaster {
 			int value = b ? 1 : 0;
 			return Int4.allocSet(heap, value);
 		case Value.TYPE_STRING: {
-			String s = (String)FishObject.get(heap, pValue);
-			BigDecimal bd = new BigDecimal(s);
-			long pp = FishNumber.allocSet(heap, bd);
-			bd = (BigDecimal)FishObject.get(null, pp);
-			return pp;
+			try {
+				String s = (String)FishObject.get(heap, pValue);
+				BigDecimal bd = new BigDecimal(s);
+				long pp = FishNumber.allocSet(heap, bd);
+				bd = (BigDecimal)FishObject.get(null, pp);
+				return pp;
+			}
+			catch (Exception x) {
+				return Int4.allocSet(heap, 0);
+			}
 		}
 		default:
 			return FishObject.toNumber(heap, pValue);	
@@ -177,6 +191,44 @@ public class AutoCaster {
 		return p;
 	}
 
+	public static Long getLong(long pValue) {
+		byte format = Value.getFormat(null, pValue);
+		switch (format) {
+		case Value.FORMAT_INT4:
+			return (long)Int4.get(pValue);
+		case Value.FORMAT_INT8:
+			return Int8.get(null, pValue);
+		case Value.FORMAT_DECIMAL:
+			BigDecimal bd = FishDecimal.get(null, pValue);
+			return bd.longValueExact();
+		case Value.FORMAT_DATE:
+			Date dt = FishDate.get(null, pValue);
+			return dt.getTime();
+		case Value.FORMAT_TIMESTAMP:
+			Timestamp ts = FishTimestamp.get(null, pValue);
+			return ts.getTime();
+		case Value.FORMAT_UTF8:
+			// mysql converts illegal string to 0
+			try {
+				long n = Long.parseLong(FishUtf8.get(pValue));
+				return n;
+			}
+			catch (Exception x) {
+				return 0l;
+			}
+		case Value.FORMAT_UNICODE16:
+			// mysql converts illegal string to 0
+			try {
+				return Long.parseLong(Unicode16.get(null, pValue));
+			}
+			catch (Exception x) {
+				return 0l;
+			}
+		default:
+			throw new IllegalArgumentException(String.valueOf(format));
+		}
+	}
+	
 	public static long toDate(Heap heap, long pValue) {
 		if (pValue == 0) {
 			return 0;
@@ -323,5 +375,41 @@ public class AutoCaster {
 			return dd * 24 * 3600 * 1000 + hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
 		}
 		throw new IllegalArgumentException();
+	}
+
+	public static long negate(Heap heap, long pValue) {
+		if (pValue == 0) {
+			return 0;
+		}
+		int type = Value.getType(heap, pValue);
+		if (type == Value.TYPE_NUMBER) {
+			return FishNumber.negate(heap, pValue);
+		}
+		if (type == Value.TYPE_TIMESTAMP) {
+			long epoch = FishTimestamp.getEpochMillisecond(heap, pValue);
+			epoch = - epoch;
+			return FishTimestamp.allocSet(heap, epoch);
+		}
+		throw new IllegalArgumentException();
+	}
+
+	public static long multiply(Heap heap, long pX, long pY) {
+		if ((pX == 0) || (pY == 0)) {
+			return 0;
+		}
+		int typex = Value.getType(heap, pX);
+		int typey = Value.getType(heap, pY);
+		if (typex != typey) {
+			int type = max(typex, typey);
+			pX = cast(heap, type, typex, pX);
+			pY = cast(heap, type, typey, pY);
+		}
+		return FishObject.multiply(heap, pX, pY);
+	}
+
+	public static String getString(Heap heap, long pValue) {
+		pValue = toString(heap, pValue);
+		String value = (String)FishObject.get(heap, pValue);
+		return value;
 	}
 }

@@ -41,4 +41,9 @@ public class FuncAbs extends Function {
 	public Operator getUpstream() {
 		return this.parameters.get(0);
 	}
+
+	@Override
+	public int getMinParameters() {
+		return 1;
+	}
 }

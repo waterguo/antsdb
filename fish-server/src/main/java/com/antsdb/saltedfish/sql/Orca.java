@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.SpaceManager;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.server.mysql.replication.MysqlSlave;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
@@ -192,9 +193,21 @@ public class Orca {
             
             // system tables
             
-            this.humpback.createTable(SYSNS, String.format("%08x", TABLEID_SYSSEQUENCE), TABLEID_SYSSEQUENCE);
-            this.humpback.createTable(SYSNS, String.format("%08x", TABLEID_SYSTABLE), TABLEID_SYSTABLE);
-            this.humpback.createTable(SYSNS, String.format("%08x", TABLEID_SYSCOLUMN), TABLEID_SYSCOLUMN);
+            this.humpback.createTable(
+            		SYSNS, 
+            		String.format("%08x", TABLEID_SYSSEQUENCE), 
+            		TABLEID_SYSSEQUENCE, 
+            		TableType.DATA);
+            this.humpback.createTable(
+            		SYSNS, 
+            		String.format("%08x", TABLEID_SYSTABLE), 
+            		TABLEID_SYSTABLE, 
+            		TableType.DATA);
+            this.humpback.createTable(
+            		SYSNS, 
+            		String.format("%08x", TABLEID_SYSCOLUMN), 
+            		TABLEID_SYSCOLUMN, 
+            		TableType.DATA);
             
             // system sequence 
             
@@ -281,7 +294,11 @@ public class Orca {
                 // recreate gtable.it could happen cuz humpback creates the physical when flush the content 
                 
                 if (gtable == null) {
-                    gtable = this.humpback.createTable(name.getNamespace(), table.getTableName(), table.getId());
+                    gtable = this.humpback.createTable(
+                    		name.getNamespace(), 
+                    		table.getTableName(), 
+                    		table.getId(), 
+                    		TableType.DATA);
                     _log.warn("table {} not found in humpback, created ", name);
                 }
                 else {

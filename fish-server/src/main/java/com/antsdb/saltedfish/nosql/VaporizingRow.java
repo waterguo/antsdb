@@ -13,9 +13,9 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
-import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.util.BytesUtil;
 
@@ -48,7 +48,7 @@ public final class VaporizingRow {
 		init();
     	this.version = from.getTrxTimestamp();
     	byte[] key = from.getKey();
-    	long pKey = (key != null) ? Bytes.allocSet(heap, key) : 0;   
+    	long pKey = (key != null) ? KeyBytes.allocSet(heap, key).getAddress() : 0;   
     	setKey(pKey);
     	for (int i=0; i<=this.maxColumnId; i++) {
     		Object value = from.get(i);
