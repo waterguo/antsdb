@@ -28,7 +28,7 @@ public class CreateTable extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        Humpback humpback = ctx.getOrca().getStroageEngine();
+        Humpback humpback = ctx.getOrca().getHumpback();
         String ns = Checks.namespaceExist(ctx.getOrca(), this.tableName.getNamespace());
         Transaction trx = ctx.getTransaction();
         
@@ -41,29 +41,23 @@ public class CreateTable extends Statement {
         
         // find a good non-conflict name
         
-        if (tableMeta.getId() < 0) {
-        	// system tables use id
-        	tableMeta.setExternalName(String.format("%08x", tableMeta.getId()));
-        }
-        else {
-        	tableMeta.setExternalName(tableMeta.getTableName());
-        }
+    	tableMeta.setExternalName(tableMeta.getTableName());
         
         // create physical table
 
         if (Orca.SYSNS.equals(tableName.getNamespace())) {
-            if (humpback.getTable(tableName.getNamespace(), tableMeta.getId()) == null) {
+            if (humpback.getTable(tableName.getNamespace(), tableMeta.getHtableId()) == null) {
                 humpback.createTable(
                 		tableName.getNamespace(), 
                 		tableMeta.getExternalName(), 
-                		tableMeta.getId(),
+                		tableMeta.getHtableId(),
                 		TableType.DATA);
             }
         }
         else {
             humpback.createTable(tableName.getNamespace(), 
             					 tableMeta.getExternalName(), 
-            		             tableMeta.getId(),
+            		             tableMeta.getHtableId(),
             		             TableType.DATA);
         }
         

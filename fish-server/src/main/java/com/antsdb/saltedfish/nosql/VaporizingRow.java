@@ -66,6 +66,11 @@ public final class VaporizingRow {
 		return maxColumnId;
 	}
 	
+    public void setKey(byte[] key) {
+        long pKey = (key != null) ? KeyBytes.allocSet(heap, key).getAddress() : 0;
+        setKey(pKey);
+    }
+    
 	public void setKey(long pNewKey) {
     	if (this.pKey != 0) {
     		size -= FishObject.getSize(this.pKey);
@@ -161,7 +166,7 @@ public final class VaporizingRow {
 		return buf.toString();
 	}
 
-	private byte[] getKey() {
+	public byte[] getKey() {
 		long pKey = getKeyAddress();
 		byte[] key = (byte[])FishObject.get(heap, pKey);
 		return key;

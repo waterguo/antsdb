@@ -20,6 +20,7 @@ import java.util.Locale;
 import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.FishTimestamp;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
@@ -37,14 +38,14 @@ public class FuncDateFormat extends Function {
         	return 0;
         }
         pDate = AutoCaster.toTimestamp(heap, pDate);
-        Timestamp time = (Timestamp)FishObject.get(heap, pDate);
+        Timestamp time = FishTimestamp.isAllZero(pDate) ? null : (Timestamp)FishObject.get(heap, pDate);
         long pFormat = this.parameters.get(1).eval(ctx, heap, params, pRecord);
         String format = (String)FishObject.get(heap, pFormat);
 		String result = format(format, time);
 		return FishObject.allocSet(heap, result);
 	}
 
-	private String format(String format, Timestamp time) {
+	static String format(String format, Timestamp time) {
 		StringBuilder buf = new StringBuilder();
 		for (int i=0; i<format.length(); i++) {
 			char ch = format.charAt(i);
@@ -57,8 +58,10 @@ public class FuncDateFormat extends Function {
 				continue;
 			}
 			char specifier = format.charAt(++i);
-			Calendar calendar = Calendar.getInstance();
-			calendar.setTimeInMillis(time.getTime());
+			Calendar calendar = (time == null) ? null : Calendar.getInstance();
+			if (time != null) {
+			    calendar.setTimeInMillis(time.getTime());
+			}
 			if (specifier == 'a') {
 				throw new NotImplementedException();
 			}
@@ -66,91 +69,193 @@ public class FuncDateFormat extends Function {
 				throw new NotImplementedException();
 			}
 			else if (specifier == 'c') {
-				buf.append(calendar.get(Calendar.MONTH + 1));
+			    if (calendar != null) {
+			        buf.append(calendar.get(Calendar.MONTH) + 1);
+			    }
+			    else {
+			        buf.append("0");
+			    }
 			}
 			else if (specifier == 'd') {
-				int day = calendar.get(Calendar.DAY_OF_MONTH);
-				if (day < 10) {
-					buf.append('0');
-				}
-				buf.append(day);
+                if (calendar != null) {
+                    int day = calendar.get(Calendar.DAY_OF_MONTH);
+                    if (day < 10) {
+                        buf.append('0');
+                    }
+                    buf.append(day);
+                }
+                else {
+                    buf.append("00");
+                }
 			}
 			else if (specifier == 'D') {
-				throw new NotImplementedException();
+                if (calendar != null) {
+                    int day = calendar.get(Calendar.DAY_OF_MONTH);
+                    buf.append(day);
+                    switch (day) {
+                    case 1: buf.append("st");
+                    case 2: buf.append("nd");
+                    case 3: buf.append("rd");
+                    default: buf.append("th");
+                    }
+                }
+                else {
+                    buf.append("00");
+                }
 			}
 			else if (specifier == 'e') {
-				buf.append(calendar.get(Calendar.DAY_OF_MONTH));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.DAY_OF_MONTH));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'f') {
-				buf.append(calendar.get(Calendar.MILLISECOND * 1000));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.MILLISECOND * 1000));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'H') {
-				buf.append(calendar.get(Calendar.HOUR));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.HOUR));
+                }
+                else {
+                    buf.append("00");
+                }
 			}
 			else if (specifier == 'h') {
-				buf.append(calendar.get(Calendar.HOUR) % 13);
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.HOUR) % 13);
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'i') {
-				buf.append(calendar.get(Calendar.MINUTE));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.MINUTE));
+                }
+                else {
+                    buf.append("00");
+                }
 			}
 			else if (specifier == 'I') {
-				buf.append(calendar.get(Calendar.HOUR) % 13);
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.HOUR) % 13);
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'j') {
-				buf.append(calendar.get(Calendar.DAY_OF_YEAR));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.DAY_OF_YEAR));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'k') {
-				buf.append(calendar.get(Calendar.HOUR));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.HOUR));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'l') {
-				buf.append(calendar.get(Calendar.HOUR) % 13);
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.HOUR) % 13);
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'm') {
-				int month = calendar.get(Calendar.MONTH) + 1;
-				if (month < 10) {
-					buf.append('0');
-				}
-				buf.append(calendar.get(Calendar.MONTH) + 1);
+                if (calendar != null) {
+                    int month = calendar.get(Calendar.MONTH) + 1;
+                    if (month < 10) {
+                        buf.append('0');
+                    }
+                    buf.append(calendar.get(Calendar.MONTH) + 1);
+                }
+                else {
+                    buf.append("00");
+                }
 			}
 			else if (specifier == 'M') {
-				buf.append(calendar.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault()));
+                if (calendar != null) {
+                    buf.append(calendar.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault()));
+                }
+                else {
+                    buf.append("");
+                }
 			}
 			else if (specifier == 'p') {
-				int hour = calendar.get(Calendar.HOUR);
-				buf.append(hour < 12 ? "AM" : "PM");
+                if (calendar != null) {
+                    int hour = calendar.get(Calendar.HOUR);
+                    buf.append(hour < 12 ? "AM" : "PM");
+                }
+                else {
+                    buf.append("AM");
+                }
 			}
 			else if (specifier == 'r') {
-				int hour = calendar.get(Calendar.HOUR);
-				hour = hour % 13;
-				if (hour < 10) {
-					buf.append('0');
-				}
-				buf.append(hour);
-				buf.append(':');
-				int minute = calendar.get(Calendar.MINUTE);
-				if (minute < 10) {
-					buf.append('0');
-				}
-				buf.append(minute);
-				buf.append(':');
-				int second = calendar.get(Calendar.SECOND);
-				if (second < 10) {
-					buf.append('0');
-				}
-				buf.append(second);
-				buf.append(hour < 12 ? " AM" : " PM");
+                if (calendar != null) {
+                    int hour = calendar.get(Calendar.HOUR);
+                    hour = hour % 13;
+                    if (hour < 10) {
+                        buf.append('0');
+                    }
+                    buf.append(hour);
+                    buf.append(':');
+                    int minute = calendar.get(Calendar.MINUTE);
+                    if (minute < 10) {
+                        buf.append('0');
+                    }
+                    buf.append(minute);
+                    buf.append(':');
+                    int second = calendar.get(Calendar.SECOND);
+                    if (second < 10) {
+                        buf.append('0');
+                    }
+                    buf.append(second);
+                    buf.append(hour < 12 ? " AM" : " PM");
+                }
+                else {
+                    buf.append("00 AM");
+                }
 			}
 			else if (specifier == 's') {
-				buf.append(calendar.get(Calendar.SECOND));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.SECOND));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'S') {
-				buf.append(calendar.get(Calendar.SECOND));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.SECOND));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'T') {
 				throw new NotImplementedException();
 			}
 			else if (specifier == 'u') {
-				buf.append(calendar.get(Calendar.WEEK_OF_YEAR));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.WEEK_OF_YEAR));
+                }
+                else {
+                    buf.append("0");
+                }
 			}
 			else if (specifier == 'U') {
 				throw new NotImplementedException();
@@ -168,16 +273,31 @@ public class FuncDateFormat extends Function {
 				throw new NotImplementedException();
 			}
 			else if (specifier == 'x') {
-				throw new NotImplementedException();
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.YEAR));
+                }
+                else {
+                    buf.append("0000");
+                }
 			}
 			else if (specifier == 'X') {
 				throw new NotImplementedException();
 			}
 			else if (specifier == 'y') {
-				buf.append(calendar.get(Calendar.YEAR) % 100);
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.YEAR) % 100);
+                }
+                else {
+                    buf.append("00");
+                }
 			}
 			else if (specifier == 'Y') {
-				buf.append(calendar.get(Calendar.YEAR));
+                if (calendar != null) {
+                    buf.append(calendar.get(Calendar.YEAR));
+                }
+                else {
+                    buf.append("0000");
+                }
 			}
 			else if (specifier == '%') {
 				buf.append('%');

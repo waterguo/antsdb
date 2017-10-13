@@ -102,13 +102,7 @@ abstract class UpdateBase extends Statement {
             if (primaryKeyChange) {
             	error = this.gtable.delete(trx.getTrxId(), pKey, timeout);
             	if (error != HumpbackError.SUCCESS) {
-            		if (error == HumpbackError.EXISTENCE_VIOLATION) {
-                    	// the row doesn't exist
-            			return false;
-            		}
-                    else {
-                    	throw new OrcaException(error);
-                    }
+                	throw new OrcaException(error);
             	}
             	newRow.setVersion(trx.getTrxId());
             	error = this.gtable.insert(newRow, timeout);
@@ -122,10 +116,6 @@ abstract class UpdateBase extends Statement {
             	this.indexHandlers.update(heap, trx, oldRow, newRow, primaryKeyChange, timeout);
             	success = true;
             	break;
-            }
-            else if (error == HumpbackError.EXISTENCE_VIOLATION) {
-            	// the row doesn't exist
-            	return false;
             }
             else if (error == HumpbackError.CONCURRENT_UPDATE) {
             	// row is updated by another trx. retry

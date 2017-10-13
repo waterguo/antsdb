@@ -16,7 +16,6 @@ package com.antsdb.saltedfish.sql;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -24,7 +23,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author wgu0
  */
-class SessionSweeper implements Runnable {
+public class SessionSweeper implements Runnable {
 	static Logger _log = UberUtil.getThisLogger();
 
 	Orca orca;
@@ -34,31 +33,14 @@ class SessionSweeper implements Runnable {
 	}
 	
 	@Override
-	public void run() {
+	public synchronized void run() {
 		try {
-			// find out the oldest transaction
-			
-			long oldest = this.orca.getTrxMan().getLastTrxId() - 1;
-			for (Session session:this.orca.sessions) {
-				Transaction trx = session.getTransaction_();
-				if (trx == null) {
-					continue;
-				}
-				long trxid = trx.getTrxId();
-				if (trxid == 0) {
-					continue;
-				}
-				oldest = Math.max(trxid, oldest);
-			}
-			
-			// log the trxid so that replayer knows end of the transaction window. it is critical for freeing unused 
-			// transactions
-			
-			long lastClosed = oldest + 1;
+			long lastClosed = this.orca.getLastClosedTransactionId();
 			Humpback humpback = this.orca.getHumpback();
 			if (lastClosed < humpback.getLastClosedTransactionId()) {
+                humpback.setLastClosedTransactionId(lastClosed);
 				humpback.getGobbler().logTransactionWindow(lastClosed);
-				humpback.setLastClosedTransactionId(lastClosed);
+	            _log.trace("session sweeper found last trx: {}", lastClosed);
 			}
 		}
 		catch (Exception x) {

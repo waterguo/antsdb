@@ -56,13 +56,13 @@ class IndexEntryHandler {
 		return handlers;
 	}
 	
-	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout) {
+	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
     	long pIndexKey = keyMaker.make(heap, row);
     	long pRowKey = row.getKeyAddress();
-    	insert(heap, trx, pIndexKey, pRowKey, (byte)0, timeout);
+    	insert(heap, trx, pIndexKey, pRowKey, (byte)0, timeout, isReplace);
 	}
 	
-	void insert(Heap heap, Transaction trx, long pIndexKey, long pRowKey, byte misc, int timeout) {
+	void insert(Heap heap, Transaction trx, long pIndexKey, long pRowKey, byte misc, int timeout, boolean isReplace) {
     	for (;;) {
 	    	HumpbackError error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
 	        if (error == HumpbackError.SUCCESS) {
@@ -101,6 +101,6 @@ class IndexEntryHandler {
 		}
 		long pRowKey = newRow.getKeyAddress();
 		delete(heap, trx, pOldIndexKey, timeout);
-		insert(heap, trx, pNewIndexKey, pRowKey, (byte)0, timeout);
+		insert(heap, trx, pNewIndexKey, pRowKey, (byte)0, timeout, true);
 	}
 }

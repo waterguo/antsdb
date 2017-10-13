@@ -25,9 +25,7 @@ import com.antsdb.saltedfish.sql.DdlGenerator;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
-import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
-import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Statement;
 import com.antsdb.saltedfish.sql.vdm.StatementWrapper;
 
@@ -65,18 +63,8 @@ public class InstructionGenerator {
         }
     }
     
-    static public Script generate(Session session, String text) throws OrcaException {
-        ScriptContext scriptCtx = MysqlParserFactory.parse(text);
-        GeneratorContext ctx = new GeneratorContext(session);
-        scan(ctx, scriptCtx);
-        Instruction code = (Instruction)generate(ctx, scriptCtx);
-        Script script = new Script(code, ctx.getParameterCount(), ctx.getVariableCount(), text);
-        return script;
-    }
-    
     static public Instruction generate(GeneratorContext ctx, ParseTree rule) throws OrcaException {
         Generator<ParseTree> generator = getGenerator(rule);
-        Instruction code = generator.gen(ctx, rule);
         if (!ctx.isCompileDdl() && (generator instanceof DdlGenerator<?>)) {
             // run it if it is ddl statement otherwise following statements may fail to parse because of missing
             // objects
@@ -84,7 +72,8 @@ public class InstructionGenerator {
         	x.nParameters = ctx.getParameterCount();
         	throw x;
         }
-        else if (code instanceof Statement) {
+        Instruction code = generator.gen(ctx, rule);
+        if (code instanceof Statement) {
             Statement stmt = (Statement)code;
             StatementWrapper wrapper = new StatementWrapper(stmt, rule, generator);
             return wrapper;

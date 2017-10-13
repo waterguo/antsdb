@@ -37,7 +37,6 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 		long[] values;
 		long pRow;
 		boolean isClosed = false;
-		private SpaceManager memman;
 		private AtomicLong counter;
 		GTable gtable;
 		Transaction trx;
@@ -48,7 +47,6 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 				Transaction trx, 
 				AtomicLong counter) {
 			super(CursorPrimaryKeySeek.this);
-			this.memman = memman;
 			this.gtable = gtable;
 			this.trx = trx;
 			this.counter = counter;
@@ -71,7 +69,7 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 				// convert row to record
 				
 		    	long pRecord = newRecord();
-		        Row row = Row.fromSpacePointer(this.memman, pRow, 0);
+		        Row row = Row.fromMemoryPointer(pRow, 0);
 		        Record.setKey(pRecord, row.getKeyAddress());
 		        for (int i=0; i<this.meta.getColumnCount(); i++) {
 		        	long pValue = row.getFieldAddress(CursorPrimaryKeySeek.this.mapping[i]);
@@ -126,7 +124,7 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        GTable gtable = ctx.getHumpback().getTable(table.getId());
+        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         Transaction trx = ctx.getTransaction();
     	MyCursor c = new MyCursor(
     			ctx.getSpaceManager(), 

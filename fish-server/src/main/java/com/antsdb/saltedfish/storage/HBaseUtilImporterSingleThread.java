@@ -94,7 +94,7 @@ public class HBaseUtilImporterSingleThread {
 					rows.add(row);
 					
 					if (rows.size() >= ROWS_PER_PUT) {
-						put(rows);						
+						put(table.getId(), rows);						
 						count += rows.size();
 						if ((count % 20000) == 0) {
 							System.out.println("  Done rows: " + count);
@@ -105,7 +105,7 @@ public class HBaseUtilImporterSingleThread {
 				}
 
 				if (rows.size() > 0) {
-					put(rows);
+					put(table.getId(), rows);
 					count += rows.size();
 					System.out.println("  Done rows: " + count);
 					rows.clear();;
@@ -116,10 +116,12 @@ public class HBaseUtilImporterSingleThread {
 								count + ", " + (end - start) + " ms\n");
 			}
 		}
-		// write current SP to __SYS.SYNCPARAM
+		// write current SP to SYNCPARAM
 		long currentSP = getCurrentSP();
 		System.out.println("==== Update SYNCPARAM to " + currentSP + "====\n");
-    	CheckPoint.updateHBase(this.hbaseConn, currentSP, false, this.humpback.getServerId(), null);
+        CheckPoint cp = new CheckPoint(humpback, this.hbaseConn, true);
+        cp.setServerId(this.humpback.getServerId());
+        cp.updateLogPointer(currentSP);
     	
 		long importEnd = System.currentTimeMillis(); 
 		
@@ -129,7 +131,7 @@ public class HBaseUtilImporterSingleThread {
 	private long getCurrentSP() {
 		long end = 0;
     	for (GTable i:this.humpback.getTables()) {
-    		long sp = i.getEndRowSpacePointer();
+    		long sp = i.getLogSpan().y;
     		end = Math.max(end, sp);
     	}
     	return end;
@@ -148,29 +150,26 @@ public class HBaseUtilImporterSingleThread {
     	}
     }
     
-	int tableId = Integer.MAX_VALUE;
+	int tableId = Humpback.SYSMETA_TABLE_ID;
 	TableName tableName;
 	List<byte[]> tableColumnQualifierList = new ArrayList<byte[]>();
 	byte[] tableColumnTypes;
 	
-	void getTableInfo(Row row) {
-		int id = row.getTableId();
-		if (this.tableId != id) {			
-			TableMeta tableMeta = getTable(id);
-	    	this.tableName = getTableName(id);
-	    	
-			int maxColumnId = row.getMaxColumnId();
-			this.tableColumnTypes = new byte[maxColumnId+1];
-			this.tableColumnQualifierList.clear();
-			
-	        for (int i=0; i<=maxColumnId; i++) {
-	        	long pValue = row.getFieldAddress(i); 
-	        	this.tableColumnTypes[i] = Helper.getType(pValue);
-	        	
-	    		byte[] qualifier = getColumnName(tableMeta, i);
-	    		this.tableColumnQualifierList.add(qualifier);
-	        }	    	
-		}
+	void getTableInfo(int tableId, Row row) {
+		TableMeta tableMeta = getTable(tableId);
+    	this.tableName = getTableName(tableId);
+    	
+		int maxColumnId = row.getMaxColumnId();
+		this.tableColumnTypes = new byte[maxColumnId+1];
+		this.tableColumnQualifierList.clear();
+		
+        for (int i=0; i<=maxColumnId; i++) {
+        	long pValue = row.getFieldAddress(i); 
+        	this.tableColumnTypes[i] = Helper.getType(pValue);
+        	
+    		byte[] qualifier = getColumnName(tableMeta, i);
+    		this.tableColumnQualifierList.add(qualifier);
+        }	    	
  	}
 	
 	byte[] getColumnName(TableMeta table, int columnId) {
@@ -211,8 +210,8 @@ public class HBaseUtilImporterSingleThread {
     	return this.metaService.getTable(Transaction.getSeeEverythingTrx(), tableId);
 	}
 	
-	void put(List<Row> rows) throws IOException  {    	
-    	getTableInfo(rows.get(0));
+	void put(int tableId, List<Row> rows) throws IOException  {    	
+    	getTableInfo(tableId, rows.get(0));
     	
     	// skip data from already dropped table    	
     	if (this.tableName == null) {

@@ -28,10 +28,9 @@ public class OpAddTime extends BinaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long addrLeftValue = this.left.eval(ctx, heap, params, pRecord);
-        long adddrRightValue = this.right.eval(ctx, heap, params, pRecord);
-        long addrResult = AutoCaster.plus(heap, addrLeftValue, adddrRightValue);
-        return addrResult;
+        long px = this.left.eval(ctx, heap, params, pRecord);
+        long py = this.right.eval(ctx, heap, params, pRecord);
+        return AutoCaster.addTime(heap, px, py);
     }
 
     @Override

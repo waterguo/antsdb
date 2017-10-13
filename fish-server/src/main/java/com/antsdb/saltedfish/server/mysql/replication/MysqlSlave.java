@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.codec.Charsets;
@@ -40,6 +41,7 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.util.CodingError;
+import com.antsdb.saltedfish.util.JumpException;
 import com.antsdb.saltedfish.util.UberUtil;
 import com.google.code.or.OpenReplicator;
 import com.google.code.or.binlog.BinlogEventListener;
@@ -90,14 +92,16 @@ public class MysqlSlave implements BinlogEventListener {
     Map<Long, Integer> insertPstmtMap = new HashMap<>();
     Map<Long, Integer> deletePstmtMap = new HashMap<>();
     Map<Long, Integer> updatePstmtMap = new HashMap<>();
+    Set<String> ignoreList;
 	
 	private MysqlSlave() {
-		session = fish.getOrca().createSession(masterUser);
+		session = fish.getOrca().createSession(masterUser, getClass().getSimpleName());
 		serverId = getConfig().getSlaveServerId();
-        masterHost = SaltedFish.getInstance().getConfig().getProperties().getProperty("masterHost");
-        masterPort = Integer.parseInt(SaltedFish.getInstance().getConfig().getProperties().getProperty("masterPort"));
+        masterHost = getConfig().getMasterHost(); 
+        masterPort = getConfig().getMasterPort();
         masterUser = getConfig().getSlaveUser();
         masterPassword = getConfig().getSlavePassword();
+        ignoreList = getConfig().getIgnoreList();
         masterBinlog = getCheckPoint().getSlaveLogFile();
         masterLogPos = getCheckPoint().getSlaveLogPosition();
 
@@ -214,6 +218,9 @@ public class MysqlSlave implements BinlogEventListener {
 	        	onTableMap((TableMapEvent)event);
 	        }
         }
+        catch (JumpException ignored) {
+            // skip on purpose
+        }
         catch (Exception x) {
         	_log.error("replication failed: {}", event, x);
         	StringBuffer buf = new StringBuffer();
@@ -300,6 +307,9 @@ public class MysqlSlave implements BinlogEventListener {
 		}
 		String dbname = event.getDatabaseName().toString();
 		if (!StringUtils.isEmpty(dbname)) {
+	        if (this.ignoreList.contains(dbname.toLowerCase())) {
+	            return;
+	        }
 			this.session.run("USE " + dbname);
 		}
 		this.session.run(sql);
@@ -322,12 +332,19 @@ public class MysqlSlave implements BinlogEventListener {
 
 	private TableMeta getTable(long tableId) {
 		String[] name = this.tableById.get(tableId);
-		if (name == null) {
-			throw new RuntimeException("Table map not found for table id:" + tableId);
+        if (name == null) {
+            throw new OrcaException("Table map not found for table id {}", tableId);
+        }
+		if (name.length != 2) {
+            throw new OrcaException("illegal table name {} found with table id {}", name, tableId);
+		}
+		String ns = name[0];
+		if (this.ignoreList.contains(ns.toLowerCase())) {
+		    throw new JumpException();
 		}
 		TableMeta table = getMetadata().getTable(Transaction.getSeeEverythingTrx(), name[0], name[1]);
 		if (table == null) {
-			throw new RuntimeException(name + " is not found in slave");
+            throw new OrcaException("table name {}  with id {} is not found in slave", name, tableId);
 		}
 		
 		return table;

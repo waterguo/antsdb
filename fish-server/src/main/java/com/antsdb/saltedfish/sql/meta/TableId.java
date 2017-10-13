@@ -13,12 +13,23 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.meta;
 
-public enum TableId {
-    RESERVED,
-    SYSSEQUENCE,
-    SYSTABLE,
-    SYSCOLUMN,
-    SYSPARAM,
-    SYSRULE,
-    SYSRULECOL;
+public final class TableId {
+    public static final int SYSSEQUENCE = 0x50;
+    public static final int SYSTABLE = 0x51;
+    public static final int SYSCOLUMN = 0x52;
+    public static final int SYSPARAM = 0x53;
+    public static final int SYSRULE = 0x54;
+    public static final int MAX = 0xff;
+            
+    public static int valueOf(String name) {
+        switch (name) {
+        case "SYSSEQUENCE": return SYSSEQUENCE;
+        case "SYSTABLE": return SYSTABLE;
+        case "SYSCOLUMN": return SYSCOLUMN;
+        case "SYSPARAM": return SYSPARAM;
+        case "SYSRULE": return SYSRULE;
+        default:
+            throw new IllegalArgumentException(name);
+        }
+    }
 }

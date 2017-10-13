@@ -18,8 +18,6 @@ import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
 public class SequenceMeta {
-    public static final ObjectName SEQ_NAME = new ObjectName(Orca.SYSNS, "sequenceId");
-
     SlowRow row;
 
     public SequenceMeta(ObjectName name, int id) {
@@ -29,7 +27,7 @@ public class SequenceMeta {
     }
     
     public SequenceMeta(Orca orca, ObjectName name) {
-        this(name, (int)orca.getIdentityService().getSequentialId(SEQ_NAME));
+        this(name, (int)orca.getIdentityService().getNextGlobalId());
     }
     
     public SequenceMeta(SlowRow row) {

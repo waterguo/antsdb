@@ -44,7 +44,7 @@ public class HumpbackTableScan extends CursorMaker {
     
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        GTable table = ctx.getHumpback().getTable(this.table.getId());
+        GTable table = ctx.getHumpback().getTable(this.table.getHtableId());
         Cursor cursor = new DumbCursor(
         		ctx.getSpaceManager(),
                 this.cursorMeta, 
@@ -58,7 +58,7 @@ public class HumpbackTableScan extends CursorMaker {
         Transaction trx = session.getTransaction();
         Orca orca = session.getOrca();
         TableMeta tableMeta = orca.getMetaService().getTable(trx, tableName);
-        GTable table = orca.getStroageEngine().getTable(tableName.getNamespace(), tableMeta.getId());
+        GTable table = orca.getHumpback().getTable(tableName.getNamespace(), tableMeta.getHtableId());
         CursorMeta meta = createCursorMeta(session, tableName, columns);
         int[] mapping = new int[columns.size()];
         for (int i=0; i<mapping.length; i++) {

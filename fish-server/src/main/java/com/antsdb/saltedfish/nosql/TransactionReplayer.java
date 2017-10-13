@@ -16,12 +16,14 @@ package com.antsdb.saltedfish.nosql;
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.util.CodingError;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
 import com.antsdb.saltedfish.util.JumpException;
 
 /**
@@ -29,9 +31,8 @@ import com.antsdb.saltedfish.util.JumpException;
  * 
  * @author *-xguo0<@
  */
-public class TransactionReplayer extends ReplayHandler {
+public class TransactionReplayer implements ReplayHandler {
 	private ReplayHandler downstream;
-	private long lastClosedTrxId;
 	private long sp;
 	private TrxMan trxman;
 	
@@ -41,6 +42,22 @@ public class TransactionReplayer extends ReplayHandler {
 	}
 	
 	@Override
+    public void insert(InsertEntry entry) throws Exception {
+        if (isTrxRolledBack(entry)) {
+            return;
+        }
+        this.downstream.insert(entry);
+    }
+
+    @Override
+    public void update(UpdateEntry entry) throws Exception {
+        if (isTrxRolledBack(entry)) {
+            return;
+        }
+        this.downstream.update(entry);
+    }
+
+    @Override
 	public void put(PutEntry entry) throws Exception {
 		if (isTrxRolledBack(entry)) {
 			return;
@@ -96,18 +113,18 @@ public class TransactionReplayer extends ReplayHandler {
 
 	private boolean isTrxRolledBack(IndexEntry entry) {
 		long trxid = entry.getTrxid();
+		if (trxid == 0) {
+		    throw new IllegalArgumentException("unexpected trxid=0");
+		}
 		return isTrxRolledBack(trxid);
 	}
 
-	private boolean isTrxRolledBack(PutEntry entry) {
+	private boolean isTrxRolledBack(RowUpdateEntry entry) {
 		long trxid = entry.getTrxId();
 		return isTrxRolledBack(trxid);
 	}
 
 	private boolean isTrxRolledBack(long trxid) {
-		if (trxid < this.lastClosedTrxId) {
-			throw new JumpException();
-		}
 		long version = trxman.getTimestamp(trxid);
 		if (version > 0) {
 			return false;
@@ -115,7 +132,7 @@ public class TransactionReplayer extends ReplayHandler {
 		if (version == TrxMan.MARK_ROLLED_BACK) {
 			return true;
 		}
-		throw new CodingError("invalid trxid " + trxid);
+		throw new InvalidTransactionIdException(trxid);
 	}
 
 	public static long replay(Humpback humpback, long spStart, boolean inclusive, ReplayHandler handler) 
@@ -126,7 +143,6 @@ public class TransactionReplayer extends ReplayHandler {
 			return spStart;
 		}
 		TransactionReplayer replayer = new TransactionReplayer(humpback.getTrxMan(), handler);
-		replayer.lastClosedTrxId = humpback.getLastClosedTransactionId();
 		replayer.sp = spStart;
 		try {
 			return humpback.getGobbler().replay(spStart, inclusive, replayer);

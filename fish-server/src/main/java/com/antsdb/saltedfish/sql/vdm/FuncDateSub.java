@@ -33,21 +33,14 @@ public class FuncDateSub extends Function {
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pX = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-        if (pX == 0) {
-        	return 0;
-        }
         long pY = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-        if (pY == 0) {
-        	return 0;
-        }
         if (Value.getType(heap, pY) == Value.TYPE_NUMBER) {
         	// default is days without unit of time measurement suffix
         	long y = AutoCaster.getLong(pY);
         	pY = FishTimestamp.allocSet(heap, y * MILLIS_IN_A_DAY);
         }
         pY = AutoCaster.negate(heap, pY);
-        long addrResult = AutoCaster.plus(heap, pX, pY);
-        return addrResult;
+        return AutoCaster.addTime(heap, pX, pY);
 	}
 
 	@Override

@@ -70,19 +70,26 @@ public class MysqlParserFactory extends SqlParserFactory {
 	private Object run(GeneratorContext gctx, VdmContext ctx, Parameters params, Sql_stmtContext rule) {
 		ParseTree stmt = rule.getChild(0);
 		Generator<ParseTree> generator = InstructionGenerator.getGenerator(stmt);
+		boolean isDdl = generator instanceof DdlGenerator<?>;
 		Instruction code = generator.gen(gctx, stmt);
+		boolean success = false;
 		if (code == null) {
 			return null;
 		}
 		try {
 			Object result = code.run(ctx, params, 0);
+			success = true;
 			return result;
 		}
 		finally {
-			if (generator instanceof DdlGenerator<?>) {
-				// mysql commits after every ddl statement
-				ctx.getSession().commit();
-			}
+		    if (isDdl) {
+		        if (success) {
+	                ctx.getSession().commit();
+		        }
+		        else {
+		            ctx.getSession().rollback();
+		        }
+		    }
 		}
 	}
 
@@ -91,7 +98,7 @@ public class MysqlParserFactory extends SqlParserFactory {
     }
     
     static MysqlParser.ScriptContext parse(CharStream cs) {
-    	if (isCommtedStatement(cs)) {
+    	if (isCommentedStatement(cs)) {
     		String s = cs.toString();
     		s = s.substring(9);
     		s = s.substring(0, s.length()-3);
@@ -121,7 +128,7 @@ public class MysqlParserFactory extends SqlParserFactory {
      * @param cs
      * @return
      */
-	private static boolean isCommtedStatement(CharStream cs) {
+	private static boolean isCommentedStatement(CharStream cs) {
 		int idx = cs.index();
 		if (cs.LA(idx+1) != '/') {
 			return false;

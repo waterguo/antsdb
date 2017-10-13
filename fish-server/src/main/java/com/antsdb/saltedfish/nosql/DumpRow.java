@@ -32,7 +32,7 @@ import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
-import com.antsdb.saltedfish.nosql.MemTabletReadOnly.ListNode;
+import com.antsdb.saltedfish.nosql.MemTablet.ListNode;
 import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.CommandLineHelper;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -41,7 +41,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author wgu0
  */
-public class DumpRow implements CommandLineHelper {
+public class DumpRow extends CommandLineHelper {
 	int tableId;
 	byte[] key;
 	long pKey;
@@ -115,7 +115,7 @@ public class DumpRow implements CommandLineHelper {
 		// init space manager
 		
 		this.spaceman = new SpaceManager(this.home, false);
-		spaceman.init();
+		spaceman.open();
 		
 		// proceed
 		

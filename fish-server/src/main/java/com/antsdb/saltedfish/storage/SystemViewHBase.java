@@ -19,6 +19,7 @@ import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
+import com.antsdb.saltedfish.sql.vdm.EmptyCursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.util.CursorUtil;
@@ -53,7 +54,10 @@ public class SystemViewHBase extends CursorMaker {
 
 	@Override
 	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		HBaseStorageHandler handler = getHandler();
+	    HBaseReplicationHandler handler = getHandler();
+	    if (handler == null) {
+	        return new EmptyCursor(this.meta);
+	    }
 		HBaseStorageService service = getService();
         ArrayList<Item> list = new ArrayList<>();
 		if (handler != null) {
@@ -76,14 +80,11 @@ public class SystemViewHBase extends CursorMaker {
 		return hbase;
 	}
 	
-	HBaseStorageHandler getHandler() {
-		HBaseStorageService hbase = this.orca.getHBaseStorageService();
-		if (hbase == null) {
-			return null;
-		}
-		if (hbase.hbaseSyncThread == null) {
-			return null;
-		}
-		return hbase.hbaseSyncThread.hbaseHandler;
+	HBaseReplicationHandler getHandler() {
+	    if (getService() == null) {
+	        return null;
+	    }
+	    HBaseReplicationHandler result = (HBaseReplicationHandler)getService().getReplayHandler();
+		return result;
 	}
 }

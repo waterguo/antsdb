@@ -26,7 +26,7 @@ public class Show_databasesGenerator extends Generator<Show_databasesContext> {
 	@Override
 	public Instruction gen(GeneratorContext ctx, Show_databasesContext rule) throws OrcaException {
         String sql = "SELECT schema_name `Database` FROM information_schema.SCHEMATA";
-        Script script = InstructionGenerator.generate(ctx.getSession(), sql);
+        Script script = ctx.getSession().parse(sql);
         return new NestedScript(script, new Object[] {});
 	}
 

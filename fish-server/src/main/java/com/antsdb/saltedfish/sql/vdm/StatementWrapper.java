@@ -52,7 +52,11 @@ public class StatementWrapper extends Instruction {
         }
         else {
             TableMeta table = dependents.get(i);
-            ctx.getSession().lockTable(table.getId(), LockLevel.SHARED, true);
+            if (!ctx.getSession().isImportModeOn()) {
+                // in asynchronous batch mode mode, lock is supposed to be locked already. dont lock again. the session
+                // locking mechanism doesn't support concurrency
+                ctx.getSession().lockTable(table.getId(), LockLevel.SHARED, true);
+            }
             return run(dependents, i+1, ctx, params, pMaster);
         }
     }

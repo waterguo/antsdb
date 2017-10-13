@@ -57,6 +57,10 @@ public class ToInteger extends UnaryOperator {
         	}
         	result = (int)n;
         }
+        else if (val instanceof BigDecimal) {
+            BigDecimal value = (BigDecimal)val;
+            result = value.intValueExact();
+        }
         else if (val instanceof String) {
             try {
                 result = Integer.valueOf((String)val);

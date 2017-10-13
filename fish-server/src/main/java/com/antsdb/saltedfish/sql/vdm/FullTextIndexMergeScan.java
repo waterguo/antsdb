@@ -153,11 +153,6 @@ public class FullTextIndexMergeScan extends CursorMaker {
 		}
 
 		@Override
-		public boolean isRow() {
-			return this.lastFetched.isRow();
-		}
-
-		@Override
 		public byte getMisc() {
 			return this.lastFetched.getMisc();
 		}
@@ -190,6 +185,10 @@ public class FullTextIndexMergeScan extends CursorMaker {
 			long pValue = this.term.eval(ctx, heap, params, pMaster);
 			String query = AutoCaster.getString(heap, pValue);
 			LuceneUtil.tokenize(query, (String type, String term) -> {
+			    char lead = term.charAt(0);
+			    if (lead == '+') {
+			        term = term.substring(1);
+			    }
 				terms.add(term.toLowerCase());
 			});
 		}
@@ -203,7 +202,7 @@ public class FullTextIndexMergeScan extends CursorMaker {
 			scans.add(c.makeRowIterator(ctx, params, pMaster));
 		}
 		MyRowIterator it = new MyRowIterator(scans);
-        GTable gtable = ctx.getHumpback().getTable(table.getId());
+        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 		Cursor cursor = new IndexCursor(
 				ctx.getSpaceManager(), 
 				meta, 

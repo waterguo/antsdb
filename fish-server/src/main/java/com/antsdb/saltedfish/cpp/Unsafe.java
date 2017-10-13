@@ -82,6 +82,10 @@ public final class Unsafe {
 		unsafe.putIntVolatile(null, ix(addr), value);
 	}
 
+    public final static void putOrderedLong(long addr, long value) {
+        unsafe.putOrderedLong(null, ix(addr), value);
+    }
+
 	public final static void putLong(long addr, long value) {
 		unsafe.putLong(ix(addr), value);
 	}
@@ -205,5 +209,26 @@ public final class Unsafe {
 	public static long getAndAddLong(long addr, long value) {
         return unsafe.getAndAddLong(null, ix(addr), value);
 	}
+
+    public static int compare(long px, int sizeX, long py, int sizeY) {
+        int minLength = Math.min(sizeX, sizeY);
+        for (int i=0; i<minLength; i++) {
+            int x = Unsafe.getByte(px + i) & 0xff;
+            int y = Unsafe.getByte(py + i) & 0xff;
+            int result = x - y;
+            if (result != 0) {
+                return result;
+            }
+        }
+        if (sizeX > sizeY) {
+            return 1;
+        }
+        else if (sizeX < sizeY) {
+            return -1;
+        }
+        else {
+            return 0;
+        }
+    }
 
 }

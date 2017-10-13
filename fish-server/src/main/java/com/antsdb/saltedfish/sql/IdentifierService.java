@@ -21,12 +21,16 @@ import com.antsdb.saltedfish.util.IdGenerator;
 
 public class IdentifierService {
 	static Transaction _trx = new Transaction(1, Long.MAX_VALUE);
+	static final ObjectName GLOBAL_SEQUENCE_NAME = new ObjectName(Orca.SYSNS, "GlobalId");
+	static int  GLOBAL_SEQUENCE_ID = 0;
 	
     Orca orca;
+    SequenceMeta global;
 
     IdentifierService(Orca orca) {
         super();
         this.orca = orca;
+        this.global = this.orca.getMetaService().getSequence(_trx, GLOBAL_SEQUENCE_NAME);
     }
     
     /**
@@ -43,11 +47,23 @@ public class IdentifierService {
      * 
      * @return
      */
-    public long getSequentialId() {
-        return getSequentialId(new ObjectName(Orca.SYSNS, "system"));
+    public long getNextGlobalId() {
+        return getNextGlobalId(1);
     }
     
-    public long getSequentialId(ObjectName name) {
+    public long getNextGlobalId(int increment) {
+        long result = this.global.getLastNumber();
+        result += increment;
+        this.global.setLastNumber(result);
+        this.orca.getMetaService().updateSequence(_trx.getTrxId(), this.global);
+        return result;
+    }
+    
+    public long getNextId(ObjectName name) {
+        return getNextId(name, 0);
+    }
+    
+    public long getNextId(ObjectName name, int increment) {
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, name);
         long counter;
         if (seq == null) {
@@ -57,7 +73,7 @@ public class IdentifierService {
         }
         else {
             counter = seq.getLastNumber();
-            counter++;
+            counter += (increment == 0) ? seq.getIncrement() : increment;
             seq.setLastNumber(counter);
             this.orca.getMetaService().updateSequence(seq.getTransactionTimestamp(), seq);
         }

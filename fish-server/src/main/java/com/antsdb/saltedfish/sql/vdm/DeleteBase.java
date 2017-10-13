@@ -52,10 +52,6 @@ abstract class DeleteBase extends Statement {
             	this.indexHandlers.delete(heap, trx, row, timeout);
             	return true;
             }
-            else if (error == HumpbackError.EXISTENCE_VIOLATION) {
-            	// the row doesn't exist
-            	return false;
-            }
             else {
             	throw new OrcaException(error);
             }

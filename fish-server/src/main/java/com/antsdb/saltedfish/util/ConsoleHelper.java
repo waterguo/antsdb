@@ -13,6 +13,12 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.util;
 
+import java.io.IOException;
+import java.io.LineNumberReader;
+import java.io.StringReader;
+
+import org.apache.commons.lang.StringUtils;
+
 public interface ConsoleHelper {
 	public default void println(String format, Object... args) {
 		String text = String.format(format, args);
@@ -22,5 +28,16 @@ public interface ConsoleHelper {
 	public default void print(String format, Object... args) {
 		String text = String.format(format, args);
 		System.out.print(text);
+	}
+	
+	public default void printlnWithIndentation(String text, int spaces) {
+	    try {
+	        String indentation = StringUtils.repeat(" ", spaces);
+    	    LineNumberReader reader = new LineNumberReader(new StringReader(text));
+    	    for (String line=reader.readLine(); line != null; line=reader.readLine()) {
+    	        println("%s%s", indentation, line);
+    	    }
+	    }
+	    catch (IOException ignored) {}
 	}
 }

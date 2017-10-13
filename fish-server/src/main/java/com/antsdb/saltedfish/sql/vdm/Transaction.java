@@ -29,11 +29,12 @@ import com.antsdb.saltedfish.util.UberUtil;
 public final class Transaction {
 	static Logger _log = UberUtil.getThisLogger();
 	
-    private long trxid;
+    private volatile long trxid;
     long trxts;
     boolean isDdl = false;
     TrxMan trxman;
     TableLock tableLock;
+    long spStart;
 
     /* debug code below
     @Override
@@ -57,12 +58,17 @@ public final class Transaction {
         this.trxts = trxts;
     }
 
+    public void makeAutonomous() {
+        this.trxid = this.trxman.getNewVersion();
+    }
+    
     public long getGuaranteedTrxId() {
         if (this.trxid == 0) {
 	        if (this.trxman == null) {
 	        	throw new CodingError();
 	        }
             this.trxid = this.trxman.getNewTrxId();
+            this.spStart = this.trxman.getCurrentSp();
         }
         return this.trxid;
     }
@@ -145,5 +151,11 @@ public final class Transaction {
 	public void reset() {
 		this.trxid = 0;
 		this.trxts = 0;
+		this.spStart = 0;
+		this.isDdl = false;
+	}
+	
+	public long getStartSp() {
+	    return this.spStart;
 	}
 }

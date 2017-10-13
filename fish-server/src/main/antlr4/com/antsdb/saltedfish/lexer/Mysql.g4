@@ -193,7 +193,7 @@ commit_stmt
  ;
  
 create_database_stmt
- : K_CREATE K_DATABASE identifier (K_CHARACTER K_SET any_name)? 
+ : K_CREATE K_DATABASE (K_IF K_NOT K_EXISTS)? identifier (K_CHARACTER K_SET any_name)?  
  ;
  
 create_index_stmt:
@@ -205,7 +205,7 @@ indexed_column_def
  : indexed_column ('(' signed_number ')')?
  ;
   
-create_table_stmt: K_CREATE K_TABLE table_name_ '(' create_defs  ','? ')' table_options ;
+create_table_stmt: K_CREATE K_TABLE (K_IF K_NOT K_EXISTS)? table_name_ '(' create_defs  ','? ')' table_options;
 
 create_defs
  : create_def (',' create_def)*
@@ -351,7 +351,7 @@ file_name: STRING_LITERAL;
 lock_table_stmt: K_LOCK K_TABLES table_name_* K_WRITE?;
  
 insert_stmt
- : K_INSERT HINT? K_IGNORE? K_INTO table_name_ (insert_stmt_values | insert_stmt_select) 
+ : (K_INSERT | K_REPLACE) HINT? K_IGNORE? K_INTO table_name_ (insert_stmt_values | insert_stmt_select) 
  ;
  
 insert_stmt_values
@@ -407,7 +407,7 @@ compound_operator
  ;
  
 select_or_values
- : K_SELECT HINT? ( K_DISTINCT | K_ALL )? select_columns 
+ : K_SELECT HINT? MULTILINE_STATEMENT? ( K_DISTINCT | K_ALL )? select_columns 
    from_clause ? 
    where_clause ? 
    group_by_clause ?
@@ -670,9 +670,13 @@ expr_cast
  ;
  
 expr_function
- : function_name '(' (expr_function_parameters | expr_function_star_parameter)? ')'
+ : function_name '(' (expr_function_parameters | expr_function_star_parameter | group_concat_parameter)? ')'
  ;
 
+group_concat_parameter
+ : K_DISTINCT? column_name_ K_SEPARATOR literal_value
+ ;
+ 
 expr_function_parameters
  : expr ( ',' expr )*
  ;
@@ -682,7 +686,7 @@ expr_function_star_parameter
  ; 
   
 expr_match
- : K_MATCH '(' column_name_ ( ',' column_name_)* ')' K_AGAINST (expr)
+ : K_MATCH '(' column_name_ ( ',' column_name_)* ')' K_AGAINST '(' expr (K_IN K_BOOLEAN K_MODE)? ')'
  ;
  
 expr_parenthesis
@@ -756,7 +760,7 @@ any_name
 name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
- | K_MATCH | K_AGAINST
+ | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE
  ;
  
 identifier
@@ -870,6 +874,7 @@ K_BEGIN : B E G I N;
 K_BETWEEN : B E T W E E N;
 K__BINARY : '_' B I N A R Y;
 K_BINARY : B I N A R Y;
+K_BOOLEAN : B O O L E A N;
 K_BY : B Y;
 K_CASCADE : C A S C A D E;
 K_CASE : C A S E;
@@ -953,6 +958,7 @@ K_LOAD : L O A D;
 K_LOCK : L O C K;
 K_MASTER : M A S T E R;
 K_MATCH : M A T C H;
+K_MODE : M O D E;
 K_MODIFY : M O D I F Y;
 K_NAMES : N A M E S;
 K_NATURAL : N A T U R A L;
@@ -986,6 +992,7 @@ K_ROW : R O W;
 K_ROWNUM : R O W N U M;
 K_SAVEPOINT : S A V E P O I N T;
 K_SELECT : S E L E C T;
+K_SEPARATOR : S E P A R A T O R; 
 K_SEQUENCE: S E Q U E N C E;
 K_SESSION: S E S S I O N;
 K_SET : S E T;

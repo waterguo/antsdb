@@ -73,7 +73,7 @@ public class Checks {
         if (result != null) {
             return result;
         }
-        Humpback humpback = orca.getStroageEngine();
+        Humpback humpback = orca.getHumpback();
         result = humpback.getNamespace(ns);
         if (result != null) {
         	return result;
@@ -84,7 +84,7 @@ public class Checks {
     }
     
     public static void namespaceNotExist(Orca orca, String ns) throws OrcaException {
-        Humpback humpback = orca.getStroageEngine();
+        Humpback humpback = orca.getHumpback();
         if (humpback.getNamespace(ns) != null) {
             throw new OrcaException("namespace already exist: " + ns);
         }

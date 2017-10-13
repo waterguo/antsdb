@@ -25,7 +25,8 @@ public class Create_database_stmtGenerator extends DdlGenerator<Create_database_
     @Override
     public Instruction gen(GeneratorContext ctx, Create_database_stmtContext rule) throws OrcaException {
         String name = Utils.getIdentifier(rule.identifier());
-        CreateNamespace step = new CreateNamespace(name);
+        boolean ifNotExists = rule.K_NOT() != null;
+        CreateNamespace step = new CreateNamespace(name, ifNotExists);
         return step;
     }
 

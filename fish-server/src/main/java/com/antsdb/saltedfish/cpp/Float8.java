@@ -44,12 +44,27 @@ public class Float8 {
 			throw new IllegalArgumentException();
 		}
 		double y;
-		if (typey == Value.FORMAT_FLOAT4) {
+        if (typey == Value.FORMAT_INT4) {
+            y = Int4.get(addry);
+        }
+        else if (typey == Value.FORMAT_INT8) {
+            y = Int8.get(null, addry);
+        }
+        else if (typey == Value.FORMAT_BIGINT) {
+            y = BigInt.get(null, addry).doubleValue();
+        }
+        else if (typey == Value.FORMAT_FAST_DECIMAL) {
+            y = FastDecimal.get(null, addry).doubleValue();
+        }
+        else if (typey == Value.FORMAT_FLOAT4) {
 			y = Float4.get(null, addry);
 		}
 		else if (typey == Value.FORMAT_FLOAT8) {
 			y = Float8.get(null, addry);
 		}
+        else if (typey == Value.FORMAT_DECIMAL) {
+            y = FishDecimal.get(null, addry).doubleValue();
+        }
 		else {
 			throw new IllegalArgumentException();
 		}

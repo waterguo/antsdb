@@ -15,10 +15,8 @@ package com.antsdb.saltedfish.sql;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import com.antsdb.saltedfish.nosql.RowLockMonitor;
-import com.antsdb.saltedfish.nosql.RowLockMonitor.RowLockInfo;
+import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
@@ -35,10 +33,9 @@ public class SystemViewLocks extends CursorMaker {
 	CursorMeta meta;
 	
     public static class Item {
-    	public long REQUEST_TRX_ID;
-    	public long LOCK_TRX_ID;
-    	public String FILE;
-    	public long POS;
+    	public int SESSION;
+    	public String LOCK_TYPE;
+    	public String OBJECT;
     }
     
 	public SystemViewLocks(Orca orca) {
@@ -53,30 +50,28 @@ public class SystemViewLocks extends CursorMaker {
 
 	@Override
 	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		RowLockMonitor monitor = this.orca.getHumpback().getRowLockMonitor();
-		monitor.start();
-		try {
-			Thread.sleep(2 * 1000);
-		}
-		catch (InterruptedException ignored) {
-		}
-		Map<Long, RowLockInfo> locks = monitor.end();
-		List<Item> list = new ArrayList<>();
-		for (RowLockInfo i:locks.values()) {
-			list.add(add(i));
-		}
-		// done
+        List<Item> list = new ArrayList<>();
+	    for (Session session:ctx.getOrca().getSessions()) {
+	        for (TableLock lock:session.tableLocks.values()) {
+	            if (lock.getLevel() == LockLevel.EXCLUSIVE_BY_OTHER) {
+	                continue;
+	            }
+	            list.add(add(ctx, lock));
+	        }
+	    }
+
+	    // done
         
         Cursor c = CursorUtil.toCursor(meta, list);
         return c;
 	}
 
-	private Item add(RowLockInfo lock) {
+	private Item add(VdmContext ctx, TableLock lock) {
+	    SysMetaRow tableInfo = ctx.getHumpback().getTableInfo(lock.tableId);
 		Item item = new Item();
-		item.REQUEST_TRX_ID = lock.requestTrxId;
-		item.LOCK_TRX_ID = lock.lockTrxId;
-		item.FILE = lock.file.toString();
-		item.POS = lock.pos;
+		item.SESSION = lock.owner;
+		item.LOCK_TYPE = LockLevel.toString(lock.level.get());
+		item.OBJECT = tableInfo.getNamespace() + "." + tableInfo.getTableName();
 		return item;
 	}
 }

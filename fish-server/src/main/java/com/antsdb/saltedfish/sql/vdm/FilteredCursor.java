@@ -75,7 +75,7 @@ public class FilteredCursor extends CursorWithHeap {
 
     @Override
     public String toString() {
-        return "Filter";
+        return this.upstream.toString();
     }
 
 }

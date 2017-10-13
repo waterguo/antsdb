@@ -25,6 +25,8 @@ import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.util.CursorUtil;
+import com.antsdb.saltedfish.util.LongLong;
+import static com.antsdb.saltedfish.util.UberFormatter.*;
 
 /**
  * 
@@ -40,10 +42,11 @@ public class SystemViewTablets extends CursorMaker {
         public int TABLE_ID;
         public int TABLET_ID;
         public String FILE;
-        public long START_SP;
-        public long END_SP;
+        public String START_SP;
+        public String END_SP;
 		public long START_TRXID;
 		public long END_TRXID;
+		public int CARBONFROZEN;
     }
 
 	public SystemViewTablets(Orca orca) {
@@ -79,9 +82,11 @@ public class SystemViewTablets extends CursorMaker {
         item.TABLE_ID = gtable.getId();
         item.TABLET_ID = tablet.getTabletId();
         item.FILE = tablet.getFile().getAbsolutePath();
-        item.START_SP = tablet.getStartRow();
-        item.END_SP = tablet.getEndRow();
+        LongLong span = tablet.getLogSpan();
+        item.START_SP = (span != null) ? hex(span.x) : "";
+        item.END_SP = (span != null) ? hex(span.y) : "";
         item.START_TRXID = tablet.getStartTrxId();
         item.END_TRXID = tablet.getEndTrxId();
+        item.CARBONFROZEN = tablet.isCarbonfrozen() ? 1 : 0;
 	}
 }

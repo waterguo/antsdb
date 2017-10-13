@@ -42,6 +42,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
+import static com.antsdb.saltedfish.server.mysql.MysqlServerHandler.*;
+
 public class MysqlClientHandler extends ChannelInboundHandlerAdapter 
 {
     static Logger _log = UberUtil.getThisLogger();
@@ -153,7 +155,7 @@ public class MysqlClientHandler extends ChannelInboundHandlerAdapter
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable x) throws Exception {
-		System.out.println(x.getMessage());
+	    _log.error(x.getMessage());
 	}
 
 	public void processRows(TableMapPacket map, RowsEventV2Packet msg)
@@ -231,14 +233,38 @@ public class MysqlClientHandler extends ChannelInboundHandlerAdapter
 
 	}
 	
-	public void state(ChannelHandlerContext ctx, StateIndicator msg)
+    protected int getCapabilities() {
+        int flag = 0;
+        flag |= CLIENT_CONNECT_WITH_DB;
+        flag |= CLIENT_PROTOCOL_41;
+        flag |= CLIENT_TRANSACTIONS;
+        flag |= CLIENT_RESERVED;
+        flag |= CLIENT_PLUGIN_AUTH;
+        flag |= CLIENT_SECURE_CONNECTION;
+        if (enableSSL())
+        	flag |= CLIENT_SSL;
+        return flag;
+    }
+
+	private boolean enableSSL()
+	{
+    	String keyFile = fish.getConfig().getSSLKeyFile();
+    	String password = fish.getConfig().getSSLPassword();
+    	if (keyFile!=null || password!=null)
+    	{
+    		return true;
+    	}
+    	return false;
+	}
+	
+    public void state(ChannelHandlerContext ctx, StateIndicator msg)
 	{
         ByteBuf buf = ctx.alloc().buffer();
     	if (msg.eventType == StateIndicator.INITIAL_STATE)
     	{
             PacketEncoder.writePacket(buf, (byte)1, () -> packetEncoder.writeHandshakeResponse(
             		buf,
-            		MysqlServerHandler.getServerCapabilities(),
+            		getCapabilities(),
             		masterUser, 
             		masterPassword));
             ctx.writeAndFlush(buf);
@@ -253,7 +279,7 @@ public class MysqlClientHandler extends ChannelInboundHandlerAdapter
     	}
     	else if (msg.eventType == StateIndicator.REGISTERED_STATE)
     	{
-            this.session = this.fish.getOrca().createSession(masterUser);
+            this.session = this.fish.getOrca().createSession(masterUser, getClass().getSimpleName());
             PacketEncoder.writePacket(buf, (byte)0, () -> packetEncoder.writeBinlogDump(
             		buf,
             		masterLogPos,

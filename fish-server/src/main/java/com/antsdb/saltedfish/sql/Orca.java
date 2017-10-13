@@ -25,16 +25,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.Replicable;
+import com.antsdb.saltedfish.nosql.Replicator;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.server.mysql.replication.MysqlSlave;
-import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 import com.antsdb.saltedfish.sql.meta.TableId;
@@ -64,7 +64,7 @@ import static com.antsdb.saltedfish.sql.OrcaConstant.*;
  */
 public class Orca {
 	public static final String VERSION = "5.5.0-antsdb1606";
-    public static final String SYSNS = "__SYS";
+    public static final String SYSNS = Humpback.SYS_NAMESAPCE;
     
     static Logger _log = UberUtil.getThisLogger();
     static Orca _default;
@@ -78,15 +78,17 @@ public class Orca {
     ClusterService clusterService;
     Map<String, Object> variables = new ConcurrentHashMap<String, Object>();
     Cache<String, Script> statementCache;
-    Map<String, ExternalTable> externals = new HashMap<>();
     Map<String, CursorMaker> sysviews = new HashMap<>();
     Map<String, String> namespaces = new HashMap<>();
     boolean isClosed = false;
     Set<Session> sessions = ConcurrentHashMap.newKeySet();
-    HBaseStorageService hbaseStorageService = null;
-	private ScheduledFuture<?> sessionSweeper;
+	private ScheduledFuture<?> sessionSweeperFuture;
 	private File home;
-	private SqlDialect dialect; 
+	private SqlDialect dialect;
+    private SessionSweeper sessionSweeper;
+    private ScheduledFuture<?> recyclerFuture;
+    private Replicator replicator;
+    private Session sysdefault;
     
     class ShutdownThread extends Thread {
         @Override
@@ -100,19 +102,20 @@ public class Orca {
         this.home = home;
         _instances.add(this);
         String hbaseConf = props.getProperty("hbase_conf", null);
-        this.humpback = Humpback.open(home, hbaseConf==null);
+        this.humpback = new Humpback(home, hbaseConf==null);
+        this.humpback.open();
         this.humpback.disableShutdownHook();
-        this.idService = new IdentifierService(this);
-        this.metaService = new MetadataService(this);
         this.config = new ConfigService(this, props);
+        this.metaService = new MetadataService(this);
         
         // init statement cache
         
         this.statementCache = CacheBuilder.newBuilder().maximumSize(1000).build();
 
-        //
+        // 
         
         init();
+        this.idService = new IdentifierService(this);
         
         // skipping validation. it no longer applicable.
         // validate();
@@ -135,15 +138,8 @@ public class Orca {
         new RecycleThread(this).start();
 
         // system views
-        
-        registerSystemView(SYSNS, "STATEMENT_METRICS", new SystemMetrics(this));
-        registerSystemView(SYSNS, "TRX", new SystemViewTrx(this));
-        registerSystemView(SYSNS, "HBASE", new SystemViewHBase(this));
-        registerSystemView(SYSNS, "VALUE", new SystemViewValue(this));
-        registerSystemView(SYSNS, "TABLETS", new SystemViewTablets(this));
-        registerSystemView(SYSNS, "SESSIONS", new SystemViewSessions(this));
-        registerSystemView(SYSNS, "CONCURRENCY_STATS", new SystemViewConcurrencyStats(this));
-        registerSystemView(SYSNS, "LOCKS", new SystemViewLocks(this));
+
+        initViews();
         
         // cluster service
         
@@ -151,99 +147,110 @@ public class Orca {
         
         // backend jobs
         
-        this.sessionSweeper = getJobManager().scheduleWithFixedDelay(new SessionSweeper(this), 2, TimeUnit.SECONDS);
-
+        FishJobManager jobman = getJobManager();
+        jobman.schedule(10, TimeUnit.SECONDS, ()-> {
+            if (this.isClosed) {
+                return;
+            }
+            this.sessionSweeper = new SessionSweeper(this);
+            this.sessionSweeperFuture = jobman.scheduleWithFixedDelay(this.sessionSweeper, 2, TimeUnit.SECONDS);
+            ResourceRecycler recycler = new ResourceRecycler(this);
+            this.recyclerFuture = getJobManager().scheduleWithFixedDelay(recycler, 60, TimeUnit.SECONDS);
+        });
         Runtime.getRuntime().addShutdownHook(new ShutdownThread());
-        
-        // start hbase replication
-        
-        this.hbaseStorageService = this.humpback.getHBaseService();
-        if (this.hbaseStorageService != null) {
-        	this.hbaseStorageService.setMetaService(this.metaService);
-        	this.hbaseStorageService.start();
+        if (this.humpback.getStorageEngine().supportReplication()) {
+            getHBaseStorageService().setMetaService(this.metaService);
+            Replicable replicable = (Replicable)this.humpback.getStorageEngine();
+            this.replicator = new Replicator("replicator", this.humpback, replicable);
+            this.replicator.start();
         }
+
+        // system default session. used as the template for the use sessions
+        
+        this.sysdefault = createSession("system", "default");
     }
     
+    private void initViews() {
+        registerSystemView(SYSNS, TABLENAME_SYSSEQUENCE, new SysSequence(this));
+        registerSystemView(SYSNS, TABLENAME_SYSTABLE, new SysTable(this));
+        registerSystemView(SYSNS, TABLENAME_SYSCOLUMN, new SysColumn(this));
+        registerSystemView(SYSNS, TABLENAME_SYSPARAM, new SysParam(this));
+        registerSystemView(SYSNS, TABLENAME_SYSRULE, new SysRule(this));
+
+        registerSystemView(SYSNS, "STATEMENT_METRICS", new SystemMetrics(this));
+        registerSystemView(SYSNS, "TRX", new SystemViewTrx(this));
+        registerSystemView(SYSNS, "HBASE", new SystemViewHBase(this));
+        registerSystemView(SYSNS, "SYSTEM_INFO", new SystemInfoView(this));
+        registerSystemView(SYSNS, "TABLETS", new SystemViewTablets(this));
+        registerSystemView(SYSNS, "SESSIONS", new SystemViewSessions(this));
+        registerSystemView(SYSNS, "CONCURRENCY_STATS", new SystemViewConcurrencyStats(this));
+        registerSystemView(SYSNS, "LOCKS", new SystemViewLocks(this));
+        registerSystemView(SYSNS, "CACHE_INFO", new SystemViewCacheInfo(this));
+        registerSystemView(SYSNS, "MINKE_INFO", new SystemViewMinkeInfo(this));
+        registerSystemView(SYSNS, "REPLICATOR_INFO", new SystemViewReplicatorInfo(this));
+        registerSystemView(SYSNS, "SYNCHRONIZER_INFO", new SystemViewSynchronizerInfo(this));
+        registerSystemView(SYSNS, "TABLE_STATS", new SystemViewTableStats(this));
+        registerSystemView(SYSNS, "x00000000", new SystemViewHumpbackMeta(this));
+        registerSystemView(SYSNS, "x00000001", new SystemViewHumpbackNamespace(this));
+        registerSystemView(SYSNS, "x00000002", new SystemViewTableStats(this));
+    }
+
     private void verifySystem() {
     	if (this.humpback.getNamespace(SYSNS) == null) {
-    		throw new OrcaException("namespace __sys is not found");
+    		throw new OrcaException("namespace " + Orca.SYSNS + " is not found");
     	}
-    	if (this.humpback.getTable(-TableId.SYSTABLE.ordinal()) == null) {
+    	if (this.humpback.getTable(TableId.SYSTABLE) == null) {
     		throw new OrcaException("systable is not found");
     	}
-    	if (this.humpback.getTable(-TableId.SYSSEQUENCE.ordinal()) == null) {
+    	if (this.humpback.getTable(TableId.SYSSEQUENCE) == null) {
     		throw new OrcaException("syssequence is not found");
-    	}
-    	Transaction trx = Transaction.getSeeEverythingTrx();
-    	if (this.metaService.getSequence(trx, SequenceMeta.SEQ_NAME) == null) {
-    		throw new OrcaException("sequence sequenceId is not found");
     	}
 	}
 
 	void init() throws Exception {
-        if (!isOrcaEnabled()) {
-            String dbtype = this.config.getDefaultDatabaseType();
-            this.dialect = getDialect(dbtype);
-            
-            _log.info("database is not found. creating seed database with type {}", dbtype);
-            
-            // system namespaces
-            
-            this.humpback.createNamespace(SYSNS);
-            
-            // system tables
-            
-            this.humpback.createTable(
-            		SYSNS, 
-            		String.format("%08x", TABLEID_SYSSEQUENCE), 
-            		TABLEID_SYSSEQUENCE, 
-            		TableType.DATA);
-            this.humpback.createTable(
-            		SYSNS, 
-            		String.format("%08x", TABLEID_SYSTABLE), 
-            		TABLEID_SYSTABLE, 
-            		TableType.DATA);
-            this.humpback.createTable(
-            		SYSNS, 
-            		String.format("%08x", TABLEID_SYSCOLUMN), 
-            		TABLEID_SYSCOLUMN, 
-            		TableType.DATA);
-            
-            // system sequence 
-            
-            createSystemSequence(SequenceMeta.SEQ_NAME, 0, 10);
-            createSystemSequence(TableMeta.SEQ_NAME, 1, 0);
-            createSystemSequence(ColumnMeta.SEQ_NAME, 2, 0);
-            createSystemSequence(new ObjectName(SYSNS, TABLENAME_SYSRULE), 3, 0);
-            createSystemSequence(new ObjectName(SYSNS, TABLENAME_SYSRULECOL), 4, 0);
-
-            // script
-            
-            createSystemSession().run(IOUtils.toString(getClass().getResource("init.sql")));
-            _log.info("database is created");
-            
-            // setting up initial parameters
-            
-            this.config.set("databaseType", dbtype);            
+        if (isOrcaEnabled()) {
+            return;
         }
+        String dbtype = this.config.getDefaultDatabaseType();
+        this.dialect = getDialect(dbtype);
+        
+        _log.info("database is not found. creating seed database with type {}", dbtype);
+        
+        // system tables
+        
+        createSystemTable(TABLEID_SYSSEQUENCE);
+        createSystemTable(TABLEID_SYSTABLE);
+        createSystemTable(TABLEID_SYSCOLUMN);
+        createSystemTable(TABLEID_SYSPARAM);
+        createSystemTable(TABLEID_SYSRULE);
+        
+        // system sequence 
+        
+        createSystemSequence(IdentifierService.GLOBAL_SEQUENCE_NAME, 0, 0x100, 1);
+
+        // script
+        
+        _log.info("database is created");
+        
+        // setting up initial parameters
+        
+        this.config.set("databaseType", dbtype);            
     }
     
-    void createSystemSequence(ObjectName name, int id, int next) {
+    void createSystemSequence(ObjectName name, int id, int next, int increment) {
         SequenceMeta seq = new SequenceMeta(name, id);
         seq.setLastNumber(next);
+        seq.setIncrement(increment);
         getMetaService().addSequence(Transaction.getSystemTransaction(), seq);
     }
     
     boolean isOrcaEnabled() {
-        return this.humpback.getNamespace(SYSNS) != null;
-    }
-    
-    public Humpback getStroageEngine() {
-        return this.humpback;
+        GTable gtable = this.humpback.getTable(TABLEID_SYSSEQUENCE);
+        return gtable != null;
     }
     
     public HBaseStorageService getHBaseStorageService() {
-    	return this.hbaseStorageService;
+    	return this.humpback.getHBaseService();
     }
     
     public IdentifierService getIdentityService() {
@@ -276,9 +283,6 @@ public class Orca {
         if (this.humpback.getTable(TABLEID_SYSRULE) == null) {
             throw new OrcaException("system table not found: " + TABLENAME_SYSRULE);
         }
-        if (this.humpback.getTable(TABLEID_SYSRULECOL) == null) {
-            throw new OrcaException("system table not found: " + TABLENAME_SYSRULECOL);
-        }
         
         // verify tables registered in meta data service
         
@@ -289,7 +293,7 @@ public class Orca {
             for (String tableName:getMetaService().getTables(session.getTransaction(), ns)) {
                 ObjectName name = new ObjectName(ns, tableName);
                 TableMeta table = getMetaService().getTable(ctx.getTransaction(), name);
-                GTable gtable = this.humpback.getTable(table.getId());
+                GTable gtable = this.humpback.getTable(table.getHtableId());
                 
                 // recreate gtable.it could happen cuz humpback creates the physical when flush the content 
                 
@@ -297,7 +301,7 @@ public class Orca {
                     gtable = this.humpback.createTable(
                     		name.getNamespace(), 
                     		table.getTableName(), 
-                    		table.getId(), 
+                    		table.getHtableId(), 
                     		TableType.DATA);
                     _log.warn("table {} not found in humpback, created ", name);
                 }
@@ -326,8 +330,17 @@ public class Orca {
         }
     }
     
-    public Session createSession(String user) {
+    public Session createSession(String user, String remoteEndpoint) {
         Session session = new Session(this, getSqlParserFactory(), user);
+        session.remote = remoteEndpoint;
+        if (this.sysdefault != null) {
+            for (Map.Entry<Integer, TableLock> i:this.sysdefault.tableLocks.entrySet()) {
+                int tableId = i.getKey();
+                TableLock lock = i.getValue();
+                TableLock newlock = lock.clone(session.getId());
+                session.tableLocks.put(tableId, newlock);
+            }
+        }
         this.sessions.add(session);
         return session;
     }
@@ -355,7 +368,12 @@ public class Orca {
         
         // close all sessions
         
-        this.sessionSweeper.cancel(false);
+        if (this.sessionSweeperFuture != null) {
+            this.sessionSweeperFuture.cancel(false);
+        }
+        if (this.recyclerFuture != null) {
+            this.recyclerFuture.cancel(false);
+        }
         for (Session i:this.sessions) {
         	closeSession(i);
         }
@@ -363,9 +381,11 @@ public class Orca {
         // shutdown hbase storage service
         
         try {
-        	if (this.hbaseStorageService != null) {
-        		this.hbaseStorageService.shutdown();
-        		this.hbaseStorageService = null;
+            if (this.replicator != null) {
+                this.replicator.close();
+            }
+        	if (getHBaseStorageService() != null) {
+        	    getHBaseStorageService().shutdown();
         	}
         }
         catch(Exception e) {
@@ -404,27 +424,6 @@ public class Orca {
         this.sysviews.put(key, maker);
     }
     
-    public void registerExternalTable(String ns, String tableName, ExternalTable table) {
-        // register namespace if absent
-        
-        if (this.namespaces.get(ns.toLowerCase()) == null) {
-            this.namespaces.put(ns.toLowerCase(), ns);
-        }
-        
-        // register table
-        
-        String key = (ns + '.' + tableName).toLowerCase();
-        // table id for externals starts at -0x1000 and goes down
-        int tableId = -0x1000 - this.externals.size();
-        table.getMeta().setId(tableId);
-        this.externals.put(key, table);
-    }
-    
-    public ExternalTable getExternalTable(String ns, String tableName) {
-        String key = (ns + '.' + tableName).toLowerCase();
-        return this.externals.get(key);
-    }
-
     public Script getCachedStatement(String text) {
         Script script = this.statementCache.asMap().get(text);
         return script;
@@ -489,4 +488,77 @@ public class Orca {
 		}
 		return dialect;
 	}
+	
+	public SessionSweeper getSessionSweeper() {
+	    return this.sessionSweeper;
+	}
+	
+	/**
+	 * get the start sp of any active or future transaction
+	 * 
+	 * @return never 0
+	 */
+	public long getStartSp() {
+	    long result = this.humpback.getSpaceManager().getAllocationPointer();
+	    for (Session session:this.sessions) {
+	        long sp = session.getStartSp();
+	        if (sp == 0) {
+	            continue;
+	        }
+	        result = Math.min(result, sp);
+	    }
+	    return result;
+	}
+
+    /**
+     * free unused resource
+     */
+    public void recycle() {
+        this.humpback.recycle();
+    }
+    
+    /**
+     * get the oldest trx id from all sessions
+     * 
+     * @return 0 if there is no active trx
+     */
+    public long getOldestTrxId() {
+        long oldest = Long.MIN_VALUE;
+        for (Session session:this.sessions) {
+            Transaction trx = session.getTransaction_();
+            if (trx == null) {
+                continue;
+            }
+            long trxid = trx.getTrxId();
+            if (trxid == 0) {
+                continue;
+            }
+            oldest = Math.max(trxid, oldest);
+        }
+        return (oldest == Long.MIN_VALUE) ? 0 : oldest;
+    }
+    
+    public long getLastClosedTransactionId() {
+        long currentTrxId = getTrxMan().getLastTrxId();
+        long oldest = getOldestTrxId();
+        if (oldest == 0) {
+            // no active trx, get last of the current trxid
+            return currentTrxId;
+        }
+        else {
+            return Math.max(currentTrxId, oldest+1);
+        }
+    }
+    
+    public Set<Session> getSessions() {
+        return this.sessions;
+    }
+    
+    public Replicator getReplicator() {
+        return this.replicator;
+    }
+    
+    private void createSystemTable(int tableId) {
+        this.humpback.createTable(SYSNS, String.format("x%08x", tableId), tableId, TableType.DATA);
+    }
 }

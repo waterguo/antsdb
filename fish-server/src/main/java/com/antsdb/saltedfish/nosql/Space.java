@@ -14,27 +14,96 @@
 package com.antsdb.saltedfish.nosql;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.lang.ref.WeakReference;
+import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
+import java.nio.channels.FileChannel.MapMode;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+
+import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * a single unit lives on the storage. 
  *  
  * @author wgu0
  */
-public class Space {
+final class Space implements AutoCloseable {
+    static Logger _log = UberUtil.getThisLogger();
+    
 	int id;
 	File file;
-	MappedByteBuffer buf;
 	long addr;
 	long spStart;
 	long spEnd;
 	AccessToken token;
-	WeakReference<AccessToken> weakToken;
-	RandomAccessFile raf;
-	FileChannel channel;
 	AtomicInteger allocPointer;
+	MemoryMappedFile mmf;
+	int capacity;
+    boolean isGarbage = false;
+	
+	public void open(MapMode mode, int fileSize) throws IOException {
+        int fileLength = (int)this.file.length();
+        int size = (mode == MapMode.READ_WRITE) ? fileSize : fileLength;
+	    this.mmf = new MemoryMappedFile(this.file, size, mode == MapMode.READ_WRITE ? "rw" : "r");
+        if (mode == MapMode.READ_WRITE) {
+            File parent = file.getAbsoluteFile().getParentFile();
+            long free = parent.getUsableSpace();
+            if ((fileSize * 4) > free) {
+                throw new HumpbackException("out of storage space: " + this.file.toString() + ' ' + free);
+            }
+        }
+        if (mode == MapMode.READ_WRITE) {
+            this.mmf.buf.load();
+        }
+        this.mmf.buf.order(ByteOrder.LITTLE_ENDIAN);
+        this.addr = this.mmf.getAddress();
+        this.spStart = SpaceManager.makeSpacePointer(this.id, 0);
+        this.spEnd = fileSize + this.spStart;
+        this.allocPointer = new AtomicInteger(fileLength);
+        this.capacity = this.mmf.buf.capacity();
+	}
+	
+    @Override
+    public void close() throws Exception {
+        if (this.mmf == null) {
+            return;
+        }
+        this.mmf.close();
+        this.mmf = null;
+        this.addr = 0;
+    }
+    
+    void delete() throws Exception {
+        close();
+        HumpbackUtil.deleteHumpbackFile(this.file);
+        _log.debug("{} is deleted", this.file);
+    }
+
+    public int getCapacity() {
+        return this.capacity;
+    }
+
+    public void force(long offsetStart, long size) throws IOException {
+        MappedByteBuffer buf = this.mmf.channel.map(MapMode.READ_WRITE, offsetStart, size);
+        buf.force();
+        Unsafe.unmap(buf);
+    }
+
+    public void resize() throws IOException {
+        if (this.allocPointer == null) {
+            return;
+        }
+        int size = this.allocPointer.get();
+        if (size == this.file.length()) {
+            return;
+        }
+        RandomAccessFile raf = new RandomAccessFile(this.file, "rw");
+        raf.setLength(size);
+        raf.close();
+    }
+
 }

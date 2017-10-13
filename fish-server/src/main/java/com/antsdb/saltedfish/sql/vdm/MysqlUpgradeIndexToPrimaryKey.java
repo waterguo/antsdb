@@ -50,11 +50,12 @@ public class MysqlUpgradeIndexToPrimaryKey extends Statement {
 				return null;
 			}
 		}
-		GTable gtable = ctx.getHumpback().getTable(table.getId());
+		GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 		if (!gtable.isPureEmpty()) {
 			throw new OrcaException("unable to upgrade unique index to primary key because table is not empty {}", 
 					                this.tableName);
 		}
+		index = index.clone();
 		index.setType(Rule.PrimaryKey);
 		ctx.getMetaService().updateRule(ctx.getTransaction(), index);
 		return null;

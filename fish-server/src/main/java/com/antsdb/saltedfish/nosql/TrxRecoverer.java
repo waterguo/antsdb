@@ -18,15 +18,19 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
+import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author wgu0
  */
-class TrxRecoverer extends ReplayHandler {
+class TrxRecoverer implements ReplayHandler {
 	static Logger _log = UberUtil.getThisLogger();
 	
 	private TrxMan trxman;
@@ -38,7 +42,7 @@ class TrxRecoverer extends ReplayHandler {
     	// start recovering from the start given point
     	
 		this.trxman = trxMan;
-    	_log.info("start recovering trx from {} ...", spStart);
+    	_log.info("start recovering trx from {} ...", UberFormatter.hex(spStart));
     	trxMan.setOldest(0);
     	long end = gobbler.replay(spStart, true, this);
     	_log.info("trx recovering stopped at {}", end);
@@ -75,7 +79,21 @@ class TrxRecoverer extends ReplayHandler {
 	}
 
 	@Override
-	public void put(PutEntry entry) throws Exception {
+    public void insert(InsertEntry entry) throws Exception {
+        rowUpdate(entry);
+    }
+
+    @Override
+    public void update(UpdateEntry entry) throws Exception {
+        rowUpdate(entry);
+    }
+
+    @Override
+    public void put(PutEntry entry) throws Exception {
+        rowUpdate(entry);
+    }
+    
+	private void rowUpdate(RowUpdateEntry entry) throws Exception {
 		long pRow = entry.getRowPointer();
 		long trxid = Row.getVersion(pRow);
 		if (trxid >= 0) {

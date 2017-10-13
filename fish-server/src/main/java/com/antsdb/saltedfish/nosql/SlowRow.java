@@ -28,37 +28,40 @@ public class SlowRow extends HashMap<Integer, Object> {
 	private static final long serialVersionUID = 1L;
 	
 	byte[] key;
-	long version;
+	long version = 1;
 	int maxColumnId = 0;
+	boolean isMutable = true;
 	
 	private SlowRow() {
 	}
 	
-	public SlowRow(int key) {
-		this.key = KeyMaker.make(key);
-	}
-	
-	public SlowRow(byte[] key) {
-		this.key = key;
-	}
-
-	public SlowRow(long key) {
-		this.key = KeyMaker.make(key);
-	}
-
-	public SlowRow(String key) {
-		this.key = KeyMaker.make(key);
-	}
+    public SlowRow(Object... values) {
+        if (values.length == 0) {
+            throw new IllegalArgumentException();
+        }
+        else if ((values.length == 1) && (values[0] instanceof byte[])) {
+            this.key = (byte[])values[0];
+        }
+        else {
+            this.key = KeyMaker.gen(values);
+        }
+    }
 
 	public byte[] getKey() {
 		return this.key;
 	}
 	
 	public void setKey(byte[] byteArray) {
+	    if (!this.isMutable) {
+	        throw new IllegalArgumentException();
+	    }
 		this.key = byteArray;
 	}
 	
 	public void set(Integer index, Object value) {
+        if (!this.isMutable) {
+            throw new IllegalArgumentException();
+        }
 		put(index, value);
 		this.maxColumnId = Math.max(this.maxColumnId, index);
 	}
@@ -66,9 +69,11 @@ public class SlowRow extends HashMap<Integer, Object> {
 	@Override
 	public SlowRow clone() {
 		SlowRow result = new SlowRow(this.key);
+        result.maxColumnId = this.maxColumnId;
 		result.key = this.key;
 		result.version = this.version;
 		result.putAll(this);
+        result.isMutable = true;
 		return result;
 	}
 
@@ -86,15 +91,18 @@ public class SlowRow extends HashMap<Integer, Object> {
 		return result;
 	}
 
-	public static SlowRow fromRowPointer(SpaceManager memman, long spRow) {
-		if (spRow == 0) {
+	public static SlowRow fromRowPointer(long pRow, long version) {
+		if (pRow == 0) {
 			return null;
 		}
-		Row row = Row.fromSpacePointer(memman, spRow, 0);
+		Row row = Row.fromMemoryPointer(pRow, version);
 		return from(row);
 	}
 
 	public void setTrxTimestamp(long trxTimestamp) {
+        if (!this.isMutable) {
+            throw new IllegalArgumentException();
+        }
 		this.version = trxTimestamp;
 	}
 
@@ -110,4 +118,12 @@ public class SlowRow extends HashMap<Integer, Object> {
 		return this.maxColumnId; 
 	}
 
+    public void setMutable(boolean value) {
+        if (!this.isMutable && value) {
+            // making a read-only object mutable is not allowed
+            throw new IllegalArgumentException();
+        }
+        this.isMutable = value;
+    }
+    
 }

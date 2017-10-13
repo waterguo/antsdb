@@ -41,7 +41,7 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
 	}
 
 	@Override
-	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout) {
+	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
 		HashMap<String, AtomicInteger> terms = new HashMap<>();
 		for (ColumnMeta i:this.columns) {
 			String text = (String)row.get(i.getColumnId());
@@ -65,7 +65,7 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
 			long pIndexKey = this.keyMaker.make(heap, frow);
 			int count = term.getValue().get();
 			byte misc = (byte)((count > 0xff) ? 0xff : count);
-			insert(heap, trx, pIndexKey, row.getKeyAddress(), misc, timeout);
+			insert(heap, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace);
 		}
 	}
 
@@ -93,7 +93,7 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
 	@Override
 	void update(Heap heap, Transaction trx, Row oldRow, VaporizingRow newRow, boolean force, int timeout) {
 		delete(heap, trx, oldRow, timeout);
-		insert(heap, trx, newRow, timeout);
+		insert(heap, trx, newRow, timeout, true);
 	}
 
 }

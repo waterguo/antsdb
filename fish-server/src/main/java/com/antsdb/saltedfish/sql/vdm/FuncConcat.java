@@ -25,22 +25,36 @@ public class FuncConcat extends Function {
 
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		long p1 = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-		long p2 = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-		p1 = AutoCaster.toString(heap, p1);
-		p2 = AutoCaster.toString(heap, p2);
-		long pResult = FishString.concat(heap, p1, p2);
+	    long pResult = 0;
+	    for (Operator i:this.parameters) {
+	        long pValue = i.eval(ctx, heap, params, pRecord);
+	        if (pValue == 0) {
+	            return 0;
+	        }
+	        pValue = AutoCaster.toString(heap, pValue);
+	        if (pResult == 0) {
+	            pResult = pValue;
+	        }
+	        else {
+	            pResult = FishString.concat(heap, pResult, pValue);
+	        }
+	    }
 		return pResult;
 	}
 
 	@Override
+    public int getMaxParameters() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
 	public DataType getReturnType() {
 		return DataType.varchar();
 	}
 
 	@Override
 	public int getMinParameters() {
-		return 2;
+		return 1;
 	}
 
 }

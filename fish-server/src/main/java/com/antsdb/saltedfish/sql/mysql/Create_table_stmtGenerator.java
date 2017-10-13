@@ -36,6 +36,7 @@ import com.antsdb.saltedfish.sql.vdm.CreateIndex;
 import com.antsdb.saltedfish.sql.vdm.CreatePrimaryKey;
 import com.antsdb.saltedfish.sql.vdm.CreateTable;
 import com.antsdb.saltedfish.sql.vdm.Flow;
+import com.antsdb.saltedfish.sql.vdm.IfTableNotExist;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
@@ -75,13 +76,15 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
         
         // create columns and constraints
         
+        boolean hasPrimaryKey = false;
         for (Create_defContext i:rule.create_defs().create_def()) {
             if (i.primary_key_def() != null) {
                 flow.add(createPrimrayKey(ctx, tableName, i.primary_key_def()));
+                hasPrimaryKey = true;
             }
             else if (i.index_def() != null) {
             	boolean isUnique = i.index_def().K_UNIQUE() != null;
-            	if (isUnique && (nUniqueKeys==1)) {
+            	if (isUnique && !hasPrimaryKey && (nUniqueKeys==1)) {
             		// special treatment, if there is only one unique key, make it as primary key
                     flow.add(createPrimrayKey(ctx, tableName, i.index_def()));
             	}
@@ -95,6 +98,7 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
                 flow.add(cc);
                 if (keyColumns.size() > 0) {
                 	CreatePrimaryKey cpk = new CreatePrimaryKey(tableName, keyColumns);
+                	hasPrimaryKey = true;
                 	flow.add(cpk);
                 }
                 else if (keyColumns.size() > 1) {
@@ -110,14 +114,22 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
             }
         }
         flow.add(new SyncTableSequence(tableName, options));
-        return flow;
+        flow.add(new CreateDelayedForeignKey(tableName));
+        if (rule.K_NOT() == null) {
+            return flow;
+        }
+        else {
+            return new IfTableNotExist(tableName, flow);
+        }
     }
 
 	private Instruction createConstraint(GeneratorContext ctx, ObjectName tableName, Constraint_defContext rule) {
         ObjectName parentTableName = TableName.parse(ctx, rule.table_name_());
         List<String> childColumns = Utils.getColumns(rule.columns(0));
         List<String> parentColumns = Utils.getColumns(rule.columns(1));
-		CreateForeignKey fk = new CreateForeignKey(tableName, parentTableName, childColumns, parentColumns);
+        String name = rule.identifier().getText();
+		CreateForeignKey fk = new CreateForeignKey(tableName, name, parentTableName, childColumns, parentColumns);
+		fk.setRebuildIndex(false);
 		return fk;
 	}
 
@@ -155,6 +167,7 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
     	}
         boolean isFullText = rule.K_FULLTEXT() != null;
         CreateIndex step = new CreateIndex(indexName, isFullText, isUnique, false, tableName, columns);
+        step.setRebuild(false);
         return step;
 	}
 

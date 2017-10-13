@@ -112,6 +112,9 @@
                         <exclude>
                             com/antsdb/saltedfish/storage/TestHBaseImport.*
                         </exclude>
+                        <exclude>
+                            com/antsdb/saltedfish/TestCleartext.*
+                        </exclude>
                         <exclude>${testExcludes}</exclude>
                         <!-- exclude root test cases. they are not part of the automation -->
                         <exclude>
@@ -226,7 +229,7 @@
 		<dependency>
     		<groupId>org.apache.hbase</groupId>
     		<artifactId>hbase-client</artifactId>
-    		<version>1.1.2</version>
+    		<version>1.3.0</version>
 		</dependency>
         <dependency>
             <groupId>org.codehaus.groovy</groupId>

@@ -16,41 +16,68 @@ package com.antsdb.saltedfish.sql.mysql;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import com.antsdb.saltedfish.sql.meta.ColumnMeta;
-import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.DataType;
-import com.antsdb.saltedfish.sql.DataTypeFactory;
+import com.antsdb.saltedfish.sql.meta.ColumnMeta;
+import com.antsdb.saltedfish.sql.meta.IndexMeta;
+import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
-import com.antsdb.saltedfish.sql.vdm.HashMapRecord;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
-import com.antsdb.saltedfish.sql.vdm.Record;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.util.CursorUtil;
-import com.antsdb.saltedfish.util.UberUtil;
 
 public class ShowColumns extends CursorMaker {
-
+    final static CursorMeta META_FULL = CursorUtil.toMeta(ItemFull.class);
+    final static CursorMeta META_SHORT = CursorUtil.toMeta(ItemShort.class);
+    
     boolean isFull = false;
     String nsName = "";
     String tableName = "";
     String like;
+    private Pattern pattern;
 
+    public static class ItemShort {
+        public String Field;
+        public String Type;
+        public String Null;
+        public String Key;
+        public String Default;
+        public String Extra;
+    }
+    
+    public static class ItemFull {
+        public String Field;
+        public String Type;
+        public String Collation;
+        public String Null;
+        public String Key;
+        public String Default;
+        public String Extra;
+        public String Privileges;
+        public String Comment;;
+    }
+    
     public ShowColumns(String ns, String table, boolean full, String like) {
         this.nsName = ns;
         this.tableName = table;
         this.isFull = full;
         this.like = like;
+        if (like != null) {
+            String patternText = this.like.replaceAll("_", ".");
+            patternText = this.like.replaceAll("%", ".*");
+            this.pattern = Pattern.compile(patternText, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        }
     }
         
     @Override
     public CursorMeta getCursorMeta() {
-        return null;
+        return this.isFull ? META_FULL : META_SHORT;
     }
     
     @Override
@@ -64,102 +91,86 @@ public class ShowColumns extends CursorMaker {
         
         TableMeta table = Checks.tableExist(ctx.getSession(), ns, this.tableName);
 
-        // Read in meta from __SYS.SYSCOLUMN
-        
-        String sql = "SELECT c.id, column_name, type_name, type_length, type_scale, nullable, default_value, r.rule_type" 
-                   + " FROM __sys.syscolumn c"
-        		   + " LEFT JOIN __sys.sysrulecol rc ON (c.id=rc.column_id)"
-        		   + " LEFT JOIN __sys.sysrule r ON (rc.rule_id=r.id)"
-        		   + " WHERE c.namespace=? and c.table_name=?";
-        if (this.like != null) {
-        	sql += " AND column_name LIKE ?"; 
-        }
-        Parameters params;
-        if (this.like != null) {
-        	params = new Parameters(new Object[]{table.getNamespace(), table.getTableName(), this.like});
-        } 
-        else {
-        	params = new Parameters(new Object[]{table.getNamespace(), table.getTableName()});
-        }
-
-        // make cursor meta
-        
-        CursorMeta meta = new CursorMeta();
         if (this.isFull) {
-            meta.addColumn(new FieldMeta("Field", DataType.varchar()))
-                .addColumn(new FieldMeta("Type", DataType.varchar()))
-                .addColumn(new FieldMeta("Collation", DataType.varchar()))
-                .addColumn(new FieldMeta("Null", DataType.varchar()))
-                .addColumn(new FieldMeta("Key", DataType.varchar()))
-                .addColumn(new FieldMeta("Default", DataType.varchar()))
-                .addColumn(new FieldMeta("Extra", DataType.varchar()))
-        	    .addColumn(new FieldMeta("Privileges", DataType.varchar()))
-    	        .addColumn(new FieldMeta("Comment", DataType.varchar()));
+            List<ItemFull> items = new ArrayList<>();
+            for (ColumnMeta column:table.getColumns()) {
+                if (!like(column)) {
+                    continue;
+                }
+                items.add(toItemFull(table, column));
+            }
+            Cursor c = CursorUtil.toCursor(META_FULL, items);
+            return c;
         }
         else {
-            meta.addColumn(new FieldMeta("Field", DataType.varchar()))
-                .addColumn(new FieldMeta("Type", DataType.varchar()))
-                .addColumn(new FieldMeta("Null", DataType.varchar()))
-                .addColumn(new FieldMeta("Key", DataType.varchar()))
-                .addColumn(new FieldMeta("Default", DataType.varchar()))
-                .addColumn(new FieldMeta("Extra", DataType.varchar()));
+            List<ItemShort> items = new ArrayList<>();
+            for (ColumnMeta column:table.getColumns()) {
+                if (!like(column)) {
+                    continue;
+                }
+                items.add(toItemShort(table, column));
+            }
+            Cursor c = CursorUtil.toCursor(META_SHORT, items);
+            return c;
         }
-        
-        // generate result
-        
-        DataTypeFactory fac = ctx.getOrca().getTypeFactory();
-        List<Record> records = new ArrayList<>();
-        try (Cursor c = (Cursor)(ctx.getSession().parse(sql).run(ctx, params, 0));) {
-        	for (long pRecord = c.next(); pRecord != 0; pRecord = c.next()) {
-	        	String columnName = (String)Record.getValue(pRecord, 1);
-	        	String typeName = (String)Record.getValue(pRecord, 2);
-	        	Integer typeLength = (Integer)Record.getValue(pRecord, 3);
-	        	Integer typeScale =  (Integer)Record.getValue(pRecord, 4);
-	        	Boolean nullable = (Boolean)Record.getValue(pRecord, 5);
-	        	String defaultValue = (String)Record.getValue(pRecord, 6);
-	        	Integer ruleType = (Integer)Record.getValue(pRecord, 7);
-	        	DataType type = fac.newDataType(typeName, typeLength, typeScale);
-	        	Record rec = new HashMapRecord();
-	        	if (this.isFull) {
-	            	rec.set(0, columnName)
-	      	           .set(1, toString(type))
-	      	           .set(2, type.getJavaType() == String.class ? "utf8_bin" : null)
-	      	           .set(3, nullable ? "YES" : "NO")
-	      	           .set(4, getKeyType(ruleType))
-	      	           .set(5, defaultValue)
-	      	           .set(6, isAutoIncrement(table, columnName) ? "auto_increment" : "")
-	      	           .set(7, "select,insert,update,references")
-	      	           .set(8, "");
-	        	}
-	        	else {
-	            	rec.set(0, columnName)
-	         	       .set(1, toString(type))
-	         	       .set(2, nullable ? "YES" : "NO")
-	         	       .set(3, UberUtil.safeEqual(ruleType, RuleMeta.Rule.PrimaryKey.ordinal()) ? "PRI" : "")
-	         	       .set(4, defaultValue)
-	         	       .set(5, "");
-	        	}
-	        	records.add(rec);
-        	}
-        }
-        
-        return CursorUtil.toCursor(meta, records);
     }
 
-	private String getKeyType(Integer ruleType) {
-		if (ruleType == null) {
-			return "";
-		}
-		if (RuleMeta.Rule.PrimaryKey.ordinal() == ruleType) {
-			return "PRI";
-		}
-		else if (RuleMeta.Rule.Index.ordinal() == ruleType) {
-			return "MUL";
-		}
-		else {
-			return ruleType.toString();
-		}
-	}
+	private boolean like(ColumnMeta column) {
+	    if (pattern == null) {
+	        return true;
+	    }
+	    Matcher m = this.pattern.matcher(column.getColumnName());
+        return m.find();
+    }
+
+    private ItemShort toItemShort(TableMeta table, ColumnMeta column) {
+	    ItemShort item = new ItemShort();
+	    item.Field = column.getColumnName();
+        item.Type = toString(column.getDataType());
+	    item.Null = column.isNullable() ? "YES" : "NO";
+        item.Key = getColumnKeyType(table, column);
+	    item.Default = column.getDefault();
+	    item.Extra = "";
+        return item;
+    }
+
+    private ItemFull toItemFull(TableMeta table, ColumnMeta column) {
+        ItemFull item = new ItemFull();
+        item.Field = column.getColumnName();
+        item.Type = toString(column.getDataType());
+        item.Null = column.isNullable() ? "YES" : "NO";
+        item.Key = getColumnKeyType(table, column);
+        item.Default = column.getDefault();
+        item.Extra = isAutoIncrement(table, column.getColumnName()) ? "auto_increment" : "";
+        item.Collation = (column.getDataType().getJavaType() == String.class) ? "utf8_bin" : null;
+        item.Privileges = "select,insert,update,references";
+        item.Comment = "";
+        return item;
+    }
+
+    private boolean contains(RuleMeta<?> rule, ColumnMeta column) {
+        if (rule == null) {
+            return false;
+        }
+        for (int columnId:rule.getRuleColumns()) {
+            if (columnId == column.getId()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private String getColumnKeyType(TableMeta table, ColumnMeta column) {
+        if (contains(table.getPrimaryKey(), column)) {
+            return "PRI";
+        }
+        for (IndexMeta index:table.getIndexes()) {
+            if (contains(index, column)) {
+                return "MUL";
+            }
+        }
+        return "";
+    }
 
 	private boolean isAutoIncrement(TableMeta table, String columnName) {
 		ColumnMeta column = table.findAutoIncrementColumn();
@@ -168,16 +179,16 @@ public class ShowColumns extends CursorMaker {
 		}
 		return (column.getColumnName().equals(columnName)); 
 	}
-
-	private Object toString(DataType type) {
-		if (type.getJavaType() == BigDecimal.class) {
-			return type.toString();
-		}
-		else if (type.getLength() > 0) {
-			return type.getName() + "(" + type.getLength() + ")";
-		}
-		else {
-			return type.toString();
-		}
-	}
+    
+	private String toString(DataType type) {
+        if (type.getJavaType() == BigDecimal.class) {
+            return type.toString();
+        }
+        else if (type.getLength() > 0) {
+            return type.getName() + "(" + type.getLength() + ")";
+        }
+        else {
+            return type.toString();
+        }
+    }
 }

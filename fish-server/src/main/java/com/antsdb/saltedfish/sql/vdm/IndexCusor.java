@@ -28,7 +28,6 @@ class IndexCursor extends CursorWithHeap {
 	GTable gtable;
     RowIterator iter;
     int[] mapping;
-	private SpaceManager memman;
 	private boolean isClosed = false;
 	Transaction trx;
 	private AtomicLong counter;
@@ -47,7 +46,6 @@ class IndexCursor extends CursorWithHeap {
 		this.iter = iter;
 		this.mapping = mapping;
 		this.trx = trx;
-		this.memman = memman;
 		this.counter = counter;
 	}
 	
@@ -66,13 +64,12 @@ class IndexCursor extends CursorWithHeap {
             if (pRowKey == 0) {
                 return 0;
             }
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
-            if (pRow == 0) {
+            Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+            if (row == null) {
             	// at rare occasions, row cannot be found. we just ignore it. it could happen for example full text 
             	// index. indexing rows are not deleted completely due to analyzer change
             	continue;
             }
-            Row row = Row.fromSpacePointer(this.memman, pRow, 0);
             Record.setKey(pRecord, row.getKeyAddress());
             for (int i=0; i<this.meta.getColumnCount(); i++) {
             	long pValue = row.getFieldAddress(this.mapping[i]);

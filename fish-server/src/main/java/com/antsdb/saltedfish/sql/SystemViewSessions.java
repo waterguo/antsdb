@@ -36,6 +36,7 @@ public class SystemViewSessions extends CursorMaker {
         public int ID;
 		public long TRX;
 		public String USER;
+		public String REMOTE;
     }
 
 	public SystemViewSessions(Orca orca) {
@@ -67,5 +68,6 @@ public class SystemViewSessions extends CursorMaker {
         Transaction trx = session.getTransaction_();
 		item.TRX = (trx != null) ? trx.getTrxId() : 0;
 		item.USER = session.getUser();
+		item.REMOTE = session.remote;
 	}
 }

@@ -19,8 +19,11 @@ public class HBaseSyncErrorJumpException extends RuntimeException {
      */
     private static final long serialVersionUID = 1L;
 
+    public HBaseSyncErrorJumpException(Throwable cause) {
+        super(cause);
+    }
+    
     public HBaseSyncErrorJumpException(String msg, Throwable cause) {
     	super(msg, cause);
     }
-
 }

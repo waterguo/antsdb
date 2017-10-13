@@ -13,18 +13,31 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.sql.OrcaException;
+
 public class CreateNamespace extends Statement {
     String name;
+    boolean ifNotExists;
     
     
-    public CreateNamespace(String name) {
+    public CreateNamespace(String name, boolean ifNotExists) {
         super();
         this.name = name;
+        this.ifNotExists = ifNotExists;
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        Checks.namespaceNotExist(ctx.getOrca(), this.name);
+        Humpback humpback = ctx.getOrca().getHumpback();
+        if (humpback.getNamespace(this.name) != null) {
+            if (this.ifNotExists) {
+                return null;
+            }
+            else {
+                throw new OrcaException("namespace already exist: " + this.name);                
+            }
+        }
         ctx.getHumpback().createNamespace(this.name);
         return null;
     }

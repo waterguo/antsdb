@@ -129,7 +129,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         // prevent null cursor. in case of 'select 1'.
         
         if (planner.isEmpty()) {
-            planner.addCursor("", new Dual()); 
+            planner.addCursor("", new Dual(), false); 
         }
         
         // where
@@ -204,7 +204,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         if (rule.having_clause() != null) {
         	ExprContext rewritten = rewriteHaving(ctx, planner, rule.having_clause().expr());
         	Planner newone = new Planner(ctx);
-        	newone.addCursor("", planner.run());
+        	newone.addCursor("", planner.run(), false);
             Operator filter = ExprGenerator.gen(ctx, newone, rewritten);
             newone.setWhere(filter);
             planner = newone;
@@ -372,7 +372,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                     ctx, 
                     rule.from_subquery().select_stmt(),
                     planner);
-            name = planner.addCursor(alias, subquery);
+            name = planner.addCursor(alias, subquery, isOuter);
         }
         else if (rule.from_table() != null) {
             Table_name_Context tableName = rule.from_table().table_name_();

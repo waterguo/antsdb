@@ -18,19 +18,21 @@ package com.antsdb.saltedfish.nosql;
  * @author wgu0
  */
 public class SysMetaRow {
-    final static int COLUMN_TABLE_ID = 2;
-    final static int COLUMN_NAMESPACE = 3;
-    final static int COLUMN_COMPARATOR = 4;
-    final static int COLUMN_TABLE_NAME = 5;
-    final static int COLUMN_TABLE_TYPE = 6;
+    final static int COLUMN_TABLE_ID = 1;
+    final static int COLUMN_NAMESPACE = 2;
+    final static int COLUMN_COMPARATOR = 3;
+    final static int COLUMN_TABLE_NAME = 4;
+    final static int COLUMN_TABLE_TYPE = 5;
+    final static int COLUMN_DELETE_MARK = 6;
     
 	SlowRow row;
 
-	SysMetaRow(int id) {
+	public SysMetaRow(int id) {
 		this.row = new SlowRow(id);
+		setTableId(id);
 	}
 	
-	SysMetaRow(SlowRow row) {
+	public SysMetaRow(SlowRow row) {
 		super();
 		this.row = row;
 	}
@@ -39,7 +41,7 @@ public class SysMetaRow {
 		return (String)this.row.get(COLUMN_NAMESPACE);
 	}
 	
-	void setNamespace(String value) {
+	public void setNamespace(String value) {
 		this.row.set(COLUMN_NAMESPACE, value);
 	}
 	
@@ -47,11 +49,11 @@ public class SysMetaRow {
 		return (int)this.row.get(COLUMN_TABLE_ID);
 	}
 
-	void setTableId(int value) {
+	public void setTableId(int value) {
 		this.row.set(COLUMN_TABLE_ID, value);
 	}
 	
-	void setTableName(String value) {
+	public void setTableName(String value) {
 		this.row.set(COLUMN_TABLE_NAME, value);
 	}
 
@@ -65,5 +67,14 @@ public class SysMetaRow {
 	
 	public TableType getType() {
 		return TableType.valueOf((String)this.row.get(COLUMN_TABLE_TYPE));
+	}
+	
+	public void setDeleted(boolean value) {
+	    this.row.set(COLUMN_DELETE_MARK, value);
+	}
+	
+	public boolean isDeleted() {
+	    Boolean value = (Boolean)this.row.get(COLUMN_DELETE_MARK);
+	    return (value == null) ? false : value;
 	}
 }

@@ -45,10 +45,8 @@ class MysqlCharStream implements CharStream {
 			throw new IllegalStateException("cannot consume EOF");
 		}
 
-		//System.out.println("prev p="+p+", c="+(char)data[p]);
         if ( p < n ) {
             p++;
-			//System.out.println("p moves to "+p+" (c='"+(char)data[p]+"')");
         }
 	}
 
@@ -65,11 +63,8 @@ class MysqlCharStream implements CharStream {
 		}
 
 		if ( (p+i-1) >= n ) {
-            //System.out.println("char LA("+i+")=EOF; p="+p);
             return IntStream.EOF;
         }
-        //System.out.println("char LA("+i+")="+(char)data[p+i-1]+"; p="+p);
-		//System.out.println("LA("+i+"); p="+p+" n="+n+" data.length="+data.length);
 		int ch = this.buf.get(p+i-1);
 		return ch;
 	}

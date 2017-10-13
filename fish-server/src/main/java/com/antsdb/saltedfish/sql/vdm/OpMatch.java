@@ -33,10 +33,12 @@ public class OpMatch extends Operator {
 	private List<FieldValue> columns;
 	private Operator against;
 	private boolean isInWhere = true;
+	private boolean isBooleanMode;
 
-	public OpMatch(List<FieldValue> columns, Operator against) {
+	public OpMatch(List<FieldValue> columns, Operator against, boolean isBooleanMode) {
 		this.columns = columns;
 		this.against = against;
+		this.isBooleanMode = isBooleanMode;
 	}
 	
 	@Override
@@ -113,4 +115,7 @@ public class OpMatch extends Operator {
 		this.isInWhere  = value;
 	}
 
+	public boolean isBooleanMode() {
+	    return this.isBooleanMode;
+	}
 }

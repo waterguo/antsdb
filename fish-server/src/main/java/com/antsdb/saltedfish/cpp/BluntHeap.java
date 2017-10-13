@@ -26,12 +26,13 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 public class BluntHeap extends Heap implements AutoCloseable {
 	static final int DEFAULT_SIZE = 1024 * 1024;
+	static final int ALIGNMENT = 4;
+    static final int ALIGNMENT_MASK = ALIGNMENT - 1;
 	
 	ByteBuffer buf;
 	long address;
 	volatile int capacity;
 	AtomicInteger pos = new AtomicInteger();
-	private int alignment = 1;
 	
 	public BluntHeap () {
 		this(DEFAULT_SIZE);
@@ -54,16 +55,6 @@ public class BluntHeap extends Heap implements AutoCloseable {
 		this.capacity = capacity;
 	}
 	
-	public void setAlignment(int alignment) {
-		if (alignment == this.alignment) {
-			return;
-		}
-		if (this.position() % alignment != 0) {
-			throw new IllegalArgumentException();
-		}
-		this.alignment = alignment;
-	}
-	
 	/**
 	 * 
 	 * @param size
@@ -75,9 +66,10 @@ public class BluntHeap extends Heap implements AutoCloseable {
 	}
 
 	public int allocOffset(int size) {
-		int mod = size % alignment;
+		int mod = size % ALIGNMENT;
 		if (mod != 0) {
-			size += alignment - mod;
+			size = size & ~ALIGNMENT_MASK;
+			size += ALIGNMENT;
 		}
 		int result = this.pos.getAndAdd(size);
 		if ((result + size) < this.capacity) {
@@ -195,9 +187,16 @@ public class BluntHeap extends Heap implements AutoCloseable {
 
 	/**
 	 * prevents writes by filling it up
+	 * 
+	 * @return the last position before freeze 
 	 */
-	public void freeze() {
-		this.capacity = (int)position();
+	public int freeze() {
+	    for (;;) {
+    	    int current = this.pos.get();
+    		if (this.pos.compareAndSet(current, this.capacity)) {
+    		    return current;
+    		}
+	    }
 	}
 
 	@Override

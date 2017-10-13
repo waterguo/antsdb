@@ -22,11 +22,14 @@ import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.cpp.MurmurHash;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.CodingError;
+import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberObject;
 
 /**
@@ -45,15 +48,15 @@ import com.antsdb.saltedfish.util.UberObject;
  *
  */
 public class Row extends UberObject implements Map<Integer, Object> {
-
-	protected static final int OFFSET_FILE_VERSION = 0;
-	protected static final int OFFSET_LENGTH = 1;
-	protected static final int OFFSET_TABLE_ID = 4; 
-	protected static final int OFFSET_MAX_COLUMN_ID = 0x8;
-	protected static final int OFFSET_TRX_TS = 0xa;
-	protected static final int OFFSET_KEY_OFFSET = 0x12;
-	protected static final int OFFSET_VALUES_OFFSETS = 0x16;
-	protected static final Row TOMB_STONE = new Row(Unsafe.allocateMemory(100));
+    public static final int DELETE_MARK = 1;
+    protected static final Row TOMB_STONE = new Row(Unsafe.allocateMemory(100));
+	protected static final int OFFSET_FORMAT = 0;
+    protected static final int OFFSET_MAX_COLUMN_ID = 0x2;
+	protected static final int OFFSET_LENGTH = 4;
+	protected static final int OFFSET_TRX_TS = 0x8;
+    protected static final int OFFSET_HASH = 0x10;
+	protected static final int OFFSET_KEY_OFFSET = 0x18;
+	protected static final int OFFSET_VALUES_OFFSETS = 0x1c;
     		
 	protected static final byte FILE_VERSION = Value.FORMAT_ROW;
     
@@ -64,7 +67,7 @@ public class Row extends UberObject implements Map<Integer, Object> {
     long version;
     
     Row(long addr, long version) {
-    	if (Unsafe.getByte(addr + OFFSET_FILE_VERSION) != FILE_VERSION) {
+    	if (Unsafe.getByteVolatile(addr + OFFSET_FORMAT) != FILE_VERSION) {
     		throw new IllegalArgumentException();
     	}
     	this.version = version;
@@ -82,13 +85,13 @@ public class Row extends UberObject implements Map<Integer, Object> {
     	return this == TOMB_STONE;
     }
     
-    final static long from(long p, VaporizingRow from, int tableId) {
+    final static long from(long p, VaporizingRow from) {
     	int size = from.getSize();
     	long pRow = p;
-    	long pData = pRow + getHeaderSize(from.getMaxColumnId());
+    	int headerSize = getHeaderSize(from.getMaxColumnId());
+    	long pData = pRow + headerSize;
     	Unsafe.putByte(pRow, FILE_VERSION);
     	Unsafe.putInt3(pRow + OFFSET_LENGTH, size);
-    	Unsafe.putInt(pRow + OFFSET_TABLE_ID, tableId);
     	Unsafe.putLong(pRow + OFFSET_TRX_TS, from.getTrxTimestamp());
     	Unsafe.putShort(pRow + OFFSET_MAX_COLUMN_ID, (short)from.getMaxColumnId());
     	Unsafe.putInt(pRow + OFFSET_KEY_OFFSET, (int)(pData - pRow));
@@ -106,34 +109,16 @@ public class Row extends UberObject implements Map<Integer, Object> {
     	if ((pData - pRow) != size) {
     		throw new CodingError();
     	}
+    	long hash = MurmurHash.hash64(pRow + headerSize, size - headerSize);
+    	Unsafe.putLong(pRow + OFFSET_HASH, hash);
     	return pRow;
     }
     
-    final static long from(SpaceManager spaceman, VaporizingRow from) {
-    	int size = from.getSize();
-    	long spRow = spaceman.alloc(size);
-    	long pRow = spaceman.toMemory(spRow);
-    	long pData = pRow + getHeaderSize(from.getMaxColumnId());
-    	Unsafe.putByte(pRow, FILE_VERSION);
-    	Unsafe.putInt3(pRow + OFFSET_LENGTH, size);
-    	Unsafe.putLong(pRow + OFFSET_TRX_TS, from.getTrxTimestamp());
-    	Unsafe.putShort(pRow + OFFSET_MAX_COLUMN_ID, (short)from.getMaxColumnId());
-    	Unsafe.putInt(pRow + OFFSET_KEY_OFFSET, (int)(pData - pRow));
-    	pData = copyValue(from.getKeyAddress(), pData);
-    	for (int i=0; i<=from.getMaxColumnId(); i++) {
-    		long pValue = from.getFieldAddress(i);
-    		if (pValue == 0) {
-        		Unsafe.putInt(pRow + OFFSET_VALUES_OFFSETS + i * 4, 0);
-        		continue;
-    		}
-    		int offset = (int)(pData - pRow);
-    		Unsafe.putInt(pRow + OFFSET_VALUES_OFFSETS + i * 4, offset);
-    		pData = copyValue(pValue, pData);
-    	}
-    	if ((pData - pRow) != size) {
-    		throw new CodingError();
-    	}
-    	return spRow;
+    public final static long from(Heap heap, VaporizingRow from) {
+        int size = from.getSize();
+        long pRow = heap.alloc(size);
+        from(pRow, from);
+        return pRow;
     }
     
     private static long copyValue(long pValue, long pData) {
@@ -146,8 +131,8 @@ public class Row extends UberObject implements Map<Integer, Object> {
 	}
 
 	/**
-     * 
-     * @param maxSequence maximum possible value of the column id.
+     * @param pRow
+     * @param version 0 means getting the version from row
      */
     public static Row fromMemoryPointer(long pRow, long version) {
     	if (pRow == 0) {
@@ -155,6 +140,9 @@ public class Row extends UberObject implements Map<Integer, Object> {
     	}
     	if (pRow == 1) {
     		return TOMB_STONE;
+    	}
+    	if (version == 0) {
+    	    version = Row.getVersion(pRow);
     	}
     	Row row = new Row(pRow, version);
     	return row;
@@ -187,7 +175,7 @@ public class Row extends UberObject implements Map<Integer, Object> {
     		return null;
     	}
     	if (offset >= 1000) {
-    		throw new IllegalArgumentException();
+    		throw new IllegalArgumentException(String.format("0x%016x", this.addr));
     	}
         byte[] bytes = KeyBytes.create(this.addr + offset).get();
         return bytes;
@@ -304,7 +292,7 @@ public class Row extends UberObject implements Map<Integer, Object> {
     public Set<Map.Entry<Integer, Object>> entrySet() {
     	Set<Map.Entry<Integer, Object>> set = new LinkedHashSet<>();
     	int maxColumnId = getMaxColumnId();
-    	for (int i=0; i<maxColumnId; i++) {
+    	for (int i=0; i<=maxColumnId; i++) {
     		Object value = get(i);
     		if (value != null) {
     			MyEntry entry = new MyEntry(i, value);
@@ -371,8 +359,11 @@ public class Row extends UberObject implements Map<Integer, Object> {
 		buf.append("trx timestamp:");
 		buf.append(getTrxTimestamp());
 		buf.append('\n');
+        buf.append("hash:");
+        buf.append(UberFormatter.hex(this.getHash()));
+        buf.append('\n');
 		buf.append("key:");
-		buf.append(BytesUtil.toHex8(getKey()));
+		buf.append(KeyBytes.toString(getKeyAddress()));
 		buf.append('\n');
 		for (int i=0; i<=getMaxColumnId(); i++) {
 			Object value = get(i);
@@ -385,18 +376,15 @@ public class Row extends UberObject implements Map<Integer, Object> {
 				else {
 					buf.append(value);
 				}
-				buf.append("\n");
+				buf.append('\n');
 			}
 		}
+		buf.deleteCharAt(buf.length()-1);
 		return buf.toString();
 	}
 
 	public long getAddress() {
 		return this.addr;
-	}
-
-	public int getTableId() {
-		return Row.getTableId(this.addr);
 	}
 
 	public static long getVersion(long pRow) {
@@ -408,10 +396,6 @@ public class Row extends UberObject implements Map<Integer, Object> {
 		Unsafe.putLong(pRow + OFFSET_TRX_TS, version);
 	}
 	
-	public static int getTableId(long pRow) {
-		return Unsafe.getInt(pRow + OFFSET_TABLE_ID);
-	}
-
 	public static long getKeyAddress(long pRow) {
 		int offset = Unsafe.getInt(pRow + OFFSET_KEY_OFFSET);
 		return pRow + offset;
@@ -423,6 +407,11 @@ public class Row extends UberObject implements Map<Integer, Object> {
 	public int getLength() {
 		int size = Unsafe.getInt3(this.addr + OFFSET_LENGTH);
 		return size;
+	}
+
+	public static int getLength(long pRow) {
+        int size = Unsafe.getInt3(pRow + OFFSET_LENGTH);
+        return size;
 	}
 	
 	public long getVersion() {
@@ -436,10 +425,32 @@ public class Row extends UberObject implements Map<Integer, Object> {
 	 */
 	public int clone(BluntHeap heap) {
 		int size = getLength();
-		int offset = heap.allocOffset(size());
+		int offset = heap.allocOffset(size);
 		long addr = heap.getAddress(offset);
 		Unsafe.copyMemory(getAddress(), addr, size);
 		Row.setVersion(addr, getVersion());
 		return offset;
+	}
+	
+	public long getHash() {
+	    long result = Unsafe.getLong(this.addr + OFFSET_HASH);
+	    return result;
+	}
+	
+	public static boolean compareByBytes(long px, long py) {
+	    if (px == py) {
+	        return true;
+	    }
+	    if ((px == 0) || (py == 0)) {
+	        return false;
+	    }
+	    int sizeX = Row.getLength(px);
+	    int sizeY = Row.getLength(py);
+	    if (sizeX != sizeY) {
+	        return false;
+	    }
+	    // we dont wanna compare tableId and version. they can be 0 after read from hbase
+	    int result = Unsafe.compare(px+OFFSET_HASH, sizeX-OFFSET_HASH, py+OFFSET_HASH, sizeY-OFFSET_HASH);
+	    return (result == 0) ? true : false;
 	}
 }

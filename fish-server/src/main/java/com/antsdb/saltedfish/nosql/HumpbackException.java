@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
+import org.slf4j.helpers.MessageFormatter;
+
 public class HumpbackException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
@@ -21,6 +23,10 @@ public class HumpbackException extends RuntimeException {
         super();
     }
 
+    public HumpbackException(String message, Object... params) {
+        super(MessageFormatter.arrayFormat(message, params).getMessage());
+    }
+    
     public HumpbackException(String message, Throwable cause) {
         super(message, cause);
     }

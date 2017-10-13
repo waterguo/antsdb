@@ -22,7 +22,7 @@ import com.antsdb.saltedfish.sql.Orca;
  * 
  * @author *-xguo0<@
  */
-public class FuncVersion extends Function{
+public class FuncVersion extends Function {
 	
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {

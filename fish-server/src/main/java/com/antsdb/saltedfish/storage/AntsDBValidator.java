@@ -13,9 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 import javax.xml.bind.DatatypeConverter;
 
@@ -27,8 +25,7 @@ import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
-import com.antsdb.saltedfish.nosql.Gobbler.EntryType;
-import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaConstant;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
@@ -62,14 +59,6 @@ public class AntsDBValidator {
 		return table;
 	}
 	
-	static boolean isIndex(Humpback humpback, long sp) {
-		sp -= 6;
-		long p = humpback.getSpaceManager().toMemory(sp);
-		LogEntry entry = new LogEntry(sp, p);
-		EntryType type = entry.getType();
-		return type == EntryType.INDEX;
-	}
-
 	static TableMeta getTableMeta(MetadataService metaService, int tableId) {
 		if (metaService == null) {
 			return null;
@@ -96,6 +85,8 @@ public class AntsDBValidator {
 			System.out.println("Table not found - " + fullTableName);
 			return -1;
 		}
+		SysMetaRow tableInfo = humpback.getTableInfo(table.getId());
+		boolean isIndex = tableInfo.getType() == TableType.INDEX;
 		
 		byte[] key = hexToBytes(keyHex);
 		if (key == null) {
@@ -103,9 +94,6 @@ public class AntsDBValidator {
 			return -1;
 		}
 
-		// Get table rows to test
-		List<Row> rows =  new ArrayList<Row>();
-		
 		// Scan from head to get top #### rows
 		RowIterator scanner;
 		scanner = table.scan(0, Long.MAX_VALUE,
@@ -117,11 +105,9 @@ public class AntsDBValidator {
 		long count = 0;
 		while (scanner.next()) {
 			// skip index table at this time
-			if (rows.size() == 0) {
-				if (isIndex(humpback, scanner.getRowPointer())) {
-					System.out.println("Index table skipped - " + fullTableName);
-					return -1;
-				}
+			if (isIndex) {
+				System.out.println("Index table skipped - " + fullTableName);
+				return -1;
 			}
 			
 			Row row = scanner.getRow();

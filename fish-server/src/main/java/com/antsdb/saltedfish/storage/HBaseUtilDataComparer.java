@@ -34,8 +34,7 @@ import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
-import com.antsdb.saltedfish.nosql.Gobbler.EntryType;
-import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaConstant;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
@@ -290,7 +289,7 @@ public class HBaseUtilDataComparer {
 			
 			// check if it's index table
 			if (scanner.next()) {
-				this.isIndexTable = isIndex(scanner.getRowPointer());
+				this.isIndexTable = table.getTableType() == TableType.INDEX;
 			}
 			else {
 				// no rows, return directly
@@ -573,14 +572,6 @@ public class HBaseUtilDataComparer {
 			return qualifier;
 		}
 			
-		private boolean isIndex(long sp) {
-			sp -= 6;
-			long p = humpback.getSpaceManager().toMemory(sp);
-			LogEntry entry = new LogEntry(sp, p);
-			EntryType type = entry.getType();
-			return type == EntryType.INDEX;
-		}
-	
 		public class IndexDataRow {
 			long rowKeyPointer;
 			long indexKeyPointer;

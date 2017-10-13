@@ -41,7 +41,6 @@ class PacketDecoder extends ByteToMessageDecoder{
 	static final int MAX_PACKET_SIZE = 0xffffff;  
     static final int COMMAND_HANDSKAE= -1; // mysql doesn't have this code
     
-    boolean isHandshaken = false;
     MysqlServerHandler handler;
     ByteBuf largePacket;
     
@@ -112,8 +111,7 @@ class PacketDecoder extends ByteToMessageDecoder{
         RecievePacket packet = null;
         try
         {
-            if (!this.isHandshaken) {
-                this.isHandshaken = true;
+            if (!this.handler.isHandshaken) {
                 packet = new AuthPacket();
                 packet.packetLength = size;
                 packet.read(this.handler, in);

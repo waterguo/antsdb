@@ -15,7 +15,9 @@ package com.antsdb.saltedfish.sql.vdm;
 
 
 import com.antsdb.saltedfish.cpp.FishNumber;
+import com.antsdb.saltedfish.cpp.FishTimestamp;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.DataType;
 
 public class OpNegate extends UnaryOperator {
@@ -26,8 +28,23 @@ public class OpNegate extends UnaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long pValue = AutoCaster.toNumber(heap, upstream.eval(ctx, heap, params, pRecord));
-        pValue = FishNumber.negate(heap, pValue);
+        long pValue = upstream.eval(ctx, heap, params, pRecord);
+        if (pValue == 0) {
+            return 0;
+        }
+        int type = Value.getType(heap, pValue);
+        if (type == Value.TYPE_NUMBER) {
+            pValue = FishNumber.negate(heap, pValue);
+        }
+        else if (type == Value.TYPE_TIMESTAMP) {
+            long epoch = FishTimestamp.getEpochMillisecond(heap, pValue);
+            epoch = - epoch;
+            return FishTimestamp.allocSet(heap, epoch);
+        }
+        else {
+            pValue = AutoCaster.toNumber(heap, pValue);
+            pValue = FishNumber.negate(heap, pValue);
+        }
         return pValue;
     }
 

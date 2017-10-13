@@ -76,6 +76,9 @@ public class FishObject {
 		else if (type == Value.FORMAT_BOUNDARY) {
 			result = new FishBoundary(addr);
 		}
+		else if (type == Value.FORMAT_INT4_ARRAY) {
+		    result = new Int4Array(addr).toArray();
+		}
 		else {
 			throw new IllegalArgumentException();
 		}
@@ -119,6 +122,9 @@ public class FishObject {
 		}
 		else if (value instanceof byte[]) {
 			addr = Bytes.allocSet(heap, (byte[])value);
+		}
+		else if (value instanceof int[]) {
+		    addr = Int4Array.alloc(heap, (int[])value).getAddress();
 		}
 		else {
 			throw new IllegalArgumentException();
@@ -187,9 +193,6 @@ public class FishObject {
 		if (typex == Value.TYPE_NUMBER) {
 			return FishNumber.add(heap, addrx, addry);
 		}
-		else if (typex == Value.TYPE_FLOAT) {
-			return Float8.add(heap, addrx, addry);
-		}
 		else if (typex == Value.TYPE_TIMESTAMP) {
 			return FishTimestamp.add(heap, addrx, addry);
 		}
@@ -209,9 +212,6 @@ public class FishObject {
 		}
 		if (typex == Value.TYPE_NUMBER) {
 			return FishNumber.multiply(heap, addrx, addry);
-		}
-		else if (typex == Value.TYPE_FLOAT) {
-			return Float8.multiply(heap, addrx, addry);
 		}
 		else {
 			throw new IllegalArgumentException();	
@@ -290,8 +290,7 @@ public class FishObject {
 			Date dt = FishDate.get(heap, addr);
 			return dt.getTime();
 		case Value.FORMAT_TIMESTAMP:
-			Timestamp ts = FishTimestamp.get(heap, addr);
-			return ts.getTime();
+			return FishTimestamp.getEpochMillisecond(heap, addr);
 		case Value.FORMAT_UTF8:
 			try {
 				long n = Long.parseLong(FishUtf8.get(addr));
@@ -360,6 +359,10 @@ public class FishObject {
 			return Float8.getSize(pValue);
 		case Value.FORMAT_DATE:
 			return FishDate.getSize(pValue);
+		case Value.FORMAT_NULL:
+		    return 1;
+		case Value.FORMAT_INT4_ARRAY:
+		    return new Int4Array(pValue).getSize();
 		default:
 			throw new IllegalArgumentException();
 		}
@@ -399,6 +402,14 @@ public class FishObject {
 			long value = Int8.get(heap, pValue);
 			return Unicode16.allocSet(heap, String.valueOf(value));
 		}
+		case Value.FORMAT_DECIMAL: {
+		    BigDecimal value = FishDecimal.get(heap, pValue);
+		    return Unicode16.allocSet(heap, value.toString());
+		}
+        case Value.FORMAT_FAST_DECIMAL: {
+            BigDecimal value = FastDecimal.get(heap, pValue);
+            return Unicode16.allocSet(heap, value.toString());
+        }
 		case Value.FORMAT_BYTES: {
 			byte[] bytes = Bytes.get(heap, pValue);
 			return Unicode16.allocSet(heap, new String(bytes, Charsets.UTF_8));
@@ -444,7 +455,8 @@ public class FishObject {
 			buf.append(Float8.get(null, pValue));
 			break;
 		default:
-			buf.append("unknown");
+		    Object obj = FishObject.get(null, pValue);
+			buf.append(obj.toString());
 		}
 		return buf.toString();
 	}

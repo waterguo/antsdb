@@ -25,23 +25,17 @@ public final class VariableLengthLongComparator extends KeyComparator{
 	}
 	
 	public static int compare_(long xAddr, long yAddr) {
-		int xLength = KeyBytes.getLength(xAddr);
-		int yLength = KeyBytes.getLength(yAddr);
+		int xLength = KeyBytes.getUnmaskedLength(xAddr);
+		int yLength = KeyBytes.getUnmaskedLength(yAddr);
 		int minLength = Math.min(xLength, yLength);
-		for (int i=0; i<=(minLength-1)/8; i++) {
-			long x = Unsafe.getLongVolatile(xAddr + 4 + i * 8);
-			long y = Unsafe.getLongVolatile(yAddr + 4 + i * 8);
-			int result = Long.compareUnsigned(x, y);
-			if (result != 0) {
-				return result;
-			}
-		}
-		if (xLength > minLength) {
-			return 1;
-		}
-		if (yLength > minLength) {
-			return -1;
-		}
-		return 0;
+        for (int i=0; i<minLength; i+=8) {
+            long x = Unsafe.getLongVolatile(xAddr + 4 + i);
+            long y = Unsafe.getLongVolatile(yAddr + 4 + i);
+            int result = Long.compareUnsigned(x, y);
+            if (result != 0) {
+                return result;
+            }
+        }
+		return Integer.compare(xLength & 0x7fff, yLength & 0x7fff);
 	}
 }

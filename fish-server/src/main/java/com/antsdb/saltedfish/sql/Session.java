@@ -29,6 +29,9 @@ import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.nosql.HumpbackSession;
+import com.antsdb.saltedfish.sql.command.FishParserFactory;
+import com.antsdb.saltedfish.sql.vdm.AsynchronusInsert;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
@@ -43,23 +46,28 @@ public class Session {
     Map<String, Object> variables = new ConcurrentHashMap<String, Object>();
     boolean autoCommit = true;
     String currentNameSpace = "TEST";
+    FishParserFactory fishParser = new FishParserFactory();
     SqlParserFactory fac;
     Map<Integer, PreparedStatement> prepared = new HashMap<Integer, PreparedStatement>();
     String user;
     int resetAutoCommit = 0;
     ConcurrentMap<Integer, TableLock> tableLocks = new ConcurrentHashMap<>();
 
-    private Transaction trx;
+    private volatile Transaction trx;
 	private boolean isClosed = false;
 	private long lastInsertId;
 	private int id = _id.incrementAndGet();
 	private String protocolCharset = "latin1";
 	private SessionParameters parameters = new SessionParameters();
+    AsynchronusInsert asyncExecutor;
+    private HumpbackSession hsession;
+    public String remote;
     
     public Session(Orca orca, SqlParserFactory fac, String user) {
         this.orca = orca;
         this.fac = fac;
         this.user = user;
+        this.hsession = orca.getHumpback().createSession();
     }
     
     public Object run(String sql) throws SQLException {
@@ -79,6 +87,15 @@ public class Session {
     		throw new OrcaException("session is closed");
     	}
     	
+    	// import 
+    	
+    	if ((this.asyncExecutor != null) && isInsert(cs)) {
+    	    if (getTransaction().getTrxId() == 0) {
+    	        this.trx.getGuaranteedTrxId();
+    	    }
+    	    return asyncInsert(cs);
+    	}
+    	
         // main stuff
         
         startTrx();
@@ -87,6 +104,28 @@ public class Session {
         return script.run(ctx, params, 0);
     }
     
+    private Integer asyncInsert(CharStream cs) {
+        if (this.asyncExecutor.getError() != null) {
+            throw new OrcaException(this.asyncExecutor.getError());
+        }
+        this.asyncExecutor.add(cs);
+        return 1;
+    }
+
+    private boolean isInsert(CharStream cs) {
+        return beginWith(cs, "INSERT INTO ");
+    }
+
+    private boolean beginWith(CharStream cs, String s) {
+        int idx = cs.index();
+        for (int i=0; i<s.length(); i++) {
+            if (cs.LA(idx + i + 1) != s.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public Script parse(CharStream cs) {
     	if (this.isClosed) {
     		throw new OrcaException("session is closed");
@@ -102,7 +141,13 @@ public class Session {
         
         if (script == null) {
         	try {
-        		script = this.fac.parse(this, cs);
+        	    if (cs.LA(1) == '.') {
+        	        cs.consume();
+        	        script = this.fishParser.parse(this, cs);
+        	    }
+        	    else {
+                    script = this.fac.parse(this, cs);
+        	    }
         	}
         	catch (ParseCancellationException x) {
         		if (x.getCause() instanceof InputMismatchException) {
@@ -182,6 +227,7 @@ public class Session {
 
     public void close() {
         rollback();
+        unlockAll();
         this.orca.sessions.remove(this);
         this.isClosed  = true;
     }
@@ -191,6 +237,8 @@ public class Session {
     }
     
     private void endTransaction(boolean success) {
+        waitForAsyncExecution();
+        
     	// only if there is a transaction
     	
     	if (this.trx == null) {
@@ -362,7 +410,7 @@ public class Session {
 		}
 	}
 	
-	public void lockTable(int owner, int tableId, int level, boolean transactional) {
+	public boolean lockTable(int owner, int tableId, int level, boolean transactional) {
 		// guaranteed getting a table lock
 		
 		TableLock lock = this.tableLocks.get(tableId);
@@ -377,7 +425,7 @@ public class Session {
 		// lock the sucker
 		
 		if (!lock.acquire(owner, level, getLockTimeoutMilliSeconds())) {
-			return;
+			return false;
 		}
 		
 		// is it transactional ?
@@ -413,23 +461,78 @@ public class Session {
 				}
 			}
 		}
+		return true;
 	}
 	
-	public void lockTable(int tableId, int lockLevel, boolean transactional) {
-		lockTable(getId(), tableId, lockLevel, transactional);
+	public boolean lockTable(int tableId, int lockLevel, boolean transactional) {
+		return lockTable(getId(), tableId, lockLevel, transactional);
 	}
 
 	public void unlockAll() {
+	    List<Integer> tables = new ArrayList<>();
 		for (Map.Entry<Integer, TableLock> i:this.tableLocks.entrySet()) {
 			int tableId = i.getKey();
 			TableLock lock = i.getValue();
 			if (lock.getLevel() == LockLevel.EXCLUSIVE) {
-				unlockTable(getId(), tableId);
+			    tables.add(tableId);
 			}
+		}
+		for (Integer i:tables) {
+            unlockTable(getId(), i);
 		}
 	}
 	
 	public SessionParameters getParameters() {
 		return this.parameters;
 	}
+	
+	public void notifyStartQuery() {
+	    this.hsession.open();
+	}
+	
+	public void notifyEndQuery() {
+	    this.hsession.close();
+	}
+	
+	/**
+	 * get start sp if the session is currently in a transaction
+	 * 
+	 * @return 0 if there is no active transaction
+	 */
+	public long getStartSp() {
+	   Transaction result = this.trx;
+	   return (result != null) ? result.getStartSp() : 0;
+	}
+
+	public boolean isImportModeOn() {
+	    return this.asyncExecutor != null;
+	}
+
+	private void waitForAsyncExecution() {
+	    if (this.asyncExecutor != null) {
+	        this.asyncExecutor.waitForCompletion();
+	    }
+	}
+	
+    public void setImportMode(boolean value) {
+        if (value) {
+            if (this.asyncExecutor != null) {
+                return;
+            }
+            // make all asynchronous in one transaction. otherwise session sweeper cant determine the transaction
+            // window correctly
+            this.variables.put("##oldAutoCommit", this.autoCommit);
+            this.autoCommit = false;
+            this.asyncExecutor = new AsynchronusInsert(this);
+        }
+        else {
+            if (this.asyncExecutor != null) {
+                this.asyncExecutor.close();
+                commit();
+                this.asyncExecutor = null;
+                this.autoCommit = (Boolean)this.variables.get("##oldAutoCommit");
+            }
+        }
+    }
+    
 }

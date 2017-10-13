@@ -16,7 +16,10 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.sql.LockLevel;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ForeignKeyMeta;
@@ -24,8 +27,11 @@ import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.util.UberUtil;
 
 public class DropTable extends Statement {
+    static Logger _log = UberUtil.getThisLogger();
+    
 	List<ObjectName> tableNames;
     boolean ifExist;
     
@@ -54,14 +60,19 @@ public class DropTable extends Statement {
 		        Transaction trx = ctx.getTransaction();
 	        	ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
 		        
+	            // refetch the table metadata to avoid concurrency
+	            
+	            table = ctx.getMetaService().getTable(trx, table.getId());
+	            check(ctx, table);
+	            
 		        // indexes blah blah
 		        
 		        dropDependents(ctx, table, params);
 		        
 		        // drop physical table
 		        
-		        Humpback humpback = ctx.getOrca().getStroageEngine();
-		        humpback.dropTable(tblName.getNamespace(), table.getId());
+		        Humpback humpback = ctx.getOrca().getHumpback();
+		        humpback.dropTable(tblName.getNamespace(), table.getHtableId());
 		        
 		        // remove metadata
 		        
@@ -84,7 +95,18 @@ public class DropTable extends Statement {
         return null;
     }
 
-	private void dropDependents(VdmContext ctx, TableMeta table, Parameters params) {
+	private void check(VdmContext ctx, TableMeta table) {
+	    Humpback humpback = ctx.getHumpback();
+	    SysMetaRow meta = humpback.getTableInfo(table.getId());
+	    if (meta != null) {
+	        if (!meta.isDeleted()) {
+	            return;
+	        }
+	    }
+	    _log.warn("table {} is out of sync between orca and humpback", table.getId());
+    }
+
+    private void dropDependents(VdmContext ctx, TableMeta table, Parameters params) {
 		for (IndexMeta i:table.getIndexes()) {
 			DropIndex drop = new DropIndex(table.getObjectName(), i.getName());
 			drop.run(ctx, params);

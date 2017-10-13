@@ -19,7 +19,7 @@ import com.antsdb.saltedfish.sql.Orca;
 public class PrimaryKeyMeta extends RuleMeta<PrimaryKeyMeta> {
 
     public PrimaryKeyMeta(Orca orca, TableMeta owner) {
-        super(orca, Rule.PrimaryKey);
+        super(orca, Rule.PrimaryKey, owner.getId());
         setTableId(owner.getId());
         setName("PK_" + Long.toHexString(getId()));
     }
@@ -30,6 +30,12 @@ public class PrimaryKeyMeta extends RuleMeta<PrimaryKeyMeta> {
 
     public int getId() {
         return (int)row.get(ColumnId.sysrule_id.getId());
+    }
+
+    @Override
+    public PrimaryKeyMeta clone() {
+        PrimaryKeyMeta result = new PrimaryKeyMeta(this.row.clone());
+        return result;
     }
 
 }

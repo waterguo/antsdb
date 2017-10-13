@@ -20,6 +20,7 @@ package com.antsdb.saltedfish.util;
  *
  */
 public class UberTime extends Thread {
+    static final int SLEEP_MS = 1;
     static volatile long _nanoTime;
     static volatile long _milliTime;
     
@@ -51,17 +52,33 @@ public class UberTime extends Thread {
     	return _milliTime;
     }
     
+    /**
+     * get the time uncertainty in ms
+     * @return
+     */
+    public final static long getTimeUncertainty() {
+        return SLEEP_MS * 100;
+    }
+    
     @Override
     public void run() {
         for (;;) {
             UberTime._nanoTime = System.nanoTime();
             _milliTime = System.currentTimeMillis();
             try {
-                Thread.sleep(1);
+                Thread.sleep(SLEEP_MS);
             }
             catch (InterruptedException e) {
             }
         }
     }
     
+    /**
+     * wait until time moves forward
+     */
+    public static void step() {
+        long time = getTime();
+        while (time == getTime()) {
+        }
+    }
 }

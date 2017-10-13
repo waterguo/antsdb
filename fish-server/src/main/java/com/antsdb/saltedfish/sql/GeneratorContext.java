@@ -64,7 +64,7 @@ public class GeneratorContext {
     
     public GTable getGtable(ObjectName name) {
         TableMeta tableMeta = getOrca().getMetaService().getTable(session.getTransaction(), name);
-        return getOrca().getStroageEngine().getTable(name.getNamespace(), tableMeta.getId());
+        return getOrca().getHumpback().getTable(name.getNamespace(), tableMeta.getHtableId());
     }
     
     public void addParameter(TerminalNode node) {

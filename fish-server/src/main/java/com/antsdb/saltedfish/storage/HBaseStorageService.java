@@ -20,11 +20,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
@@ -34,31 +38,38 @@ import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.io.compress.Compression.Algorithm;
+import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.util.Bytes;
-
+import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.ConfigService;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.IndexLine;
+import com.antsdb.saltedfish.nosql.Replicable;
+import com.antsdb.saltedfish.nosql.ReplicationHandler;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SpaceManager;
+import com.antsdb.saltedfish.nosql.StorageEngine;
+import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.OrcaConstant;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
+import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberTimer;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public class HBaseStorageService {
+public class HBaseStorageService implements StorageEngine, Replicable {
     static Logger _log = UberUtil.getThisLogger();
     
-    File hbaseConfHome = null;					// hbase configuration home
     Configuration hbaseConfig = null;			// hbase configuration
     Connection hbaseConnection = null;      	// hbase connection (thread-safe)
-    HBaseStorageServerThread hbaseSyncThread;	// background thread to sync data to HBase
+    User hbaseUser = null;
     Humpback humpback = null;					// humpback for handler to use
     MetadataService metaService = null;			// MetadataService to get Table Meta from ANTSDB
     CheckPoint cp;
@@ -69,52 +80,21 @@ public class HBaseStorageService {
     Algorithm compressionType = Algorithm.GZ;	// compression type: GZ by default (NONE, SNAPPY, LZO, LZ4)
 
 	long startTrxId = 0;
+	HBaseReplicationHandler replicationHandler;
+    ConcurrentMap<Integer, HBaseTable> tableById = new ConcurrentHashMap<>();
 
-    public HBaseStorageService(ConfigService antsdbConfig, Humpback humpback) throws Exception {
-    	
-    	// options used by hbase service
-        this.bufferSize = antsdbConfig.getHBaseBufferSize();
-        this.maxColumnPerPut = antsdbConfig.getHBaseMaxColumnsPerPut();        
-        String compressCodec = antsdbConfig.getHBaseCompressionCodec();
-    	this.compressionType = Algorithm.valueOf(compressCodec.toUpperCase());
-        
-    	// Check HBase conf folder for configuration
-    	File hbaseConfFile = antsdbConfig.getHBaseConfFile();
-    	if (!hbaseConfFile.isFile()) {
-            throw new OrcaHBaseException("HBase config file is not found - {}", hbaseConfFile); 
-        }
-    	_log.info("found HBase config file: {}", hbaseConfFile.getAbsolutePath());
-        
-        // Configuration object
-        this.hbaseConfig = HBaseConfiguration.create();
-        this.hbaseConfig.addResource(new Path(hbaseConfFile.getAbsolutePath()));
-       
-        // Connection is thread-safe and heavy weight object so we create one and share it
-        this.hbaseConnection = ConnectionFactory.createConnection(hbaseConfig);
-		try {
-	        this.humpback = humpback;
+    private boolean isMutable;
 
-			_log.info("HBase is connected ");
-
-			// Initialize HBase database for antsdb
-			init();
-			
-	        // Start background HBaseServer thread
-	        this.hbaseSyncThread = new HBaseStorageServerThread(this, this.humpback);
-		}
-		catch (Throwable x) {
-			this.hbaseConnection.close();
-			throw x;
-		}
+    public HBaseStorageService(Humpback humpback) throws Exception {
+        this.humpback = humpback;
     }
 
     public void shutdown() throws IOException {
+        if (this.hbaseConnection == null) {
+            return;
+        }
     	
-    	// background thread
-        this.hbaseSyncThread.shutdown();
-        
     	// save current SP to hBase
-        this.cp.setOpen(false);
         this.cp.updateHBase();
     	
         // HBase connection
@@ -125,10 +105,6 @@ public class HBaseStorageService {
 		_log.debug("HBase disconnected.");
     }
     
-    public void setPaused(boolean paused) {
-    	this.hbaseSyncThread.setPaused(paused);
-    }
-    
     public boolean isConnected() {
     	return (this.hbaseConnection != null && !this.hbaseConnection.isClosed());
     }
@@ -137,14 +113,93 @@ public class HBaseStorageService {
     	return this.cp.getCurrentSp();
     }
     
-    public void setCurrentSP(long currentSP) {
-    	this.cp.setCurrentSp(currentSP);
+    public void updateLogPointer(long currentSP) throws IOException {
+    	this.cp.updateLogPointer(currentSP);
     }
 
     public int getConfigBufferSize() {
     	return this.bufferSize;
     }
     
+    @Override
+    public void open(File home, ConfigService antsdbConfig, boolean isMutable) throws Exception {
+        this.isMutable = isMutable;
+        
+        // options used by hbase service
+        this.bufferSize = antsdbConfig.getHBaseBufferSize();
+        this.maxColumnPerPut = antsdbConfig.getHBaseMaxColumnsPerPut();        
+        String compressCodec = antsdbConfig.getHBaseCompressionCodec();
+        this.compressionType = Algorithm.valueOf(compressCodec.toUpperCase());
+        
+        // Configuration object
+        this.hbaseConfig = HBaseConfiguration.create();
+        for (Map.Entry<Object, Object> i:antsdbConfig.getProperties().entrySet()) {
+            String key = (String)i.getKey();
+            if (key.startsWith("hbase.") || key.startsWith("zookeeper.")) {
+                this.hbaseConfig.set(key, (String)i.getValue());
+            }
+        }
+       
+        try {
+            // Connection is thread-safe and heavy weight object so we create one and share it
+            if (User.isHBaseSecurityEnabled(this.hbaseConfig)) {
+                
+                System.setProperty("java.security.krb5.realm", "BLUE-ANTS.CLOUDAPP.NET");
+                System.setProperty("java.security.krb5.kdc", "blue-ants.cloudapp.net");
+    
+                String hbasePrinc = this.hbaseConfig.get("hbase.master.kerberos.principal", "");
+                String hbaseKeytabFile = hbaseConfig.get("hbase.master.keytab.file", "");
+                
+                UserGroupInformation.setConfiguration(this.hbaseConfig);            
+                UserGroupInformation userGroupInformation = 
+                        UserGroupInformation.loginUserFromKeytabAndReturnUGI(hbasePrinc, hbaseKeytabFile);
+                UserGroupInformation.setLoginUser(userGroupInformation);
+                hbaseUser = User.create(userGroupInformation);
+                hbaseConnection = ConnectionFactory.createConnection(hbaseConfig, hbaseUser);
+    
+                /*
+                hbaseUser.runAs(new PrivilegedExceptionAction<Object>() {
+                    @Override
+                    public Object run() throws Exception {
+                        Connection hConnection = ConnectionFactory.createConnection(hbaseConfig);
+                        // Create table
+                        try (Admin admin = hConnection.getAdmin()) {
+                            // Create namespace first
+                            NamespaceDescriptor nsDescriptor = NamespaceDescriptor.create("TEST").build();
+                            admin.createNamespace(nsDescriptor);
+                            
+                            HTableDescriptor table = new HTableDescriptor(TableName.valueOf("TEST", "Kerberos"));
+                            table.addFamily(new HColumnDescriptor(Helper.SYS_COLUMN_FAMILY));
+                            table.addFamily(new HColumnDescriptor(Helper.DATA_COLUMN_FAMILY));
+                            admin.createTable(table);
+                        } catch (Exception ex) {
+                            throw new OrcaHBaseException("Failed to create table - TEST:kerberos", ex);
+                        }
+                        return hConnection;
+                    }
+                });
+                */
+            }
+            else {
+                this.hbaseConnection = ConnectionFactory.createConnection(hbaseConfig);
+            }
+        }
+        catch (Throwable x) {
+            throw x;        
+        }
+        
+        try {
+            _log.info("HBase is connected ");
+
+            // Initialize HBase database for antsdb
+            init();
+        }
+        catch (Throwable x) {
+            this.hbaseConnection.close();
+            throw x;
+        }
+    }
+
     private void init() throws Exception {
     	// create antsdb namespaces and tables if they are missing
     	
@@ -152,14 +207,28 @@ public class HBaseStorageService {
     	
     	// load checkpoint
     	
-    	this.cp = new CheckPoint(humpback, this.hbaseConnection);
+    	this.cp = new CheckPoint(humpback, this.hbaseConnection, this.isMutable);
+    	
+    	// load system tables
+    	
+    	Admin admin = this.hbaseConnection.getAdmin();
+    	TableName[] tables = admin.listTableNamesByNamespace(OrcaConstant.SYSNS);
+    	for (TableName i:tables) {
+    	    String name = i.getQualifierAsString();
+    	    if (!name.startsWith("x")) {
+    	        continue;
+    	    }
+    	    int id = Integer.parseInt(name.substring(1), 16);
+    	    SysMetaRow meta = new SysMetaRow(id);
+    	    meta.setNamespace(i.getNamespaceAsString());
+    	    meta.setTableName(name);
+    	    meta.setType(TableType.DATA);
+    	    HBaseTable table = new HBaseTable(this, meta);
+    	    this.tableById.put(id, table);
+    	}
     	
     	// validations
     	
-    	if (this.cp.isOpen) {
-    		// hbase is already opened by another antsdb or it crashed last time
-    		_log.warn("hbase wasn't closed properly by antsdb last time");
-    	}
     	if (this.cp.serverId != this.humpback.getServerId()) {
     		throw new OrcaHBaseException("hbase is currently linked to a different antsdb instance");
     	}
@@ -169,11 +238,15 @@ public class HBaseStorageService {
     	
     	// update checkpoint
     	
-    	this.cp.setOpen(true);
-    	this.cp.updateHBase();
+    	if (this.isMutable) {
+    	    this.cp.updateHBase();
+    	}
     }
     
     private void setup() throws OrcaHBaseException {
+        if (!this.isMutable) {
+            return;
+        }
     	if (!Helper.existsNamespace(this.hbaseConnection, OrcaConstant.SYSNS)) {
     		_log.info("namespace {} is not found in HBase, creating ...", OrcaConstant.SYSNS);
     		createNamespace(OrcaConstant.SYSNS);
@@ -183,56 +256,69 @@ public class HBaseStorageService {
     		createTable(OrcaConstant.SYSNS, CheckPoint.TABLE_SYNC_PARAM);
     	}
     }
-    
-    public synchronized void createNamespace(String namespace) throws OrcaHBaseException {        
+
+    @Override
+    public synchronized void createNamespace(String namespace) throws OrcaHBaseException {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
     	Helper.createNamespace(this.hbaseConnection, namespace);
     }
 
-    public synchronized void dropNamespace(String namespace) throws OrcaHBaseException {        
+    @Override
+    public synchronized void deleteNamespace(String namespace) throws OrcaHBaseException {        
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
     	Helper.dropNamespace(this.hbaseConnection, namespace);
     }
     
-    public synchronized void createTable(String namespace, String tableName) throws OrcaHBaseException {        
+    @Override
+    public synchronized  StorageTable createTable(SysMetaRow meta) throws OrcaHBaseException {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        String namespace = meta.getNamespace();
+        String tableName = meta.getTableName();
     	Helper.createTable(this.hbaseConnection, namespace, tableName, this.compressionType);
+    	HBaseTable table = new HBaseTable(this, meta);
+    	this.tableById.put(meta.getTableId(), table);
+    	return table;
     }
-   
+
+    void createTable(String namespace, String tableName) {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        Helper.createTable(this.hbaseConnection, namespace, tableName, this.compressionType);
+    }
+    
     public boolean existsTable(String namespace, String tableName) {
     	return Helper.existsTable(this.hbaseConnection, namespace, tableName);
     }
     
-    public synchronized void dropTable(String namespace, String tableName) {
-    	Helper.dropTable(this.hbaseConnection, namespace, tableName);
+    @Override
+    public synchronized boolean deleteTable(int tableId) {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        HBaseTable table = this.tableById.get(tableId);
+        if (table == null) {
+            throw new IllegalArgumentException();
+        }
+    	Helper.dropTable(this.hbaseConnection, table.meta.getNamespace(), table.meta.getTableName());
+    	return true;
     }
         
-    public synchronized void truncateTable(int tableid, long sp) throws OrcaHBaseException {
-    	TableName tableName = getTableName(tableid);
-    	if (tableName != null) {
-    		try {
-            	// truncate table from hbase
-        		Helper.truncateTable(this.hbaseConnection, 
-        				tableName.getNamespaceAsString(), tableName.getQualifierAsString());
-
-        		// save truncate table sp list
-        		this.cp.setTruncateTableSp(tableid, sp);
-    		}
-    		catch (Exception ex) {
-                throw new OrcaHBaseException("Failed to truncate table - " + tableName, ex);
-    		}
-        }
-    	else {
-    		throw new OrcaHBaseException("Truncate Table not found - " + tableid);
-    	}
-    }
-    
 	List<byte[]> tableColumnQualifierList = new ArrayList<byte[]>();
 	byte[] tableColumnTypes = null;
-	void updateColumnInfo(Row row) {
+	
+	void updateColumnInfo(int tableId, Row row) {
 		
-		int id = row.getTableId();
 		int maxColumnId = row.getMaxColumnId();
 		
 		if (this.tableColumnQualifierList.size() < maxColumnId + 1) {
-			TableMeta tableMeta = getTable(id);
+			TableMeta tableMeta = getTableMeta(tableId);
 			this.tableColumnQualifierList.clear();
 			this.tableColumnTypes = new byte[maxColumnId+1];
 
@@ -246,92 +332,32 @@ public class HBaseStorageService {
 		}
  	}
 	
-	public synchronized void put(List<HBaseStorageSyncBuffer.RowData> rows) throws IOException  {    	
-    	int tableId = rows.get(0).getRow().getTableId();
-    	TableName tableName = getTableName(tableId);
-    	
-    	// skip data from already dropped table    	
-    	if (tableName == null) {
-    		return;
-    	}
-
-    	this.tableColumnQualifierList.clear();
-    	this.tableColumnTypes = null;
-
-    	Table htable = this.hbaseConnection.getTable(tableName);
-    	int totalColumns = 0;
-    	ArrayList<Put> puts = new ArrayList<Put>(100);
-    	
-    	Row row;
-    	for (HBaseStorageSyncBuffer.RowData rowData : rows) {
- 
-    		// If table already truncated we'll skip this row
-    		if (this.cp.isTruncatedData(tableId, rowData.getSp())) {
-    			continue;
-    		}
-
-    		// get Row
-    		row = rowData.getRow();
-    		
-    		// update column info
-    		updateColumnInfo(row);
-    		
-	        // populate row key    	
-			byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
-	    	Put put = new Put(key);
+	/**
+	 * 
+	 * @param tableId
+	 * @return null if the table is deleted
+	 */
+	Mapping getMapping(int tableId) {
+        SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
+        if (tableInfo == null) {
+            throw new OrcaHBaseException("humpback metadata for table {} is not found", tableId);
+        }
+        if (tableInfo.isDeleted()) {
+            return null;
+        }
+        TableMeta tableMeta = getTableMeta(tableId);
+        if ((tableId >= 0x100) && (tableMeta == null)) {
+            throw new OrcaHBaseException("orca metadata for table {} is not found", tableId);
+        }
+        Mapping mapping = new Mapping(tableInfo, tableMeta);
+        return mapping;
+	}
 	
-	    	// populate version
-	    	
-	    	// long version = this.humpback.getTrxMan().getTimestamp(Row.getVersion(row.getAddress()));
-	    	long version = this.humpback.getTrxMan().getTimestamp(row.getVersion());
-	    	if (version < 0) {
-	    		throw new OrcaHBaseException("invalid version {}", version);
-	    	}
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
-	    	
-			// populate size
-			
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, version, Bytes.toBytes(row.getLength()));
-			
-	    	// populate fields
-			
-			int maxColumnId = row.getMaxColumnId();
-			byte[] types = new byte[maxColumnId+1];
-	        for (int i=0; i<=maxColumnId; i++) {
-				byte[] qualifier = tableColumnQualifierList.get(i);
-	    		if (qualifier == null) {
-	    			continue;
-	    		}
-	        	long pValue = row.getFieldAddress(i); 
-				types[i] = Helper.getType(pValue);
-	    		byte[] value = Helper.toBytes(pValue);
-	    		put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, qualifier, version, value);
-	        }
-	
-	        // populate data types
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, version, types);
-			puts.add(put);
-			totalColumns += put.size();
-			
-			// if total columns exceeds define maxColumnCount, we'll do one put
-			if (totalColumns >= this.maxColumnPerPut) {
-				htable.put(puts);
-				puts.clear();
-				totalColumns = 0;
-			}
-    	}
-
-    	// do last put
-		if (puts.size() > 0) {
-    		htable.put(puts);
-    		puts.clear();
-    		totalColumns = 0;
-    	}
-		htable.close();
-    }
-    
-	public void put1(List<Row> rows) throws IOException  {    	
-    	int tableId = rows.get(0).getTableId();
+	public void put1(int tableId, List<Row> rows) throws IOException  {    	
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        
     	TableName tableName = getTableName(tableId);
     	
     	// skip data from already dropped table    	
@@ -349,7 +375,7 @@ public class HBaseStorageService {
     	for (Row row : rows) {
 
     		// update column info
-    		updateColumnInfo(row);
+    		updateColumnInfo(tableId, row);
     		
 	        // populate row key    	
 			byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
@@ -405,75 +431,16 @@ public class HBaseStorageService {
 		htable.close();
     }
     
-	public synchronized void index(List<HBaseStorageSyncBuffer.IndexData> indics) throws IOException {
-		
-       	int tableId = indics.get(0).getTableId();
-    	TableName tableName = getTableName(tableId);
-    	
-    	// skip data from already dropped table    	
-    	if (tableName == null) {
-    		return;
-    	}
-
-    	Table htable = this.hbaseConnection.getTable(tableName);
-    	int totalColumns = 0;
-    	ArrayList<Put> puts = new ArrayList<Put>(100);
-    	
-    	long version;
-    	for (HBaseStorageSyncBuffer.IndexData index : indics) {
-
-    		// If table already truncated we'll skip this row
-    		if (this.cp.isTruncatedData(tableId, index.getSp())) {
-    			continue;
-    		}
-    		
- 			// convert antsdb's key to normal key value (HBase key is user-readable)
-			
-			byte[] rowkey = Helper.antsKeyToHBase(index.getRowKey());
-			byte[] indexKey = Helper.antsKeyToHBase(index.getIndexKey());
-
-			// Initiate put and delete object
-	    	Put put = new Put(indexKey);
-
-	    	// get version of the row
-	    	version = index.getTrxTs();
-
-	    	// version
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
-	    	// index key
-			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, version, rowkey);
-	    	
-			puts.add(put);
-			totalColumns += put.size();
-			
-			// if total columns exceeds define maxColumnCount, we'll do one put
-			if (totalColumns >= this.maxColumnPerPut) {
-				htable.put(puts);
-				puts.clear();
-				totalColumns = 0;
-			}
-        }
-    	
-		// do last put
- 		if (puts.size() > 0) {
-    		htable.put(puts);
-    		puts.clear();
-    		totalColumns = 0;
-    	}
-		
- 		htable.close();        	
-	}
-
 	public synchronized void delete(int tableid, long pkey, long trxid, long sp) throws IOException {
-
-		// If table already truncated we'll skip this delete
-		if (this.cp.isTruncatedData(tableid, sp)) return;
-		
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
 		// Get table object
 
     	TableName tableName = getTableName(tableid);
         if (tableName == null) {
         	// table is deleted
+            return;
         }
         
         // Generate delete data
@@ -492,19 +459,18 @@ public class HBaseStorageService {
     }
     
     public TableName getTableName(int tableId) {
-    	if (tableId < 0) {
-        	String name = String.format("%08x", tableId);
-    		return TableName.valueOf(OrcaConstant.SYSNS, name);
-    	}
     	SysMetaRow metarow = this.humpback.getTableInfo(tableId);
-    	return (metarow != null) ? TableName.valueOf(metarow.getNamespace(), metarow.getTableName()) : null;
+    	if (metarow == null) {
+    	    throw new OrcaHBaseException("metadata of table {} is not found", tableId);
+    	}
+    	if (metarow.isDeleted()) {
+    	    return null;
+    	}
+    	return TableName.valueOf(metarow.getNamespace(), metarow.getTableName());
 	}
 
-	public TableMeta getTable(int tableId) {
+	public TableMeta getTableMeta(int tableId) {
 		if (this.metaService == null) {
-			return null;
-		}
-		if (tableId < 0) {
 			return null;
 		}
     	return this.metaService.getTable(Transaction.getSeeEverythingTrx(), tableId);
@@ -552,8 +518,8 @@ public class HBaseStorageService {
         try {
     		byte[] key = Helper.antsKeyToHBase(pKey);
 			Result r = Helper.get(this.hbaseConnection, tableName, key);
-            TableMeta table = getTable(tableId);
-	    	return Helper.toRow(heap, r, table);
+            TableMeta table = getTableMeta(tableId);
+	    	return Helper.toRow(heap, r, table, tableId);
 		}
 		catch (IOException x) {
 			throw new OrcaHBaseException(x);
@@ -655,13 +621,6 @@ public class HBaseStorageService {
 		}
 	}
     
-	/**
-	 * start the replication thread
-	 */
-	public void start() {
-        this.hbaseSyncThread.start();
-	}
-
 	public boolean doesTableExists(String ns, String table) {
     	return Helper.existsTable(this.hbaseConnection, ns, table);
 	}
@@ -698,4 +657,160 @@ public class HBaseStorageService {
 	public long getStartTrxId() {
 		return this.startTrxId;
 	}
+
+    @Override
+    public StorageTable getTable(int tableId) {
+        return this.tableById.get(tableId);
+    }
+
+    @Override
+    public boolean isTransactionRecoveryRequired() {
+        return true;
+    }
+
+    @Override
+    public LongLong getLogSpan() {
+        LongLong result = new LongLong(0, this.cp.getCurrentSp());
+        return result;
+    }
+
+    @Override
+    public void setEndSpacePointer(long sp) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public void checkpoint() throws Exception {
+        throw new NotImplementedException();
+   }
+
+    @Override
+    public void gc(long timestamp) {
+        // nothing to gc
+    }
+
+    @Override
+    public void close() throws IOException {
+        shutdown();
+    }
+
+    @Override
+    public boolean supportReplication() {
+        return true;
+    }
+
+    @Override
+    public long getReplicateLogPointer() {
+        return this.cp.getCurrentSp();
+    }
+
+    @Override
+    public ReplicationHandler getReplayHandler() {
+        if (this.replicationHandler == null) {
+            this.replicationHandler = new HBaseReplicationHandler(humpback, this);
+        }
+        return this.replicationHandler;
+    }
+
+    @Override
+    public void syncTable(SysMetaRow meta) {
+        if (this.tableById.get(meta.getTableId()) != null) {
+            return;
+        }
+        HBaseTable table = new HBaseTable(this, meta);
+        this.tableById.put(meta.getTableId(), table);
+    }
+
+    @Override
+    public synchronized void deletes(int tableId, List<Long> keys) {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        try {
+            this.tableById.get(tableId);
+            TableName tableName = getTableName(tableId);
+            
+            // skip data from already dropped table     
+            if (tableName == null) {
+                return;
+            }
+            Table htable = this.hbaseConnection.getTable(tableName);
+            List<Delete> deletes = new ArrayList<>();
+            for (Long pkey:keys) {
+                byte[] key = Helper.antsKeyToHBase(pkey);
+                Delete delete = new Delete(key);
+                deletes.add(delete);
+           }
+           htable.delete(deletes);
+        }
+        catch (IOException x) {
+            throw new OrcaHBaseException(x);
+        }
+   }
+
+    @Override
+    public synchronized void putRows(int tableId, List<Long> rows) {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        try {
+            SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
+            if (tableInfo == null) {
+                throw new OrcaHBaseException("metadata of table {} is not found", tableId);
+            }
+            if (tableInfo.isDeleted()) {
+                return;
+            }
+            Mapping mapping = getMapping(tableId);
+            List<Put> puts = new ArrayList<>();
+            for (Long pRow:rows) {
+                Row row = Row.fromMemoryPointer(pRow, 0);
+                Put put = Helper.toPut(mapping, row);
+                puts.add(put);
+            }
+            if (puts.size() > 0) {
+                Table htable = this.hbaseConnection.getTable(mapping.getTableName());
+                htable.put(puts);
+            }
+        }
+        catch (IOException x) {
+            throw new OrcaHBaseException(x);
+        }
+    }
+
+    @Override
+    public synchronized void putIndexLines(int tableId, List<Long> indexLines) {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("hbase storage is in read-only mode");
+        }
+        try {
+            SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
+            if (tableInfo == null) {
+                throw new OrcaHBaseException("metadata of table {} is not found", tableId);
+            }
+            if (tableInfo.isDeleted()) {
+                return;
+            }
+            TableName tn = getTableName(tableId);
+            List<Put> puts = new ArrayList<>();
+            for (Long pLine:indexLines) {
+                IndexLine line = IndexLine.from(pLine);
+                Put put = Helper.toPut(line);
+                puts.add(put);
+            }
+            if (puts.size() > 0) {
+                Table htable = this.hbaseConnection.getTable(tn);
+                htable.put(puts);
+            }
+        }
+        catch (IOException x) {
+            throw new OrcaHBaseException(x);
+        }
+   }
+
+    @Override
+    public boolean exist(int tableId) {
+        TableName tn = getTableName(tableId);
+        return Helper.existsTable(this.hbaseConnection, tn);
+    }
 }

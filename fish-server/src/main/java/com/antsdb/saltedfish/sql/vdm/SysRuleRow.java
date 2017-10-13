@@ -44,7 +44,8 @@ public class SysRuleRow {
     }
 
     public Boolean isUnique() {
-    	return (Boolean)row.get(ColumnId.sysrule_is_unique.getId());
+    	Integer value = (Integer)row.get(ColumnId.sysrule_is_unique.getId());
+    	return (value != null) ? value == 1 : false;
     }
 
 	@Override
@@ -61,4 +62,9 @@ public class SysRuleRow {
 	public Integer getIndexTableId() {
     	return (Integer)row.get(ColumnId.sysrule_index_table_id.getId());
 	}
+	
+    public int[] getRuleColumns() {
+        int[] columns = (int[])this.row.get(ColumnId.sysrule_columns.getId());
+        return columns;
+    }
 }

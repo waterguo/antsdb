@@ -19,6 +19,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.TreeMap;
 
 import org.apache.commons.lang.NotImplementedException;
 
@@ -36,6 +40,43 @@ import com.antsdb.saltedfish.sql.vdm.Record;
 
 public class CursorUtil {
 
+    static class PropertiesCursor extends CursorWithHeap {
+        private Iterator<Entry<String, Object>> iter;
+
+        public PropertiesCursor(CursorMeta meta, Map<String, Object> props) {
+            super(meta);
+            this.iter = props.entrySet().iterator();
+        }
+
+        @Override
+        public long next() {
+            try {
+                if (this.getHeap() == null) {
+                    return 0;
+                }
+                if (!iter.hasNext()) {
+                    return 0;
+                }
+                Entry<String, Object> obj = iter.next();
+                String name = (String)obj.getKey();
+                String value = String.valueOf(obj.getValue());
+                Heap heap = getHeap();
+                long pRecord = newRecord();
+                Record.set(pRecord, 0, FishObject.allocSet(heap, name));
+                Record.set(pRecord, 1, FishObject.allocSet(heap, value));
+                return pRecord;
+            }
+            catch (Exception x) {
+                throw new OrcaException(x);
+            }
+        }
+
+        @Override
+        public void close() {
+            super.close();
+        }
+    }
+    
 	static class IteratorCursor extends CursorWithHeap {
 		Iterator<?> iter;
 		
@@ -57,7 +98,7 @@ public class CursorUtil {
 		    	if (Marker.GROUP_END == obj) {
 		    		return Record.GROUP_END;
 		    	}
-				Heap heap = newHeap();
+				Heap heap = getHeap();
 				long pRecord = newRecord();
 				toRecord(heap, getMetadata(), pRecord, obj);
 				return pRecord;
@@ -136,6 +177,17 @@ public class CursorUtil {
 
 	public static CursorMeta toMeta(Class<?> klass) {
     	CursorMeta meta = new CursorMeta();
+        if (klass == Properties.class) {
+            FieldMeta column = new FieldMeta();
+            column.setName("name");
+            column.setType(DataType.varchar());
+            meta.addColumn(column);
+            column = new FieldMeta();
+            column.setName("value");
+            column.setType(DataType.varchar());
+            meta.addColumn(column);
+            return meta;
+        }
         for (Field i:klass.getFields()) {
         	FieldMeta column = new FieldMeta();
             column.setName(i.getName());
@@ -191,4 +243,10 @@ public class CursorUtil {
 	public static Cursor toCursor(CursorMeta meta, Record record) {
 		return toCursor(meta, Collections.singletonList(record));
 	}
+
+    public static Cursor toCursor(CursorMeta meta, Map<String, Object> props) {
+        props = new TreeMap<>(props);
+        Cursor c = new PropertiesCursor(meta, props);
+        return c;
+    }
 }

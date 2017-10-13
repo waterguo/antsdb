@@ -208,7 +208,8 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
             ObjectName tableName, 
             Alter_table_add_constraintContext rule) {
         if (rule.alter_table_add_constraint_fk() != null) {
-            return createAddForeignKey(ctx, tableName, rule.alter_table_add_constraint_fk());
+            String name = (rule.any_name() != null) ? rule.any_name().getText() : null;
+            return createAddForeignKey(ctx, tableName, name, rule.alter_table_add_constraint_fk());
         }
         else if (rule.alter_table_add_constraint_pk() != null) {
             return createAddPrimaryKey(ctx, tableName, rule.alter_table_add_constraint_pk());
@@ -229,10 +230,11 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
     private Instruction createAddForeignKey(
             GeneratorContext ctx, 
             ObjectName tableName, 
+            String name,
             Alter_table_add_constraint_fkContext rule) {
         ObjectName parentTable = TableName.parse(ctx, rule.table_name_());
         List<String> childColumns = Utils.getColumns(rule.child_columns().columns());
         List<String> parentColumns = Utils.getColumns(rule.parent_columns().columns());
-        return new CreateForeignKey(tableName, parentTable, childColumns, parentColumns);
+        return new CreateForeignKey(tableName, name, parentTable, childColumns, parentColumns);
     }
 }

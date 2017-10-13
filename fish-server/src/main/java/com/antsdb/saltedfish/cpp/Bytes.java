@@ -123,4 +123,8 @@ public class Bytes {
 		return s;
 	}
 
+    public static byte get(long pValue, int pos) {
+        return Unsafe.getByte(pValue + 4 + pos);
+    }
+
 }

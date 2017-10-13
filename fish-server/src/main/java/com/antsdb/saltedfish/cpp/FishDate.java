@@ -38,6 +38,11 @@ public class FishDate {
 		return 9;
 	}
 
+    public final static long getEpochMillisecond(Heap heap, long address) {
+        long epoch = Unsafe.getLong(address+1);
+        return epoch;
+    }
+    
 	public static final void set(Heap heap, long address, Date value) {
 		Unsafe.putByte(address, Value.FORMAT_DATE);
 		Unsafe.putLong(address+1, value.getTime());

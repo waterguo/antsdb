@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -24,50 +25,86 @@ import java.nio.channels.FileChannel.MapMode;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class MemoryMappedFile {
+public class MemoryMappedFile implements Closeable {
 	static Logger _log = UberUtil.getThisLogger();
 	
 	File file;
 	int size;
 	long addr;
 	MappedByteBuffer buf;
+	FileChannel channel;
+    RandomAccessFile raf;
 	
+	/**
+	 * 
+	 * @param file
+	 * @param mode "rw" for read and write. "r" for read only
+	 * @throws IOException
+	 */
 	public MemoryMappedFile(File file, String mode) throws IOException {
 		this(file, file.length(), mode);
 	}
 	
 	public MemoryMappedFile(File file, long size, String mode) throws IOException {
-		if (size >= Integer.MAX_VALUE) {
-			throw new IllegalArgumentException("jvm doesn't support mapped file more than 2g");
-		}
-		MapMode mapmode = null;
-		if (mode.equals("r")) {
-			mapmode = MapMode.READ_ONLY;
-		}
-		else if (mode.equals("rw")) {
-			mapmode = MapMode.READ_WRITE;
-		}
-		else {
-			throw new IllegalArgumentException();
-		}
-		this.file = file;
-		try (RandomAccessFile raf = new RandomAccessFile(file, mode)) {
-			FileChannel channel = raf.getChannel();
-			this.buf = channel.map(mapmode, 0, size);
-			this.buf.order(ByteOrder.nativeOrder());
-			this.addr = UberUtil.getAddress(buf);
-		}
-        _log.debug(String.format("mounted %s at 0x%016x", file.toString(), addr));
+	    this(file, mode, 0, size);
 	}
 	
-	public void close() {
-		unmap();
+	public MemoryMappedFile(File file, String mode, long offset, long size) throws IOException {
+        if (size >= Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("jvm doesn't support mapped file more than 2g");
+        }
+        MapMode mapmode = null;
+        if (mode.equals("r")) {
+            mapmode = MapMode.READ_ONLY;
+        }
+        else if (mode.equals("rw")) {
+            mapmode = MapMode.READ_WRITE;
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
+        
+        if ((mapmode == MapMode.READ_WRITE) && !file.exists()) {
+            File parent = file.getAbsoluteFile().getParentFile();
+            long free = parent.getUsableSpace();
+            if ((size * 4) > free) {
+                throw new HumpbackException("out of storage space: " + file.toString() + ' ' + free);
+            }
+        }
+        
+        this.file = file;
+        boolean exist = this.file.exists();
+        this.raf = new RandomAccessFile(file, mode);
+        this.channel = raf.getChannel();
+        this.buf = channel.map(mapmode, offset, size);
+        this.buf.order(ByteOrder.nativeOrder());
+        this.addr = UberUtil.getAddress(buf);
+        _log.debug(String.format("mounted %s %s %s at 0x%016x with length 0x%08x",
+                exist ? "exist" : "new",
+                file.toString(), 
+                mode, 
+                addr, 
+                size));
+    }
+
+    public void close() {
+        unmap();
+		try {
+            this.channel.close();
+            this.raf.close();
+        }
+        catch (IOException e) {
+            _log.warn("fail to close channel {}", this.file);
+        }
+        this.channel = null;
+        this.raf = null;
 	}
 	
 	public long getAddress() {
@@ -82,8 +119,8 @@ public class MemoryMappedFile {
 		this.buf.force();
 	}
 
-	public void unmap() {
-        _log.debug(String.format("%s 0x%016x is unmounted", file.toString(), addr));
+	private void unmap() {
+        _log.debug("{} @ {} is unmounted", file.toString(), UberFormatter.hex(addr));
 		Unsafe.unmap(this.buf);
 		this.buf = null;
 		this.addr = 0;
@@ -92,4 +129,20 @@ public class MemoryMappedFile {
 	public boolean isReadOnly() {
 		return this.buf.isReadOnly();
 	}
+
+    @Override
+    public String toString() {
+        return this.file.toString();
+    }
+
+    public void force(long offset, int length) throws IOException {
+        _log.debug(String.format("forcing %s offset 0x%08x length 0x%08x", file.toString(), offset, length));
+        MappedByteBuffer buff = null;
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+            FileChannel channel = raf.getChannel();
+            buff = channel.map(MapMode.READ_WRITE, offset, size);
+            buff.force();
+        }
+    }
+	
 }

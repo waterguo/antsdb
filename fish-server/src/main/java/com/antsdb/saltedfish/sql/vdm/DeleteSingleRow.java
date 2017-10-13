@@ -20,6 +20,7 @@ import com.antsdb.saltedfish.cpp.FishBoundary;
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.LockLevel;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -37,6 +38,7 @@ public class DeleteSingleRow extends DeleteBase {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
 		ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+		Transaction trx = ctx.getTransaction();
     	try (Heap heap = new FlexibleHeap()) {
     		long pBoundary = this.key.eval(ctx, heap, params, 0);
 	        if (pBoundary == 0) {
@@ -46,6 +48,10 @@ public class DeleteSingleRow extends DeleteBase {
 	        long pKey = boundary.getKeyAddress();
 	        if (pKey == 0) {
 	        	return 0;
+	        }
+	        Row row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
+	        if (row == null) {
+	            return 0;
 	        }
             return deleteSingleRow(ctx, params, pKey) ? 1 : 0;
     	}

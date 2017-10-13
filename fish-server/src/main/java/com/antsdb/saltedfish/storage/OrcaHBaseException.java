@@ -27,11 +27,18 @@ public class OrcaHBaseException extends OrcaException {
 	private static final long serialVersionUID = 1L;
 
 
+    public OrcaHBaseException(Exception x, String message, Object... params) {
+        super(x, message, params);
+    }
+    
 	public OrcaHBaseException(String message, Object... params) {
 		super(message, params);
 	}
 
-
+	public OrcaHBaseException(String message) {
+	    super(message);
+	}
+	
 	public OrcaHBaseException(Exception x) {
 		super(x);
 	}

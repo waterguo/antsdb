@@ -31,7 +31,7 @@ public class OpSequenceValue extends Operator {
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         IdentifierService idService = ctx.getOrca().getIdentityService();
-        long value = idService.getSequentialId(this.name);
+        long value = idService.getNextId(this.name);
         long addr = Int8.allocSet(heap, value);
         return addr;
     }

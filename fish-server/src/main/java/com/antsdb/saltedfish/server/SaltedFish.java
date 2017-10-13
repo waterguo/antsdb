@@ -44,6 +44,7 @@ public class SaltedFish {
     ChannelFuture f;
     EventLoopGroup bossGroup;
     NioEventLoopGroup workerGroup;
+    boolean isClosed;
 
     public SaltedFish(File home) {
         _singleton = this;
@@ -52,10 +53,16 @@ public class SaltedFish {
     }
 
     public void start() throws Exception {
-        startLogging();
-        this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
-        startDatabase();
-        startNetty();
+        try {
+            startLogging();
+            this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
+            startDatabase();
+            startNetty();
+        }
+        catch (Exception x) {
+            _log.error("failed to start", x);
+            throw x;
+        }
     }
     
     public void startOrcaOnly() throws Exception {
@@ -124,6 +131,7 @@ public class SaltedFish {
     void startNetty() throws Exception {
         bossGroup = new NioEventLoopGroup();
         workerGroup = new NioEventLoopGroup(this.configService.getNettyWorkerThreadPoolSize());
+        _log.info("java.home: {}", System.getProperty("java.home"));
         _log.info("netty worker pool size: {}", workerGroup.executorCount());
 
         ServerBootstrap b = new ServerBootstrap();
@@ -140,6 +148,13 @@ public class SaltedFish {
     }
 
     public void shutdown() {
+        try {
+            this.orca.shutdown();
+        }
+        catch (Exception x) {
+            _log.error("unable to shutdown orca gracefully", x);
+        }
+        
         // Wait until the server socket is closed.
         // In this example, this does not happen, but you can do that to gracefully
         // shut down your server.
@@ -166,5 +181,14 @@ public class SaltedFish {
 	public File getConfigFolder(File home) {
 		File conf = new File(home, "conf");
 		return (conf.exists()) ? conf : home;
+	}
+	
+	public void close() {
+	    this.isClosed = true;
+	    this.orca.shutdown();
+	}
+	
+	public boolean isClosed() {
+	    return this.isClosed;
 	}
 }

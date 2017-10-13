@@ -23,20 +23,24 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.varia.NullAppender;
 
-import com.antsdb.saltedfish.nosql.HumpbackReadOnly;
+import com.antsdb.saltedfish.minke.Minke;
+import com.antsdb.saltedfish.minke.MinkeCache;
+import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.util.CommandLineHelper;
 
 /**
  * 
  * @author wgu0
  */
-public abstract class FishCommandLine implements CommandLineHelper {
+public abstract class FishCommandLine extends CommandLineHelper {
 	protected CommandLine cmd;
 	
 	abstract protected Options getOptions();
+	abstract protected String getName();
 	
 	static {
-		String level = System.getenv("ANTSDB_DEBUG");
+		String level = System.getenv("ANTSDB_LOG_LEVEL");
 		BasicConfigurator.resetConfiguration();
 		if (level != null) {
 			BasicConfigurator.resetConfiguration();
@@ -50,7 +54,10 @@ public abstract class FishCommandLine implements CommandLineHelper {
 	}
 	
 	public FishCommandLine(String[] args) throws ParseException {
-		this.cmd = parse(getOptions(), args);
+	    Options options = getOptions();
+        options.addOption("h", "help", false, "print help");
+        options.addOption(null, "home", true, "antsdb home");
+		this.cmd = parse(options, args);
 	}
 	
 	public File getHome() {
@@ -70,12 +77,25 @@ public abstract class FishCommandLine implements CommandLineHelper {
 		return file;
 	}
 	
-	public HumpbackReadOnly getHumpbackReadOnly() throws Exception {
+	public Humpback getHumpbackReadOnly() throws Exception {
 		File home = getHome();
 		if (home == null) {
 			return null;
 		}
-		HumpbackReadOnly humpback = new HumpbackReadOnly(home);
+		Humpback humpback = new Humpback(home);
+		humpback.setMutable(false);
+		humpback.open();
 		return humpback;
+	}
+	
+	public Minke getMinke() throws Exception  {
+	    StorageEngine storage = getHumpbackReadOnly().getStorageEngine();
+	    if (storage instanceof Minke) {
+	        return (Minke)storage;
+	    }
+        if (storage instanceof MinkeCache) {
+            return ((MinkeCache)storage).getMinke();
+        }
+        return null;
 	}
 }

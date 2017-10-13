@@ -34,7 +34,7 @@ public class MysqlChannelInitializer extends ChannelInitializer<SocketChannel> {
     @Override
     public void initChannel(SocketChannel ch) throws Exception {
         _log.trace("channel initialized with remote address {}", ch.remoteAddress());
-        MysqlServerHandler handler = new MysqlServerHandler(fish);
+        MysqlServerHandler handler = new MysqlServerHandler(fish, ch);
         PacketDecoder decoder = new PacketDecoder(handler);
         ch.pipeline().addLast(decoder, handler);
     }

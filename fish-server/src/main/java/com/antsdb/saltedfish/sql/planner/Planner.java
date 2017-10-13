@@ -31,7 +31,6 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
-import com.antsdb.saltedfish.sql.meta.RuleColumnMeta;
 import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Aggregator;
@@ -157,11 +156,11 @@ public class Planner {
         return node.alias;
     }
     
-    public ObjectName addCursor(String name, CursorMaker maker) {
+    public ObjectName addCursor(String name, CursorMaker maker, boolean isOuter) {
         Node node = new Node();
         node.maker = maker;
         node.alias = new ObjectName(null, name);
-        node.isOuter = false;
+        node.isOuter = isOuter;
         this.nodes.put(node.alias, node);
         for (FieldMeta i:maker.getCursorMeta().getFields()) {
             PlannerField field = new PlannerField(node, i);
@@ -246,14 +245,9 @@ public class Planner {
         
         // group by 
         
-        if (this.groupBy != null) {
-        	if (this.groupBy.size() != 0) {
-        		maker = new DumbGrouper(maker, this.groupBy, ctx.getNextMakerId());
-        	}
-        	else {
-        		maker = new ThroughGrouper(maker);
-        	}
-        }
+    	CursorMaker grouper = buildGroupBy(maker, path);
+    	boolean hasGrouper = grouper != maker;
+    	maker = grouper;
         
         // aggregation
         
@@ -276,7 +270,7 @@ public class Planner {
 
         // group by post process
         
-        if (this.groupBy != null) {
+        if (hasGrouper) {
             maker = new GroupByPostProcesser(maker);
         }
 
@@ -295,9 +289,43 @@ public class Planner {
         return maker;
     }
     
+    private CursorMaker buildGroupBy(CursorMaker maker, Link path) {
+        if (this.groupBy == null) {
+            return maker;
+        }
+        if (this.groupBy.size() == 0) {
+            // group the enter result set. happends when query has aggregation function but no group by clause
+            maker = new ThroughGrouper(maker);
+            return maker;
+        }
+        List<PlannerField> groupKey = getGroupKey(this.groupBy);
+        if (path.isUnique(groupKey)) {
+            // result is unique by the key. no grouping is needed
+            return maker;
+        }
+        maker = new DumbGrouper(maker, this.groupBy, ctx.getNextMakerId());
+        return maker;
+    }
+
+    private List<PlannerField> getGroupKey(List<Operator> expr) {
+        List<PlannerField> result = new ArrayList<>();
+        for (Operator op:expr) {
+            if (!(op instanceof FieldValue)) {
+                return null;
+            }
+            FieldValue fv = (FieldValue)op;
+            result.add(fv.getField());
+        }
+        return result;
+    }
+
     private CursorMaker buildOrderby(CursorMaker maker) {
     	if (this.orderBy == null) {
     		return maker;
+    	}
+    	if (hasImplicitGroupBy(maker)) {
+    	    // skip order by if there is implicit group by clause
+    	    return maker;
     	}
     	if (doesComplyOrder(maker, this.orderBy, this.orderByDirections)) {
     		return maker;
@@ -306,7 +334,16 @@ public class Planner {
         return maker;
 	}
 
-	private boolean doesComplyOrder(RangeScannable maker,List<Operator> orderBy, List<Boolean> direction) {
+    /**
+     * if the query has aggregation functions but no groupby
+     * @param maker
+     * @return
+     */
+	private boolean hasImplicitGroupBy(CursorMaker maker) {
+        return this.groupBy != null && (this.groupBy.size() == 0);
+    }
+
+    private boolean doesComplyOrder(RangeScannable maker,List<Operator> orderBy, List<Boolean> direction) {
 		List<ColumnMeta> order = maker.getOrder();
 		Vector from = maker.getFrom();
 		Vector to = maker.getTo();
@@ -648,7 +685,7 @@ public class Planner {
         // select for update support
         
         if (this.forUpdate) {
-            GTable gtable = this.orca.getHumpback().getTable(node.table.getId());
+            GTable gtable = this.orca.getHumpback().getTable(node.table.getHtableId());
             link.maker = new RecordLocker(link.maker, node.table, gtable);
         }
         
@@ -764,13 +801,13 @@ public class Planner {
 
 	private CursorMaker createFullTextScanner(TableMeta table, IndexMeta index, ColumnFilter filter) {
 		OpMatch match = (OpMatch)filter.operand;
-		if (match.getColumns().size() != index.getRuleColumns().size()) {
+		if (match.getColumns().size() != index.getRuleColumns().length) {
 			return null;
 		}
 		for (FieldValue fv:match.getColumns()) {
 			boolean found = false;
-			for (RuleColumnMeta ruleColumn:index.getRuleColumns()) {
-				if (fv.getField().getColumn().getId() == ruleColumn.getColumnId()) {
+			for (int ruleColumn:index.getRuleColumns()) {
+				if (fv.getField().getColumn().getId() == ruleColumn) {
 					found = true;
 					break;
 				}
@@ -905,7 +942,7 @@ public class Planner {
 			name = addTable(alias, (TableMeta)table, isOuter);
 		}
 		else if (table instanceof CursorMaker) {
-			name = addCursor(alias, (CursorMaker)table);
+			name = addCursor(alias, (CursorMaker)table, isOuter);
 		}
 		else {
 			throw new IllegalArgumentException();

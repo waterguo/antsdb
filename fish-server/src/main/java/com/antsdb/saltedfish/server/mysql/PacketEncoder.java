@@ -63,6 +63,7 @@ public final class PacketEncoder {
     public static final byte[] OK_PACKET = new byte[] { 7, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0 };
     // for a auth OK packet, no need to call back, just out put hard coded bytes
     public static final byte[] AUTH_OK_PACKET = new byte[] { 7, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0 };
+    public static final byte[] SSL_AUTH_OK_PACKET = new byte[] { 7, 0, 0, 3, 0, 0, 0, 2, 0, 0, 0 };
     static final FastDateFormat TIMESTAMP19_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss");
     static final FastDateFormat TIMESTAMP29_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS000000");
     
@@ -624,7 +625,8 @@ public final class PacketEncoder {
     		                              long threadId, 
     		                              int capability, 
     		                              byte charSet, 
-    		                              int status) {
+    		                              int status,
+    		                              String authPlugin) {
         buffer.writeByte(protocolVersion);
         BufferUtils.writeString(buffer, serverVersion);
         BufferUtils.writeUB4(buffer, threadId);
@@ -652,7 +654,7 @@ public final class PacketEncoder {
         if ((capability & MysqlServerHandler.CLIENT_PLUGIN_AUTH) != 0) {
         	// no idea what this means, copied from trace
         	buffer.writeBytes(new byte[] {0x73, 0x68, 0x2f, 0x50, 0x27, 0x6f, 0x7a, 0x38, 0x46, 0x38, 0x26, 0x51, 0x00});
-        	BufferUtils.writeString(buffer, MysqlServerHandler.AUTH_MYSQL_NATIVE);
+        	BufferUtils.writeString(buffer, authPlugin);
         }
     }
 

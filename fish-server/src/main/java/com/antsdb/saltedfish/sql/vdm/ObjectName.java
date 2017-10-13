@@ -15,8 +15,6 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import org.apache.commons.lang.StringUtils;
 
-import com.antsdb.saltedfish.util.UberUtil;
-
 public class ObjectName {
     public String catalog;
     public String schema;
@@ -75,13 +73,13 @@ public class ObjectName {
             return false;
         }
         ObjectName that = (ObjectName)obj;
-        if (!UberUtil.safeEqual(this.catalog, that.catalog)) {
+        if (!StringUtils.equalsIgnoreCase(this.catalog, that.catalog)) {
             return false;
         }
-        if (!UberUtil.safeEqual(this.schema, that.schema)) {
+        if (!StringUtils.equalsIgnoreCase(this.schema, that.schema)) {
             return false;
         }
-        if (!UberUtil.safeEqual(this.table, that.table)) {
+        if (!StringUtils.equalsIgnoreCase(this.table, that.table)) {
             return false;
         }
         return true;

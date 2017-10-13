@@ -57,7 +57,7 @@ public class FishNumber extends Value {
 			return multiply(heap, type2, addr2, type1, addr1);
 		}
 	}
-	private static long multiply(Heap heap, int type2, long addr2, int type1, long addr1) {
+	private static long multiply(Heap heap, int type1, long addr1, int type2, long addr2) {
 		if (type1 == Value.FORMAT_INT4) {
 			int value = Int4.get(heap, addr1);
 			return multiply_int4(heap, value, type2, addr2);
@@ -74,6 +74,12 @@ public class FishNumber extends Value {
 			BigDecimal value = FishDecimal.get(heap, addr1);
 			return multiply_decimal(heap, value, type2, addr2);
 		}
+        else if (type1 == Value.FORMAT_FLOAT4) {
+            return Float8.multiply(heap, addr1, addr2);
+        }
+        else if (type1 == Value.FORMAT_FLOAT8) {
+            return Float8.multiply(heap, addr1, addr2);
+        }
 		else {
 			throw new CodingError();
 		}
@@ -183,6 +189,12 @@ public class FishNumber extends Value {
 			BigDecimal value = FishDecimal.get(heap, addr1);
 			return add_decimal(heap, value, type2, addr2);
 		}
+        else if (type1 == Value.FORMAT_FLOAT4) {
+            return Float8.add(heap, addr1, addr2);
+        }
+        else if (type1 == Value.FORMAT_FLOAT8) {
+            return Float8.add(heap, addr1, addr2);
+        }
 		else {
 			throw new CodingError();
 		}

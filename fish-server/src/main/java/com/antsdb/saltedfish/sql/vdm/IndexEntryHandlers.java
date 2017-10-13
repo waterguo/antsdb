@@ -49,9 +49,9 @@ final class IndexEntryHandlers {
     	}
 	}
 	
-	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout) {
+	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
 		for (IndexEntryHandler i:this.handlers) {
-			i.insert(heap, trx, row, timeout);
+			i.insert(heap, trx, row, timeout, isReplace);
 		}
 	}
 	

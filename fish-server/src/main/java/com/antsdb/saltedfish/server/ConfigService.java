@@ -49,6 +49,29 @@ public class ConfigService {
     	return props.getProperty("fish.auth_plugin");
     }
     
+    public String getKerberosEnable() {
+        String enable = props.getProperty("kerberos.enable");
+        return enable==null? "N" : enable;
+    }
+    
+    public String getAuthEnable() {
+        String enable = props.getProperty("auth.enable");
+        return enable==null? "N" : enable;
+    }
+    
+    public String getSSLKeyFile() {
+        return props.getProperty("ssl.key_file");
+    }
+    
+    // This property should be use for test case com.antsdb.saltedfish.TestCleartext only. 
+    public String getTestPassword() {
+        return props.getProperty("test.password");
+    }
+    
+    public String getSSLPassword() {
+        return props.getProperty("ssl.password");
+    }
+
     public Properties getProperties() {
         return this.props;
     }

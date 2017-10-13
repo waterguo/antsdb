@@ -42,6 +42,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_valuesContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_matchContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_parenthesisContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_selectContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Group_concat_parameterContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_intervalContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
@@ -60,9 +61,11 @@ import com.antsdb.saltedfish.sql.vdm.CurrentTimestamp;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.FuncAbs;
+import com.antsdb.saltedfish.sql.vdm.FuncAvg;
 import com.antsdb.saltedfish.sql.vdm.FuncBase64;
 import com.antsdb.saltedfish.sql.vdm.FuncCast;
 import com.antsdb.saltedfish.sql.vdm.FuncConcat;
+import com.antsdb.saltedfish.sql.vdm.FuncConnectionId;
 import com.antsdb.saltedfish.sql.vdm.FuncCount;
 import com.antsdb.saltedfish.sql.vdm.FuncCurDate;
 import com.antsdb.saltedfish.sql.vdm.FuncCurrentUser;
@@ -75,6 +78,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncElt;
 import com.antsdb.saltedfish.sql.vdm.FuncEmptyClob;
 import com.antsdb.saltedfish.sql.vdm.FuncField;
 import com.antsdb.saltedfish.sql.vdm.FuncFindInSet;
+import com.antsdb.saltedfish.sql.vdm.FuncFromUnixTime;
 import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
 import com.antsdb.saltedfish.sql.vdm.FuncHex;
 import com.antsdb.saltedfish.sql.vdm.FuncLeft;
@@ -86,10 +90,12 @@ import com.antsdb.saltedfish.sql.vdm.FuncMin;
 import com.antsdb.saltedfish.sql.vdm.FuncMonth;
 import com.antsdb.saltedfish.sql.vdm.FuncNow;
 import com.antsdb.saltedfish.sql.vdm.FuncRand;
+import com.antsdb.saltedfish.sql.vdm.FuncRound;
 import com.antsdb.saltedfish.sql.vdm.FuncSubstringIndex;
 import com.antsdb.saltedfish.sql.vdm.FuncSum;
 import com.antsdb.saltedfish.sql.vdm.FuncToTimestamp;
 import com.antsdb.saltedfish.sql.vdm.FuncTrim;
+import com.antsdb.saltedfish.sql.vdm.FuncUnixTimestamp;
 import com.antsdb.saltedfish.sql.vdm.FuncUpper;
 import com.antsdb.saltedfish.sql.vdm.FuncUser;
 import com.antsdb.saltedfish.sql.vdm.FuncVersion;
@@ -105,7 +111,9 @@ import com.antsdb.saltedfish.sql.vdm.OpAddTime;
 import com.antsdb.saltedfish.sql.vdm.OpAnd;
 import com.antsdb.saltedfish.sql.vdm.OpBetween;
 import com.antsdb.saltedfish.sql.vdm.OpBinary;
+import com.antsdb.saltedfish.sql.vdm.OpBitwiseAnd;
 import com.antsdb.saltedfish.sql.vdm.OpConcat;
+import com.antsdb.saltedfish.sql.vdm.OpDivide;
 import com.antsdb.saltedfish.sql.vdm.OpEqual;
 import com.antsdb.saltedfish.sql.vdm.OpEqualNull;
 import com.antsdb.saltedfish.sql.vdm.OpExists;
@@ -119,7 +127,6 @@ import com.antsdb.saltedfish.sql.vdm.OpLess;
 import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
 import com.antsdb.saltedfish.sql.vdm.OpLike;
 import com.antsdb.saltedfish.sql.vdm.OpMatch;
-import com.antsdb.saltedfish.sql.vdm.OpMinusTime;
 import com.antsdb.saltedfish.sql.vdm.OpMultiply;
 import com.antsdb.saltedfish.sql.vdm.OpNegate;
 import com.antsdb.saltedfish.sql.vdm.OpNot;
@@ -144,6 +151,7 @@ public class ExprGenerator {
 		_functionByName.put("concat", FuncConcat.class);
 		_functionByName.put("curdate", FuncCurDate.class);
 		_functionByName.put("current_user", FuncCurrentUser.class);
+        _functionByName.put("connection_id", FuncConnectionId.class);
 		_functionByName.put("database", FuncDatabase.class);
 		_functionByName.put("date_add", FuncDateAdd.class);
 		_functionByName.put("date_format", FuncDateFormat.class);
@@ -152,6 +160,7 @@ public class ExprGenerator {
 		_functionByName.put("empty_clob", FuncEmptyClob.class);
 		_functionByName.put("field", FuncField.class);
 		_functionByName.put("find_in_set", FuncFindInSet.class);
+        _functionByName.put("from_unixtime", FuncFromUnixTime.class);
 		_functionByName.put("hex", FuncHex.class);
 		_functionByName.put("length", FuncLength.class);
 		_functionByName.put("left", FuncLeft.class);
@@ -160,12 +169,14 @@ public class ExprGenerator {
 		_functionByName.put("month", FuncMonth.class);
 		_functionByName.put("now", FuncNow.class);
 		_functionByName.put("rand", FuncRand.class);
+        _functionByName.put("round", FuncRound.class);
 		_functionByName.put("subdate", FuncDateSub.class);
 		_functionByName.put("substring_index", FuncSubstringIndex.class);
 		_functionByName.put("totimestamp", FuncToTimestamp.class);
 		_functionByName.put("to_base64", FuncBase64.class);
 		_functionByName.put("to_timestamp", FuncToTimestamp.class);
 		_functionByName.put("trim", FuncTrim.class);
+        _functionByName.put("unix_timestamp", FuncUnixTimestamp.class);
 		_functionByName.put("user", FuncUser.class);
 		_functionByName.put("upper", FuncUpper.class);
 		_functionByName.put("user", FuncUser.class);
@@ -235,7 +246,7 @@ public class ExprGenerator {
                 Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
                 if ((left instanceof OpInterval) || (right instanceof OpInterval)) {
-                    return new OpMinusTime(left, right);
+                    return new OpAddTime(left, new OpNegate(right));
                 }
                 else {
                     return new OpAdd(left, new OpNegate(right));
@@ -245,6 +256,11 @@ public class ExprGenerator {
                 Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
                 return new OpMultiply(left, right);
+            }
+            else if ("/".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpDivide(left, right);
             }
             else if (">".equals(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
@@ -276,6 +292,11 @@ public class ExprGenerator {
                 Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
                 return new OpNot(new OpEqual(left, right));
             }
+            else if ("&".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                return new OpBitwiseAnd(left, right);
+            }
             else if ("like".equalsIgnoreCase(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
@@ -291,7 +312,7 @@ public class ExprGenerator {
                 Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
                 return new OpAnd(left, right);
             }
-            else if ("||".equalsIgnoreCase(op)) {
+            else if ("||".equals(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
                 return new OpConcat(left, right);
@@ -448,6 +469,7 @@ public class ExprGenerator {
     }
     
     private static Operator gen_match(GeneratorContext ctx, Planner planner, Expr_matchContext rule) {
+        boolean isBooleanMode = rule.K_BOOLEAN() != null;
         List<FieldValue> columns = new ArrayList<>();
         rule.column_name_().forEach( (it) -> {
         	Operator op = genColumnValue(ctx, planner, it);
@@ -460,7 +482,7 @@ public class ExprGenerator {
 			throw new OrcaException("column reference is missing");
 		}
         Operator against = gen(ctx, planner, rule.expr());
-		return new OpMatch(columns, against);
+		return new OpMatch(columns, against, isBooleanMode);
 	}
 
 	private static Operator gen_cast(GeneratorContext ctx, Planner cursorMeta, Expr_castContext rule) {
@@ -519,11 +541,18 @@ public class ExprGenerator {
 	            Operator expr = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
 	            func = new FuncSum(ctx.allocVariable(), expr);
 	        }
+            else if (name.equalsIgnoreCase("avg")) {
+                if (rule.expr_function_parameters() == null) {
+                    throw new OrcaException("count takes one and only one input parameter");
+                }
+                if (rule.expr_function_parameters().expr().size() != 1) {
+                    throw new OrcaException("count takes one and only one input parameter");
+                }
+                Operator expr = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
+                func = new FuncAvg(ctx.allocVariable(), expr);
+            }
 	        else if (name.equalsIgnoreCase("GROUP_CONCAT")) {
-	            if (rule.expr_function_parameters().expr().size() != 1) {
-	                throw new OrcaException("GROUP_CONCAT requires one input parameter");
-	            }
-	            func = new FuncGroupConcat(ctx.allocVariable());
+	            func = genGroupConcat(ctx, rule);
 	        }
 	        else {
 	            throw new NotImplementedException("function: " + name);
@@ -534,12 +563,29 @@ public class ExprGenerator {
                 func.addParameter(ExprGenerator.gen(ctx, cursorMeta, i));
             }
         }
+        if (rule.group_concat_parameter() != null) {
+            Group_concat_parameterContext params = rule.group_concat_parameter();
+            Operator col = genColumnValue(ctx, cursorMeta, params.column_name_());
+            Operator separator = genLiteralValue(ctx, cursorMeta, params.literal_value());
+            func.addParameter(col);
+            func.addParameter(separator);
+        }
         if ((func.getMinParameters() >= 0) && (func.getChildren().size() < func.getMinParameters())) {
         	throw new OrcaException("{}() requires at least {} parameters", name, func.getMinParameters());
         }
         if ((func.getMaxParameters() >= 0) && (func.getChildren().size() > func.getMaxParameters())) {
         	throw new OrcaException("{}() cannot take more than {} parameters", name, func.getMaxParameters());
         }
+        return func;
+    }
+
+    private static Function genGroupConcat(GeneratorContext ctx, Expr_functionContext rule) {
+        if (rule.expr_function_parameters() != null) {
+            if (rule.expr_function_parameters().expr().size() != 1) {
+                throw new OrcaException("GROUP_CONCAT requires one input parameter");
+            }
+        }
+        FuncGroupConcat func = new FuncGroupConcat(ctx.allocVariable());
         return func;
     }
 

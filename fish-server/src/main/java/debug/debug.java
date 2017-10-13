@@ -13,9 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package debug;
 
+import java.sql.Timestamp;
+
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.FishTimestamp;
 import com.antsdb.saltedfish.cpp.FishUtf8;
+import com.antsdb.saltedfish.cpp.Int4Array;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.vdm.Record;
 
 /**
@@ -24,6 +29,9 @@ import com.antsdb.saltedfish.sql.vdm.Record;
  */
 public class debug {
 	public static String dump(long p) {
+	    if (p <= 0x10) {
+	        return "illegal memory address: " + p;
+	    }
 		byte type = Value.getFormat(null, p);
 		if (type == Value.FORMAT_RECORD) {
 			return Record.dump(p);
@@ -32,6 +40,17 @@ public class debug {
 			String s = FishUtf8.get(p);
 			return s;
 		}
+        else if (type == Value.FORMAT_ROW) {
+            String s = Row.fromMemoryPointer(p, Row.getVersion(p)).toString();
+            return s;
+        }
+        else if (type == Value.FORMAT_TIMESTAMP) {
+            Timestamp val = FishTimestamp.get(null, p);
+            return val.toString();
+        }
+        else if (type == Value.FORMAT_INT4_ARRAY) {
+            return "[" + Integer.toHexString(Value.FORMAT_INT4_ARRAY & 0xff) + "]" + new Int4Array(p).toString();
+        }
 		return FishObject.debug(p);
 	}
 }

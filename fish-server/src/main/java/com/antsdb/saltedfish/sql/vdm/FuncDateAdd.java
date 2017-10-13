@@ -25,28 +25,21 @@ import com.antsdb.saltedfish.sql.DataType;
 public class FuncDateAdd extends Function {
 	static final long MILLIS_IN_A_DAY = 24 * 60 * 60 * 1000l;
 
-	@Override
+    @Override
 	public int getMinParameters() {
 		return 2;
 	}
 
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long pX = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-        if (pX == 0) {
-        	return 0;
+        long px = this.parameters.get(0).eval(ctx, heap, params, pRecord);
+        long py = this.parameters.get(1).eval(ctx, heap, params, pRecord);
+        if (Value.getType(heap, py) == Value.TYPE_NUMBER) {
+            // default is days without unit of time measurement suffix
+            long y = AutoCaster.getLong(py);
+            py = FishTimestamp.allocSet(heap, y * MILLIS_IN_A_DAY);
         }
-        long pY = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-        if (pY == 0) {
-        	return 0;
-        }
-        if (Value.getType(heap, pY) == Value.TYPE_NUMBER) {
-        	// default is days without unit of time measurement suffix
-        	long y = AutoCaster.getLong(pY);
-        	pY = FishTimestamp.allocSet(heap, y * MILLIS_IN_A_DAY);
-        }
-        long addrResult = AutoCaster.plus(heap, pX, pY);
-        return addrResult;
+        return AutoCaster.addTime(heap, px, py);
 	}
 
 	@Override

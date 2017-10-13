@@ -19,12 +19,40 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.antsdb.saltedfish.util.CursorUtil;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class DumbGrouper extends CursorMaker {
+    static final long GROUP_END = Record.GROUP_END;
     CursorMaker upstream;
     List<Operator> exprs;
+    
+    private static class MyCursor extends Cursor {
+        private List<Long> items;
+        private Cursor upstream;
+        int i=0;
+
+        public MyCursor(Cursor upstream, List<Long> items) {
+            super(upstream.getMetadata());
+            this.items = items;
+            this.upstream = upstream;
+        }
+
+        @Override
+        public long next() {
+            if (i >= this.items.size()) {
+                return 0;
+            }
+            long pResult = items.get(this.i);
+            this.i++;
+            return pResult;
+        }
+
+        @Override
+        public void close() {
+            this.upstream.close();
+        }
+        
+    }
     
     static class GroupKey {
         List<Object> values = new ArrayList<Object>();
@@ -79,54 +107,48 @@ public class DumbGrouper extends CursorMaker {
         // fetch all rows in memory and group them by group key
         
     	AtomicLong counter = ctx.getCursorStats(makerId);
-        Map<GroupKey, List<Record>> recordsByGroupKey = new LinkedHashMap<DumbGrouper.GroupKey, List<Record>>();
-        try (Cursor c = this.upstream.make(ctx, params, pMaster)) {
-            for (;;) {
-                long pRec = c.next();
-                if (pRec == 0) {
-                    break;
-                }
-                counter.incrementAndGet();
-                GroupKey key = new GroupKey();
-                if (this.exprs != null) { 
-                    for (Operator i:this.exprs) {
-                        Object val = Util.eval(ctx, i, params, pRec);
-                        key.values.add(val);
-                    }
-                }
-                List<Record> list = recordsByGroupKey.get(key);
-                if (list == null) {
-                    list = new ArrayList<Record>();
-                    recordsByGroupKey.put(key, list);
-                }
-                Record rec = Record.toRecord(pRec);
-                list.add(rec);
+        Map<GroupKey, List<Long>> recordsByGroupKey = new LinkedHashMap<DumbGrouper.GroupKey, List<Long>>();
+        Cursor c = this.upstream.make(ctx, params, pMaster);
+        c = new RecordBuffer(c);
+        for (;;) {
+            long pRec = c.next();
+            if (pRec == 0) {
+                break;
             }
+            counter.incrementAndGet();
+            GroupKey key = new GroupKey();
+            if (this.exprs != null) { 
+                for (Operator i:this.exprs) {
+                    Object val = Util.eval(ctx, i, params, pRec);
+                    key.values.add(val);
+                }
+            }
+            List<Long> list = recordsByGroupKey.get(key);
+            if (list == null) {
+                list = new ArrayList<Long>();
+                recordsByGroupKey.put(key, list);
+            }
+            list.add(pRec);
         }
         
         // store the grouped records in list
         
-        List<Record> result = new ArrayList<Record>();
-        for (List<Record> i:recordsByGroupKey.values()) {
-            for (Record j:i) {
-                result.add(j);
-            }
-            result.add(Marker.GROUP_END);
+        List<Long> records = new ArrayList<Long>();
+        for (List<Long> i:recordsByGroupKey.values()) {
+            records.addAll(i);
+            records.add(GROUP_END);
         }
 
         // prevent empty result. there are cases like select count(*) from empty_table
         
-        if (result.size() == 0 && (this.exprs.size() == 0)) {
-            result.add(Marker.GROUP_END);
+        if (records.size() == 0 && (this.exprs.size() == 0)) {
+            records.add(GROUP_END);
         }
         
         // done convert the list to the cursor
         
-        Cursor c = CursorUtil.toCursor(this.getCursorMeta(), result);
-
-        // 
-
-        return c;
+        Cursor result = new MyCursor(c, records);
+        return result;
     }
 
     @Override

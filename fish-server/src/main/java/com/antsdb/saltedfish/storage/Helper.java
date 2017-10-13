@@ -32,40 +32,51 @@ import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.io.compress.Compression.Algorithm;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
+import com.antsdb.saltedfish.cpp.FastDecimal;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.Int4Array;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
-import com.antsdb.saltedfish.nosql.MutableRow;
+import com.antsdb.saltedfish.nosql.IndexLine;
+import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.VaporizingRow;
+import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * hbase helper functions but in a more user friendly way
  *  
  * @author wgu0
  */
-public final class Helper {
-
+final class Helper {
+    final static Logger _log = UberUtil.getThisLogger();
+    
 	private static final byte[] EMPTY = new byte[0];
 
     public static final String SYS_COLUMN_FAMILY 	= "s";			// all system information columns use "s" as column family
     public static final String DATA_COLUMN_FAMILY 	= "d";         	// all data columns use same column family - "d"
 
-    public static final String SYS_COLUMN_KEYPREFIX 	= "k";      // key id (first 4 bytes) of "Key" in antsdb
+    public static final String SYS_COLUMN_KEYPREFIX = "k";      // key id (first 4 bytes) of "Key" in antsdb
     public static final String SYS_COLUMN_DATATYPE 	= "t";			// array of bytes to store data type for each column
     public static final String SYS_COLUMN_VERSION 	= "v";			// version of row in antsdb
     public static final String SYS_COLUMN_INDEXKEY 	= "i";         	// index key column name
-    public static final String SYS_COLUMN_SIZE       = "s";         // size in bytes
+    public static final String SYS_COLUMN_MISC      = "m";          // misc
+    public static final String SYS_COLUMN_SIZE      = "s";         // size in bytes
+    public static final String SYS_COLUMN_HASH      = "h";
     
     public static final byte[] SYS_COLUMN_FAMILY_BYTES = Bytes.toBytes(SYS_COLUMN_FAMILY);
     public static final byte[] DATA_COLUMN_FAMILY_BYTES = Bytes.toBytes(DATA_COLUMN_FAMILY);    
@@ -73,7 +84,9 @@ public final class Helper {
     public static final byte[] SYS_COLUMN_DATATYPE_BYTES = Bytes.toBytes(SYS_COLUMN_DATATYPE);    
     public static final byte[] SYS_COLUMN_VERSION_BYTES = Bytes.toBytes(SYS_COLUMN_VERSION);
     public static final byte[] SYS_COLUMN_INDEXKEY_BYTES = Bytes.toBytes(SYS_COLUMN_INDEXKEY);    
+    public static final byte[] SYS_COLUMN_MISC_BYTES = Bytes.toBytes(SYS_COLUMN_MISC);    
     public static final byte[] SYS_COLUMN_SIZE_BYTES = Bytes.toBytes(SYS_COLUMN_SIZE);
+    public static final byte[] SYS_COLUMN_HASH_BYTES = Bytes.toBytes(SYS_COLUMN_HASH);
 
     public static Map<String, byte[]> toMap(Result r) {
 		Map<String, byte[]> row = new HashMap<>();
@@ -89,6 +102,39 @@ public final class Helper {
 		}
 		return row;
 	}
+
+    public static Put toPut(Mapping mapping, Row row) {
+        byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
+        Put put = new Put(key);
+        put.addColumn(SYS_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(row.getLength()));
+        put.addColumn(SYS_COLUMN_FAMILY_BYTES, SYS_COLUMN_HASH_BYTES, Bytes.toBytes(row.getHash()));
+        
+        // populate fields
+        
+        int maxColumnId = row.getMaxColumnId();
+        byte[] types = new byte[maxColumnId+1];
+        for (int i=0; i<=maxColumnId; i++) {
+            long pValue = row.getFieldAddress(i); 
+            types[i] = Helper.getType(pValue);
+            byte[] value = Helper.toBytes(pValue);
+            put.addColumn(mapping.getUserFamily(), mapping.getColumn(i), value);
+        }
+
+        // populate data types
+        put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, types);
+        return put;
+    }
+    
+    public static Put toPut(IndexLine line) {
+        byte[] key = Helper.antsKeyToHBase(line.getKey());
+        byte[] rowKey = Helper.antsKeyToHBase(line.getRowKey());
+        byte[] misc = new byte[1];
+        misc[0] = line.getMisc();
+        Put put = new Put(key);
+        put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, rowKey);
+        put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_MISC_BYTES, misc);
+        return put;
+    }
 
 	public static String getKeyName(byte[] key) {
 		if ((key.length == 2) && (key[0] < 0x30)) {
@@ -170,20 +216,24 @@ public final class Helper {
         } catch (NamespaceNotFoundException ex) {
             return false;
         } catch (Exception ex) {
-            throw new OrcaHBaseException("Failed to check existence of namespace - " + nameSpace);
+            throw new OrcaHBaseException(ex);
         }
     }
 
-	public static boolean existsTable(Connection conn, String ns, String name) {
+    public static boolean existsTable(Connection conn, TableName name) {
         try (Admin admin = conn.getAdmin()) {
-        	return admin.tableExists(TableName.valueOf(ns, name));            
+            return admin.isTableAvailable(name);            
         } 
         catch (TableNotFoundException ex) {
             return false;
         } 
         catch (Exception ex) {
-            throw new OrcaHBaseException("Failed to check existence of table - " + ns);
+            throw new OrcaHBaseException(ex, "Failed to check existence of table {}.{}", name);
         }
+    }
+    
+	public static boolean existsTable(Connection conn, String ns, String name) {
+    	return existsTable(conn, TableName.valueOf(ns, name));            
 	}
 
     public static void createNamespace(Connection connection, String namespace) {        
@@ -191,8 +241,10 @@ public final class Helper {
         if (!Helper.existsNamespace(connection, namespace)) {
             try (Admin admin = connection.getAdmin()) {
                 NamespaceDescriptor nsDescriptor = NamespaceDescriptor.create(namespace).build();
+                _log.debug("creating namespace {}", namespace);
                 admin.createNamespace(nsDescriptor);
-            } catch(Exception ex) {
+            } 
+            catch(Exception ex) {
                 throw new OrcaHBaseException("Failed to create namespace - " + namespace, ex);
             }
         }
@@ -205,11 +257,14 @@ public final class Helper {
         // Check whether namespace exists
         if (Helper.existsNamespace(connection, namespace)) {
 	        try (Admin admin = connection.getAdmin()) { 
+                _log.debug("dropping namespace {}", namespace);
 	            admin.deleteNamespace(namespace);
-	        } catch(Exception ex) {
+	        } 
+	        catch(Exception ex) {
 	            throw new OrcaHBaseException("Failed to drop namespace - " + namespace, ex);
 	        }
-        } else {
+        } 
+        else {
             // throw new HumpbackException("Namespace not found - " + namespace);
         }
     }
@@ -227,6 +282,7 @@ public final class Helper {
                 HTableDescriptor table = new HTableDescriptor(TableName.valueOf(namespace, tableName));
                 table.addFamily(new HColumnDescriptor(SYS_COLUMN_FAMILY));
                 table.addFamily(new HColumnDescriptor(DATA_COLUMN_FAMILY));
+                _log.debug("creating table {}", table.toString());
                 admin.createTable(table);
 			} catch (Exception ex) {
 				throw new OrcaHBaseException("Failed to create table - " + tableName, ex);
@@ -234,23 +290,26 @@ public final class Helper {
     	}
     }
 
-    public static void createTable(Connection connection, String namespace, String tableName,
-    								Algorithm compressionType) {
-    	
+    public static void createTable(Connection conn, String namespace, String tableName, Algorithm compressionType) {
 		// Check whether table already exists
-    	if (!Helper.existsTable(connection, namespace, tableName)) {
+        if (Helper.existsTable(conn, namespace, tableName)) {
+            Helper.dropTable(conn, namespace, tableName);
+        }
+    	if (!Helper.existsTable(conn, namespace, tableName)) {
     		
         	// Create namespace first
-        	createNamespace(connection, namespace);
+        	createNamespace(conn, namespace);
         
         	// Create table
-        	try (Admin admin = connection.getAdmin()) {
+        	try (Admin admin = conn.getAdmin()) {
                 HTableDescriptor table = new HTableDescriptor(TableName.valueOf(namespace, tableName));
                 table.addFamily(new HColumnDescriptor(SYS_COLUMN_FAMILY).setCompressionType(compressionType));
                 table.addFamily(new HColumnDescriptor(DATA_COLUMN_FAMILY).setCompressionType(compressionType));
+                _log.debug("creating table {}", table.toString());
                 admin.createTable(table);
-			} catch (Exception ex) {
-				throw new OrcaHBaseException("Failed to create table - " + tableName, ex);
+			} 
+        	catch (Exception ex) {
+				throw new OrcaHBaseException(ex, "Failed to create table - " + tableName);
 			}
     	}
     }
@@ -262,10 +321,12 @@ public final class Helper {
         	TableName table = TableName.valueOf(namespace, tableName);
     		if (admin.tableExists(table)) {
 	            // Drop table
+    		    _log.debug("dropping table {}", table.toString());
 	            admin.disableTable(table);
 	            admin.deleteTable(table);
     		}
-        } catch (Exception ex) {
+        } 
+    	catch (Exception ex) {
             throw new OrcaHBaseException("Failed to drop table - " + tableName, ex);
         }
     }
@@ -324,7 +385,7 @@ public final class Helper {
 		return version;
 	}
 
-	public static long toRow(Heap heap, Result r, TableMeta table) {
+	public static long toRow(Heap heap, Result r, TableMeta table, int tableId) {
 		if (r.isEmpty()) {
 			return 0;
 		}
@@ -334,14 +395,12 @@ public final class Helper {
 	    NavigableMap<byte[], byte[]> sysFamilyMap = r.getFamilyMap(SYS_COLUMN_FAMILY_BYTES);
 	    NavigableMap<byte[], byte[]> dataFamilyMap = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
 	    byte[] colDataType = sysFamilyMap.get(SYS_COLUMN_DATATYPE_BYTES);
-	    byte[] versionBytes = sysFamilyMap.get(SYS_COLUMN_VERSION_BYTES);
 	    byte[] sizeBytes = sysFamilyMap.get(SYS_COLUMN_SIZE_BYTES);
-	    long version = Bytes.toLong(versionBytes);
 	    int size = Bytes.toInt(sizeBytes);
 	    
 	    // populate the row. system table doesn't come with metadata
 	    
-		MutableRow row = null;
+		VaporizingRow row = null;
 	    if (table != null) {
 	    	row = populateUsingMetadata(heap, table, dataFamilyMap, colDataType, size);
 	    }
@@ -350,8 +409,8 @@ public final class Helper {
 	    }
 		byte[] key = hbaseKeyToAnts(r.getRow());
 		row.setKey(key);
-		row.setVersion(version);
-    	return row.getAddress();
+    	long pRow = Row.from(heap, row);
+    	return pRow;
 	}
 
 	public static byte[] hbaseKeyToAnts(byte[] bytes) {
@@ -359,39 +418,41 @@ public final class Helper {
 		return bytes;
 	}
 
-	private static MutableRow populateDirect(
+	private static VaporizingRow populateDirect(
 			Heap heap, 
 			NavigableMap<byte[], 
 			byte[]> data, 
 			byte[] types,
 			int size) {
-		MutableRow row = null;
-		/*
-		MutableRow row = new MutableRow(heap, types.length, size, types.length);
+	    VaporizingRow row = new VaporizingRow(heap, types.length-1);
 		for (Map.Entry<byte[], byte[]> i:data.entrySet()) {
 			byte[] key = i.getKey();
 			int column = key[0] << 8 | key[1];
 			if (types[column] == Value.FORMAT_NULL) {
 				continue;
 			}
-        	row.set(column, types[column], i.getValue());
+			long pValue = toMemory(heap, types[column], i.getValue());
+        	row.setFieldAddress(column, pValue);
 		}
-		*/
 		return row;
 	}
 
-	private static MutableRow populateUsingMetadata(
+	private static VaporizingRow populateUsingMetadata(
 			Heap heap, 
 			TableMeta table, 
 			NavigableMap<byte[], byte[]> data, 
 			byte[] types,
 			int size) {
-		MutableRow row = null;
-		/*
-		 MutableRow row = new MutableRow(heap, types.length, size, table.getMaxColumnId());
-		row.setTableId(table.getId());
-		row.set(0, Value.FORMAT_INT8, data.get(ROWID_COLUMN));
-        for (int i=1; i<=table.getMaxColumnId(); i++) {
+	    VaporizingRow row = new VaporizingRow(heap, table.getMaxColumnId());
+        for (int i=0; i<=table.getMaxColumnId(); i++) {
+            if (i == 0) {
+                // rowid
+                byte[] colRowid = Bytes.toBytes((short)0);
+                byte[] colValueBytes = data.get(colRowid);
+                long pValue = toMemory(heap, Value.FORMAT_INT8, colValueBytes);
+                row.setFieldAddress(i, pValue);
+                continue;
+            }
             ColumnMeta colMeta;
         	colMeta = table.getColumnByColumnId(i);
             // skip invalid column - not found column meta
@@ -407,12 +468,9 @@ public final class Helper {
             String colName = colMeta.getColumnName();
             byte[] colNameBytes = Bytes.toBytes(colName);
             byte[] colValueBytes = data.get(colNameBytes);
-
-            if (colValueBytes != null) {
-            	row.set(i, types[i], colValueBytes);
-            }
+            long pValue = toMemory(heap, types[i], colValueBytes);
+            row.setFieldAddress(i, pValue);
         }
-		 */
         return row;
 	}
 
@@ -423,6 +481,77 @@ public final class Helper {
 		return Value.getFormat(null, pValue);
 	}
 
+	private static long putBytesReversed(Heap heap, int type, byte[] value) {
+        long p = heap.alloc(value.length + 1);
+        Unsafe.putByte(p, (byte)type);
+	    for (int i=0; i<value.length; i++) {
+	        Unsafe.putByte(p+1+i, value[value.length-i-1]);
+	    }
+	    return p;
+	}
+	
+    public static long toMemory(Heap heap, int type, byte[] value) {
+        if (value == null) {
+            return 0;
+        }
+        long pValue;
+        if (type == Value.FORMAT_INT4) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_INT8) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_NULL) {
+            return 0;
+        }
+        else if (type == Value.FORMAT_BOOL) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_FLOAT4) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_FLOAT8) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_DATE) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_TIMESTAMP) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_TIME) {
+            pValue = putBytesReversed(heap, type, value);
+        }
+        else if (type == Value.FORMAT_DECIMAL) {
+            BigDecimal bd = Bytes.toBigDecimal(value);
+            return FishObject.allocSet(heap, bd);
+        }
+        else if (type == Value.FORMAT_FAST_DECIMAL) {
+            BigDecimal bd = Bytes.toBigDecimal(value);
+            pValue = FastDecimal.allocSet(heap, bd);
+        }
+        else if (type == Value.FORMAT_UTF8) {
+            pValue = heap.alloc(value.length + FishUtf8.HEADER_SIZE);
+            Unsafe.putByte(pValue, (byte)type);
+            Unsafe.putInt3(pValue+1, value.length);
+            Unsafe.putBytes(pValue+FishUtf8.HEADER_SIZE, value);
+        }
+        else if (type == Value.FORMAT_UNICODE16) {
+            String s = Bytes.toString(value);
+            pValue = Unicode16.allocSet(heap, s);
+        }
+        else if (type == Value.FORMAT_BYTES) {
+            pValue = com.antsdb.saltedfish.cpp.Bytes.allocSet(heap, value);
+        }
+        else if (type == Value.FORMAT_INT4_ARRAY) {
+            pValue = Int4Array.alloc(heap, value).getAddress();
+        }
+        else {
+            throw new IllegalArgumentException(String.valueOf(type));
+        }
+        return pValue;
+    }
+    
 	public static byte[] toBytes(long pValue) {
 		if (pValue == 0) {
 			return EMPTY;
@@ -480,6 +609,9 @@ public final class Helper {
 			needInverse = false;
 			length = Unsafe.getInt3(pValue + 1);
 			offset = 4;
+		}
+		else if (dataType == Value.FORMAT_INT4_ARRAY) {
+		    return new Int4Array(pValue).toBytes();
 		}
 		else {
 			throw new IllegalArgumentException(String.valueOf(dataType));

@@ -23,7 +23,7 @@ import com.antsdb.saltedfish.sql.Orca;
 public class ForeignKeyMeta extends RuleMeta<ForeignKeyMeta> {
 
 	public ForeignKeyMeta(Orca orca, TableMeta table) {
-		super(orca, Rule.ForeignKey);
+		super(orca, Rule.ForeignKey, table.getId());
 		setTableId(table.getId());
 	}
 
@@ -39,12 +39,10 @@ public class ForeignKeyMeta extends RuleMeta<ForeignKeyMeta> {
         row.set(ColumnId.sysrule_parent_table_id.getId(), tableId);
 	}
 	
-    public ForeignKeyMeta addColumn(Orca orca, ColumnMeta column) {
-        int key = (int)orca.getIdentityService().getSequentialId(RULE_COL_SEQUENCE);
-        RuleColumnMeta ruleColumn = new RuleColumnMeta(key);
-        ruleColumn.setRuleId(this.getId());
-        ruleColumn.setColumnId(column.getId());
-        this.ruleColumns.add(ruleColumn);
-        return this;
+    @Override
+    public ForeignKeyMeta clone() {
+        ForeignKeyMeta result = new ForeignKeyMeta(this.row.clone());
+        return result;
     }
+
 }

@@ -41,7 +41,6 @@ public class CursorIndexRangeScan extends CursorMaker {
 		long[] values;
 		RowIterator iter;
 		boolean isClosed = false;
-		private SpaceManager memman;
 		private AtomicLong counter;
 		GTable gtable;
 		Transaction trx;
@@ -54,7 +53,6 @@ public class CursorIndexRangeScan extends CursorMaker {
 				Transaction trx, 
 				AtomicLong counter) {
 			super(CursorIndexRangeScan.this);
-			this.memman = memman;
 			this.gtable = gtable;
 			this.gindex = gindex;
 			this.trx = trx;
@@ -90,8 +88,7 @@ public class CursorIndexRangeScan extends CursorMaker {
 		        if (pRowKey == 0) {
 		            continue;
 		        }
-		        long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
-		        Row row = Row.fromSpacePointer(this.memman, pRow, 0);
+		        Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
 		        Record.setKey(pRecord, row.getKeyAddress());
 		        for (int i=0; i<this.meta.getColumnCount(); i++) {
 		        	long pValue = row.getFieldAddress(CursorIndexRangeScan.this.mapping[i]);
@@ -155,7 +152,7 @@ public class CursorIndexRangeScan extends CursorMaker {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
-        GTable gtable = ctx.getHumpback().getTable(table.getId());
+        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         Transaction trx = ctx.getTransaction();
     	MyCursor c = new MyCursor(
     			ctx.getSpaceManager(), 

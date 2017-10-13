@@ -35,9 +35,11 @@ public final class TrxMan {
     AtomicLong trxid = new AtomicLong(IdGenerator.getId());
     AtomicLong version = new AtomicLong(trxid.get());
 	private boolean isClosed;
-	private long oldest = -10; 
+	private long oldest = -10;
+    private SpaceManager sm; 
     
-	public TrxMan() {
+	public TrxMan(SpaceManager sm) {
+	    this.sm = sm;
 	}
 	
     /**
@@ -80,6 +82,10 @@ public final class TrxMan {
         this.trx.put(trxid, (long)-1);
     }
 
+    public long getCurrentSp() {
+        return this.sm.getAllocationPointer();
+    }
+    
     public long getNewTrxId() {
     	if (this.isClosed) {
     		throw new CodingError();
@@ -128,13 +134,20 @@ public final class TrxMan {
 		if (trxid > this.oldest) {
 			return;
 		}
-		_log.trace("freeing transactions to {} ...", trxid);
 		Iterator<Map.Entry<Long, Long>> i = this.trx.entrySet().iterator();
+		int count = 0;
 		for (;i.hasNext();) {
 			Map.Entry<Long, Long> ii = i.next();
 			if (ii.getKey() >= trxid) {
 				i.remove();
+				count++;
 			}
+		}
+		if (count > 0) {
+	        _log.debug("{} transactions freed. transaction window reset to {} ...", count, trxid);
+		}
+		else {
+            _log.trace("transaction window reset to {} ...", trxid);
 		}
 		this.oldest = trxid - 1;
 	}

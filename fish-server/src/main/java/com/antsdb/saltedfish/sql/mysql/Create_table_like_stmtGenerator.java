@@ -56,6 +56,7 @@ public class Create_table_like_stmtGenerator extends Generator<Create_table_like
 		createPrimaryKey(ctx, flow, table, name);
 		createIndexes(ctx, flow, table, name);
         flow.add(new SyncTableSequence(name, Collections.emptyMap()));
+        flow.add(new CreateDelayedForeignKey(name));
 	}
 
 	private void createColumns(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {

@@ -40,7 +40,8 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
     throws OrcaException {
         ObjectName name = TableName.parse(ctx, rule.table_name_());
         if (rule.insert_stmt_values() != null) {
-        	Instruction step = gen(ctx, name, rule.insert_stmt_values(), rule.K_IGNORE() != null);
+            boolean isReplace = rule.K_REPLACE() != null;
+        	Instruction step = gen(ctx, name, rule.insert_stmt_values(), isReplace, rule.K_IGNORE() != null);
             return step;
         }
         else if (rule.insert_stmt_select() != null) {
@@ -55,6 +56,7 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
     		GeneratorContext ctx, 
     		ObjectName tableName, 
     		Insert_stmt_valuesContext rule, 
+    		boolean isReplace,
     		boolean ignoreError) {
         // collect column names
         
@@ -129,6 +131,7 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
         
         GTable gtable = ctx.getGtable(tableName);
         InsertSingleRow insert = new InsertSingleRow(ctx.getOrca(), table, gtable, fields, rows);
+        insert.setReplace(isReplace);
         insert.setIgnoreError(ignoreError);
         return insert;
     }

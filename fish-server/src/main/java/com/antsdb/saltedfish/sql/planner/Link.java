@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorPrimaryKeySeek;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.Filter;
+import com.antsdb.saltedfish.sql.vdm.FullTextIndexMergeScan;
 import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.IndexSeek;
 import com.antsdb.saltedfish.sql.vdm.Operator;
@@ -124,6 +125,9 @@ class Link {
         else if (maker instanceof Union) {
         	return getScore(((Union)maker).getLeft()) + getScore(((Union)maker).getRight());
         }
+        else if (maker instanceof FullTextIndexMergeScan) {
+            score = 1.1f;
+        }
         else {
         	throw new CodingError();
         }
@@ -146,4 +150,14 @@ class Link {
 		}
 		return values != null ? values.size() : 0;
 	}
+
+    public boolean isUnique(List<PlannerField> key) {
+        if (key == null) {
+            return false;
+        }
+        if (this.previous != null) {
+            return this.previous.isUnique(key); 
+        }
+        return this.to.isUnique(key);
+    }
 }

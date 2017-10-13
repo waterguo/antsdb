@@ -28,6 +28,9 @@ import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
 import com.antsdb.saltedfish.sql.FishCommandLine;
 
 /**
@@ -42,7 +45,7 @@ public class Validator extends FishCommandLine {
 	private long startTime;
 	private long endTime;
 	private boolean doesValidateReplay = false;
-	private HumpbackReadOnly humpback;
+	private Humpback humpback;
 	private SpaceManager spaceman;
 	private long errors = 0;
 
@@ -54,6 +57,11 @@ public class Validator extends FishCommandLine {
 		super(args);
 	}
 	
+    @Override
+    protected String getName() {
+        return "validator";
+    }
+    
 	protected Options getOptions() {
 		Options options = new Options();
 		options.addOption("h", "help", false, "print help");
@@ -109,14 +117,14 @@ public class Validator extends FishCommandLine {
 	 * @throws IOException 
 	 */
 	private void validateTablets() throws Exception {
-		for (GTableReadOnly table:this.humpback.getTables()) {
-			for (MemTabletReadOnly tablet:table.getMemTable().getTabletsReadOnly()) {
+		for (GTable table:this.humpback.getTables()) {
+			for (MemTablet tablet:table.getMemTable().getTabletsReadOnly()) {
 				validateTablet(tablet);
 			}
 		}
 	}
 
-	private boolean validateTablet(MemTabletReadOnly tablet) throws Exception {
+	private boolean validateTablet(MemTablet tablet) throws Exception {
 		Set<Long> positions = new HashSet<>();
 		println(tablet.getFile().toString());
 		FishSkipList skip = tablet.getSkipList();
@@ -184,9 +192,19 @@ public class Validator extends FishCommandLine {
 		gobbler.replay(SpaceManager.HEADER_SIZE, true, new ReplayHandler(){
 
 			@Override
-			public void put(Gobbler.PutEntry entry) {
-				positions.remove(entry.getSpacePointer());
-			}
+            public void insert(InsertEntry entry) throws Exception {
+                positions.remove(entry.getSpacePointer());
+            }
+
+            @Override
+            public void update(UpdateEntry entry) throws Exception {
+                positions.remove(entry.getSpacePointer());
+            }
+
+            @Override
+            public void put(PutEntry entry) throws Exception {
+                positions.remove(entry.getSpacePointer());
+            }
 
 			@Override
 			public void index(IndexEntry entry) {

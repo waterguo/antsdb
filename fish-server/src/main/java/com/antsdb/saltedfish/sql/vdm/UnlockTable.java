@@ -22,6 +22,7 @@ public class UnlockTable extends Statement {
 	@Override
 	public Object run(VdmContext ctx, Parameters params) {
 		ctx.getSession().unlockAll();
+		ctx.getSession().setImportMode(false);
 		return null;
 	}
 }

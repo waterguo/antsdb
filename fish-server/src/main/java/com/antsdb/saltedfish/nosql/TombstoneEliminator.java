@@ -79,11 +79,6 @@ class TombstoneEliminator implements RowIterator {
 	}
 
 	@Override
-	public boolean isRow() {
-		return this.upstream.isRow();
-	}
-
-	@Override
 	public long getIndexSuffix() {
 		return this.upstream.getIndexSuffix();
 	}
@@ -98,4 +93,8 @@ class TombstoneEliminator implements RowIterator {
 		return this.upstream.getMisc();
 	}
 
+	@Override
+	public String toString() {
+	    return this.upstream.toString();
+	}
 }

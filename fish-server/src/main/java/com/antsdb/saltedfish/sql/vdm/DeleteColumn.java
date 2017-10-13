@@ -42,7 +42,7 @@ public class DeleteColumn extends Statement {
 
 		// scan for affected indexes. 
 		
-		GTable gtable = ctx.getHumpback().getTable(table.getId());
+		GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 		for (IndexMeta index:table.getIndexes()) {
 			List<ColumnMeta> indexColumns = index.getColumns(table);
 			if (indexColumns.contains(column)) {
@@ -55,7 +55,9 @@ public class DeleteColumn extends Statement {
 				}
 				else {
 					// remove the index column
-					ctx.getMetaService().deleteRuleColumn(trx, index.findRuleColumn(column));
+				    indexColumns.remove(column);
+				    index.setRuleColumns(indexColumns);
+					ctx.getMetaService().updateRule(trx, index);
 				}
 			}
 		}
@@ -75,7 +77,9 @@ public class DeleteColumn extends Statement {
 				}
 				else {
 					// remove the index column
-					ctx.getMetaService().deleteRuleColumn(trx, pk.findRuleColumn(column));
+                    indexColumns.remove(column);
+                    pk.setRuleColumns(indexColumns);
+                    ctx.getMetaService().updateRule(trx, pk);
 				}
 			}
 		}
@@ -89,55 +93,6 @@ public class DeleteColumn extends Statement {
 		return null;
 	}
 	
-	/**
-	 * to be implemented in the future
-	 * 
-	 * @param ctx
-	 * @param params
-	 * @return
-	 */
-	public Object run_(VdmContext ctx, Parameters params) {
-		TableMeta table = Checks.tableExist(ctx.session, this.tableName);
-		ColumnMeta column = Checks.columnExist(table, this.columnName);
-		List<IndexMeta> affected = new ArrayList<>();
-		Transaction trx = ctx.getTransaction();
-		
-		// remove column from meta-data
-		
-		ctx.getMetaService().deleteColumn(trx, column);
-		
-		// scan for affected indexes
-		
-		for (IndexMeta index:table.getIndexes()) {
-			List<ColumnMeta> indexColumns = index.getColumns(table);
-			if (indexColumns.contains(column)) {
-				affected.add(index);
-			}
-		}
-		
-		// rebuild everything if primary key affected. otherwise just rebuild affected indexes
-		
-		if (table.getPrimaryKey() != null) {
-			PrimaryKeyMeta pk = table.getPrimaryKey();
-			List<String> pkColumns = deleteColumnFromRule(table, pk, column);
-			if (pkColumns != null) {
-				for (IndexMeta index:affected) {
-					ctx.getMetaService().deleteRuleColumn(trx, index.findRuleColumn(column));
-				}
-				new ModifyPrimaryKey(this.tableName, pkColumns).run(ctx, params, 0);
-			}
-			else {
-				for (IndexMeta index:affected) {
-					List<String> indexColumns = deleteColumnFromRule(table, index, column);
-					new DropIndex(this.tableName, index.getName()).run(ctx, params);
-					new CreateIndex(index.getName(), index.isUnique(), false, false, this.tableName, indexColumns);
-				}
-			}
-		}
-		
-		return null;
-	}
-
 	List<String> deleteColumnFromRule(TableMeta table, RuleMeta<?> rule, ColumnMeta column) {
 		List<String> newColumns = new ArrayList<>();
 		List<ColumnMeta> columns = rule.getColumns(table);

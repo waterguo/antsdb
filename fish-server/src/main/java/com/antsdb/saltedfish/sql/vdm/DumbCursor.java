@@ -22,7 +22,6 @@ import com.antsdb.saltedfish.nosql.SpaceManager;
 public class DumbCursor extends CursorWithHeap {
     RowIterator iter;
     int[] mapping;
-	private SpaceManager memman;
 	private boolean isClosed = false;
 	private AtomicLong counter;
     
@@ -30,7 +29,6 @@ public class DumbCursor extends CursorWithHeap {
         super(meta);
         this.iter = iter;
         this.mapping = mapping;
-        this.memman = memman;
         this.counter = counter;
     }
 
@@ -44,11 +42,10 @@ public class DumbCursor extends CursorWithHeap {
     		return 0;
     	}
     	long pRecord = newRecord();
-        long pRow = iter.getRowPointer();
-        if (pRow == 0) {
+        Row row = iter.getRow();
+        if (row == null) {
             return 0;
         }
-        Row row = Row.fromSpacePointer(this.memman, pRow, 0);
         Record.setKey(pRecord, row.getKeyAddress());
         for (int i=0; i<this.meta.getColumnCount(); i++) {
         	long pValue = row.getFieldAddress(this.mapping[i]);
@@ -62,5 +59,10 @@ public class DumbCursor extends CursorWithHeap {
     public void close() {
     	super.close();
     	this.isClosed  = true;
+    }
+
+    @Override
+    public String toString() {
+        return this.iter.toString();
     }
 }

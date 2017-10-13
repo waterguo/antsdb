@@ -18,15 +18,8 @@ package com.antsdb.saltedfish.util;
  * 
  * @author *-xguo0<@
  */
-public abstract class ScalableData<T> {
-	private volatile T lastCreated;
-	
-	/**
-	 * force a reset of the growth meaning the data is cleared
-	 */
-	protected synchronized void resetGrowth() {
-		this.lastCreated = null;
-	}
+public abstract class ScalableData {
+	private volatile int ticket;
 	
 	/**
 	 * grow the current storage 
@@ -34,12 +27,14 @@ public abstract class ScalableData<T> {
 	 * @param filled the storage object that is full 
 	 * @return
 	 */
-	protected synchronized void grow(T filled) {
-		if (filled != lastCreated) {
+	protected synchronized void grow(int requestTicket) {
+		if (this.ticket != requestTicket) {
 			// caller should try again because a new storage object is created
 			return;
 		}
-		this.lastCreated = extend(filled);
+		int next = this.ticket + 1;
+		extend(requestTicket, next);
+		this.ticket = next;
 	}
 	
 	/**
@@ -48,5 +43,5 @@ public abstract class ScalableData<T> {
 	 * @param current the current filled up storage object
 	 * @return new object that extends the filled up one
 	 */
-	protected abstract T extend(T filled);
+	protected abstract void extend(int requestTicket, int nextTicket);
 }

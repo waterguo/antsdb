@@ -27,8 +27,7 @@ import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
-import com.antsdb.saltedfish.nosql.Gobbler.EntryType;
-import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaConstant;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
@@ -161,12 +160,14 @@ public class HBaseUtilImporter {
 			
 		}
 		
-		// write current SP to __SYS.SYNCPARAM
+		// write current SP to SYNCPARAM
 		currentSP = this.humpback.getLatestSP();
 		System.out.println("*******************************************************************");
 		System.out.printf("Update SYNCPARAM to %d\n", currentSP);
 		System.out.println("*******************************************************************\n");
-    	CheckPoint.updateHBase(this.hbaseConn, currentSP, false, this.humpback.getServerId(), null);
+		CheckPoint cp = new CheckPoint(humpback, this.hbaseConn, true);
+		cp.setServerId(this.humpback.getServerId());
+		cp.updateLogPointer(currentSP);
     	
 		long importEnd = System.currentTimeMillis();
 		totalSeconds = (importEnd - importStart) / 1000;
@@ -247,14 +248,13 @@ public class HBaseUtilImporter {
 
 		RowIterator scanner = table.scan(0, Long.MAX_VALUE);
 		
-		boolean isIndexTable = false;
+		boolean isIndexTable = table.getTableType() == TableType.INDEX;
 		boolean firstRow = true;
 		while (scanner.next()) {
 			// use first row to check whether index table
 			if (firstRow) {
 				firstRow = false;
 
-				isIndexTable = isIndex(scanner.getRowPointer());
 				if (isIndexTable) {
 					System.out.print(", INDEX  ");
 					break;
@@ -269,7 +269,7 @@ public class HBaseUtilImporter {
 			
 			if (rows.size() >= ROWS_PER_PUT) {
 		
-				TableRows r = new TableRows(rows);
+				TableRows r = new TableRows(tableId, rows, 0);
 				importMgr.putRows(r);						
 				count += rows.size();
 				
@@ -283,7 +283,7 @@ public class HBaseUtilImporter {
 		}
 
 		if (rows.size() > 0) {
-			TableRows r = new TableRows(rows);
+			TableRows r = new TableRows(tableId, rows, 0);
 			importMgr.putRows(r);						
 			count += rows.size();
 		}
@@ -342,23 +342,15 @@ public class HBaseUtilImporter {
     	return (metarow != null) ? TableName.valueOf(metarow.getNamespace(), metarow.getTableName()) : null;
 	}
 
-	private boolean isIndex(long sp) {
-		sp -= 6;
-		long p = humpback.getSpaceManager().toMemory(sp);
-		LogEntry entry = new LogEntry(sp, p);
-		EntryType type = entry.getType();
-		return type == EntryType.INDEX;
-	}
-	
 	public class TableRows {
 		boolean index = false;
 		int tableId;
 		List<IndexDataRow> indexRows = null;
 		List<Row> rows = null;
 		
-		public TableRows(List<Row> rows) {
+		public TableRows(int tableId, List<Row> rows, int nothing) {
 			this.index = false;
-			this.tableId = rows.get(0).getTableId();
+			this.tableId = tableId;
 			this.rows = rows;
 			this.indexRows = null;
 		}

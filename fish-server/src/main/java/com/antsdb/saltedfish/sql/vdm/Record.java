@@ -96,6 +96,14 @@ public abstract class Record {
     	return p;
     }
     
+    public final static long clone(Heap heap, long pRecord) {
+        int nFields = Record.size(pRecord);
+        int bytes = OFFSET_FIELDS + nFields * 8;
+        long pResult = heap.alloc(bytes);
+        Unsafe.copyMemory(pRecord, pResult, bytes);
+        return pResult;
+    }
+    
 	public static void reset(long pRecord) {
     	checkType(pRecord);
 		int bytes = 8 + size(pRecord) * 8; 

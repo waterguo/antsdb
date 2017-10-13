@@ -65,6 +65,10 @@ public interface RowIterator extends Closeable {
     public abstract byte getMisc();
     
 	default public long getVersion() {
+	    long pRow = getRowPointer();
+	    if (pRow < 10) {
+	        throw new IllegalArgumentException();
+	    }
 		return Row.getVersion(getRowPointer());
 	}
 	
@@ -77,6 +81,4 @@ public interface RowIterator extends Closeable {
     }
     
     public abstract void close();
-
-	public abstract boolean isRow();
 }

@@ -15,7 +15,6 @@ package com.antsdb.saltedfish.nosql;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.lang.NotImplementedException;
 
@@ -24,8 +23,7 @@ import org.apache.commons.lang.NotImplementedException;
  * @author wgu0
  */
 public class ConcurrentLinkedList<T> implements Iterable<T>, Collection<T> {
-	AtomicReference<Node<T>> head = new AtomicReference<ConcurrentLinkedList.Node<T>>();
-	AtomicReference<Node<T>> tail = new AtomicReference<ConcurrentLinkedList.Node<T>>();
+	Node<T> head;
 	volatile int size;
 	
 	private static class MyIterator<T> implements Iterator<T> {
@@ -66,48 +64,34 @@ public class ConcurrentLinkedList<T> implements Iterable<T>, Collection<T> {
 		}
 	}
 
-	public void addFirst(T object) {
+	public synchronized void addFirst(T object) {
 		Node<T> baby = new Node<>(object);
-		for (;;) {
-			Node<T> node = head.get();
-			baby.next = node;
-			if (head.compareAndSet(node, baby)) {
-				break;
-			}
-		}
-		if (baby.next == null) {
-			tail.compareAndSet(null, baby);
-		}
+        baby.next = head;
+        head = baby;
 		this.size++;
 	}
 	
-	public void addLast(T object) {
-		Node<T> baby = new Node<>(object);
-		for (;;) {
-			Node<T> node = tail.get();
-			if (node != null) {
-				node.next = baby;
-			}
-			if (tail.compareAndSet(node, baby)) {
-				break;
-			}
-		}
-		if (this.head.get() == null) {
-			head.compareAndSet(null, baby);
-		}
+	public synchronized void addLast(T object) {
+        Node<T> baby = new Node<>(object);
+        Node<T> last = getLastNode();
+        if (last == null) {
+            this.head = baby;
+        }
+        else {
+            last.next = baby;
+        }
 		this.size++;
 	}
 
 	@Override
 	public Iterator<T> iterator() {
-		return new MyIterator<>(this.head.get());
+		return new MyIterator<>(this.head);
 	}
 
 	@Override
-	public void clear() {
+	public synchronized void clear() {
 		while (this.size != 0) {
-			this.head.set(null);
-			this.tail.set(null);
+			this.head = null;
 			this.size = 0;
 		}
 	}
@@ -119,12 +103,12 @@ public class ConcurrentLinkedList<T> implements Iterable<T>, Collection<T> {
 
 	@Override
 	public boolean isEmpty() {
-		return this.head.get() == null;
+		return this.head == null;
 	}
 
 	@Override
 	public boolean contains(Object o) {
-		for (Node<T> i=this.head.get(); i!= null; i=i.next) {
+		for (Node<T> i=this.head; i!= null; i=i.next) {
 			if (i.data == o) {
 				return true;
 			}
@@ -149,8 +133,26 @@ public class ConcurrentLinkedList<T> implements Iterable<T>, Collection<T> {
 	}
 
 	@Override
-	public boolean remove(Object o) {
-		throw new NotImplementedException();
+	public synchronized boolean remove(Object o) {
+	    if (this.head == null) {
+	        return false;
+	    }
+	    if (this.head.data == o) {
+	        this.head = this.head.next;
+	        this.size--;
+	        return true;
+	    }
+        for (Node<T> i=this.head; i!= null; i=i.next) {
+            if (i.next == null) {
+                continue;
+            }
+            if (i.next.data == o) {
+                i.next = i.next.next;
+                this.size--;
+                return true;
+            }
+        }
+        return false;
 	}
 
 	@Override
@@ -174,30 +176,41 @@ public class ConcurrentLinkedList<T> implements Iterable<T>, Collection<T> {
 	}
 
 	public Node<T> getFirstNode() {
-		return this.head.get();
+		return this.head;
 	}
 	
+    public Node<T> getLastNode() {
+        for (Node<T> i=head; i!=null; i=i.next) {
+            if (i.next == null) {
+                return i;
+            }
+        }
+        return null;
+    }
+    
 	public T getFirst() {
-		Node<T> node = this.head.get();
+		Node<T> node = this.head;
 		return (node != null) ? node.data : null;
 	}
 
 	public T getLast() {
-		Node<T> node = this.tail.get();
-		return (node != null) ? node.data : null;
+	    Node<T> last = getLastNode();
+        return (last != null) ? last.data : null;
 	}
 
-	public Node<T> insert(Node<T> node, T tablet) {
+	public synchronized Node<T> insert(Node<T> node, T tablet) {
 		Node<T> baby = new Node<T>(tablet);
 		baby.next = node.next;
 		node.next = baby;
+		this.size++;
 		return baby;
 	}
 
-	public void deleteNext(Node<T> node) {
+	public synchronized void deleteNext(Node<T> node) {
 		if (node.next == null) {
 			return;
 		}
 		node.next = node.next.next;
+		this.size--;
 	}
 }

@@ -16,7 +16,7 @@ package com.antsdb.saltedfish.sql.meta;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.hadoop.util.StringUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.SlowRow;
@@ -30,8 +30,6 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class ColumnMeta extends MetaObject {
 	static Logger _log = UberUtil.getThisLogger();
 	
-    public static final ObjectName SEQ_NAME = new ObjectName(Orca.SYSNS, "columnId");
-    
     SlowRow row;
     DataType type;
     
@@ -46,13 +44,14 @@ public class ColumnMeta extends MetaObject {
         else {
             columnId = table.getMaxColumnId() + 1;
         }
-        int id = (int)orca.getIdentityService().getSequentialId(ColumnMeta.SEQ_NAME); 
-        this.row = new SlowRow(id);
+        int id = (int)orca.getIdentityService().getNextGlobalId(); 
+        this.row = new SlowRow(table.getId(), id);
         setId(id);
         setColumnId(columnId);
         setNamespace(table.getNamespace());
         setTableName(table.getTableName());
         setColumnName(columnName);
+        setTableId(table.getId());
         if (getTypeName() != null) {
         	this.type = orca.getTypeFactory().newDataType(getTypeName(), getTypeLength(), getTypeScale());
         }
@@ -232,7 +231,7 @@ public class ColumnMeta extends MetaObject {
     }
 
 	@Override
-	public Object clone() {
+	public ColumnMeta clone() {
 		ColumnMeta newone =  new ColumnMeta();
 		newone.row = this.row.clone();
 		newone.type = this.type;
@@ -270,4 +269,12 @@ public class ColumnMeta extends MetaObject {
 	public void setSequence(float value) {
 		row.set(ColumnId.syscolumn_seq.getId(), value);
 	}
+
+    public void setTableId(int value) {
+        row.set(ColumnId.syscolumn_table_id.getId(), value);
+    }
+
+    public int getTableId() {
+        return (Integer)row.get(ColumnId.syscolumn_table_id.getId());
+    }
 }

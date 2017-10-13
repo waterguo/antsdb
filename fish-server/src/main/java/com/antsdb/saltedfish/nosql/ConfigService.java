@@ -17,15 +17,25 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.Properties;
 
+import com.antsdb.saltedfish.util.SizeConstants;
+
 /**
  * 
  * @author wgu0
  */
 public class ConfigService {
+    static final int KB = 1024;
+    static final int MB = 1024 * KB;
+    static final int GB = 1024 * MB;
+    
     Properties props;
     File file;
 
-    ConfigService(File file) throws Exception {
+    public ConfigService() {
+        this.props = new Properties();
+    }
+    
+    public ConfigService(File file) throws Exception {
     	this.file = file;
 		this.props = new Properties();
 		if (file.exists()) {
@@ -35,12 +45,8 @@ public class ConfigService {
 		}
 	}
 
-    public File getHBaseConfFile() {
-    	String value = this.props.getProperty("hbase_conf", null);
-    	if (value == null) {
-    		return null;
-    	}
-    	return new File(this.file.getParent(), value);
+    public boolean isHbaseOn() {
+        return getStorageEngineName().equals("hbase");
     }
 
 	public boolean isValidationOn() {
@@ -86,6 +92,52 @@ public class ConfigService {
     	return this.props.getProperty("hbase_compression_codec", "GZ");
     }
 
+    public String getKrbRealm() {
+    	return this.props.getProperty("krb_realm", "");
+    }
+    
+    public String getKrbKdc() {
+    	return this.props.getProperty("krb_kdc", "");
+    }
+
+    public String getKrbJaasConf() {
+    	String value = this.props.getProperty("krb_jaas", null);
+    	if (value == null) {
+    		return null;
+    	}
+    	File f = new File(value);
+    	
+    	if (f.getAbsoluteFile().exists())
+    		return f.getAbsoluteFile().toString();
+    	else
+    		return null;
+    }
+
+    public int getMinkePageSize() {
+        return getInt("minke.page-size", 16 * MB);
+    }
+    
+    public int getMinkeFileSize() {
+        return getInt("minke.file-size", 1 * GB);
+    }
+    
+    public long getMinkeSize() {
+        return getLong("minke.size", Long.MAX_VALUE);
+    }
+    
+    public long getCacheSize() {
+        return getLong("cache.size", 10l * GB);
+    }
+    
+    private long getLong(String key, long defaultValue) {
+        long value = defaultValue;
+        String s = this.props.getProperty(key);
+        if (s != null && s.trim() != "") {
+            value = Long.parseLong(s);
+        }
+        return value;
+    }
+    
 	private int getInt(String key, int defaultValue) {
 		int value = defaultValue;
 		String s = this.props.getProperty(key);
@@ -95,4 +147,47 @@ public class ConfigService {
 		return value;
 	}
 	
+    private boolean getBoolean(String key, boolean defaultValue) {
+        boolean value = defaultValue;
+        String s = this.props.getProperty(key);
+        if (s != null && s.trim() != "") {
+            value = Boolean.parseBoolean(s);
+        }
+        return value;
+    }
+    
+	public boolean isSynchronizerEnabled() {
+	    return getBoolean("minke.synchronizer", true);
+	}
+	
+	/**
+	 * when recycling files, rename them to ".junk" instead of deleting from file system
+	 * 
+	 * @return
+	 */
+	public boolean isFakeDeletetionEnabled() {
+        return getBoolean("minke.fake-deletion", false);
+	}
+	
+	public Properties getProperties() {
+	    return this.props;
+	}
+
+    public int getTabletSize() {
+        int result = getInt("humpback.tablet.file.size", (int)SizeConstants.mb(64));
+        return result;
+    }
+    
+    public String getStorageEngineName() {
+        String result = this.props.getProperty("humpback.storage-engine");
+        return (result == null) ? "minke" : result; 
+    }
+
+    /**
+     * is cache verification enabled ?
+     * @return 0:diabled; 1:only after fetch; 2:always
+     */
+    public int getCacheVerificationMode() {
+        return getInt("cache.verification-mode", 0);
+    }
 }

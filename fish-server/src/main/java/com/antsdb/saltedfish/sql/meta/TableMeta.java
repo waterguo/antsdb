@@ -20,13 +20,12 @@ import java.util.List;
 
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.sql.Orca;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.util.BytesUtil;
 
 public class TableMeta extends MetaObject {
-    public static final ObjectName SEQ_NAME = new ObjectName(Orca.SYSNS, "tableId");
-
     SlowRow row;
     PrimaryKeyMeta pk;
     List<ColumnMeta> columns = Collections.emptyList();
@@ -35,13 +34,18 @@ public class TableMeta extends MetaObject {
     int maxColumnId = 0;
     KeyMaker keyMaker;
 
+    public TableMeta(Orca orca, int id) {
+        this.row = new SlowRow(id);
+        setId(id);
+    }
+    
     public TableMeta(Orca orca, ObjectName name) {
         int id;
         if (Orca.SYSNS.equals(name.getNamespace())) {
-            id = -TableId.valueOf(name.getTableName().toUpperCase()).ordinal();
+            id = TableId.valueOf(name.getTableName().toUpperCase());
         }
         else {
-            id = (int)orca.getIdentityService().getSequentialId(SEQ_NAME);
+            id = (int)orca.getIdentityService().getNextGlobalId(0x10);
         }
         this.row = new SlowRow(id);
         setId(id);
@@ -58,8 +62,21 @@ public class TableMeta extends MetaObject {
         return (Integer)row.get(ColumnId.systable_id.getId());
     }
     
-    public void setId(int id) {
+    private void setId(int id) {
         row.set(ColumnId.systable_id.getId(), id);
+    }
+    
+    /**
+     * get the humpback table id
+     * @return
+     */
+    public int getHtableId() {
+        Integer result = (Integer)row.get(ColumnId.systable_htable_id.getId());
+        return (result != null) ? result : getId();
+    }
+    
+    public void setHtableId(int id) {
+        row.set(ColumnId.systable_htable_id.getId(), id);
     }
     
     public String getNamespace() {
@@ -108,6 +125,18 @@ public class TableMeta extends MetaObject {
             }
         }
         return null;
+    }
+    
+    public List<ColumnMeta> getColumnsByName(List<String> names) {
+        List<ColumnMeta> result = new ArrayList<>();
+        for (String i:names) {
+            ColumnMeta col = getColumn(i);
+            if (col == null) {
+                throw new OrcaException("column that makes of the primary key is not found: " + i);
+            }
+            result.add(col);
+        }
+        return result;
     }
     
     public PrimaryKeyMeta getPrimaryKey() {
@@ -196,4 +225,28 @@ public class TableMeta extends MetaObject {
 	public void setExternalName(String value) {
 		row.set(ColumnId.systable_ext_name.getId(), value);
 	}
+
+    public SlowRow getRow() {
+        return this.row;
+    }
+
+    @Override
+    public TableMeta clone() {
+        TableMeta result = new TableMeta(this.row.clone());
+        result.maxColumnId = this.maxColumnId;
+        if (this.pk != null) {
+            result.pk = this.pk.clone();
+        }
+        result.columns = new ArrayList<>();
+        for (ColumnMeta i:this.columns) {
+            result.columns.add(i.clone());
+        }
+        for (ForeignKeyMeta i:this.fks) {
+            result.fks.add(i.clone());
+        }
+        for (IndexMeta i:this.indexes) {
+            result.indexes.add(i.clone());
+        }
+        return result;
+    }
 }

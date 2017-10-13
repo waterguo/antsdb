@@ -163,4 +163,8 @@ public class Script extends Instruction {
     public Measure getMeasure() {
         return this.measure;
     }
+    
+    public Instruction getRoot() {
+        return this.root;
+    }
 }

@@ -86,12 +86,10 @@ public class TableSeek extends CursorMaker implements Seekable {
 	        }
 	        FishBoundary boundary = new FishBoundary(pBoundary);
 	        long pKey = boundary.getKeyAddress();
-	        GTable gtable = ctx.getHumpback().getTable(table.getId());
+	        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 	        Transaction trx = ctx.getTransaction();
-	        long spRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
-	        long pRow = 0;
-	        if (spRow != 0) {
-	        	pRow = ctx.getOrca().getSpaceManager().toMemory(spRow);
+	        long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+	        if (pRow != 0) {
 	        	ctx.getCursorStats(makerId).incrementAndGet();
 	        }
 	        return new MyCursor(pRow);

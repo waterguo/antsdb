@@ -26,7 +26,7 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
     KeyMaker keyMaker;
     
     public IndexMeta(Orca orca, TableMeta owner) {
-        super(orca, Rule.Index);
+        super(orca, Rule.Index, owner.getId());
         setTableId(owner.getId());
     }
 
@@ -35,13 +35,13 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
     }
 
     public void setUnique(boolean isUnique) {
-        row.set(ColumnId.sysrule_is_unique.getId(), isUnique);
+        row.set(ColumnId.sysrule_is_unique.getId(), isUnique ? 1 : 0);
     }
 
     public boolean isUnique() {
     	Object obj = row.get(ColumnId.sysrule_is_unique.getId());
-    	if (obj instanceof Boolean) {
-    		return (Boolean)obj;
+    	if (obj instanceof Integer) {
+    		return ((Integer)obj) == 1;
     	}
     	else {
     		return false;
@@ -72,8 +72,14 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
 		return value;
 	}
 
-	public void setExternalName(TableMeta table, String indexName) {
-		setExternalName(table.getTableName() + "-" + indexName);
+	/**
+	 * we need an unique external name due to how truncate works. truncate basically creates new set of tables for
+	 * base table and indexes before deleting the old ones. we want the new indexes have a different name than the old 
+	 * ones. 
+	 */
+	public void genUniqueExternalName(TableMeta table, String indexName, int globalId) {
+	    String externalName = String.format("%s-%s-%x", table.getTableName(), indexName, globalId);
+		setExternalName(externalName);
 	}
 	
 	public void setExternalName(String value) {
@@ -88,4 +94,12 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
 		Boolean value = (Boolean)row.get(ColumnId.sysrule_is_fulltext.getId());
 		return value != null ? value : false;
 	}
+
+	@Override
+    public IndexMeta clone() {
+        SlowRow clone = this.row.clone();
+        IndexMeta result = new IndexMeta(clone);
+        result.keyMaker = this.keyMaker;
+        return result;
+    }
 }

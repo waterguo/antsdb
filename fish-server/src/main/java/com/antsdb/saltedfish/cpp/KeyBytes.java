@@ -13,18 +13,37 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
-import com.antsdb.saltedfish.util.BytesUtil;
+import java.nio.ByteBuffer;
+
+import org.slf4j.Logger;
+
+import com.antsdb.saltedfish.sql.vdm.KeyMaker;
+import static com.antsdb.saltedfish.util.UberFormatter.*;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
 public final class KeyBytes {
+    public static final int HEADER_SIZE = 4;
+    private static final KeyBytes KEY_MIN;
+    private static final KeyBytes KEY_MAX;
+    private static final VariableLengthLongComparator _comp = new VariableLengthLongComparator();
+    private static final Logger _log = UberUtil.getThisLogger();
+    
 	long addr;
+	ByteBuffer buffer;
 	
+    static {
+        KEY_MIN = KeyBytes.alloc(new byte[] {0});
+        KEY_MAX = KeyBytes.alloc(new byte[] {-1});
+        _log.debug("KEY_MIN={} KEY_MAX={}", hex(KEY_MIN.getAddress()), hex(KEY_MAX.getAddress()));
+    }
+    
 	public KeyBytes (long addr) {
 		if (Unsafe.getByte(addr) != Value.FORMAT_KEY_BYTES) {
-			throw new IllegalArgumentException();
+			throw new IllegalMemoryException(addr);
 		}
 		this.addr = addr;
 	}
@@ -39,25 +58,101 @@ public final class KeyBytes {
 		return new KeyBytes(addr);
 	}
 	
+    public static KeyBytes fromLongValue(long value) {
+        byte[] bytes = KeyMaker.make(value);
+        return alloc(bytes);
+    }
+    
+    public static KeyBytes fromHexDump(String hex) {
+        // find length
+        
+        int length = 0;
+        for (int i=0; i<hex.length(); i++) {
+            if (hex.charAt(i) == '-') {
+                continue;
+            }
+            length++;
+        }
+        
+        // parse hex numbers
+        
+        byte[] bytes = new byte[length / 2];
+        int j=0;
+        for (int i=0; i<hex.length(); i+=2) {
+            while (hex.charAt(i) == '-') {
+                i++;
+            }
+            String s = hex.substring(i, i+2);
+            byte bt = (byte)Integer.parseInt(s, 16);
+            bytes[j++] = bt;
+        }
+        
+        // little endian flip
+        
+        KeyMaker.flipEndian(bytes);
+        return alloc(bytes);
+    }
+    
+    public static KeyBytes newInstance(long pKey) {
+        if (pKey == 0) {
+            return null;
+        }
+        int len = KeyBytes.getLength(pKey);
+        KeyBytes result = new KeyBytes();
+        result.buffer = ByteBuffer.allocateDirect(len + HEADER_SIZE);
+        result.addr = UberUtil.getAddress(result.buffer);
+        Unsafe.copyMemory(pKey, result.addr, len + HEADER_SIZE);
+        return result;
+    }
+    
+    public static KeyBytes alloc(long pKey) {
+        int len = KeyBytes.getRawSize(pKey);
+        ByteBuffer buf = ByteBuffer.allocateDirect(len);
+        long addr = UberUtil.getAddress(buf);
+        Unsafe.copyMemory(pKey, addr, len);
+        KeyBytes result = new KeyBytes();
+        result.addr = addr;
+        result.buffer = buf;
+        return result;
+    }
+    
 	public static KeyBytes alloc(byte[] bytes) {
 		int len = bytes.length;
 		if (len >= Short.MAX_VALUE) {
 			throw new IllegalArgumentException();
 		}
-		long addr = Unsafe.allocateMemory(len + 4);
-		Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
-		Unsafe.putShort(addr+2, (short)len);
-		Unsafe.putBytes(addr + 4, bytes);
-		KeyBytes result = new KeyBytes();
-		result.addr = addr;
-		return result;
+		if (len == 1) {
+		    // length 1 is special case for max and min value
+            ByteBuffer buf = ByteBuffer.allocateDirect(HEADER_SIZE);
+            long addr = UberUtil.getAddress(buf);
+            Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
+            if (bytes[0] > 0) {
+                throw new IllegalArgumentException();
+            }
+            Unsafe.putShort(addr+2, bytes[0]);
+            KeyBytes result = new KeyBytes();
+            result.addr = addr;
+            result.buffer = buf;
+            return result;
+		}
+		else {
+	        ByteBuffer buf = ByteBuffer.allocateDirect(len + HEADER_SIZE);
+	        long addr = UberUtil.getAddress(buf);
+	        Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
+	        Unsafe.putShort(addr+2, (short)len);
+	        Unsafe.putBytes(addr + HEADER_SIZE, bytes);
+	        KeyBytes result = new KeyBytes();
+	        result.addr = addr;
+	        result.buffer = buf;
+	        return result;
+		}
 	}
 	
 	public static KeyBytes alloc(Heap heap, int len) {
 		if (len >= Short.MAX_VALUE) {
 			throw new IllegalArgumentException();
 		}
-		long addr = heap.alloc(len + 4);
+		long addr = heap.alloc(len + HEADER_SIZE);
 		Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
 		Unsafe.putShort(addr+2, (short)len);
 		KeyBytes result = new KeyBytes();
@@ -79,33 +174,59 @@ public final class KeyBytes {
 			return null; 
 		}
 		KeyBytes result = alloc(heap, length);
-		Unsafe.copyMemory(addr, result.addr + 4, length);
+		Unsafe.copyMemory(addr, result.addr + HEADER_SIZE, length);
 		return result;
 	}
 
+    public static KeyBytes allocSet(Heap heap, KeyBytes key) {
+        if (key == null) {
+            return null;
+        }
+        int length = key.getLength() + HEADER_SIZE;
+        long pResult = heap.alloc(length);
+        Unsafe.copyMemory(key.getAddress(), pResult, length);
+        return new KeyBytes(pResult);
+    }
+    
 	public long getAddress() {
 		return this.addr;
 	}
 	
-	public short getLength() {
-		short length = Unsafe.getShortVolatile(addr+2);
-		return length;
+	public long getDataAddress() {
+	    return this.addr + HEADER_SIZE;
 	}
 	
-	public static short getLength(long addr) {
-		short length = Unsafe.getShortVolatile(addr+2);
-		return length;
+	public static int getUnmaskedLength(long addr) {
+        int length = Unsafe.getShortVolatile(addr+2);
+        return length;
+	}
+	
+	public int getLength() {
+		int length = Unsafe.getShortVolatile(addr+2);
+		return (length <= 0) ? 0 : length;
+	}
+	
+	public static int getLength(long addr) {
+		int length = Unsafe.getShortVolatile(addr+2);
+        return (length <= 0) ? 0 : length;
 	}
 	
 	public static int getRawSize(long pValue) {
-		return getLength(pValue) + 4;
+		return getLength(pValue) + HEADER_SIZE;
 	}
 	
 	public byte[] get() {
-		short length = getLength();
-		byte[] bytes = new byte[length];
-		Unsafe.getBytes(addr+4, bytes);
-		return bytes;
+		int length = getUnmaskedLength(addr);
+		if (length > 0) {
+	        byte[] bytes = new byte[length];
+	        Unsafe.getBytes(addr+HEADER_SIZE, bytes);
+	        return bytes;
+		}
+		else {
+		    byte[] bytes = new byte[1];
+		    bytes[0] = (byte)length;
+            return bytes;
+		}
 	}
 
 	public static byte[] get(long addr) {
@@ -116,7 +237,7 @@ public final class KeyBytes {
 		if (index >= getLength()) {
 			throw new IllegalArgumentException();
 		}
-		Unsafe.putByte(addr + 4 + index, value);
+		Unsafe.putByte(addr + HEADER_SIZE + index, value);
 	}
 	
 	public void set(byte[] bytes) {
@@ -124,36 +245,32 @@ public final class KeyBytes {
 			throw new IllegalArgumentException();
 		}
 		Unsafe.putShort(addr+2, (short)bytes.length);
-		Unsafe.putBytes(addr+4, bytes);
+		Unsafe.putBytes(addr+HEADER_SIZE, bytes);
 	}
 	
 	public int compare(KeyBytes that) {
-		int xLength = getLength();
-		int yLength = that.getLength();
-		int minLength = Math.min(xLength, yLength);
-		for (int i=0; i<minLength; i++) {
-			int btx = Unsafe.getByte(this.addr + 4 + i) & 0xff;
-			int bty = Unsafe.getByte(that.addr + 4 + i) & 0xff;
-			int result = btx - bty;
-			if (result != 0) {
-				return result;
-			}
-		}
-		if (xLength > minLength) {
-			return 1;
-		}
-		if (yLength > minLength) {
-			return -1;
-		}
-		return 0;
+	    return VariableLengthLongComparator.compare_(this.addr, that.addr);
 	}
 
 	public String toString() {
-		String s = BytesUtil.toCompactHex(get());
-		return s;
+	    StringBuilder buf = new StringBuilder();
+	    if (getUnmaskedLength(this.addr) <= 0) {
+	        return Integer.toHexString(getUnmaskedLength(this.addr) & 0xff);
+	    }
+	    for (int i=0; i<this.getLength(); i+=8) {
+	        long ii = Unsafe.getLong(this.addr + HEADER_SIZE + i);
+	        if (i > 0) {
+	            buf.append('-');
+	        }
+	        buf.append(String.format("%016x", ii));
+	    }
+		return buf.toString();
 	}
 
-	public static Object toString(long pKey) {
+	public static String toString(long pKey) {
+	    if (pKey == 0) {
+	        return "NULL";
+	    }
 		return create(pKey).toString();
 	}
 
@@ -197,4 +314,28 @@ public final class KeyBytes {
 		int suffix = posFromTail << 4 | sizeRowid;
 		Unsafe.putByte(this.addr + 1, (byte)suffix);
 	}
+	
+	public void setSuffixByte(byte value) {
+        Unsafe.putByte(this.addr + 1, value);
+	}
+	
+	public byte getSuffixByte() {
+	    return Unsafe.getByte(this.addr + 1);
+	}
+	
+	public static int compare(long px, long py) {
+	    return VariableLengthLongComparator.compare_(px, py);
+	}
+	
+	public static long getMinKey() {
+	    return KEY_MIN.addr;
+	}
+	
+	public static long getMaxKey() {
+	    return KEY_MAX.addr;
+	}
+
+    public static KeyComparator getComparator() {
+        return _comp;
+    }
 }

@@ -25,10 +25,10 @@ import com.antsdb.saltedfish.cpp.Value;
 public class TypeFloat extends DataType {
 
 	public TypeFloat(String name) {
-		super(name, 0, 0, Types.FLOAT, Float.class, Value.TYPE_FLOAT);
+		super(name, 0, 0, Types.FLOAT, Float.class, Value.TYPE_NUMBER);
 	}
 	
 	public TypeFloat(String name, int length) {
-		super(name, length, 0, Types.FLOAT, Float.class, Value.TYPE_FLOAT);
+		super(name, length, 0, Types.FLOAT, Float.class, Value.TYPE_NUMBER);
 	}
 }

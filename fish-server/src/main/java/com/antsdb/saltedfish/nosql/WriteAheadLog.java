@@ -198,12 +198,12 @@ class WriteAheadLog {
                     this.ignoredTables.add(tableId);
                     return;
                 }
-                gtable.put(row.getTrxTimestamp(), (SlowRow)null);
-                if (tableId == Integer.MAX_VALUE) {
+                gtable.put(row.getTrxTimestamp(), (SlowRow)null, 0);
+                if (tableId == Humpback.SYSMETA_TABLE_ID) {
                 	try {
-						humpback.sync();
+						humpback.recoverTable();
 					}
-					catch (ClassNotFoundException e) {
+					catch (Exception e) {
 						e.printStackTrace();
 					}
                 }
@@ -225,7 +225,7 @@ class WriteAheadLog {
         // flush all in-memory data to storage
         
         _log.info("establishing check point");
-        humpback.flush();
+        humpback.flush(0, true);
         
         // done
         

@@ -13,7 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.sql.meta.ColumnId;
 
 public class SysTableRow {
     Row row;
@@ -35,6 +38,25 @@ public class SysTableRow {
     	return (Integer)this.row.get(1);
     }
 
+    public String dump() {
+        StringBuilder buf = new StringBuilder();
+        buf.append(toString());
+        buf.append('\n');
+        for (int i=0; i<=row.getMaxColumnId(); i++) {
+            Object value = row.get(i);
+            if (value == null) {
+                continue;
+            }
+            String column = ColumnId.valueOf("systable", i).toString();
+            column = StringUtils.removeStart(column, "systable_");
+            String text = String.format("  %s:%s", column, value.toString());
+            buf.append(text);
+            buf.append('\n');
+        }
+        buf.deleteCharAt(buf.length()-1);
+        return buf.toString();
+    }
+    
 	@Override
 	public String toString() {
 		return String.format("%s.%s [id=%d]", getNamespace(), getTableName(), getId());

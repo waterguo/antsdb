@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
+import com.antsdb.saltedfish.sql.Orca;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
@@ -35,10 +37,10 @@ public class ShowTables extends CursorMaker {
 		this.isFull = isFull;
 		this.like = like;
         if (this.isFull) {
-            sql = "SELECT table_name, 'BASE TABLE' as Table_type FROM __sys.systable WHERE namespace=?";
+            sql = "SELECT table_name, 'BASE TABLE' as Table_type FROM " + Orca.SYSNS + ".systable WHERE namespace=?";
         }
         else {
-            sql = "SELECT table_name FROM __sys.systable WHERE namespace=?";
+            sql = "SELECT table_name FROM " + Orca.SYSNS + ".systable WHERE namespace=?";
         }
         if (like != null) {
         	sql += " AND table_name LIKE ?";
@@ -64,6 +66,9 @@ public class ShowTables extends CursorMaker {
     	if (ns == null) {
     		ns = ctx.getSession().getCurrentNamespace();
     	}
+        if (ns == null) {
+            throw new OrcaException("namespace is not specified");
+        }
     	
         // normalize the namespace with real name
     	

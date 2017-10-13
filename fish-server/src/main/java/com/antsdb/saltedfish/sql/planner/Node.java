@@ -16,6 +16,10 @@ package com.antsdb.saltedfish.sql.planner;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.meta.ColumnMeta;
+import com.antsdb.saltedfish.sql.meta.IndexMeta;
+import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
+import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
@@ -92,4 +96,45 @@ class Node {
 	public boolean isUnion() {
 		return this.unions != null;
 	}
+
+    public boolean isUnique(List<PlannerField> key) {
+        if (this.table == null) {
+            return false;
+        }
+        if (isUnique(this.table.getPrimaryKey(), key)) {
+            return true;
+        }
+        for (RuleMeta<?> i:table.getIndexes()) {
+            if (isUnique(i, key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isUnique(RuleMeta<?> rule, List<PlannerField> key) {
+        if (!(rule instanceof PrimaryKeyMeta)) {
+            if (!(rule instanceof IndexMeta)) {
+                return false;
+            }
+            IndexMeta index = (IndexMeta)rule;
+            if (!index.isUnique()) {
+                return false;
+            }
+        }
+        int[] ruleColumns = rule.getRuleColumns();
+        if (key.size() < ruleColumns.length) {
+            return false;
+        }
+        for (int i=0; i<ruleColumns.length; i++) {
+            ColumnMeta column = key.get(i).column;
+            if (column == null) {
+                return false;
+            }
+            if (ruleColumns[i] != column.getId()) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

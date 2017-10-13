@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.antsdb.saltedfish.charset.Utf8;
 
 public class Unicode16 {
-	final static int HEADER_SIZE = 4;
+	public final static int HEADER_SIZE = 4;
 	
 	public final static String get(Heap heap, long addr) {
 		int format = Unsafe.getByte(addr);

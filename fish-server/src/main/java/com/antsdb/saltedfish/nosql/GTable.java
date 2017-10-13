@@ -18,18 +18,26 @@ import java.io.IOException;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.util.LongLong;
 
-public final class GTable implements AutoCloseable {
+public final class GTable implements AutoCloseable, LogSpan {
     String namespace;
     MemTable memtable;
     int id;
     Humpback humpback;
+    private TableType type;
 
-    public GTable(Humpback owner, String namespace, int id, int fileSize) throws IOException {
+    public GTable(Humpback owner, String namespace, int id, int fileSize, TableType type) 
+    throws IOException {
     	this.id = id;
     	this.namespace = namespace;
     	this.humpback = owner;
     	this.memtable = new MemTable(owner, new File(owner.data, namespace), id, fileSize);
+    	this.type = type;
+    }
+    
+    public void setMutable(boolean isMutable) {
+        this.memtable.setMutable(isMutable);
     }
     
     public String getNamespace() {
@@ -57,6 +65,14 @@ public final class GTable implements AutoCloseable {
 		return this.memtable.insertIndex(trxid, pIndexKey, pRowKey, misc, timeout);
 	}
     
+    public HumpbackError insertIndex(long trxid, byte[] indexKey, byte[] rowKey, byte misc, int timeout) {
+        try (BluntHeap heap = new BluntHeap()){
+            long pIndexKey = KeyBytes.allocSet(heap, indexKey).getAddress();
+            long pRowKey = KeyBytes.allocSet(heap, rowKey).getAddress();
+            return insertIndex(trxid, pIndexKey, pRowKey, misc, timeout);
+        }
+    }
+    
 	public HumpbackError insertIndex_nologging(
 			long trxid, 
 			long pIndexKey, 
@@ -64,7 +80,7 @@ public final class GTable implements AutoCloseable {
 			long sp, 
 			byte misc, 
 			int timeout) {
-		return this.memtable.insertIndex_nologging(trxid, pIndexKey, pRowKey, sp, misc, timeout);
+		return this.memtable.recoverIndexInsert(trxid, pIndexKey, pRowKey, sp, misc, timeout);
 	}
     
     public HumpbackError update(long trxid, SlowRow row, int timeout) {
@@ -80,22 +96,18 @@ public final class GTable implements AutoCloseable {
     	return this.memtable.update(row, oldVersion, timeout);
     }
     
-    public HumpbackError put(long trxid, SlowRow row) {
+    public HumpbackError put(long trxid, SlowRow row, int timeout) {
     	try (BluntHeap heap = new BluntHeap()) {
     		VaporizingRow vrow = row.toVaporisingRow(heap);
     		vrow.setVersion(trxid);
-    		return put(vrow);
+    		return put(vrow, timeout);
     	}
     }
     
-    public HumpbackError put(VaporizingRow row) {
-    	return this.memtable.put(row);
+    public HumpbackError put(VaporizingRow row, int timeout) {
+        return this.memtable.put(row, timeout);
     }
     
-	public HumpbackError putNoLogging(long trxid, long pKey, long spRow) {
-		return this.memtable.putNoLogging(trxid, pKey, spRow);
-	}
-	
     public HumpbackError delete(long trxid, byte[] key, int timeout) {
     	try (BluntHeap heap = new BluntHeap()) {
     		long pKey = KeyBytes.allocSet(heap, key).getAddress();
@@ -105,10 +117,6 @@ public final class GTable implements AutoCloseable {
     
     public HumpbackError delete(long trxid, long pKey, int timeout) {
         return this.memtable.delete(trxid, pKey, timeout);
-    }
-    
-    public HumpbackError deleteNoLogging(long trxid, long pKey, long sprow, int timeout) {
-    	return this.memtable.deleteNoLogging(trxid, pKey, sprow, timeout);
     }
     
 	public long getIndex(long trxid, long trxts, byte[] indexKey) {
@@ -209,10 +217,6 @@ public final class GTable implements AutoCloseable {
         return result;
     }
 
-    public void truncate() {
-        this.memtable.truncate();
-    }
-
     public int getId() {
         return this.id;
     }
@@ -234,17 +238,13 @@ public final class GTable implements AutoCloseable {
 		return this.memtable.validate();
 	}
 
-	public long getEndRowSpacePointer() {
-		return this.memtable.getEndRowSpacePointer();
-	}
-
 	@Override
 	public String toString() {
 		return this.memtable.toString();
 	}
 
-	public void carbonizeIfPossible() throws IOException {
-		this.memtable.carbonizeIfPossible();
+	public int carbonfreezeIfPossible(long oldestTrxid) throws IOException {
+		return this.memtable.carbonfreezeIfPossible(oldestTrxid);
 	}
 
 	public boolean isPureEmpty() {
@@ -275,10 +275,27 @@ public final class GTable implements AutoCloseable {
 	}
 
 	public void open() throws IOException {
-		open(false);
+		this.memtable.open();
 	}
 	
-	public void open(boolean deleteCorruptedFile) throws IOException {
-		this.memtable.open(deleteCorruptedFile);
-	}
+    public RowIterator scanDelta(long spStart, long spEnd) {
+        return this.memtable.scanDelta(spStart, spEnd);
+    }
+    
+    public TableType getTableType() {
+        return this.type;
+    }
+
+    @Override
+    public LongLong getLogSpan() {
+        return this.memtable.getLogSpan();
+    }
+
+    public String getLocation(long trxid, long version, byte[] key) {
+        try (BluntHeap heap = new BluntHeap()) {
+            long pKey = KeyBytes.allocSet(heap, key).getAddress();
+            String loc = this.memtable.getLocation(trxid, version, pKey);
+            return loc;
+        }
+    }
 }

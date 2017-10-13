@@ -15,21 +15,17 @@ package com.antsdb.saltedfish.nosql;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel.MapMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.Unsafe;
+import static com.antsdb.saltedfish.util.UberFormatter.*;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -72,7 +68,8 @@ public final class SpaceManager {
 		this.fileSize = filesize;
 	}
 	
-	public void init() throws IOException {
+	@SuppressWarnings("resource")
+    public void open() throws IOException {
 		// find all matched files
 		
 		List<File> files = new ArrayList<>();
@@ -107,7 +104,7 @@ public final class SpaceManager {
 		for (int i=0; i<=this.top; i++) {
 			Space space = this.spaces[i];
 			if (space == null) {
-				throw new HumpbackException("space " + i + " is missing");
+				continue;
 			}
 			MapMode mode = ((i == this.top) && mutable) ? MapMode.READ_WRITE : MapMode.READ_ONLY;
 			open(space, mode);
@@ -120,23 +117,8 @@ public final class SpaceManager {
 		}
 	}
 	
-	@SuppressWarnings("resource")
 	private void open(Space space, MapMode mode) throws IOException {
-		String filemode = (mode == MapMode.READ_WRITE) ? "rw" : "r";
-        RandomAccessFile raf = new RandomAccessFile(space.file, filemode);
-        int fileLength = (int)raf.length();
-        int size = (mode == MapMode.READ_WRITE) ? fileSize : fileLength;
-    	space.raf = raf;
-        space.channel = space.raf.getChannel();
-        space.buf = space.channel.map(mode, 0, size);
-        if (mode == MapMode.READ_WRITE) {
-        	space.buf.load();
-        }
-        space.addr = UberUtil.getAddress(space.buf);
-        space.spStart = makeSpacePointer(space.id, 0);
-        space.spEnd = fileSize + space.spStart;
-        _log.debug(String.format("mounted %s at 0x%016x", space.file.toString(), space.addr));
-    	space.allocPointer = new AtomicInteger(fileLength);
+	    space.open(mode, fileSize);
         this.addresses[space.id] = space.addr;
 	}
 
@@ -144,8 +126,11 @@ public final class SpaceManager {
 		int spaceId = (int)(spRow >> 32);
 		int offset = (int)spRow & 0x7fffffff;
 		Space space = this.spaces[spaceId];
-		if ((offset < 0) || (offset >= space.buf.capacity())) {
-			throw new IllegalArgumentException();
+		if (space == null) {
+		    throw new IllegalArgumentException("invalid space id: " + spaceId);
+		}
+		if ((offset < 0) || (offset >= space.getCapacity())) {
+			throw new IllegalArgumentException(hex(spRow));
 		}
 		long base = addresses[spaceId];
 		long address = base + offset;
@@ -156,21 +141,21 @@ public final class SpaceManager {
 		int spaceId = (int)(spRow >> 32);
 		int offset = (int)spRow & 0x7fffffff;
 		Space space = this.spaces[spaceId];
-		if ((offset < 0) || (offset >= space.buf.capacity())) {
+		if ((offset < 0) || (offset >= space.getCapacity())) {
 			throw new IllegalArgumentException();
 		}
-		return String.format("%s@%x", space.file, offset);
+		return String.format("%s:%s", space.file, hex(spRow));
 	}
 
-	public final long plus(long sp, int length, int bytes) {
+	public final long plus(long sp, long length, int bytes) {
 		int spaceId = (int)(sp >> 32);
 		int offset = (int)sp & 0x7fffffff;
 		Space space = this.spaces[spaceId];
-		if ((offset < 0) || (offset >= space.buf.capacity())) {
+		if ((offset < 0) || (offset >= space.getCapacity())) {
 			throw new IllegalArgumentException();
 		}
 		offset += length;
-		if ((offset + bytes) >= space.buf.capacity()) {
+		if ((offset + bytes) >= space.getCapacity()) {
 			spaceId++;
 			if (spaceId > this.top) {
 				return Long.MAX_VALUE;
@@ -201,18 +186,6 @@ public final class SpaceManager {
 	public final static int getSpaceId(long sp) {
 		long spaceId = sp >> 32;
 		return (int)spaceId;
-	}
-
-	public ByteBuffer getBuffer(long spStart, long spEnd) {
-		int spaceId = getSpaceId(spStart);
-		if (spaceId != getSpaceId(spEnd)) {
-			throw new IllegalArgumentException();
-		}
-		Space space = this.spaces[spaceId];
-		ByteBuffer buf = space.buf.duplicate();
-		buf.position((int)(spStart - space.spStart));
-		buf.limit((int)(spEnd - space.spStart));
-		return buf;
 	}
 
 	public final long alloc(int size) {
@@ -261,7 +234,6 @@ public final class SpaceManager {
 			Space space = new Space();
 			space.id = this.top + 1;
 			growArray(space.id);
-			this.spaces[space.id] = space;
 			String name = String.format("%08x.dat", space.id);
 			space.file = new File(this.home, name);
 			try {
@@ -270,10 +242,10 @@ public final class SpaceManager {
 			catch (IOException e) {
 				throw new OutofSpaceException(e);
 			}
-			space.buf.order(ByteOrder.LITTLE_ENDIAN);
-			space.buf.putInt(OFFSET_SIG, SIG);
-			space.buf.put(OFFSET_VERSION, VERSION);
+			Unsafe.putInt(space.addr + OFFSET_SIG, SIG);
+            Unsafe.putByte(space.addr + OFFSET_VERSION, VERSION);
 			space.allocPointer.set(HEADER_SIZE);
+            this.spaces[space.id] = space;
 			this.top = space.id;
 		}
 	}
@@ -312,11 +284,8 @@ public final class SpaceManager {
 				size = spEnd - spStart;
 			}
 			if (size != 0) {
-				MappedByteBuffer buf;
 				try {
-					buf = spaceStart.channel.map(MapMode.READ_WRITE, offsetStart, size);
-					buf.force();
-					Unsafe.unmap(buf);
+				    spaceStart.force(offsetStart, size);
 				}
 				catch (IOException e) {
 					throw new HumpbackException("unable to persist", e);
@@ -341,19 +310,10 @@ public final class SpaceManager {
 			}
 			this.spaces[i] = null;
 			try {
-				MappedByteBuffer b = space.buf;
-				space.buf = null;
-		        _log.debug(String.format("%s at 0x%016x is unmounted", space.file.toString(), space.addr));
-				Unsafe.unmap(b);
-				if (space.allocPointer != null) {
-					if (space.allocPointer.get() != space.raf.length()) {
-						space.raf.setLength(space.allocPointer.get());
-					}
-				}
-				space.raf.close();
-				space.channel.close();
+			    space.close();
+			    space.resize();
 			}
-			catch (IOException x) {
+			catch (Exception x) {
 				// it shouldn't throw any exception
 				_log.warn("errors when closing space manager", x);
 			}
@@ -376,5 +336,69 @@ public final class SpaceManager {
 	public long getSpaceStartSp(int spaceId) {
 		return makeSpacePointer(spaceId, HEADER_SIZE);
 	}
-	
+
+	/**
+	 * free log space up to the specified sp
+	 * @param gc
+	 * @param sp anything less than or equal to the sp will be released
+	 */
+    public synchronized void gc(GarbageCollector gc, long sp) {
+        int count = 0;
+        for (int i=0; i<this.top; i++) {
+            Space space = this.spaces[i];
+            if (space == null) {
+                continue;
+            }
+            if (space.isGarbage) {
+                continue;
+            }
+            if (space.spEnd <= sp) {
+                space.isGarbage = true;
+                GarbageSpace gs = new GarbageSpace();
+                gs.sm = this;
+                gs.pos = i;
+                gs.space = space;
+                gc.free(gs);
+                count++;
+                _log.debug("{} is freed", space.file);
+            }
+        }
+        if (count > 0) {
+            _log.debug("log window is reset to {} with {} files marked for gc", hex(sp), count);
+        }
+        else {
+            _log.trace("log window is reset to {} with {} files marked for gc", hex(sp), count);
+        }
+    }
+
+    /**
+     * fill up current log space
+     */
+    public void checkpoint() {
+        int index = this.top;
+        Space space = this.spaces[index];
+        int p = space.allocPointer.get();
+        while (!space.allocPointer.compareAndSet(p, this.fileSize)) {
+        }
+        grow(index);
+    }
+
+    /**
+     * calculate the bytes between x and y, 
+     * @param x
+     * @param y
+     * @return x - y
+     */
+    public long minus(long x, long y) {
+        long result = toAbsoluteBytes(x) - toAbsoluteBytes(y);
+        return result;
+    }
+    
+    public long toAbsoluteBytes(long lp) {
+        long result = getSpaceId(lp);
+        result *= this.fileSize;
+        long offset = lp & 0xffffffffl;
+        result += offset;
+        return result;
+    }
 }

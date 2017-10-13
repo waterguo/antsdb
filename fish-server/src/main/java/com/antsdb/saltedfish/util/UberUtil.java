@@ -17,6 +17,7 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.sun.management.OperatingSystemMXBean;
 
 import sun.misc.Unsafe;
 
@@ -25,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -69,14 +71,21 @@ public class UberUtil {
     }
     
     public static String getThisClassName() {
+        String result = "";
         Exception x = new Exception();
         StackTraceElement[] stack = x.getStackTrace();
         if (stack != null) {
             if (stack.length >= 2) {
-                return stack[1].getClassName();
+                result = stack[1].getClassName();
+                if ("com.antsdb.saltedfish.util.UberUtil$getThisClassName".equals(result)) {
+                    // this is groovy
+                    if (stack.length > 5) {
+                        result = stack[5].getClassName();
+                    }
+                }
             }
         }
-        return "";
+        return result;
     }
 
     public static Class<?> getThisClass() {
@@ -385,4 +394,23 @@ public class UberUtil {
 		pool.shutdown();
 		return result;
 	}
+	
+	public static double getSystemCpuLoad() {
+	    OperatingSystemMXBean bean = (OperatingSystemMXBean)ManagementFactory.getOperatingSystemMXBean();
+	    return bean.getSystemCpuLoad();
+	}
+	
+    public static double getProcessCpuLoad() {
+        OperatingSystemMXBean bean = (OperatingSystemMXBean)ManagementFactory.getOperatingSystemMXBean();
+        return bean.getProcessCpuLoad();
+    }
+    
+    public static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }

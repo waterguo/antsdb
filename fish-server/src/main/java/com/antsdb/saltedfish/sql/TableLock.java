@@ -28,12 +28,12 @@ import com.antsdb.saltedfish.util.UberUtil;
 public final class TableLock {
 	static Logger _log = UberUtil.getThisLogger();
 	
-	AtomicInteger atom = new AtomicInteger();
+	AtomicInteger level = new AtomicInteger();
 	TableLock next;
 	volatile int owner;
 	boolean transactional;
-	private int tableId;
-	private int sessionId;
+	int tableId;
+	int sessionId;
 	
 	public TableLock(int sessionId, int tableId) {
 		this.tableId = tableId;
@@ -50,7 +50,7 @@ public final class TableLock {
 	public boolean acquire(int owner, int level, int timeout) {
 		UberTimer timer = new UberTimer(timeout);
 		for (;;) {
-			int curLevel = atom.get();
+			int curLevel = this.level.get();
 
 			// upgrade the lock ?
 			
@@ -58,7 +58,7 @@ public final class TableLock {
 				if (level <= curLevel) {
 					return false;
 				}
-				if (!this.atom.compareAndSet(curLevel, level)) {
+				if (!this.level.compareAndSet(curLevel, level)) {
 					// concurrency , retry
 					continue;
 				}
@@ -98,7 +98,7 @@ public final class TableLock {
 
 	public void releaseAll() {
 		for (TableLock i = this; i!=null; i=i.next) {
-			int state = i.atom.get();
+			int state = i.level.get();
 			if (!i.transactional) {
 				continue;
 			}
@@ -111,7 +111,7 @@ public final class TableLock {
 	}
 
 	public int getLevel() {
-		return this.atom.get();
+		return this.level.get();
 	}
 
 	public boolean isTransactional() {
@@ -126,7 +126,7 @@ public final class TableLock {
 		this.owner = 0;
 		this.transactional = false;
 		this.next = null;
-		this.atom.set(LockLevel.NONE);
+		this.level.set(LockLevel.NONE);
 	}
 
 	public void setTransactional(boolean b) {
@@ -140,8 +140,15 @@ public final class TableLock {
 				this.sessionId,
 				this.tableId,
 				this.owner, 
-				this.atom.get(), 
+				this.level.get(), 
 				this.transactional);
 	}
-	
+
+	public TableLock clone(int sessionId) {
+	    TableLock result = new TableLock(sessionId, tableId);
+	    result.level.set(this.level.get());
+	    result.owner = this.owner;
+	    result.transactional = this.transactional;
+	    return result;
+	}
 }

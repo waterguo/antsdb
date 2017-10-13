@@ -62,18 +62,13 @@ public class CreatePrimaryKey extends Statement {
         // create the primary key
         
         PrimaryKeyMeta pk = new PrimaryKeyMeta(ctx.getOrca(), table);
-        for (String i:this.columns) {
-            ColumnMeta col = table.getColumn(i);
-            if (col == null) {
-                throw new OrcaException("column that makes of the primary key is not found: " + i);
-            }
-            pk.addColumn(ctx.getOrca(), col);
-        }
+        List<ColumnMeta> ruleColumns = table.getColumnsByName(this.columns);
+        pk.setRuleColumns(ruleColumns);
         ctx.getMetaService().addRule(ctx.getTransaction(), pk);
     }
 
     private void ensureTableEmpty(VdmContext ctx, TableMeta tableMeta) {
-        GTable table = ctx.getHumpback().getTable(name.getNamespace(), tableMeta.getId());
+        GTable table = ctx.getHumpback().getTable(name.getNamespace(), tableMeta.getHtableId());
         if (!table.isPureEmpty()) {
             throw new OrcaException("table must be empty when adding primary key");
         }

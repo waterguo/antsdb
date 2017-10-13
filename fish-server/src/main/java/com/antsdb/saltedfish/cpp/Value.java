@@ -17,7 +17,6 @@ public class Value {
 	public static final byte TYPE_NULL = 0;
 	public static final byte TYPE_NUMBER = 0x10;
 	public static final byte TYPE_STRING = 0x30;
-	public static final byte TYPE_FLOAT = 0x50;
 	public static final byte TYPE_BOOL = 0x60;
 	public static final byte TYPE_DATE = 0x70;
 	public static final byte TYPE_TIME = (byte)0x80;
@@ -34,17 +33,17 @@ public class Value {
 	/** 4 bytes integer */
 	public static final byte FORMAT_INT4 = TYPE_NUMBER + 2;
 	/** 8 bytes integer */
-	public static final byte FORMAT_INT8 = TYPE_NUMBER + 3;
+	public static final byte FORMAT_INT8 = TYPE_NUMBER + 4;
 	/** variable length integer */
-	public static final byte FORMAT_BIGINT = TYPE_NUMBER + 4;
+	public static final byte FORMAT_BIGINT = TYPE_NUMBER + 6;
 	/** decimal number */
-	public static final byte FORMAT_FAST_DECIMAL = TYPE_NUMBER + 5;
+	public static final byte FORMAT_FAST_DECIMAL = TYPE_NUMBER + 8;
 	/** decimal number */
-	public static final byte FORMAT_DECIMAL = TYPE_NUMBER + 6;
+	public static final byte FORMAT_DECIMAL = TYPE_NUMBER + 9;
 	/** 4 bytes float */
-	public static final byte FORMAT_FLOAT4 = TYPE_FLOAT + 0;
+	public static final byte FORMAT_FLOAT4 = TYPE_NUMBER + 12;
 	/** 8 bytes flat */
-	public static final byte FORMAT_FLOAT8 = TYPE_FLOAT + 1;
+	public static final byte FORMAT_FLOAT8 = TYPE_NUMBER + 13;
 	/** time */
 	public static final byte FORMAT_TIME = TYPE_TIME;
 	/** date */
@@ -63,6 +62,8 @@ public class Value {
 	public static final byte FORMAT_KEY_BYTES = TYPE_BYTES + 1;
 	/** boundary is a combination of key and inclusive indicator */
 	public static final byte FORMAT_BOUNDARY = TYPE_UNKNOWN + 0;
+	/** an array of integers **/
+    public static final byte FORMAT_INT4_ARRAY = TYPE_UNKNOWN + 1;
 	public static final byte FORMAT_ROW = TYPE_UNKNOWN + 0x10;
 	
 	public final static byte getFormat(Heap heap, long address) {
@@ -81,7 +82,8 @@ public class Value {
 		return getType(format);
 	}
 	
-	final static byte getType(byte format) {
+	public final static byte getType(int format) {
 		return (byte)(format & 0xf0);
 	}
+
 }

@@ -19,9 +19,9 @@ package com.antsdb.saltedfish.nosql;
  */
 final class RowKeeper {
 	long version;
-	long sprow;
+	long pRow;
 	
 	boolean isTombStone() {
-		return this.sprow == 0;
+		return this.pRow == 0;
 	}
 }

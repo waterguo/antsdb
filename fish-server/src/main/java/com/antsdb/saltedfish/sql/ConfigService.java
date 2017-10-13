@@ -14,13 +14,17 @@
 package com.antsdb.saltedfish.sql;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.sql.meta.ColumnId;
@@ -60,7 +64,7 @@ public class ConfigService {
         row.set(ColumnId.sysparam_name.getId(), key);
         row.set(ColumnId.sysparam_type.getId(), type);
         row.set(ColumnId.sysparam_value.getId(), value.toString());
-        table.put(1, row);
+        table.put(1, row, 0);
         this.params.put(key, value);
     }
     
@@ -71,11 +75,11 @@ public class ConfigService {
         }
         
         for (RowIterator i=table.scan(0, Integer.MAX_VALUE); i.next();) {
-            long pRow = i.getRowPointer();
-            if (pRow == 0) {
+            Row rrow = i.getRow();
+            if (rrow == null) {
                 break;
             }
-            SlowRow row = SlowRow.fromRowPointer(orca.getSpaceManager(), pRow);
+            SlowRow row = SlowRow.from(rrow);
             String key = (String)row.get(ColumnId.sysparam_name.getId());
             String value = (String)row.get(ColumnId.sysparam_value.getId());
             this.params.put(key, value);
@@ -120,4 +124,47 @@ public class ConfigService {
 	public String getSlavePassword() {
         return this.props.getProperty("masterPassword");
 	}
+	
+    public boolean isAsynchronousImportEnabled() {
+        return getBoolean("orca.asynchronous-import", true);
+    }
+
+    private boolean getBoolean(String key, boolean defaultValue) {
+        boolean value = defaultValue;
+        String s = this.props.getProperty(key);
+        if (s != null && s.trim() != "") {
+            value = Boolean.getBoolean(s);
+        }
+        return value;
+    }
+
+    public String getMasterHost() {
+        return this.props.getProperty("masterHost");
+    }
+
+    public int getMasterPort() {
+        return getInt("masterPort", 3306);    
+    }
+    
+    private int getInt(String key, int defaultValue) {
+        int value = defaultValue;
+        String s = this.props.getProperty(key);
+        if (s != null && s.trim() != "") {
+            value = Integer.parseInt(s);
+        }
+        return value;
+    }
+
+    public Set<String> getIgnoreList() {
+        String value = this.props.getProperty("slave.ignore-db");
+        if (value == null) {
+            return Collections.emptySet();
+        }
+        Set<String> result = new HashSet<>();
+        for (String i:StringUtils.split(value, ",")) {
+            result.add(i);
+        }
+        return result;
+    }
+    
 }

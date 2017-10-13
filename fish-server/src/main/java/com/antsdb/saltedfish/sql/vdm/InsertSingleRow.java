@@ -40,6 +40,7 @@ public class InsertSingleRow extends Statement {
     IndexEntryHandlers indexHandlers;
     boolean ignoreError = false;
     int tableId;
+    boolean isReplace = false;
     
     public InsertSingleRow(
     	Orca orca,
@@ -65,6 +66,10 @@ public class InsertSingleRow extends Statement {
 		}
 	}
 
+	public void setReplace(boolean value) {
+	    this.isReplace = value;
+	}
+	
 	public Object run_(VdmContext ctx, Parameters params) {
         int count = 0;
         try (Heap heap = new FlexibleHeap()) {
@@ -114,9 +119,9 @@ public class InsertSingleRow extends Statement {
         Transaction trx = ctx.getTransaction();
     	row.setVersion(trx.getGuaranteedTrxId());
         for (;;) {
-	        HumpbackError error = this.gtable.insert(row, timeout);
+	        HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
 	        if (error == HumpbackError.SUCCESS) {
-	        	this.indexHandlers.insert(heap, trx, row, timeout);
+	        	this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
 	        	break;
 	        }
 	        else {

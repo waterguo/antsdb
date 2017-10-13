@@ -71,7 +71,7 @@ public class TableRangeScan extends CursorMaker implements RangeScannable, Order
 		        pKeyTo = to.getKeyAddress();
 		        toInclusive = to.isInclusive();
 	        }
-	        GTable gtable = ctx.getHumpback().getTable(table.getId());
+	        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 	        Transaction trx = ctx.getTransaction();
 	        RowIterator it = gtable.scan(
 	                trx.getTrxId(), 

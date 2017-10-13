@@ -14,10 +14,11 @@
 package com.antsdb.saltedfish.nosql;
 
 /**
- * 
+ *  upper 2 bits of the 32 bits integer is reserved for table type
+ *  
  * @author *-xguo0<@
  */
 public enum TableType {
 	DATA,
-	INDEX,
+	INDEX;
 }

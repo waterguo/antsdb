@@ -21,12 +21,8 @@ package com.antsdb.saltedfish.nosql;
 public enum HumpbackError {
 	/** mission accomplished go ahead */
 	SUCCESS,
-	/** the record is supposed to be exist but not. or vice versa */
-	EXISTENCE_VIOLATION,
 	/** the record is locked by another pending trx */
 	LOCK_COMPETITION,
-	/** incorrect incoming version. it is lesser than the most recent version */
-	VERSION_VIOLATION, 
 	/** the record is updated/deleted by a concurrent trx */
 	CONCURRENT_UPDATE,
 }

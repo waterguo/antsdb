@@ -77,7 +77,7 @@ public class VdmContext {
     
     public GTable getGtable(ObjectName name) {
         TableMeta tableMeta = getMetaService().getTable(getTransaction(), name);
-        GTable table = this.getHumpback().getTable(tableMeta.getId());
+        GTable table = this.getHumpback().getTable(tableMeta.getHtableId());
         return table;
     }
 

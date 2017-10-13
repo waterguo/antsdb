@@ -13,10 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql;
 
+import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.sql.meta.TableId;
 
 public class OrcaConstant {
-    public static final String SYSNS = "__SYS";
+    public static final String SYSNS = Humpback.SYS_NAMESAPCE;
     
     public static final String TABLENAME_SYSSEQUENCE = "SYSSEQUENCE";
     public static final String TABLENAME_SYSTABLE = "SYSTABLE";
@@ -25,10 +26,9 @@ public class OrcaConstant {
     public static final String TABLENAME_SYSRULE = "SYSRULE";
     public static final String TABLENAME_SYSRULECOL = "SYSRULECOL";
     
-    public static final int TABLEID_SYSSEQUENCE = -TableId.SYSSEQUENCE.ordinal();
-    public static final int TABLEID_SYSTABLE = -TableId.SYSTABLE.ordinal();
-    public static final int TABLEID_SYSCOLUMN = -TableId.SYSCOLUMN.ordinal();
-    public static final int TABLEID_SYSPARAM = -TableId.SYSPARAM.ordinal();
-    public static final int TABLEID_SYSRULE = -TableId.SYSRULE.ordinal();
-    public static final int TABLEID_SYSRULECOL = -TableId.SYSRULECOL.ordinal();
+    public static final int TABLEID_SYSSEQUENCE = TableId.SYSSEQUENCE;
+    public static final int TABLEID_SYSTABLE = TableId.SYSTABLE;
+    public static final int TABLEID_SYSCOLUMN = TableId.SYSCOLUMN;
+    public static final int TABLEID_SYSPARAM = TableId.SYSPARAM;
+    public static final int TABLEID_SYSRULE = TableId.SYSRULE;
 }

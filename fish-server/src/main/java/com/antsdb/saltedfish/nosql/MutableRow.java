@@ -33,11 +33,6 @@ public class MutableRow extends Row {
     	updateSize();
 	}
 
-	public MutableRow setTableId(int tableId) {
-    	Unsafe.putInt(this.addr + OFFSET_TABLE_ID, tableId);
-    	return this;
-	}
-	
 	public void setVersion(long value) {
 		super.setVersion(value);
     	Unsafe.putLong(this.addr + OFFSET_TRX_TS, value);

@@ -85,7 +85,7 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
 	        // create index scanner
 	        
 	        GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
-	        GTable gtable = ctx.getHumpback().getTable(table.getId());
+	        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 	        Transaction trx = ctx.getTransaction();
 	        RowIterator it = gindex.scan(
 	                trx.getTrxId(), 

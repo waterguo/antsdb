@@ -15,7 +15,9 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.sql.LockLevel;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 /**
@@ -33,7 +35,15 @@ public class LockTable extends Statement {
 	public Object run(VdmContext ctx, Parameters params) {
 		for (ObjectName i:this.tableNames) {
 			TableMeta table = Checks.tableExist(ctx.getSession(), i);
-			ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
+			if (!ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false)) {
+			    throw new OrcaException("unable to lock table " + table.getObjectName());
+			}
+			if (ctx.getOrca().getConfigService().isAsynchronousImportEnabled()) {
+	            GTable gtable = ctx.getHumpback().getTable(table.getId());
+	            if (gtable.size() == 0) {
+	                ctx.getSession().setImportMode(true);
+	            }
+			}
 		}
 		return null;
 	}

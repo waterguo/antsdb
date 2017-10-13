@@ -167,7 +167,7 @@ public class HBaseImportThread  extends Thread {
 	// cached table information - so we don't have to get it for each batch of rows
 	// we'll update it when table changed or maxColumnId changed
 	
-	int tableId = Integer.MAX_VALUE;
+	int tableId = Humpback.SYSMETA_TABLE_ID;
 	TableName tableName;
 	List<byte[]> tableColumnQualifierList = new ArrayList<byte[]>();
 	byte[] tableColumnTypes;
@@ -191,17 +191,16 @@ public class HBaseImportThread  extends Thread {
 		}
 	}
 	
-	void updateColumnInfo(Row row) {
+	void updateColumnInfo(int tableId, Row row) {
 		
-		int id = row.getTableId();
 		int maxColumnId = row.getMaxColumnId();
 		
 		if (this.tableColumnQualifierList.size() < maxColumnId + 1) {
 			
-			TableMeta tableMeta = getTable(id);
+			TableMeta tableMeta = getTable(tableId);
 	    	
 	    	int oldMaxColumnId = this.tableColumnQualifierList.size() - 1;
-	    	if (this.tableId == id && oldMaxColumnId > 0 &&  oldMaxColumnId < maxColumnId) {
+	    	if (this.tableId == tableId && oldMaxColumnId > 0 &&  oldMaxColumnId < maxColumnId) {
 	    		_log.info("Table {}  - max column id changed from {} to {}",
 	    						this.tableName.toString(), oldMaxColumnId, maxColumnId);
 	    	}
@@ -261,7 +260,7 @@ public class HBaseImportThread  extends Thread {
 			putIndex(r.getTableId(), r.getIndexRows());
 		}
 		else {
-			put(r.getRows());
+			put(r.getTableId(), r.getRows());
 		}
 	}
 	
@@ -316,11 +315,7 @@ public class HBaseImportThread  extends Thread {
     	}
 	}
 	
-	void put(List<Row> rows) throws IOException  {
-
-		Row firstRow = rows.get(0);
-    	int tableId = firstRow.getTableId();
-
+	void put(int tableId, List<Row> rows) throws IOException  {
     	// update table info
     	updateTableInfo(tableId);
     	
@@ -352,10 +347,9 @@ public class HBaseImportThread  extends Thread {
 			put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, 
 							version, Bytes.toBytes(row.getLength()));
 			
-	    	// populate fields
+	    	// populate fields this is necessary because maxColumnId is not always the same for all rows in a table
 			
-			updateColumnInfo(row);	// this is necessary because maxColumnId is
-									// not always the same for all rows in a table
+			updateColumnInfo(tableId, row);	
 			
 			int maxColumnId = row.getMaxColumnId();
 			for (int i=0; i<=maxColumnId; i++) {

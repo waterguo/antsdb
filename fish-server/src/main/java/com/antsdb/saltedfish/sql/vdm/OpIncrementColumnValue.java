@@ -54,7 +54,7 @@ public class OpIncrementColumnValue extends UnaryOperator {
 			}
 		}
         IdentifierService idService = ctx.getOrca().getIdentityService();
-        long value = idService.getSequentialId(this.table.getAutoIncrementSequenceName());
+        long value = idService.getNextId(this.table.getAutoIncrementSequenceName());
         ctx.getSession().setLastInsertId(value);
         long addr = Int8.allocSet(heap, value);
         return addr;

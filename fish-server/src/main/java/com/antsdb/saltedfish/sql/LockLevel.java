@@ -22,4 +22,19 @@ public final class LockLevel {
 	public static final int SHARED = 1;
 	public static final int EXCLUSIVE = 2;
 	public static final int EXCLUSIVE_BY_OTHER = 3;
+	
+    public static String toString(int level) {
+        switch (level) {
+            case NONE:
+                return "NONE";
+            case SHARED:
+                return "SHARED";
+            case EXCLUSIVE:
+                return "EXCLUSIVE";
+            case EXCLUSIVE_BY_OTHER:
+                return "EXCLUSIVE_BY_OTHER";
+            default:
+                return "UNKNOWN";
+        }
+    }
 }

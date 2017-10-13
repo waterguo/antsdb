@@ -52,7 +52,7 @@ public class FullTextIndexScan extends CursorMaker {
 		if (it == null) {
 			return new EmptyCursor(getCursorMeta());
 		}
-        GTable gtable = ctx.getHumpback().getTable(table.getId());
+        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         Transaction trx = ctx.getTransaction();
         IndexCursor cursor = new IndexCursor(
         		ctx.getSpaceManager(), 

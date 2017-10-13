@@ -37,6 +37,9 @@ public class PlannerField extends FieldMeta {
         this.field = column;
     }
     
+    private PlannerField() {
+    }
+
     @Override
     public String getSourceName() {
     	if (this.column != null) {
@@ -90,5 +93,18 @@ public class PlannerField extends FieldMeta {
 	public final int getIndex() {
 		return this.index;
 	}
-    
+ 
+	public void setIndex(int value) {
+	    this.index = value;
+	}
+	
+	@Override
+	public PlannerField clone() {
+	    PlannerField clone = new PlannerField();
+        clone.owner = this.owner;
+	    clone.column = this.column;
+	    clone.field = this.field;
+	    clone.index = this.index;
+	    return clone;
+	}
 }

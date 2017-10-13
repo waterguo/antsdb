@@ -13,22 +13,15 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.meta;
 
-import static com.antsdb.saltedfish.sql.OrcaConstant.TABLENAME_SYSRULE;
-import static com.antsdb.saltedfish.sql.OrcaConstant.TABLENAME_SYSRULECOL;
-
 import java.util.ArrayList;
 import java.util.List;
 
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.sql.Orca;
-import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.UberObject;
 
 public abstract class RuleMeta<T> extends UberObject {
-    final static ObjectName RULE_SEQUENCE = new ObjectName(Orca.SYSNS, TABLENAME_SYSRULE); 
-    final static ObjectName RULE_COL_SEQUENCE = new ObjectName(Orca.SYSNS, TABLENAME_SYSRULECOL); 
-    
     public static enum Rule {
         PrimaryKey,
         Index,
@@ -36,11 +29,10 @@ public abstract class RuleMeta<T> extends UberObject {
     }
     
     SlowRow row;
-    List<RuleColumnMeta> ruleColumns = new ArrayList<>();
 
-    public RuleMeta(Orca orca, Rule type) {
-        int id = (int)orca.getIdentityService().getSequentialId(RULE_SEQUENCE);
-        row = new SlowRow(id);
+    public RuleMeta(Orca orca, Rule type, int tableId) {
+        int id = (int)orca.getIdentityService().getNextGlobalId();
+        row = new SlowRow(tableId, id);
         setId(id);
         setType(type);
     }
@@ -81,24 +73,38 @@ public abstract class RuleMeta<T> extends UberObject {
     	return (String)row.get(ColumnId.sysrule_rule_name.getId());
     }
     
-    @SuppressWarnings("unchecked")
-    public T addColumn(Orca orca, ColumnMeta column) {
-        int key = (int)orca.getIdentityService().getSequentialId(RULE_COL_SEQUENCE);
-        RuleColumnMeta ruleColumn = new RuleColumnMeta(key);
-        ruleColumn.setRuleId(getId());
-        ruleColumn.setColumnId(column.getId());
-        this.ruleColumns.add(ruleColumn);
-        return (T)this;
+    public void setRuleParentColumns(List<ColumnMeta> columns) {
+        int[] array = new int[columns.size()];
+        for (int i=0; i<columns.size(); i++) {
+            array[i] = columns.get(i).getId();
+        }
+        setRuleParentColumns(array);
     }
-
-    public List<RuleColumnMeta> getRuleColumns() {
-    	return this.ruleColumns;
+    
+    public void setRuleParentColumns(int[] value) {
+        this.row.set(ColumnId.sysrule_parent_columns.getId(), value);
+    }
+    
+    public void setRuleColumns(List<ColumnMeta> columns) {
+        int[] array = new int[columns.size()];
+        for (int i=0; i<columns.size(); i++) {
+            array[i] = columns.get(i).getId();
+        }
+        setRuleColumns(array);
+    }
+    
+    public void setRuleColumns(int[] value) {
+        this.row.set(ColumnId.sysrule_columns.getId(), value);
+    }
+    
+    public int[] getRuleColumns() {
+        int[] columns = (int[])this.row.get(ColumnId.sysrule_columns.getId());
+    	return columns;
     }
     
     public List<ColumnMeta> getColumns(TableMeta table) {
         List<ColumnMeta> list = new ArrayList<ColumnMeta>();
-        for (RuleColumnMeta i:this.ruleColumns) {
-            int columnId = i.getColumnId();
+        for (int columnId:getRuleColumns()) {
             ColumnMeta col = table.getColumn(columnId);
             if (col == null) {
                 throw new CodingError();
@@ -108,21 +114,11 @@ public abstract class RuleMeta<T> extends UberObject {
         return list;
     }
 
-    public RuleColumnMeta findRuleColumn(ColumnMeta column) {
-        for (RuleColumnMeta i:this.ruleColumns) {
-            int columnId = i.getColumnId();
-            if (columnId == column.getId()) {
-            	return i;
-            }
-        }
-        return null;
-    }
-
-    public String getSpec() {
-    	return (String)this.row.get(ColumnId.sysrule_spec.getId());
+    public String getNamespace() {
+        return (String)this.row.get(ColumnId.sysrule_namespace.getId());
     }
     
-    public void setSpec(String value) {
-    	this.row.set(ColumnId.sysrule_spec.getId(), value);
+    public void setNamespace(String value) {
+        this.row.set(ColumnId.sysrule_namespace.getId(), value);
     }
 }

@@ -14,38 +14,51 @@
 package com.antsdb.saltedfish.nosql;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
 
 /**
  * implemented by caller
  * 
  * @author wgu0
  */
-public class ReplayHandler {
-	public void all(LogEntry entry) throws Exception {
+public interface ReplayHandler {
+	default public void all(LogEntry entry) throws Exception {
 	}
 	
-	public void put(Gobbler.PutEntry entry) throws Exception {
+	default public void insert(InsertEntry entry) throws Exception {
+    }
+    
+	default public void update(UpdateEntry entry) throws Exception {
+    }
+    
+	default public void put(PutEntry entry) throws Exception {
 	}
 	
-	public void index(Gobbler.IndexEntry entry) throws Exception {
+	default public void index(Gobbler.IndexEntry entry) throws Exception {
 	}
 	
-	public void delete(Gobbler.DeleteEntry entry) throws Exception {
+	default public void delete(Gobbler.DeleteEntry entry) throws Exception {
 	}
 	
-	public void commit(CommitEntry entry) throws Exception {
+	default public void commit(CommitEntry entry) throws Exception {
 	}
 	
-	public void rollback(RollbackEntry entry) throws Exception {
+	default public void rollback(RollbackEntry entry) throws Exception {
 	}
 	
-	public void message(MessageEntry entry) throws Exception {
+	default public void message(MessageEntry entry) throws Exception {
 	}
 
-	public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+	default public void transactionWindow(TransactionWindowEntry entry) throws Exception {
 	}
+
+	default public void timestamp(TimestampEntry entry) {
+    }
 }

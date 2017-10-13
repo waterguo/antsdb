@@ -15,17 +15,22 @@ package com.antsdb.saltedfish.nosql;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
+
+import org.slf4j.Logger;
+
 import java.nio.channels.FileLock;
-import java.nio.file.StandardOpenOption;
 
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.util.UberTimer;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public class CheckPoint {
+public class CheckPoint implements AutoCloseable {
+    static Logger _log = UberUtil.getThisLogger();
+    
 	/* humpback data starts from 0 */
 
 	/** byte, tracks server crash */
@@ -50,46 +55,74 @@ public class CheckPoint {
     FileChannel ch;
     MappedByteBuffer buf;
     long addr;
+
+    private boolean mutable;
     
-    public CheckPoint(File file) throws IOException {
+    public CheckPoint(File file, boolean mutable) {
         super();
         this.file = file;
-        this.ch = FileChannel.open(
-                file.toPath(), 
-                StandardOpenOption.CREATE, 
-                StandardOpenOption.WRITE, 
-                StandardOpenOption.READ);
-        try {
-	        for (UberTimer timer = new UberTimer(60 * 1000); !timer.isExpired();) {
-	            FileLock lock = this.ch.tryLock();
-	            if (lock != null) {
-	                this.buf = this.ch.map(MapMode.READ_WRITE, 0, 512);
-	                this.addr = UberUtil.getAddress(buf);
-	                if (getServerId() == 0) {
-	                	Unsafe.putLong(this.addr + OFFSET_SERVER_ID, System.nanoTime());
-	                }
-	            	return;
-	            }
-	            try {
-					Thread.sleep(1000);
-				}
-				catch (InterruptedException ignored) {
-				}
-	        }
+        this.mutable = mutable;
+    }
+    
+    public void open() throws IOException {
+        if (mutable) {
+            openMutable();
+        }
+        else {
+            openImmutable();
+        }
+    }
+    
+    private void openImmutable() throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+            this.ch = raf.getChannel();
+            this.buf = this.ch.map(MapMode.READ_ONLY, 0, 512);
+            this.addr = UberUtil.getAddress(buf);
         }
         finally {
-        	this.ch.close();
+            this.ch.close();
+        }
+    }
+
+    private void openMutable() throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+            this.ch = raf.getChannel();
+            for (UberTimer timer = new UberTimer(60 * 1000); !timer.isExpired();) {
+                FileLock lock = this.ch.tryLock();
+                if (lock != null) {
+                    this.buf = this.ch.map(MapMode.READ_WRITE, 0, 512);
+                    this.addr = UberUtil.getAddress(buf);
+                    if (getServerId() == 0) {
+                        Unsafe.putLong(this.addr + OFFSET_SERVER_ID, System.nanoTime());
+                    }
+                    return;
+                }
+                try {
+                    Thread.sleep(1000);
+                }
+                catch (InterruptedException ignored) {
+                }
+            }
+        }
+        finally {
+            this.ch.close();
         }
         throw new IOException("unable to acquire lock on " + file.getAbsolutePath());
     }
-    
-    void close() throws IOException {
-    	if (this.buf != null) {
-    		Unsafe.unmap(buf);
+
+    @Override
+    public void close() {
+        try {
+        	if (this.buf != null) {
+        		Unsafe.unmap(buf);
+        	}
+        	if (this.ch != null) {
+                this.ch.close();
+            }
     	}
-    	if (this.ch != null) {
-    		this.ch.close();
-    	}
+        catch (Exception x) {
+            _log.error("unable to close checkpoint file", x);
+        }
     }
     
     boolean isDatabaseOpen() {

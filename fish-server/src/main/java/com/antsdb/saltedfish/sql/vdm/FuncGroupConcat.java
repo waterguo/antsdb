@@ -25,6 +25,7 @@ public class FuncGroupConcat extends Function {
 	int variableId;
 	
     private static class Data {
+        String seprator = ",";
     	String result;
     }
     
@@ -39,6 +40,10 @@ public class FuncGroupConcat extends Function {
     	Data data = (Data)ctx.getVariable(this.variableId);
     	if (data == null) {
     		data = new Data();
+    		if (this.parameters.size() >= 2) {
+    		    long pSeparator = this.parameters.get(1).eval(ctx, heap, params, pRecord);
+    		    data.seprator = AutoCaster.getString(heap, pSeparator);
+    		}
     		ctx.setVariable(variableId, data);
     	}
         if (Record.isGroupEnd(pRecord)) {
@@ -53,7 +58,7 @@ public class FuncGroupConcat extends Function {
                 data.result = val;
         	}
         	else {
-                data.result += "," + val;
+                data.result += data.seprator + val;
         	}
         }
         return FishObject.allocSet(heap, data.result);
@@ -68,4 +73,9 @@ public class FuncGroupConcat extends Function {
 	public int getMinParameters() {
 		return 1;
 	}
+
+    @Override
+    public int getMaxParameters() {
+        return 2;
+    }
 }
