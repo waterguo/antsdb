@@ -336,8 +336,8 @@ public class MinkeTable implements StorageTable, Recycable {
             
             // if original page is not filled up. we do a copy on write
             
-            int newUsageRatio = (page.getUsage() + incomingSize) * 100 / this.minke.pageSize;
-            if (newUsageRatio < 90) {
+            double newUsageRatio = (page.getUsage() + (double)incomingSize) / this.minke.pageSize;
+            if (newUsageRatio < 0.9) {
                 copyOnWrite(page);
                 return;
             }
