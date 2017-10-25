@@ -1465,7 +1465,10 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
 		            }
 			    }
 			    else {
-	                _log.warn("trxts not found for trxid: {}", version);
+			        node.setVersion(MARK_ROLLED_BACK);
+	                _log.warn("trxts not found for trxid: {} sp {} is set to rollback", 
+	                        version,
+	                        hex(node.getSpacePointer()));
 			    }
 			}
 			else {

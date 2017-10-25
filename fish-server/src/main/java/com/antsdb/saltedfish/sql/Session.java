@@ -57,8 +57,7 @@ public class Session {
 	private boolean isClosed = false;
 	private long lastInsertId;
 	private int id = _id.incrementAndGet();
-	private String protocolCharset = "latin1";
-	private SessionParameters parameters = new SessionParameters();
+	SessionParameters parameters = new SessionParameters();
     AsynchronusInsert asyncExecutor;
     private HumpbackSession hsession;
     public String remote;
@@ -354,14 +353,6 @@ public class Session {
     	return this.parameters.getLockTimeout();
     }
 
-	public String getProtocolCharset() {
-		return this.protocolCharset;
-	}
-	
-	public void setProtocolCharset(String cs) {
-		this.protocolCharset = cs;
-	}
-	
 	/**
 	 * last insert id is the last value generated for a auto_increment column.
 	 * 

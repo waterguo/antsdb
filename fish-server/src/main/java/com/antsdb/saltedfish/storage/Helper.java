@@ -635,4 +635,13 @@ final class Helper {
     	return bytes;
     }
 
+    public static long toIndexLine(Heap heap, Result r) {
+        NavigableMap<byte[], byte[]> sys = r.getFamilyMap(SYS_COLUMN_FAMILY_BYTES);
+        byte[] indexKey = r.getRow();
+        byte[] rowKey = sys.get(SYS_COLUMN_INDEXKEY_BYTES);
+        byte misc = sys.get(SYS_COLUMN_MISC_BYTES)[0];
+        indexKey = hbaseKeyToAnts(indexKey);
+        rowKey = hbaseKeyToAnts(rowKey);
+        return IndexLine.alloc(heap, indexKey, rowKey, misc).getAddress();
+    }
 }

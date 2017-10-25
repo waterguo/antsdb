@@ -67,9 +67,13 @@ public final class PacketEncoder {
     static final FastDateFormat TIMESTAMP19_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss");
     static final FastDateFormat TIMESTAMP29_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS000000");
     
-	private Charset cs;
 	private int csidx;
+    private MysqlServerHandler handler;
 
+	PacketEncoder(MysqlServerHandler handler) {
+	    this.handler = handler;
+	}
+	
     /**
      * Add header to finish the full packet
      * @param out
@@ -168,27 +172,27 @@ public final class PacketEncoder {
      */
     public void writeColumnDefBody(ByteBuf buffer, FieldMeta meta) {
         //catalog
-        BufferUtils.writeLenString(buffer, "def", this.cs);
+        BufferUtils.writeLenString(buffer, "def", getEncoder());
         //db, schema
         if (meta.getSourceTable() != null) {
-        	BufferUtils.writeLenString(buffer, meta.getSourceTable().getNamespace(), this.cs);
+        	BufferUtils.writeLenString(buffer, meta.getSourceTable().getNamespace(), getEncoder());
         }
         else {
-        	BufferUtils.writeLenString(buffer, "", this.cs);
+        	BufferUtils.writeLenString(buffer, "", getEncoder());
         }
         // table
-        BufferUtils.writeLenString(buffer, meta.getTableAlias(), this.cs);
+        BufferUtils.writeLenString(buffer, meta.getTableAlias(), getEncoder());
         // orgTable
         if (meta.getSourceTable() != null) {
-        	BufferUtils.writeLenString(buffer, meta.getSourceTable().getTableName(), this.cs);
+        	BufferUtils.writeLenString(buffer, meta.getSourceTable().getTableName(), getEncoder());
         }
         else {
-        	BufferUtils.writeLenString(buffer, "", this.cs);
+        	BufferUtils.writeLenString(buffer, "", getEncoder());
         }
         // col name
-        BufferUtils.writeLenString(buffer, meta.getName(), this.cs);
+        BufferUtils.writeLenString(buffer, meta.getName(), getEncoder());
         // col original name
-        BufferUtils.writeLenString(buffer, meta.getSourceName(), this.cs);
+        BufferUtils.writeLenString(buffer, meta.getSourceName(), getEncoder());
         // next length 
         buffer.writeByte((byte) 0x0C);
         if (meta.getType() == null) {
@@ -504,7 +508,7 @@ public final class PacketEncoder {
             BufferUtils.writeWithLength(buffer, (byte[])value);
         }
         else {
-            BufferUtils.writeLenString(buffer,value.toString(), this.cs);
+            BufferUtils.writeLenString(buffer,value.toString(), getEncoder());
         }
 	}
 
@@ -547,7 +551,7 @@ public final class PacketEncoder {
             else if (fv instanceof Duration) {
             	Duration t = (Duration)fv;
             	String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
-            	BufferUtils.writeLenString(buffer, text, this.cs);
+            	BufferUtils.writeLenString(buffer, text, getEncoder());
             }
             else if (fv instanceof Timestamp) {
                 // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
@@ -565,7 +569,7 @@ public final class PacketEncoder {
                 	else {
                 		text = TIMESTAMP29_FORMAT.format(ts);
                 	}
-                    BufferUtils.writeLenString(buffer, text, this.cs);
+                    BufferUtils.writeLenString(buffer, text, getEncoder());
             	}
             }
             else if (fv instanceof byte[]){
@@ -583,7 +587,7 @@ public final class PacketEncoder {
                     buffer.writeByte((byte) 0);
                 } 
                 else {
-                    BufferUtils.writeLenString(buffer, val, this.cs);
+                    BufferUtils.writeLenString(buffer, val, getEncoder());
                 }
             }
         }
@@ -884,8 +888,15 @@ public final class PacketEncoder {
     	BufferUtils.writeString(buf, "");
     }
     
-    public void setCodec(Charset cs, int csidx) {
-    	this.cs = cs;
-    	this.csidx = csidx;
+    private Charset getEncoder() {
+        Charset result = null;
+        if (this.handler.session != null) {
+            result = this.handler.session.getParameters().getResultEncoder(); 
+        }
+        if (result == null) {
+            result = this.handler.fish.getOrca().getDefaultSession().getParameters().getResultEncoder();
+        }
+        return result;
     }
+
 }

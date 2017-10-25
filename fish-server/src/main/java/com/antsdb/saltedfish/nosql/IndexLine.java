@@ -13,20 +13,33 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
+import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.cpp.Unsafe;
+
 /**
  * 
  * @author *-xguo0<@
  */
 public final class IndexLine {
-    private long indexKey;
+    private long addr;
     private long rowKey;
-    private byte misc;
 
     public IndexLine(long pLine) {
-        Gobbler.IndexEntry entry = new Gobbler.IndexEntry(0, pLine);
-        this.indexKey = entry.getIndexKeyAddress();
-        this.rowKey = entry.getRowKeyAddress();
-        this.misc = entry.getMisc();
+        this.addr = pLine;
+        this.rowKey = this.addr + 1 + KeyBytes.getRawSize(getKey());
+    }
+    
+    public static IndexLine alloc(Heap heap, byte[] indexKey, byte[] rowKey, byte misc) {
+        long pIndexKey = KeyBytes.allocSet(heap, indexKey).getAddress();
+        long pRowKey = KeyBytes.allocSet(heap, rowKey).getAddress();
+        int indexKeySize = KeyBytes.getRawSize(pIndexKey);
+        int rowKeySize = KeyBytes.getRawSize(pRowKey);
+        long addr = heap.alloc(1 + indexKeySize + rowKeySize);
+        Unsafe.putByte(addr, misc);
+        Unsafe.copyMemory(pIndexKey, addr+1, indexKeySize);
+        Unsafe.copyMemory(pRowKey, addr+1+indexKeySize, rowKeySize);
+        return new IndexLine(addr);
     }
     
     public static IndexLine from(long pLine) {
@@ -37,7 +50,7 @@ public final class IndexLine {
     }
     
     public long getKey() {
-        return this.indexKey;
+        return this.addr + 1;
     }
     
     public long getRowKey() {
@@ -45,6 +58,16 @@ public final class IndexLine {
     }
     
     public byte getMisc() {
-        return this.misc;
+        return Unsafe.getByte(this.addr);
     }
+
+    public long getAddress() {
+        return this.addr;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s:%s", KeyBytes.toString(getKey()), KeyBytes.toString(getRowKey()));
+    }
+    
 }

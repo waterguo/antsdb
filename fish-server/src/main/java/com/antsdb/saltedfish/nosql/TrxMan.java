@@ -53,6 +53,10 @@ public final class TrxMan {
     		return trx;
     	}
     	if (trx > this.oldest) {
+    	    if (this.isClosed) {
+    	        // recoverer is depending this logic. if there are unfinished transaction in the log
+    	        return MARK_ROLLED_BACK;
+    	    }
     		throw new IllegalArgumentException("oldest=" + this.oldest + " trx=" + trx);
     	}
         Long timestamp = this.trx.get(trx);

@@ -103,7 +103,7 @@ public class HBaseReplicationHandler extends ReplicationHandler {
     public void index(IndexEntry entry) throws Exception {
         int tableId = entry.getTableId();
         long pKey = entry.getIndexKeyAddress();
-        this.buffer.addIndexLine(tableId, pKey, entry.getAddress());
+        this.buffer.addIndexLine(tableId, pKey, entry.getIndexLineAddress());
         this.sp = entry.getSpacePointer();
         if (this.buffer.flushIfFull()) {
             this.hbase.updateLogPointer(this.sp);

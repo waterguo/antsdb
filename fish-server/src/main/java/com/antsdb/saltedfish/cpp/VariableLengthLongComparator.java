@@ -25,6 +25,9 @@ public final class VariableLengthLongComparator extends KeyComparator{
 	}
 	
 	public static int compare_(long xAddr, long yAddr) {
+	    if ((xAddr < 10) || (yAddr < 10)) {
+	        throw new IllegalArgumentException();
+	    }
 		int xLength = KeyBytes.getUnmaskedLength(xAddr);
 		int yLength = KeyBytes.getUnmaskedLength(yAddr);
 		int minLength = Math.min(xLength, yLength);

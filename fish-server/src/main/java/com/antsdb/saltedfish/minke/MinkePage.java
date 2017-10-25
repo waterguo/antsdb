@@ -343,7 +343,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         }
     }
 
-	void put(Row row) {
+	long put(Row row) {
         this.gate.incrementAndGet();
         try {
     		long pKey = row.getKeyAddress();
@@ -357,6 +357,7 @@ public final class MinkePage implements Comparable<MinkePage> {
     			}
     		}
     		trackWrite();
+    		return heap.getAddress(oNewRow);
         }
         finally {
             this.gate.decrementAndGet();

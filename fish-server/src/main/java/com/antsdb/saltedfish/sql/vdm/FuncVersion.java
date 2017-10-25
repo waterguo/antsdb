@@ -26,7 +26,7 @@ public class FuncVersion extends Function {
 	
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long addr = FishObject.allocSet(heap, Orca.VERSION);
+        long addr = FishObject.allocSet(heap, Orca._version);
         return addr;
     }
 

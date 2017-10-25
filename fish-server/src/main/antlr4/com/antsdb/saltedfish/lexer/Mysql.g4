@@ -371,13 +371,17 @@ insert_stmt_select
  ;
  
 set_stmt
- : K_SET (set_stmt_variable | set_stmt_names)
+ : K_SET (set_stmt_variable | set_stmt_names | set_stmt_character_set)
  ;
 
 set_stmt_names
- : (K_NAMES | (K_CHARACTER K_SET)) names_value (name_collate)?
+ : K_NAMES names_value (name_collate)?
  ;
 
+set_stmt_character_set
+ : K_CHARACTER K_SET names_value
+ ;
+ 
 name_collate
  : K_COLLATE names_value
  ;

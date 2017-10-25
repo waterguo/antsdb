@@ -25,11 +25,9 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
-import org.apache.commons.codec.Charsets;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.charset.Codecs;
 import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.server.SaltedFish;
 import com.antsdb.saltedfish.server.mysql.packet.AuthPacket;
@@ -65,7 +63,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     final static int HEADER_LENGTH = 4;
     static Logger _log = UberUtil.getThisLogger();
 //    public static String DEFAULT_CHARSET = "UFT8";
-    public static String SERVER_VERSION = Orca.VERSION;
+    public static String SERVER_VERSION = Orca._version;
     public static byte PROTOCOL_VERSION = 0x0a;
     public static byte CHAR_SET_INDEX = 0x21;
     public static String AUTH_MYSQL_CLEARTEXT = "mysql_clear_password";
@@ -79,8 +77,6 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     QueryHandler queryHandler;
     PacketEncoder packetEncoder;
     Map<Integer, MysqlPreparedStatement> prepared = new HashMap<>();
-    String charset;
-	private Decoder decoder;
 	int packetSequence;
     
     public SocketChannel chanel;
@@ -91,9 +87,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     public MysqlServerHandler(SaltedFish fish, SocketChannel ch) {
         this.fish = fish;
         this.chanel=ch;
-        packetEncoder = new PacketEncoder();
-		this.decoder = Codecs.ISO8859;
-		this.packetEncoder.setCodec(Charsets.ISO_8859_1, MYSQL_CHARSET_NAME_binary);
+        packetEncoder = new PacketEncoder(this);
     }
 
     @Override
@@ -293,40 +287,10 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         ByteBuf bufferArray = ctx.alloc().buffer();
         bufferArray.writeBytes(PacketEncoder.OK_PACKET);
         ctx.writeAndFlush(bufferArray);
-	}
-
-    private void resetCharset() throws Exception {
-        if (this.charset != getSession().getProtocolCharset()) {
-        	// reset encoder and decoder
-        	String name = getSession().getProtocolCharset();
-        	if (name.equals("latin1")) {
-        		this.decoder = Codecs.ISO8859;
-        		this.packetEncoder.setCodec(Charsets.ISO_8859_1, MYSQL_CHARSET_NAME_binary);
-        	}
-        	else if (name.equals("cp1250")) {
-        		this.decoder = Codecs.ISO8859;
-        		this.packetEncoder.setCodec(Charsets.ISO_8859_1, MYSQL_CHARSET_NAME_binary);
-        	}
-        	else if (name.equals("utf8")) {
-        		this.decoder = Codecs.UTF8;
-        		this.packetEncoder.setCodec(Charsets.UTF_8, MYSQL_CHARSET_NAME_utf8);
-        	}
-        	else if (name.equals("utf8mb4")) {
-        		this.decoder = Codecs.UTF8;
-        		this.packetEncoder.setCodec(Charsets.UTF_8, MYSQL_CHARSET_NAME_utf8);
-        	}
-        	else {
-        		throw new Exception("unknown charset: " + name);
-        	}
-        	this.charset = name;
-        }
     }
     
     private void query(ChannelHandlerContext ctx, QueryPacket request) throws Exception {
         queryHandler.query(ctx, request);
-        if (this.charset != getSession().getProtocolCharset()) {
-        	this.resetCharset();
-        }
     }
 
     private void stmtPrepare(ChannelHandlerContext ctx, StmtPreparePacket pstmtPacket) throws SQLException {
@@ -434,7 +398,14 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
 	}
 
 	public Decoder getDecoder() {
-		return this.decoder != null ? this.decoder : Codecs.ISO8859;
+	    Decoder result = null;
+	    if (this.session != null) {
+	        result = this.session.getParameters().getRequestDecoder();
+	    }
+	    if (result == null) {
+	        result = this.fish.getOrca().getDefaultSession().getParameters().getRequestDecoder();
+	    }
+		return result;
 	}
 
 	public SaltedFish getFish() {

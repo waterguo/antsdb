@@ -628,6 +628,9 @@ public class AutoCaster {
         long result = upcast(heap, pX, pY, (px, py) -> {
             BigDecimal x = getDecimal(px);
             BigDecimal y = getDecimal(py);
+            if (y.equals(BigDecimal.ZERO)) {
+                return 0l;
+            }
             BigDecimal z = x.divide(y);
             return FishNumber.allocSet(heap, z);
         });

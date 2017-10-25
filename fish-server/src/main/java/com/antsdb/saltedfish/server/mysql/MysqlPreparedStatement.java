@@ -92,4 +92,8 @@ public class MysqlPreparedStatement implements Closeable {
 	public String getSql() {
 		return this.script.getSql();
 	}
+	
+	public VaporizingRow getParameters() {
+	    return this.row;
+	}
 }

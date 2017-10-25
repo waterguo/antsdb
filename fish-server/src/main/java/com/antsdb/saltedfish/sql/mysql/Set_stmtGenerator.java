@@ -17,6 +17,7 @@ import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Names_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Set_stmtContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Set_stmt_character_setContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Set_stmt_namesContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Set_stmt_variableContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Variable_assignmentContext;
@@ -32,8 +33,8 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.Operator;
-import com.antsdb.saltedfish.sql.vdm.SetNames;
 import com.antsdb.saltedfish.sql.vdm.SetSystemParameter;
+import com.antsdb.saltedfish.sql.vdm.SetSystemParameter.Scope;
 import com.antsdb.saltedfish.sql.vdm.SetVariable;
 import com.antsdb.saltedfish.util.CodingError;
 
@@ -44,6 +45,9 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
     throws OrcaException {
         if (rule.set_stmt_names() != null) {
             return genSetNames(ctx, rule.set_stmt_names());
+        }
+        if (rule.set_stmt_character_set() != null) {
+            return genSetCharSet(ctx, rule.set_stmt_character_set());
         }
         else if (rule.set_stmt_variable() != null){
             return genSetVariables(ctx, rule.set_stmt_variable());
@@ -92,9 +96,22 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
 			name = name.substring(1, name.length()-1);
 		}
 		
-		// TODO	Collate to be implemented;
-	    
-        return new SetNames(name);
+		Flow flow = new Flow();
+	    flow.add(new SetSystemParameter(Scope.SESSION, "character_set_client", name));
+        flow.add(new SetSystemParameter(Scope.SESSION, "character_set_results", name));
+        flow.add(new SetSystemParameter(Scope.SESSION, "character_set_connection", name));
+        return flow;
+    }
+
+    private Instruction genSetCharSet(GeneratorContext ctx, Set_stmt_character_setContext rule) {
+        // test on 5.5.57-MariaDB shows SET CHARACTER SET only affects character_set_results. 
+        String name = rule.names_value().getText();
+        if (rule.names_value().STRING_LITERAL() != null) {
+            name = name.substring(1, name.length()-1);
+        }
+        Flow flow = new Flow();
+        flow.add(new SetSystemParameter(Scope.SESSION, "character_set_results", name));
+        return flow;
     }
 
     private SetSystemParameter createSetGlobalVariable(GeneratorContext ctx,Variable_assignment_globalContext rule) 

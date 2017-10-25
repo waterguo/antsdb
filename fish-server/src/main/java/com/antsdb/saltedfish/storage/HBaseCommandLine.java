@@ -34,6 +34,8 @@ import com.antsdb.saltedfish.util.CommandLineHelper;
  */
 public abstract class HBaseCommandLine extends CommandLineHelper {
     protected CommandLine parser;
+    private Configuration conf;
+    private Connection conn;
     
     abstract protected Options getOptions();
 
@@ -49,42 +51,30 @@ public abstract class HBaseCommandLine extends CommandLineHelper {
     }
     
     public Connection getConnection() throws IOException {
-        Connection result = null;
-        if (this.parser.hasOption("config")) {
-            result = connectUseConfig(this.parser.getOptionValue("config"));
+        if (this.conn == null) {
+            this.conn = ConnectionFactory.createConnection(getConfiguration());
+            
         }
-        else if (this.parser.hasOption("server")) {
-            result = connectUseServer(this.parser.getOptionValue("server"));
-        }
-        else {
-            println("error: either --server or --config is not specified");
-        }
-        return result;
+        return this.conn;
     }
     
-    private Connection connectUseServer(String optionValue) throws IOException {
-        String zkserver = this.parser.getOptionValue("server");
-        if (zkserver == null) {
-            println("error: --server is not specified");
-            return null;
+    protected Configuration getConfiguration() {
+        if (this.conf == null) {
+            if (this.parser.hasOption("config")) {
+                this.conf = HBaseConfiguration.create();
+                this.conf = HBaseConfiguration.create();
+                this.conf.addResource(new Path(this.parser.getOptionValue("config")));
+            }
+            else if (this.parser.hasOption("server")) {
+                this.conf = HBaseConfiguration.create();
+                this.conf.set("hbase.zookeeper.quorum", this.parser.getOptionValue("server"));
+                this.conf.set("hbase.client.retries.number", "1");
+                this.conf.set("zookeeper.recovery.retry", "1");
+            }
+            else {
+                throw new RuntimeException("error: either --server or --config is not specified");
+            }
         }
-        println("Connecting to server %s ...", zkserver);
-        Configuration conf = HBaseConfiguration.create();
-        conf.set("hbase.zookeeper.quorum", zkserver);
-        conf.set("hbase.client.retries.number", "1");
-        conf.set("zookeeper.recovery.retry", "1");
-        Connection conn = ConnectionFactory.createConnection(conf);
-        println("hbase connected - " + zkserver + "\n");
-        return conn;
+        return this.conf;
     }
-    
-    private Connection connectUseConfig(String optionValue) throws IOException {
-        Configuration conf = HBaseConfiguration.create();
-        conf = HBaseConfiguration.create();
-        conf.addResource(new Path(optionValue));
-        println("Connecting to server %s ...", conf.get("hbase.zookeeper.quorum"));
-        Connection conn = ConnectionFactory.createConnection(conf);
-        return conn;
-    }
-
 }

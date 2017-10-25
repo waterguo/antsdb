@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.GTable;
@@ -49,6 +50,7 @@ import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.storage.HBaseStorageService;
 import com.antsdb.saltedfish.storage.SystemViewHBase;
 import com.antsdb.saltedfish.util.FishJobManager;
+import com.antsdb.saltedfish.util.ManifestUtil;
 import com.antsdb.saltedfish.util.UberUtil;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -63,7 +65,7 @@ import static com.antsdb.saltedfish.sql.OrcaConstant.*;
  *
  */
 public class Orca {
-	public static final String VERSION = "5.5.0-antsdb1606";
+	public static String _version = "5.5.0-antsdb";
     public static final String SYSNS = Humpback.SYS_NAMESAPCE;
     
     static Logger _log = UberUtil.getThisLogger();
@@ -89,6 +91,13 @@ public class Orca {
     private ScheduledFuture<?> recyclerFuture;
     private Replicator replicator;
     private Session sysdefault;
+    
+    static {
+        Map<String, String> manifest = ManifestUtil.load(Orca.class);
+        String version = manifest.get("Implementation-Version");
+        version = StringUtils.replace(version, ".", "");
+        _version = String.format("5.5.0-antsdb%s", version);
+    }
     
     class ShutdownThread extends Thread {
         @Override
@@ -168,6 +177,12 @@ public class Orca {
         // system default session. used as the template for the use sessions
         
         this.sysdefault = createSession("system", "default");
+        this.sysdefault.setParameter("character_set_client", "utf8");
+        this.sysdefault.setParameter("character_set_results", "utf8");
+        this.sysdefault.setParameter("character_set_connection", "utf8");
+        this.sysdefault.setParameter("auto_increment_increment", 1);
+        this.sysdefault.setParameter("version", _version);
+        this.sysdefault.setParameter("version_comment", "AntsDB");
     }
     
     private void initViews() {
@@ -340,6 +355,7 @@ public class Orca {
                 TableLock newlock = lock.clone(session.getId());
                 session.tableLocks.put(tableId, newlock);
             }
+            session.parameters = this.sysdefault.parameters.clone();
         }
         this.sessions.add(session);
         return session;
@@ -560,5 +576,9 @@ public class Orca {
     
     private void createSystemTable(int tableId) {
         this.humpback.createTable(SYSNS, String.format("x%08x", tableId), tableId, TableType.DATA);
+    }
+
+    public Session getDefaultSession() {
+        return this.sysdefault;
     }
 }

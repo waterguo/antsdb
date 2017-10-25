@@ -65,17 +65,22 @@ public class PreparedStmtHandler {
             		MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, 
             		"Unknown pstmtId when executing.");
             return;
-        } 
+        }
+        boolean success = false;
         try {
-	        // Using column definition to parse detail info in packet
-	        // packet.readFull(pstmt);
-	        // packet.values hold BindValue, should we use it or conver it to Parameter?
-	        Object result = pstmt.run(this.serverHandler.session);
-	        
-	    	Helper.writeResonpse(ctx, serverHandler, result, false);
+            // Using column definition to parse detail info in packet
+            // packet.readFull(pstmt);
+            // packet.values hold BindValue, should we use it or conver it to Parameter?
+            Object result = pstmt.run(this.serverHandler.session);
+            
+        	Helper.writeResonpse(ctx, serverHandler, result, false);
+        	success = true;
         }
         finally {
-        	pstmt.clear();
+            if (!success) {
+                _log.debug("statement parameters:\n{}", pstmt.getParameters().toString());
+            }
+            pstmt.clear();
         }
     }
     

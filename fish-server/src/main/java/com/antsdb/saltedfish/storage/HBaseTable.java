@@ -28,10 +28,12 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -58,12 +60,17 @@ class HBaseTable implements StorageTable {
         private boolean eof = false;
         private TableMeta meta;
         private int tableId;
+        private long pKey;
+        private long pIndexRowKey;
+        private byte misc;
+        private TableType type;
 
-        public MyScanResult(TableMeta meta, ResultScanner rs, int tableId) {
+        public MyScanResult(TableMeta meta, ResultScanner rs, int tableId, TableType type) {
             this.rs = rs;
             this.meta = meta;
             this.heap = new BluntHeap();
             this.tableId = tableId;
+            this.type = type;
         }
 
         @Override
@@ -80,9 +87,18 @@ class HBaseTable implements StorageTable {
                     this.eof = true;
                     return false;
                 }
-                this.rowScanned++;
                 this.heap.reset(0);
-                this.pRow = Helper.toRow(heap, r, meta, this.tableId);
+                if (this.type == TableType.DATA) {
+                    this.pRow = Helper.toRow(heap, r, meta, this.tableId);
+                    this.pKey = Row.getKeyAddress(this.pRow);
+                }
+                else {
+                    IndexLine indexLine = new IndexLine(Helper.toIndexLine(heap, r));
+                    this.pKey = indexLine.getKey();
+                    this.pIndexRowKey = indexLine.getRowKey();
+                    this.misc = indexLine.getMisc();
+                }
+                this.rowScanned++;
                 return true;
             }
             catch (Exception x) {
@@ -111,15 +127,12 @@ class HBaseTable implements StorageTable {
 
         @Override
         public long getKeyPointer() {
-            if (pRow == 0) {
-                return 0;
-            }
-            return Row.getKeyAddress(pRow);
+            return this.pKey;
         }
 
         @Override
         public long getIndexRowKeyPointer() {
-            return 0;
+            return this.pIndexRowKey;
         }
 
         @Override
@@ -129,7 +142,7 @@ class HBaseTable implements StorageTable {
 
         @Override
         public byte getMisc() {
-            return 0;
+            return this.misc;
         }
 
         @Override
@@ -211,7 +224,7 @@ class HBaseTable implements StorageTable {
             if (!isAscending && !incStart && (start != null)) {
                 rs = new HBaseReverseScanBugStomper(rs, start);
             }
-            ScanResult result = new MyScanResult(meta, rs, this.tableId);
+            ScanResult result = new MyScanResult(meta, rs, this.tableId, this.meta.getType());
             return result;
         }
         catch (IOException x) {

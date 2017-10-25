@@ -492,8 +492,12 @@ public class MinkeTable implements StorageTable, Recycable {
             heap.close();
         }
     }
+
+    public void put(Row row) {
+        put_(row);
+    }
     
-	public void put(Row row) {
+	public long put_(Row row) {
         for (;;) {
             MinkePage page = this.pages.getFloorPage(row.getKeyAddress());
     		if (page == null) {
@@ -501,8 +505,7 @@ public class MinkeTable implements StorageTable, Recycable {
     		    continue;
     		}
     		try {
-                page.put(row);
-                return;
+                return page.put(row);
     		}
     		catch (OutOfHeapMemory x) {
     		    split(page, row.getKeyAddress(), row.getLength());

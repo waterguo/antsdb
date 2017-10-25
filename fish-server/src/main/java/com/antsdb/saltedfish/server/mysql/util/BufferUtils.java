@@ -171,29 +171,50 @@ public final class BufferUtils {
 
     public static void writeTimestamp(ByteBuf buf, Timestamp date) {
         buf.writeByte(11);
-        Calendar cal = Calendar.getInstance();
-        cal.setTime(date);
-
-        BufferUtils.writeUB2(buf, cal.get(Calendar.YEAR));
-        buf.writeByte(cal.get(Calendar.MONTH)+1);
-        buf.writeByte(cal.get(Calendar.DAY_OF_MONTH));
-        buf.writeByte(cal.get(Calendar.HOUR_OF_DAY));
-        buf.writeByte(cal.get(Calendar.MINUTE));
-        buf.writeByte(cal.get(Calendar.SECOND));
-        BufferUtils.writeUB4(buf, cal.get(Calendar.MILLISECOND)*1000);
+        if (date == null) {
+            // 0 datetime in mysql
+            BufferUtils.writeUB2(buf, 0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            BufferUtils.writeUB4(buf, 0);
+        }
+        else {
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(date);
+            BufferUtils.writeUB2(buf, cal.get(Calendar.YEAR));
+            buf.writeByte(cal.get(Calendar.MONTH)+1);
+            buf.writeByte(cal.get(Calendar.DAY_OF_MONTH));
+            buf.writeByte(cal.get(Calendar.HOUR_OF_DAY));
+            buf.writeByte(cal.get(Calendar.MINUTE));
+            buf.writeByte(cal.get(Calendar.SECOND));
+            BufferUtils.writeUB4(buf, cal.get(Calendar.MILLISECOND)*1000);
+        }
     }
 
     public static void writeDate(ByteBuf buf, java.util.Date date) {
         buf.writeByte(7);
-        Calendar cal = Calendar.getInstance();
-        cal.setTime(date);
-
-        BufferUtils.writeUB2(buf, cal.get(Calendar.YEAR));
-        buf.writeByte(cal.get(Calendar.MONTH)+1);
-        buf.writeByte(cal.get(Calendar.DAY_OF_MONTH));
-        buf.writeByte(cal.get(Calendar.HOUR_OF_DAY));
-        buf.writeByte(cal.get(Calendar.MINUTE));
-        buf.writeByte(cal.get(Calendar.SECOND));
+        if (date == null) {
+            // 0 date in mysql
+            BufferUtils.writeUB2(buf, 0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+            buf.writeByte(0);
+        }
+        else {
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(date);
+            BufferUtils.writeUB2(buf, cal.get(Calendar.YEAR));
+            buf.writeByte(cal.get(Calendar.MONTH)+1);
+            buf.writeByte(cal.get(Calendar.DAY_OF_MONTH));
+            buf.writeByte(cal.get(Calendar.HOUR_OF_DAY));
+            buf.writeByte(cal.get(Calendar.MINUTE));
+            buf.writeByte(cal.get(Calendar.SECOND));
+        }
     }
 
 

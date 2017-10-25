@@ -49,22 +49,20 @@ public class MinkeCacheTable implements StorageTable {
         }
         if ((pResult == 0) && this.cache.isMutable) {
             pResult = this.stable.get(pKey);
-            try {
-                if (pResult != 0) {
-                    Row row = Row.fromMemoryPointer(pResult, Row.getVersion(pResult));
-                    this.mtable.put(row);
-                }
-                else {
-                    this.mtable.putDeleteMark(pKey);
-                }
-                _log.debug("fetched {} from storage count={} tableId={}", 
-                        KeyBytes.toString(pKey), 
-                        (pResult != 0) ? 1 : 0,
-                        getId());
+            if (pResult != 0) {
+                // the following code might throw OutofMinkeSpace exception. it is expected. we cannot use the memory
+                // address from HBaseTable because it will be reset in next get() call. it is not perfect. but until
+                // i find the perfect solution let's live with it
+                Row row = Row.fromMemoryPointer(pResult, Row.getVersion(pResult));
+                pResult = this.mtable.put_(row);
             }
-            catch (OutOfMinkeSpace x) {
-                // ignore if cache space runs out
+            else {
+                this.mtable.putDeleteMark(pKey);
             }
+            _log.debug("fetched {} from storage count={} tableId={}", 
+                    KeyBytes.toString(pKey), 
+                    (pResult != 0) ? 1 : 0,
+                    getId());
             verifyCacheGet(pKey, -1, pResult, true);
             this.cache.cacheMiss();
         }
@@ -121,15 +119,18 @@ public class MinkeCacheTable implements StorageTable {
         ScanResult sr = this.stable.scan(pKey, true, KeyBytes.getMaxKey(), true, true);
         range = new Range();
         try {
+            int count = 0;
             if ((sr != null) && sr.next()) {
                 long pFirstKey = sr.getKeyPointer();
                 if (KeyBytes.compare(pKey, pFirstKey) == 0) {
                     result = true;
                     mtable.copyEntry(sr);
+                    count++;
                     range.pKeyStart = pKey;
                     range.startMark = BoundaryMark.NONE;
                     if (sr.next()) {
                         mtable.copyEntry(sr);
+                        count++;
                         range.pKeyEnd = sr.getKeyPointer();
                         range.endMark = BoundaryMark.NONE;
                     }
@@ -139,6 +140,8 @@ public class MinkeCacheTable implements StorageTable {
                     }
                 }
                 else {
+                    mtable.copyEntry(sr);
+                    count++;
                     range.pKeyStart = pKey;
                     range.startMark = BoundaryMark.NONE;
                     range.pKeyEnd = pFirstKey;
@@ -153,6 +156,10 @@ public class MinkeCacheTable implements StorageTable {
                 range.endMark = BoundaryMark.NONE;
             }
             this.mtable.putRange(range);
+            _log.debug("fetched {} from storage count={} tableId={}", 
+                    range.toString(), 
+                    count,
+                    getId());
         }
         catch (OutOfMinkeSpace x) { // ignore
         }
@@ -200,7 +207,7 @@ public class MinkeCacheTable implements StorageTable {
         return result;
     }
 
-    public Object getId() {
+    public int getId() {
         return this.mtable.tableId;
     }
 

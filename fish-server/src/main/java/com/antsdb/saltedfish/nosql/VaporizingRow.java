@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
@@ -148,19 +150,23 @@ public final class VaporizingRow {
 		buf.append('\n');
 		buf.append("key:");
 		buf.append(BytesUtil.toHex8(getKey()));
-		buf.append('\n');
 		for (int i=0; i<=getMaxColumnId(); i++) {
 			Object value = get(i);
 			if (value != null) {
+		        buf.append('\n');
 				buf.append(i);
 				buf.append(":");
+				String output;
 				if (value instanceof byte[]) {
-					buf.append(BytesUtil.toHex((byte[])value));
+				    output = BytesUtil.toHex((byte[])value);
 				}
 				else {
-					buf.append(value);
+				    output = value.toString();
 				}
-				buf.append("\n");
+                if (output.length() >= 80) {
+                    output = StringUtils.left(output, 80) + "...";
+                }
+                buf.append(output);
 			}
 		}
 		return buf.toString();

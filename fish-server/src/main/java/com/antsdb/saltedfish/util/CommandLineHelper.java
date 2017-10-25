@@ -20,12 +20,20 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.log4j.varia.NullAppender;
 
 /**
  * 
  * @author wgu0
  */
 public class CommandLineHelper implements ConsoleHelper {
+    
+    static {
+        Logger.getRootLogger().removeAllAppenders();
+        Logger.getRootLogger().addAppender(new NullAppender());
+    }
+    
     protected String getCommandName() {
         return this.getClass().getSimpleName();
     }

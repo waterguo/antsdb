@@ -76,9 +76,6 @@ public class SetSystemParameter extends Statement {
             }
             ctx.getSession().setAutoCommit(autoCommit == 1);
         }
-        else if (this.name.equals("character_set_results")) {
-            // lets ignore character_set_results for now
-        }
         else {
         	ctx.getSession().setParameter(name, value);
         }
