@@ -1,0 +1,20 @@
+# ansible script to install hadoop environment for AntsDB
+
+---
+- hosts: all
+  become: true
+  tasks:
+
+    - name: install hive
+      yum: name=hive-server2 state=present
+    - name: install hbase thift server
+      yum: name=hbase-thrift state=present
+    - name: start hive
+      service: name=hive-server2 enabled=yes state=started
+    - name: start hbase thift server
+      service: name=hbase-thrift enabled=yes state=started
+    - name: install hue
+      yum: name=hue,hue-server state=present
+    - name: start hue service
+      service: name=hue enabled=yes state=started
+      ignore_errors: yes

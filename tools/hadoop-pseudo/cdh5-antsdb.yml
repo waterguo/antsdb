@@ -1,0 +1,3 @@
+- import_playbook: cdh5-hadoop-pseudo.yml
+- import_playbook: cdh5-hbase-pseudo.yml
+- import_playbook: cdh5-hue.yml

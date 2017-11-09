@@ -1,0 +1,31 @@
+# ansible script to install hadoop environment for AntsDB
+
+---
+- hosts: all
+  become: true
+  tasks:
+
+    - name: install zookeeper
+      yum: name=zookeeper-server state=present
+    - name: init zookeeper service
+      shell: service zookeeper-server init creates=/var/lib/zookeeper/version-2
+    - name: install hbase
+      yum: name=hbase,hbase-master,hbase-regionserver state=present
+    - name: config hbase pseudo mode
+      lineinfile: 
+        dest: /etc/hbase/conf/hbase-site.xml
+        regexp: "hbase.cluster.distributed" 
+        line: "  <property><name>hbase.cluster.distributed</name><value>true</value></property>"
+        insertafter: "<configuration>"
+    - name: config hbase pseudo mode
+      lineinfile: 
+        dest: /etc/hbase/conf/hbase-site.xml
+        regexp: "hbase.zookeeper.quorum" 
+        line: "  <property><name>hbase.zookeeper.quorum</name><value>localhost</value></property>"
+        insertafter: "<configuration>"
+    - name: start zookeeper
+      service: name=zookeeper-server enabled=yes state=started
+    - name: start hbase master
+      service: name=hbase-master enabled=yes state=started
+    - name: start hbase regionserver
+      service: name=hbase-regionserver enabled=yes state=started

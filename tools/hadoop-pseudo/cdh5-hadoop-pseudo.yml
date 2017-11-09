@@ -1,0 +1,46 @@
+# ansible script to install hadoop environment for AntsDB
+
+---
+- hosts: all
+  become: true
+  tasks:
+
+# antsdb related package
+
+    - name: install mysql client
+      yum: name=mariadb state=present
+    - name: install java
+      yum: name=java-1.8.0-openjdk-devel state=present
+       
+# cdh 5 repos
+
+    - name: install cdh 5 repos
+      yum_repository: 
+        name=cloudera-cdh5
+        description="Cloudera's Distribution for Hadoop, Version 5" 
+        baseurl=https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/5/
+        gpgkey=https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/RPM-GPG-KEY-cloudera
+        gpgcheck=yes
+        state=present 
+    - name: add cdh5 repos key
+      rpm_key: state=present validate_certs=no key=https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/RPM-GPG-KEY-cloudera
+    - name: install hadoop pseudo
+      yum: name=hadoop-conf-pseudo state=present
+    - name: format namenode
+      command: su hdfs -c "hdfs namenode -format" creates=/var/lib/hadoop-hdfs/cache/hdfs
+    - name: start namenode service
+      service: name=hadoop-hdfs-namenode enabled=yes state=started
+    - name: start datanode service
+      service: name=hadoop-hdfs-datanode enabled=yes state=started
+    - shell: hadoop fs -test -e /tmp
+      register: hadoop_tmp_exists
+      ignore_errors: yes
+    - name: initialize hdfs
+      command: /usr/lib/hadoop/libexec/init-hdfs.sh
+      when: hadoop_tmp_exists.rc != 0
+    - name: start yarn resource manager
+      service: name=hadoop-yarn-resourcemanager enabled=yes state=started
+    - name: start yarn node manager
+      service: name=hadoop-yarn-nodemanager enabled=yes state=started
+    - name: install spark
+      yum: name=spark-core state=present
