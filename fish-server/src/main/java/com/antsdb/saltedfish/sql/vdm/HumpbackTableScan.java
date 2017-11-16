@@ -22,12 +22,15 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
+import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 public class HumpbackTableScan extends CursorMaker {
 	TableMeta table;
     CursorMeta cursorMeta;
     int[] mapping;
+    boolean isAsc = true;
     
     public HumpbackTableScan(TableMeta table, int makerId) {
     	this.table = table;
@@ -48,7 +51,7 @@ public class HumpbackTableScan extends CursorMaker {
         Cursor cursor = new DumbCursor(
         		ctx.getSpaceManager(),
                 this.cursorMeta, 
-                table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs()), 
+                table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), this.isAsc), 
                 mapping,
                 ctx.getCursorStats(makerId));
         return cursor;
@@ -71,7 +74,7 @@ public class HumpbackTableScan extends CursorMaker {
         Cursor cursor = new DumbCursor(
         		session.getOrca().getSpaceManager(), 
         		meta, 
-        		table.scan(trx.getTrxId(), trx.getTrxTs()), 
+        		table.scan(trx.getTrxId(), trx.getTrxTs(), true), 
         		mapping,
         		new AtomicLong());
         return cursor;
@@ -104,5 +107,24 @@ public class HumpbackTableScan extends CursorMaker {
 	public String toString() {
         return "Table Scan (" + this.table.getObjectName() + ")";
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        PrimaryKeyMeta pk = this.table.getPrimaryKey();
+        if (pk == null) {
+            return false;
+        }
+        int sort = SortKey.follow(SortKey.from(this.table, pk), order);
+        switch (sort) {
+        case 1:
+            this.isAsc = true;
+            return true;
+        case -1:
+            this.isAsc = false;
+            return true;
+        default:
+            return false;
+        }
+    }
     
 }

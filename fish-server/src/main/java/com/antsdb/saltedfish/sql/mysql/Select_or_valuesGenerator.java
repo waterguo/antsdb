@@ -38,6 +38,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Expr_function_parametersContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.From_itemContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.IdentifierContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Join_itemContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Join_operatorContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Result_columnContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Result_column_exprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Result_column_starContext;
@@ -108,7 +109,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         
         if (rule.from_clause() != null) {
             for (From_itemContext i:rule.from_clause().from_item()) {
-                addTableToPlanner(ctx, planner, i, null, false);
+                addTableToPlanner(ctx, planner, i, null, true, false);
             }
         }
         
@@ -118,10 +119,13 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             if (rule.from_clause().join_clause() != null) {
                 for (Join_itemContext i:rule.from_clause().join_clause().join_item()) {
                     boolean outer = false;
+                    boolean left = true;
                     if (i.join_operator() != null) {
-                        outer = i.join_operator().K_LEFT() != null;
+                        Join_operatorContext joinop = i.join_operator();
+                        outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
+                        left = joinop.K_RIGHT() == null;
                     }
-                    addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint().expr(), outer);
+                    addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint().expr(), left, outer);
                 }
             }
         }
@@ -129,7 +133,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         // prevent null cursor. in case of 'select 1'.
         
         if (planner.isEmpty()) {
-            planner.addCursor("", new Dual(), false); 
+            planner.addCursor("", new Dual(), true, false); 
         }
         
         // where
@@ -204,7 +208,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         if (rule.having_clause() != null) {
         	ExprContext rewritten = rewriteHaving(ctx, planner, rule.having_clause().expr());
         	Planner newone = new Planner(ctx);
-        	newone.addCursor("", planner.run(), false);
+        	newone.addCursor("", planner.run(), true, false);
             Operator filter = ExprGenerator.gen(ctx, newone, rewritten);
             newone.setWhere(filter);
             planner = newone;
@@ -359,7 +363,8 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
 			GeneratorContext ctx, 
 			Planner planner, 
 			From_itemContext rule, 
-			ExprContext condition, 
+			ExprContext condition,
+			boolean left,
 			boolean isOuter) {
         String alias = null;
         ObjectName name = null;
@@ -372,17 +377,17 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                     ctx, 
                     rule.from_subquery().select_stmt(),
                     planner);
-            name = planner.addCursor(alias, subquery, isOuter);
+            name = planner.addCursor(alias, subquery, left, isOuter);
         }
         else if (rule.from_table() != null) {
             Table_name_Context tableName = rule.from_table().table_name_();
             // add table to planner
             Object table = getTable(ctx, tableName);
-            name = planner.addTableOrView(alias, table, isOuter);
+            name = planner.addTableOrView(alias, table, left, isOuter);
         }
         if (condition != null) {
             Operator expr = ExprGenerator.gen(ctx, planner, condition);
-            planner.addJoinCondition(name, expr, false);
+            planner.addJoinCondition(name, expr, left);
         }
     }
 

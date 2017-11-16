@@ -13,6 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.List;
+
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 /**
  * 
  * also known as cross join
@@ -160,6 +164,11 @@ public class DumbJoin extends CursorMaker {
         c.expr = this.expr;
         c.isOuterJoin = this.outer;
         return c;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.left.setSortingOrder(order);
     }
 
 }

@@ -17,20 +17,18 @@ import java.util.ArrayList;
 
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.EmptyCursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class SystemViewHBase extends CursorMaker {
+public class SystemViewHBase extends ViewMaker {
 	Orca orca;
-	CursorMeta meta;
 	
     public static class Item {
         public long TRX_COUNT;
@@ -43,13 +41,8 @@ public class SystemViewHBase extends CursorMaker {
     }
 
 	public SystemViewHBase(Orca orca) {
+	    super(CursorUtil.toMeta(Item.class));
 		this.orca = orca;
-		meta = CursorUtil.toMeta(Item.class);
-	}
-
-	@Override
-	public CursorMeta getCursorMeta() {
-		return meta;
 	}
 
 	@Override

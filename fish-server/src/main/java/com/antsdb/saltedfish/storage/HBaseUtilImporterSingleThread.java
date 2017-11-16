@@ -88,7 +88,7 @@ public class HBaseUtilImporterSingleThread {
 				start = System.currentTimeMillis();
 				count = 0;
 				
-				RowIterator scanner = table.scan(0, Long.MAX_VALUE);
+				RowIterator scanner = table.scan(0, Long.MAX_VALUE, true);
 				while (scanner.next()) {
 					Row row = scanner.getRow();
 					rows.add(row);

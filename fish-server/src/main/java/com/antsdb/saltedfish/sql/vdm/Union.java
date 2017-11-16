@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 public class Union extends CursorMaker {
     CursorMaker left;
     CursorMaker right;
@@ -89,4 +91,9 @@ public class Union extends CursorMaker {
 	public CursorMaker getRight() {
 		return this.right;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 }

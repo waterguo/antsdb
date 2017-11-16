@@ -69,6 +69,7 @@ public final class Humpback {
     public final static int SYSMETA_TABLE_ID = 0;
     public final static int SYSNS_TABLE_ID = 1;
     public final static int SYSSTATS_TABLE_ID = 2;
+    public final static int SYSTABLE_MAX_ID = 0xf;
     public final static String SYS_NAMESAPCE = "ANTSDB";
 
     static List<Humpback> _instances = Collections.synchronizedList(new ArrayList<>());
@@ -357,7 +358,7 @@ public final class Humpback {
         // load name spaces
 
         this.namespaces.put(SYS_NAMESAPCE.toLowerCase(), SYS_NAMESAPCE);
-        for (RowIterator i = this.sysns.scan(1, 1);i.next();) {
+        for (RowIterator i = this.sysns.scan(1, 1, true);i.next();) {
             SysNamespaceRow row = new SysNamespaceRow(i.getRow());
             this.namespaces.put(row.getNamespace().toLowerCase(), row.getNamespace());
             File nsfile = new File(this.data, row.getNamespace());
@@ -370,7 +371,7 @@ public final class Humpback {
         
         // load tables
 
-        for (RowIterator i = this.sysmeta.scan(1, 1);i.next();) {
+        for (RowIterator i = this.sysmeta.scan(1, 1, true);i.next();) {
             SysMetaRow row = new SysMetaRow(SlowRow.from(i.getRow()));
             this.storage.syncTable(row);
             if (row.isDeleted()) {
@@ -823,7 +824,7 @@ public final class Humpback {
             return;
         }
         Set<Integer> validIds = new HashSet<Integer>();
-        for (RowIterator i = this.sysmeta.scan(1, 1); i.next();) {
+        for (RowIterator i = this.sysmeta.scan(1, 1, true); i.next();) {
             SlowRow srow = SlowRow.from(i.getRow());
             if (srow == null) {
                 continue;
@@ -848,11 +849,11 @@ public final class Humpback {
             validIds.add(tableId);
         }
         for (Map.Entry<Integer, GTable> i : this.tableById.entrySet()) {
-            if (i.getKey() == SYSMETA_TABLE_ID) {
+            if (i.getKey() <= SYSTABLE_MAX_ID) {
                 continue;
             }
             if (!validIds.contains(i.getKey())) {
-                this.tableById.remove(i);
+                this.tableById.remove(i.getKey());
                 i.getValue().drop();
                 this.gc.collect(UberTime.getTime() + 1);
             }
@@ -1023,7 +1024,7 @@ public final class Humpback {
 
     public List<SysMetaRow> getTablesMeta() {
         List<SysMetaRow> result = new ArrayList<>();
-        RowIterator it = this.sysmeta.scan(0, Long.MAX_VALUE);
+        RowIterator it = this.sysmeta.scan(0, Long.MAX_VALUE, true);
         while (it.next()) {
             SysMetaRow row = new SysMetaRow(SlowRow.from(it.getRow()));
             result.add(row);

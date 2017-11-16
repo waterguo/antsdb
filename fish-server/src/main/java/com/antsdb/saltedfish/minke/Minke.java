@@ -663,4 +663,8 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     public boolean exist(int tableId) {
         return this.tableById.get(tableId) != null;
     }
+    
+    public List<MinkeFile> getFiles() {
+        return this.files;
+    }
 }

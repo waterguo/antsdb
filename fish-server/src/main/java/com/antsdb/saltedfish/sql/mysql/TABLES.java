@@ -21,21 +21,19 @@ import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.ColumnId;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class TABLES extends CursorMaker {
-	Orca orca;
-    CursorMeta meta;
-    
+public class TABLES extends ViewMaker {
+    Orca orca;
+
     public static class Item {
         public String TABLE_SCHEMA_CATALOG = "def";
         public String TABLE_SCHEMA;
@@ -61,22 +59,17 @@ public class TABLES extends CursorMaker {
     }
 
     public TABLES(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
         this.orca = orca;
-    	this.meta = CursorUtil.toMeta(Item.class); 
     }
 
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.meta;
-	}
-
     @Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Item> list = new ArrayList<>();
         Transaction trx = Transaction.getSeeEverythingTrx();
-        RowIterator iter = this.orca.getMetaService().getSysTable().scan(trx.getTrxId(), trx.getTrxTs());
-        for (;iter.next();) {
-        	Row row = iter.getRow();
+        RowIterator iter = ctx.getMetaService().getSysTable().scan(trx.getTrxId(), trx.getTrxTs(), true);
+        for (; iter.next();) {
+            Row row = iter.getRow();
             Item item = toItem(row);
             list.add(item);
         }
@@ -85,12 +78,12 @@ public class TABLES extends CursorMaker {
         return c;
     }
 
-	private void addInformationSchema(ArrayList<Item> list) {
-		list.add(addInformationTable("SCHEMATA"));
-		list.add(addInformationTable("TABLES"));
-	}
+    private void addInformationSchema(ArrayList<Item> list) {
+        list.add(addInformationTable("SCHEMATA"));
+        list.add(addInformationTable("TABLES"));
+    }
 
-	private Item addInformationTable(String string) {
+    private Item addInformationTable(String string) {
         Item item = new Item();
         item.TABLE_SCHEMA = "information_schema";
         item.TABLE_NAME = string;
@@ -99,17 +92,16 @@ public class TABLES extends CursorMaker {
         item.VERSION = 10;
         item.TABLE_COLLATION = "utf8_general_ci";
         return item;
-	}
+    }
 
-	private Item toItem(Row row) {
+    private Item toItem(Row row) {
         Item item = new Item();
-        item.TABLE_SCHEMA = (String)row.get(ColumnId.systable_namespace.getId());
-        item.TABLE_NAME = (String)row.get(ColumnId.systable_table_name.getId());
+        item.TABLE_SCHEMA = (String) row.get(ColumnId.systable_namespace.getId());
+        item.TABLE_NAME = (String) row.get(ColumnId.systable_table_name.getId());
         item.TABLE_TYPE = "BASE TABLE";
         item.ENGINE = "InnoDB";
         item.VERSION = 10;
         item.TABLE_COLLATION = "utf8_general_ci";
         return item;
-	}
+    }
 }
-    

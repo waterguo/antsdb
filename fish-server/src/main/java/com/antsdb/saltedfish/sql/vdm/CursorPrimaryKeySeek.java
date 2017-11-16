@@ -20,6 +20,7 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 /**
  * 
@@ -165,5 +166,10 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 		this.prefix = v;
 		this.select = select;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 
 }

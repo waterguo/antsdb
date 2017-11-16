@@ -26,6 +26,7 @@ import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Admin;
@@ -131,12 +132,19 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         String compressCodec = antsdbConfig.getHBaseCompressionCodec();
         this.compressionType = Algorithm.valueOf(compressCodec.toUpperCase());
         
-        // Configuration object
+        // Configuration object, first try to find hbase-site.xml, then the embedded hbase/zookeeper settings
+        
         this.hbaseConfig = HBaseConfiguration.create();
-        for (Map.Entry<Object, Object> i:antsdbConfig.getProperties().entrySet()) {
-            String key = (String)i.getKey();
-            if (key.startsWith("hbase.") || key.startsWith("zookeeper.")) {
-                this.hbaseConfig.set(key, (String)i.getValue());
+        if (antsdbConfig.getHBaseConf() != null) {
+            Path path = new Path(antsdbConfig.getHBaseConf());
+            this.hbaseConfig.addResource(path);
+        }
+        else {
+            for (Map.Entry<Object, Object> i:antsdbConfig.getProperties().entrySet()) {
+                String key = (String)i.getKey();
+                if (key.startsWith("hbase.") || key.startsWith("zookeeper.")) {
+                    this.hbaseConfig.set(key, (String)i.getValue());
+                }
             }
         }
        

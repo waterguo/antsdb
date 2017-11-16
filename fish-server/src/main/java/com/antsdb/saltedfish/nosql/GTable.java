@@ -205,7 +205,7 @@ public final class GTable implements AutoCloseable, LogSpan {
         return result;
     }
     
-    public RowIterator scan(long trxid, long trxts) {
+    public RowIterator scan(long trxid, long trxts, boolean asc) {
         RowIterator result = scan(
                 trxid,
                 trxts,
@@ -213,7 +213,7 @@ public final class GTable implements AutoCloseable, LogSpan {
                 false, 
                 0, 
                 false, 
-                true);
+                asc);
         return result;
     }
 

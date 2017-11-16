@@ -44,7 +44,7 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
         if (table == null) {
             throw new OrcaException("table not found: " + tableName);
         }
-        planner.addTable(null, table, false);
+        planner.addTable(null, table, true, false);
         
         // apply where clause
         

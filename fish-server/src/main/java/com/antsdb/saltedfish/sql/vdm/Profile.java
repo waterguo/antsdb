@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class Profile extends CursorMaker {
@@ -59,6 +60,11 @@ public class Profile extends CursorMaker {
         	records.add(rec);
         }
         return CursorUtil.toCursor(meta, records);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 
 }

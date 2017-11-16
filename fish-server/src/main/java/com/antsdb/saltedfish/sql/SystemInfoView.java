@@ -19,10 +19,9 @@ import java.util.Properties;
 
 import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberFormatter;
@@ -32,18 +31,12 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author wgu0
  */
-public class SystemInfoView extends CursorMaker {
+public class SystemInfoView extends ViewMaker {
 	Orca orca;
-	CursorMeta meta;
 	
 	public SystemInfoView(Orca orca) {
+	    super(CursorUtil.toMeta(Properties.class));
 		this.orca = orca;
-		meta = CursorUtil.toMeta(Properties.class);
-	}
-
-	@Override
-	public CursorMeta getCursorMeta() {
-		return meta;
 	}
 
 	@Override

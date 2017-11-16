@@ -13,34 +13,29 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
 public class FuncIf extends Function {
 	
-	public FuncIf(Operator upstream, Operator value, Operator replacement) {
-		super();
-		addParameter(upstream);
-		addParameter(value);
-		addParameter(replacement);
-	}
-
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		long valueUpstream = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-		long valueTest = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-		if (AutoCaster.equals(heap, valueUpstream, valueTest)) {
-			long addrReplacement = this.parameters.get(2).eval(ctx, heap, params, pRecord);
-			return addrReplacement;
+		long pTest = this.parameters.get(0).eval(ctx, heap, params, pRecord);
+		Boolean test = (Boolean)FishObject.get(heap, pTest);
+		long pResult;
+		if ((test != null) && test) {
+		    pResult = this.parameters.get(1).eval(ctx, heap, params, pRecord);
 		}
 		else {
-			return valueUpstream;
+            pResult = this.parameters.get(2).eval(ctx, heap, params, pRecord);
 		}
+		return pResult;
 	}
 
 	@Override
 	public DataType getReturnType() {
-		return this.parameters.get(0).getReturnType();
+		return this.parameters.get(1).getReturnType();
 	}
 
 	@Override

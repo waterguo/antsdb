@@ -27,18 +27,13 @@ import com.antsdb.saltedfish.sql.DataType;
  */
 public class OpRegexp extends Operator {
 	Operator expr;
-	String text;
-	Pattern pattern;
+	Operator pattern;
+    private int variableId;
 	
-	public OpRegexp(Operator expr, String text) {
+	public OpRegexp(Operator expr, Operator pattern, int variableId) {
 		this.expr = expr;
-		this.text = text;
-		StringBuilder buf = new StringBuilder();
-		for (int i=0; i<text.length(); i++) {
-			char ch = text.charAt(i);
-			buf.append(ch);
-		}
-		this.pattern = Pattern.compile(buf.toString());
+		this.pattern = pattern;
+		this.variableId = variableId;
 	}
 
 	@Override
@@ -47,8 +42,18 @@ public class OpRegexp extends Operator {
 		if (pValue == 0) {
 			return 0;
 		}
+		Pattern ptn = (Pattern)ctx.getVariable(this.variableId);
+		if (ptn == null) {
+		    long pPattern = this.pattern.eval(ctx, heap, params, pRecord);
+		    String patternString = (String)FishObject.get(heap, pPattern);
+		    if (patternString == null) {
+		        return 0;
+		    }
+		    ptn = Pattern.compile(patternString);
+		    ctx.setVariable(this.variableId, ptn);
+		}
 		String s = (String)FishObject.get(heap, pValue);
-		boolean result = this.pattern.matcher(s).find();
+		boolean result = ptn.matcher(s).find();
 		return FishBool.allocSet(heap, result);
 	}
 

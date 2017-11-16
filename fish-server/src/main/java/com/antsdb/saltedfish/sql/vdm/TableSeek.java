@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.cpp.FishBoundary;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class TableSeek extends CursorMaker implements Seekable {
@@ -122,5 +123,10 @@ public class TableSeek extends CursorMaker implements Seekable {
 	public Operator getKey() {
 		return this.op;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 
 }

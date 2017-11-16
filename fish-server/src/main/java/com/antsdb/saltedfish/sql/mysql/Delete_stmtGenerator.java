@@ -40,7 +40,7 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
         
         if (rule.from_clause() != null) {
             for (From_itemContext i:rule.from_clause().from_item()) {
-                Select_or_valuesGenerator.addTableToPlanner(ctx, planner, i, null, false);
+                Select_or_valuesGenerator.addTableToPlanner(ctx, planner, i, null, true, false);
             }
         }
         
@@ -56,7 +56,8 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
                     Select_or_valuesGenerator.addTableToPlanner(ctx, 
                     		                                    planner, 
                     		                                    i.from_item(), 
-                    		                                    i.join_constraint().expr(), 
+                    		                                    i.join_constraint().expr(),
+                    		                                    true,
                     		                                    outer);
                 }
             }

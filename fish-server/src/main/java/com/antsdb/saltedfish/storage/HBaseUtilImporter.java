@@ -246,7 +246,7 @@ public class HBaseUtilImporter {
 		count = 0;
 		rows =  new ArrayList<Row>(ROWS_PER_PUT);
 
-		RowIterator scanner = table.scan(0, Long.MAX_VALUE);
+		RowIterator scanner = table.scan(0, Long.MAX_VALUE, true);
 		
 		boolean isIndexTable = table.getTableType() == TableType.INDEX;
 		boolean firstRow = true;

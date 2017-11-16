@@ -22,4 +22,23 @@ public class PageState {
     public static final int ACTIVE = 1;
     public static final int CARBONFREEZED = 2;
     public static final int GARBAGE = 3;
+    
+    public static String getStateName(int value) {
+        String result = "";
+        switch (value) {
+        case FREE:
+            result = "FREE";
+            break;
+        case ACTIVE:
+            result = "ACTIVE";
+            break;
+        case CARBONFREEZED:
+            result = "CBFD";
+            break;
+        case GARBAGE:
+            result = "GARBAGE";
+            break;
+        }
+        return result;
+    }
 }

@@ -488,7 +488,7 @@ join_item
  ;
  
 join_operator
- : ( K_LEFT K_OUTER? | K_INNER | K_CROSS )? K_JOIN
+ : (K_LEFT | K_RIGHT)? (K_OUTER | K_INNER | K_CROSS)? K_JOIN
  ;
 
 join_constraint
@@ -642,11 +642,11 @@ expr
  | expr ( '<<' | '>>' | '&' | '|' ) expr
  | expr ( '<' | '<=' | '>' | '>=' ) expr
  | expr ( '=' | '==' | '!=' | '<>' | K_IS K_NOT | K_IS | K_LIKE | K_GLOB | K_MATCH ) expr
- | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) literal_value ( K_ESCAPE expr )?
+ | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) like_expr ( K_ESCAPE expr )?
  | expr expr_in_select
  | expr expr_in_values
  | expr expr_in_table 
- | expr K_NOT? K_BETWEEN expr K_AND expr
+ | expr_simple K_NOT? K_BETWEEN expr_simple K_AND expr_simple
  | expr K_AND expr
  | expr K_REGEXP pattern
  | expr K_OR expr
@@ -657,6 +657,20 @@ expr
  | expr_cast
  ;
 
+expr_simple
+ : literal_value
+ | bind_parameter
+ | column_name_
+ | variable_reference
+ | system_variable_reference
+ | expr_function
+ | expr_select 
+ ;
+ 
+like_expr
+ : literal_value | bind_parameter
+ ;
+ 
 pattern
  : STRING_LITERAL | DOUBLE_QUOTED_LITERAL 
  ;
@@ -678,7 +692,7 @@ expr_function
  ;
 
 group_concat_parameter
- : K_DISTINCT? column_name_ K_SEPARATOR literal_value
+ : K_DISTINCT? column_name_ ( K_ORDER K_BY ordering_term ( ',' ordering_term )* )?  (K_SEPARATOR literal_value)?
  ;
  
 expr_function_parameters
@@ -754,7 +768,7 @@ table_alias
  ;
 
 function_name
- : any_name | K_LEFT
+ : any_name | K_LEFT | K_IF
  ;
 
 any_name

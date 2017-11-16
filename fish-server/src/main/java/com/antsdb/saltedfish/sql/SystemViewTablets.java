@@ -19,11 +19,10 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.MemTablet;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 import com.antsdb.saltedfish.util.LongLong;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
@@ -32,9 +31,8 @@ import static com.antsdb.saltedfish.util.UberFormatter.*;
  * 
  * @author wgu0
  */
-public class SystemViewTablets extends CursorMaker {
+public class SystemViewTablets extends ViewMaker {
 	Orca orca;
-	CursorMeta meta;
 	
     public static class Item {
         public String NAMESPACE;
@@ -50,13 +48,8 @@ public class SystemViewTablets extends CursorMaker {
     }
 
 	public SystemViewTablets(Orca orca) {
+	    super(CursorUtil.toMeta(Item.class));
 		this.orca = orca;
-		meta = CursorUtil.toMeta(Item.class);
-	}
-
-	@Override
-	public CursorMeta getCursorMeta() {
-		return meta;
 	}
 
 	@Override

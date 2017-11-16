@@ -23,7 +23,7 @@ import com.antsdb.saltedfish.sql.OrcaException;
 
 public class FuncCast extends UnaryOperator {
     DataType type;
-    
+
     public FuncCast(DataType type, Operator expr) {
         super(expr);
         this.type = type;
@@ -41,32 +41,32 @@ public class FuncCast extends UnaryOperator {
         }
         else if (type.getJavaType() == Integer.class) {
             if (value instanceof String) {
-                return Integer.valueOf((String)value);
+                return Integer.valueOf((String) value);
             }
         }
         else if (type.getJavaType() == Long.class) {
             if (value instanceof String) {
-                return Long.valueOf((String)value);
+                return Long.valueOf((String) value);
             }
         }
         else if (type.getJavaType() == String.class) {
             if (value instanceof byte[]) {
-                return FishObject.allocSet(heap, new String((byte[])value));
+                return FishObject.allocSet(heap, new String((byte[]) value));
             }
             return FishObject.allocSet(heap, value.toString());
         }
         else if (type.getJavaType() == Date.class) {
-        	return AutoCaster.toDate(heap, addrValue);
+            return AutoCaster.toDate(heap, addrValue);
         }
         else if (type.getJavaType() == Timestamp.class) {
-        	return AutoCaster.toTimestamp(heap, addrValue);
+            return AutoCaster.toTimestamp(heap, addrValue);
         }
         throw new OrcaException("unable to cast value " + value + " to " + type.toString());
     }
-    
+
     @Override
     public DataType getReturnType() {
         return this.type;
     }
-    
+
 }

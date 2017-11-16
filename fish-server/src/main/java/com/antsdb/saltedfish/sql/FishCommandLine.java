@@ -18,6 +18,7 @@ import java.io.File;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -25,8 +26,10 @@ import org.apache.log4j.varia.NullAppender;
 
 import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
+import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.StorageEngine;
+import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.util.CommandLineHelper;
 
 /**
@@ -98,4 +101,36 @@ public abstract class FishCommandLine extends CommandLineHelper {
         }
         return null;
 	}
+	
+	/**
+	 * find the table either by name or id
+	 * @param name
+	 * @return
+	 * @throws Exception 
+	 */
+    protected GTable findTable(String name) throws Exception {
+        String ns = null;
+        String[] words = StringUtils.split(name, '.');
+        Humpback humpback = getHumpbackReadOnly();
+        if (words.length == 2) {
+            ns = words[0].toLowerCase();
+            name = words[1].toLowerCase();
+            for (SysMetaRow i:humpback.getTablesMeta()) {
+                if (ns != null) {
+                    if (!ns.equals(i.getNamespace().toLowerCase())) {
+                        continue;
+                    }
+                    if (!name.equals(i.getTableName().toLowerCase())) {
+                        continue;
+                    }
+                }
+                return humpback.getTable(i.getTableId());
+            }
+        }
+        else {
+            int tableId = parseInteger(name);
+            return humpback.getTable(tableId);
+        }
+        return null;
+    }
 }

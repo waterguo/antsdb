@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class DumbSorter extends CursorMaker {
@@ -141,5 +142,10 @@ public class DumbSorter extends CursorMaker {
     	}
 		return key;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 
 }

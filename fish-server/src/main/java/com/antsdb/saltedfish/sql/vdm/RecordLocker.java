@@ -13,11 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.List;
+
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.HumpbackError;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CodingError;
 
 public class RecordLocker extends CursorMaker {
@@ -92,6 +95,11 @@ public class RecordLocker extends CursorMaker {
     @Override
     public CursorMeta getCursorMeta() {
         return this.upstream.getCursorMeta();
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
     }
 
 }

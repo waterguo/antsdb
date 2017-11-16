@@ -18,30 +18,23 @@ import java.util.Properties;
 import com.antsdb.saltedfish.minke.MinkeCache;
 import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class SystemViewCacheInfo extends CursorMaker {
+public class SystemViewCacheInfo extends ViewMaker {
     Orca orca;
-    CursorMeta meta;
 
     public SystemViewCacheInfo(Orca orca) {
+        super(CursorUtil.toMeta(Properties.class));
         this.orca = orca;
-        meta = CursorUtil.toMeta(Properties.class);
     }
 
-    @Override
-    public CursorMeta getCursorMeta() {
-        return this.meta;
-    }
-    
     @SuppressWarnings("resource")
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {

@@ -133,10 +133,10 @@ public class AutoCaster {
 			return toNumber(heap, typeOld, addr);
 		}
 		else if (typeNew == Value.TYPE_TIMESTAMP) {
-			return FishObject.toTimestamp(heap, addr);
+			return toTimestamp(heap, addr);
 		}
 		else if (typeNew == Value.TYPE_DATE) {
-			return FishObject.toDate(heap, addr);
+			return toDate(heap, addr);
 		}
 		else if (typeNew == Value.TYPE_BYTES) {
 			return FishObject.toBytes(heap, addr);

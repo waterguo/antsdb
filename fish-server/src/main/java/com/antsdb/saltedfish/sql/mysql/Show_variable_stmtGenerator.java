@@ -38,14 +38,14 @@ public class Show_variable_stmtGenerator extends Generator<Show_variable_stmtCon
         
         if (rule.where_clause() != null) {
         	Planner planner = new Planner(ctx);
-        	planner.addCursor("", maker, false);
+        	planner.addCursor("", maker, true, false);
             Operator filter = ExprGenerator.gen(ctx, planner, rule.where_clause().expr());
             maker = new Filter(maker, filter, ctx.getNextMakerId());
         }
         else if (rule.show_variable_like_clause() != null) {
         	Show_variable_like_clauseContext like = rule.show_variable_like_clause();
         	Planner planner = new Planner(ctx);
-        	planner.addCursor("", maker, false);
+        	planner.addCursor("", maker, true, false);
         	PlannerField pf = planner.findField((FieldMeta it) -> {
         		return it.getName().equals("Variable_name");
         	});

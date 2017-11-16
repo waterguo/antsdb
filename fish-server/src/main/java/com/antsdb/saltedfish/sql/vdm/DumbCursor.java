@@ -22,9 +22,9 @@ import com.antsdb.saltedfish.nosql.SpaceManager;
 public class DumbCursor extends CursorWithHeap {
     RowIterator iter;
     int[] mapping;
-	private boolean isClosed = false;
-	private AtomicLong counter;
-    
+    private boolean isClosed = false;
+    private AtomicLong counter;
+
     public DumbCursor(SpaceManager memman, CursorMeta meta, RowIterator iter, int[] mapping, AtomicLong counter) {
         super(meta);
         this.iter = iter;
@@ -34,22 +34,22 @@ public class DumbCursor extends CursorWithHeap {
 
     @Override
     public long next() {
-    	if (isClosed) {
-    		return 0;
-    	}
-    	boolean hasNext = iter.next();
-    	if (!hasNext) {
-    		return 0;
-    	}
-    	long pRecord = newRecord();
+        if (isClosed) {
+            return 0;
+        }
+        boolean hasNext = iter.next();
+        if (!hasNext) {
+            return 0;
+        }
+        long pRecord = newRecord();
         Row row = iter.getRow();
         if (row == null) {
             return 0;
         }
         Record.setKey(pRecord, row.getKeyAddress());
-        for (int i=0; i<this.meta.getColumnCount(); i++) {
-        	long pValue = row.getFieldAddress(this.mapping[i]);
-        	Record.set(pRecord, i, pValue);
+        for (int i = 0; i < this.meta.getColumnCount(); i++) {
+            long pValue = row.getFieldAddress(this.mapping[i]);
+            Record.set(pRecord, i, pValue);
         }
         this.counter.incrementAndGet();
         return pRecord;
@@ -57,8 +57,8 @@ public class DumbCursor extends CursorWithHeap {
 
     @Override
     public void close() {
-    	super.close();
-    	this.isClosed  = true;
+        super.close();
+        this.isClosed = true;
     }
 
     @Override

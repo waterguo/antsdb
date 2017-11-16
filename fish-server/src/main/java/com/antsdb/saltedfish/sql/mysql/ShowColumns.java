@@ -26,13 +26,13 @@ import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class ShowColumns extends CursorMaker {
+public class ShowColumns extends ViewMaker {
     final static CursorMeta META_FULL = CursorUtil.toMeta(ItemFull.class);
     final static CursorMeta META_SHORT = CursorUtil.toMeta(ItemShort.class);
     
@@ -64,6 +64,7 @@ public class ShowColumns extends CursorMaker {
     }
     
     public ShowColumns(String ns, String table, boolean full, String like) {
+        super(full ? META_FULL : META_SHORT);
         this.nsName = ns;
         this.tableName = table;
         this.isFull = full;
@@ -75,11 +76,6 @@ public class ShowColumns extends CursorMaker {
         }
     }
         
-    @Override
-    public CursorMeta getCursorMeta() {
-        return this.isFull ? META_FULL : META_SHORT;
-    }
-    
     @Override
     public Object run(VdmContext ctx, Parameters notused, long pMaster) {
         

@@ -151,7 +151,7 @@ public class CreateIndex extends Statement {
         GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
         KeyMaker keyMaker = new KeyMaker(index.getColumns(table), index.isUnique());
 		try (BluntHeap heap = new BluntHeap()) {
-			RowIterator scanner = gtable.scan(trx.getTrxId(), trx.getTrxTs());
+			RowIterator scanner = gtable.scan(trx.getTrxId(), trx.getTrxTs(), true);
 			while (scanner.next()) {
 				heap.reset(0);
 				Row row = scanner.getRow();

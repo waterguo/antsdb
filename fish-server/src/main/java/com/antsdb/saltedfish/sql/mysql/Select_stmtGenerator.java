@@ -74,7 +74,7 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
         
         if (rule.order_by_clause() != null) {
         	Planner planner = new Planner(ctx);
-        	planner.addCursor("", maker, false);
+        	planner.addCursor("", maker, true, false);
             List<Operator> orderExprs = new ArrayList<Operator>();
             List<Boolean> directions = new ArrayList<Boolean>();
             for (Ordering_termContext i:rule.order_by_clause().ordering_term()) {

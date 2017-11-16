@@ -18,19 +18,17 @@ import java.util.List;
 
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class SystemViewLocks extends CursorMaker {
+public class SystemViewLocks extends ViewMaker {
 	Orca orca;
-	CursorMeta meta;
 	
     public static class Item {
     	public int SESSION;
@@ -39,13 +37,8 @@ public class SystemViewLocks extends CursorMaker {
     }
     
 	public SystemViewLocks(Orca orca) {
+	    super(CursorUtil.toMeta(Item.class));
 		this.orca = orca;
-		meta = CursorUtil.toMeta(Item.class);
-	}
-
-	@Override
-	public CursorMeta getCursorMeta() {
-		return meta;
 	}
 
 	@Override

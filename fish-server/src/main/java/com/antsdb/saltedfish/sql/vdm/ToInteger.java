@@ -62,12 +62,19 @@ public class ToInteger extends UnaryOperator {
             result = value.intValueExact();
         }
         else if (val instanceof String) {
-            try {
-                result = Integer.valueOf((String)val);
+            String s = (String)val;
+            if (s.isEmpty()) {
+                // mysql behavior. tested with 5.5.5-10.0.31-MariaDB
+                result = 0; 
             }
-            catch (Exception x) {
-                // need to make sure 10.0 also works in this case
-            	result = new BigDecimal((String)val).intValueExact(); 
+            else {
+                try {
+                    result = Integer.valueOf(s);
+                }
+                catch (Exception x) {
+                    // need to make sure 10.0 also works in this case
+                	result = new BigDecimal((String)val).intValueExact(); 
+                }
             }
         }
         else if (val instanceof Double) {

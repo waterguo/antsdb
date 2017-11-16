@@ -22,6 +22,7 @@ import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 /**
  * index range scan 
@@ -36,6 +37,7 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
     Vector to;
     Operator exprFrom;
     Operator exprTo;
+    private boolean isAsc = true;
 
     public IndexRangeScan(TableMeta table, IndexMeta index, int makerId) {
     	this.table = table;
@@ -94,7 +96,7 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
 	                fromInclusive,
 	                pKeyTo,
 	                toInclusive,
-	                true);
+	                this.isAsc);
 	        IndexCursor cursor = new IndexCursor(
 	        		ctx.getSpaceManager(), 
 	        		this.meta, 
@@ -146,4 +148,19 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
 	public List<ColumnMeta> getOrder() {
 		return this.index.getColumns(table);
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        int sort = SortKey.follow(SortKey.from(this.table, this.index), order);
+        switch (sort) {
+        case 1:
+            this.isAsc = true;
+            return true;
+        case -1:
+            this.isAsc = false;
+            return true;
+        default:
+            return false;
+        }
+    }
 }

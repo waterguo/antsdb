@@ -42,7 +42,9 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_valuesContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_matchContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_parenthesisContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_selectContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_simpleContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Group_concat_parameterContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Like_exprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_intervalContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
@@ -81,6 +83,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncFindInSet;
 import com.antsdb.saltedfish.sql.vdm.FuncFromUnixTime;
 import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
 import com.antsdb.saltedfish.sql.vdm.FuncHex;
+import com.antsdb.saltedfish.sql.vdm.FuncIf;
 import com.antsdb.saltedfish.sql.vdm.FuncLeft;
 import com.antsdb.saltedfish.sql.vdm.FuncLength;
 import com.antsdb.saltedfish.sql.vdm.FuncLocate;
@@ -143,98 +146,128 @@ import com.antsdb.saltedfish.sql.vdm.UserVariableValue;
 import com.antsdb.saltedfish.util.BytesUtil;
 
 public class ExprGenerator {
-	static Map<String, Class<? extends Function>> _functionByName = new HashMap<>();
-	
-	static {
-		_functionByName.put("abs", FuncAbs.class);
-		_functionByName.put("adddate", FuncDateAdd.class);
-		_functionByName.put("concat", FuncConcat.class);
-		_functionByName.put("curdate", FuncCurDate.class);
-		_functionByName.put("current_user", FuncCurrentUser.class);
+    static Map<String, Class<? extends Function>> _functionByName = new HashMap<>();
+
+    static {
+        _functionByName.put("abs", FuncAbs.class);
+        _functionByName.put("adddate", FuncDateAdd.class);
+        _functionByName.put("concat", FuncConcat.class);
+        _functionByName.put("curdate", FuncCurDate.class);
+        _functionByName.put("current_user", FuncCurrentUser.class);
         _functionByName.put("connection_id", FuncConnectionId.class);
-		_functionByName.put("database", FuncDatabase.class);
-		_functionByName.put("date_add", FuncDateAdd.class);
-		_functionByName.put("date_format", FuncDateFormat.class);
-		_functionByName.put("date_sub", FuncDateSub.class);
-		_functionByName.put("elt", FuncElt.class);
-		_functionByName.put("empty_clob", FuncEmptyClob.class);
-		_functionByName.put("field", FuncField.class);
-		_functionByName.put("find_in_set", FuncFindInSet.class);
+        _functionByName.put("database", FuncDatabase.class);
+        _functionByName.put("date_add", FuncDateAdd.class);
+        _functionByName.put("date_format", FuncDateFormat.class);
+        _functionByName.put("date_sub", FuncDateSub.class);
+        _functionByName.put("elt", FuncElt.class);
+        _functionByName.put("empty_clob", FuncEmptyClob.class);
+        _functionByName.put("field", FuncField.class);
+        _functionByName.put("find_in_set", FuncFindInSet.class);
         _functionByName.put("from_unixtime", FuncFromUnixTime.class);
-		_functionByName.put("hex", FuncHex.class);
-		_functionByName.put("length", FuncLength.class);
-		_functionByName.put("left", FuncLeft.class);
-		_functionByName.put("locate", FuncLocate.class);
-		_functionByName.put("lower", FuncLower.class);
-		_functionByName.put("month", FuncMonth.class);
-		_functionByName.put("now", FuncNow.class);
-		_functionByName.put("rand", FuncRand.class);
+        _functionByName.put("hex", FuncHex.class);
+        _functionByName.put("if", FuncIf.class);
+        _functionByName.put("length", FuncLength.class);
+        _functionByName.put("left", FuncLeft.class);
+        _functionByName.put("locate", FuncLocate.class);
+        _functionByName.put("lower", FuncLower.class);
+        _functionByName.put("month", FuncMonth.class);
+        _functionByName.put("now", FuncNow.class);
+        _functionByName.put("rand", FuncRand.class);
         _functionByName.put("round", FuncRound.class);
-		_functionByName.put("subdate", FuncDateSub.class);
-		_functionByName.put("substring_index", FuncSubstringIndex.class);
-		_functionByName.put("totimestamp", FuncToTimestamp.class);
-		_functionByName.put("to_base64", FuncBase64.class);
-		_functionByName.put("to_timestamp", FuncToTimestamp.class);
-		_functionByName.put("trim", FuncTrim.class);
+        _functionByName.put("subdate", FuncDateSub.class);
+        _functionByName.put("substring_index", FuncSubstringIndex.class);
+        _functionByName.put("totimestamp", FuncToTimestamp.class);
+        _functionByName.put("to_base64", FuncBase64.class);
+        _functionByName.put("to_timestamp", FuncToTimestamp.class);
+        _functionByName.put("trim", FuncTrim.class);
         _functionByName.put("unix_timestamp", FuncUnixTimestamp.class);
-		_functionByName.put("user", FuncUser.class);
-		_functionByName.put("upper", FuncUpper.class);
-		_functionByName.put("user", FuncUser.class);
-		_functionByName.put("version", FuncVersion.class);
-		_functionByName.put("weekday", FuncWeekday.class);
-		_functionByName.put("year", FuncYear.class);
-	}
-	
+        _functionByName.put("user", FuncUser.class);
+        _functionByName.put("upper", FuncUpper.class);
+        _functionByName.put("user", FuncUser.class);
+        _functionByName.put("version", FuncVersion.class);
+        _functionByName.put("weekday", FuncWeekday.class);
+        _functionByName.put("year", FuncYear.class);
+    }
+
     public static Operator gen(GeneratorContext ctx, Planner planner, ExprContext rule) {
         Operator op = gen_(ctx, planner, rule);
         return op;
     }
+
+    static Operator gen(GeneratorContext ctx, Planner planner, Expr_simpleContext rule) {
+        ParseTree child = rule.getChild(0);
+        Operator result;
+        if (child instanceof Literal_valueContext) {
+            result = genLiteralValue(ctx, planner, (Literal_valueContext)child);
+        }
+        else if (child instanceof Bind_parameterContext) {
+            result = genBindParameter(ctx, (Bind_parameterContext)child);
+        }
+        else if (child instanceof Column_name_Context) {
+            result = genColumnValue(ctx, planner, (Column_name_Context)child);
+        }
+        else if (child instanceof Variable_referenceContext) {
+            result = genUserVariableRef(ctx, planner, (Variable_referenceContext)child);
+        }
+        else if (child instanceof System_variable_referenceContext) {
+            result = genSystemVariableRef(ctx, planner, (System_variable_referenceContext)child);
+        }
+        else if (child instanceof Expr_functionContext) {
+            result = genFunction(ctx, planner, (Expr_functionContext)child);
+        }
+        else if (child instanceof Expr_selectContext) {
+            result = genSingleValueQuery(ctx, planner, (Expr_selectContext)child);
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
+        return result;
+    }
     
-    static Operator gen_(GeneratorContext ctx, Planner cursorMeta, ExprContext rule)
-    throws OrcaException {
+    static Operator gen_(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) throws OrcaException {
         if (rule.getChildCount() == 1) {
             return gen_sinlge_node(ctx, cursorMeta, rule);
         }
         else if (rule.expr_in_values() != null) {
-            Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+            Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
             return gen_in_values(ctx, cursorMeta, rule.expr_in_values(), left);
         }
         else if (rule.expr_in_select() != null) {
-            Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+            Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
             return gen_in_select(ctx, cursorMeta, rule.expr_in_select(), left);
         }
         else if (rule.unary_operator() != null) {
-            Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(1));
+            Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(1));
             return gen_unary(ctx, cursorMeta, rule.unary_operator(), right);
         }
         else if (rule.K_REGEXP() != null) {
-        	// REGEXP operator
-        	Operator expr = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-        	String text = rule.literal_value().getText();
-        	text = text.substring(1, text.length()-1);
-        	return new OpRegexp(expr, text);
+            // REGEXP operator
+            Operator expr = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+            Operator pattern = genLiteralValue(ctx, cursorMeta, rule.like_expr().literal_value());
+            int variableId = ctx.allocVariable();
+            return new OpRegexp(expr, pattern, variableId);
         }
         else if (rule.K_BETWEEN() != null) {
-            Operator expr = gen(ctx, cursorMeta, rule.expr(0));
-            Operator from = gen(ctx, cursorMeta, rule.expr(1));
-            Operator to = gen(ctx, cursorMeta, rule.expr(2));
-        	return new OpBetween(expr, from, to);
+            Operator expr = gen(ctx, cursorMeta, rule.expr_simple(0));
+            Operator from = gen(ctx, cursorMeta, rule.expr_simple(1));
+            Operator to = gen(ctx, cursorMeta, rule.expr_simple(2));
+            return new OpBetween(expr, from, to);
         }
         else if (rule.getChild(1) instanceof TerminalNode) {
             String op = rule.getChild(1).getText();
             if ("=".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpEqual(left, right);
             }
             else if ("==".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpEqualNull(left, right);
             }
             else if ("+".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 if ((left instanceof OpInterval) || (right instanceof OpInterval)) {
                     return new OpAddTime(left, right);
                 }
@@ -243,8 +276,8 @@ public class ExprGenerator {
                 }
             }
             else if ("-".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 if ((left instanceof OpInterval) || (right instanceof OpInterval)) {
                     return new OpAddTime(left, new OpNegate(right));
                 }
@@ -253,78 +286,78 @@ public class ExprGenerator {
                 }
             }
             else if ("*".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpMultiply(left, right);
             }
             else if ("/".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpDivide(left, right);
             }
             else if (">".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpLarger(left, right);
             }
             else if (">=".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpLargerEqual(left, right);
             }
             else if ("<".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpLess(left, right);
             }
             else if ("<=".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpLessEqual(left, right);
             }
             else if ("!=".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpNot(new OpEqual(left, right));
             }
             else if ("<>".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpNot(new OpEqual(left, right));
             }
             else if ("&".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpBitwiseAnd(left, right);
             }
             else if ("like".equalsIgnoreCase(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpLike(left, right);
             }
             else if ("or".equalsIgnoreCase(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpOr(left, right);
             }
             else if ("and".equalsIgnoreCase(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpAnd(left, right);
             }
             else if ("||".equals(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext)rule.getChild(2));
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpConcat(left, right);
             }
             else if ("is".equalsIgnoreCase(op)) {
                 if (rule.getChild(2) instanceof ExprContext) {
-                    Operator upstream = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                    Operator upstream = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
                     return new OpIsNull(upstream);
                 }
                 else if (rule.getChild(2) instanceof TerminalNode) {
                     // IS NOT
-                    Operator upstream = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
+                    Operator upstream = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
                     return new OpNot(new OpIsNull(upstream));
                 }
                 else {
@@ -332,14 +365,14 @@ public class ExprGenerator {
                 }
             }
             else if ("not".equalsIgnoreCase(op)) {
-            	if (rule.getChild(2) instanceof TerminalNode) {
-            		TerminalNode node = (TerminalNode)rule.getChild(2);
-            		if (node.getSymbol().getType() == MysqlParser.K_LIKE) {
-                        Operator left = gen(ctx, cursorMeta, (ExprContext)rule.getChild(0));
-                        Operator right = genLiteralValue(ctx, cursorMeta, (Literal_valueContext)rule.getChild(3));
-            			return new OpNot(new OpLike(left, right));
-            		}
-            	}
+                if (rule.getChild(2) instanceof TerminalNode) {
+                    TerminalNode node = (TerminalNode) rule.getChild(2);
+                    if (node.getSymbol().getType() == MysqlParser.K_LIKE) {
+                        Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                        Operator right = gen(ctx, cursorMeta, rule.like_expr());
+                        return new OpNot(new OpLike(left, right));
+                    }
+                }
                 throw new NotImplementedException();
             }
             else {
@@ -347,7 +380,7 @@ public class ExprGenerator {
             }
         }
         else if (rule.K_DISTINCT() != null) {
-            Operator op = gen(ctx,cursorMeta, rule.expr(0));
+            Operator op = gen(ctx, cursorMeta, rule.expr(0));
             return new FuncDistinct(op, ctx.allocVariable());
         }
         else {
@@ -356,8 +389,21 @@ public class ExprGenerator {
         }
     }
 
-    private static Operator gen_unary(GeneratorContext ctx, Planner cursorMeta, Unary_operatorContext rule, Operator right) {
-        TerminalNode token = (TerminalNode)rule.getChild(0);
+    private static Operator gen(GeneratorContext ctx, Planner cursorMeta, Like_exprContext rule) {
+        if (rule.bind_parameter() != null) {
+            return genBindParameter(ctx, rule.bind_parameter());
+        }
+        else if (rule.literal_value() != null) {
+            return genLiteralValue(ctx, cursorMeta, (Literal_valueContext) rule.literal_value());
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
+    }
+
+    private static Operator gen_unary(GeneratorContext ctx, Planner cursorMeta, Unary_operatorContext rule,
+            Operator right) {
+        TerminalNode token = (TerminalNode) rule.getChild(0);
         if (token.getSymbol().getType() == MysqlParser.K_NOT) {
             return new OpNot(right);
         }
@@ -376,9 +422,7 @@ public class ExprGenerator {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
         }
-        CursorMaker select = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
-                ctx, 
-                rule.select_stmt(),
+        CursorMaker select = (CursorMaker) new Select_or_valuesGenerator().genSubquery(ctx, rule.select_stmt(),
                 cursorMeta);
         Operator in = new OpExists(select);
         if (rule.K_NOT() != null) {
@@ -387,17 +431,17 @@ public class ExprGenerator {
         return in;
     }
 
-    private static Operator gen_in_select(GeneratorContext ctx, Planner cursorMeta, Expr_in_selectContext rule, Operator left) {
+    private static Operator gen_in_select(GeneratorContext ctx, Planner cursorMeta, Expr_in_selectContext rule,
+            Operator left) {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
         }
-        /* workaround for topka query
-        CursorMaker select = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
-                ctx, 
-                rule.select_stmt(),
-                cursorMeta);
-        */
-        CursorMaker select = (CursorMaker)new Select_stmtGenerator().gen(ctx, rule.select_stmt());
+        /*
+         * workaround for topka query CursorMaker select = (CursorMaker)new
+         * Select_or_valuesGenerator().genSubquery( ctx, rule.select_stmt(),
+         * cursorMeta);
+         */
+        CursorMaker select = (CursorMaker) new Select_stmtGenerator().gen(ctx, rule.select_stmt());
         Operator in = new OpInSelect(left, select);
         if (rule.K_NOT() != null) {
             in = new OpNot(in);
@@ -405,9 +449,10 @@ public class ExprGenerator {
         return in;
     }
 
-    private static Operator gen_in_values(GeneratorContext ctx, Planner cursorMeta, Expr_in_valuesContext rule, Operator left) {
+    private static Operator gen_in_values(GeneratorContext ctx, Planner cursorMeta, Expr_in_valuesContext rule,
+            Operator left) {
         List<Operator> values = new ArrayList<Operator>();
-        for (ExprContext i:rule.expr()) {
+        for (ExprContext i : rule.expr()) {
             Operator expr = gen(ctx, cursorMeta, i);
             values.add(expr);
         }
@@ -418,9 +463,7 @@ public class ExprGenerator {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
         }
-        CursorMaker select = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
-                ctx, 
-                rule.select_stmt(),
+        CursorMaker select = (CursorMaker) new Select_or_valuesGenerator().genSubquery(ctx, rule.select_stmt(),
                 cursorMeta);
         if (select.getCursorMeta().getColumnCount() != 1) {
             throw new OrcaException("Operand should contain 1 column");
@@ -431,28 +474,28 @@ public class ExprGenerator {
     public static Operator gen_sinlge_node(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) {
         ParseTree child = rule.getChild(0);
         if (child instanceof Literal_valueContext) {
-            return genLiteralValue(ctx, cursorMeta, (Literal_valueContext)child);
+            return genLiteralValue(ctx, cursorMeta, (Literal_valueContext) child);
         }
         else if (child instanceof Bind_parameterContext) {
-            return genBindParameter(ctx, (Bind_parameterContext)child);
+            return genBindParameter(ctx, (Bind_parameterContext) child);
         }
         else if (child instanceof Column_name_Context) {
-            return genColumnValue(ctx, cursorMeta, (Column_name_Context)child);
+            return genColumnValue(ctx, cursorMeta, (Column_name_Context) child);
         }
         else if (child instanceof Expr_functionContext) {
-            return genFunction(ctx, cursorMeta, (Expr_functionContext)child);
+            return genFunction(ctx, cursorMeta, (Expr_functionContext) child);
         }
         else if (child instanceof Expr_parenthesisContext) {
-            return gen(ctx, cursorMeta, ((Expr_parenthesisContext)child).expr());
+            return gen(ctx, cursorMeta, ((Expr_parenthesisContext) child).expr());
         }
         else if (child instanceof Expr_selectContext) {
-            return genSingleValueQuery(ctx, cursorMeta, (Expr_selectContext)child);
+            return genSingleValueQuery(ctx, cursorMeta, (Expr_selectContext) child);
         }
         else if (child instanceof Variable_referenceContext) {
-            return genUserVariableRef(ctx, cursorMeta, (Variable_referenceContext)child);
+            return genUserVariableRef(ctx, cursorMeta, (Variable_referenceContext) child);
         }
         else if (child instanceof System_variable_referenceContext) {
-            return genSystemVariableRef(ctx, cursorMeta, (System_variable_referenceContext)child);
+            return genSystemVariableRef(ctx, cursorMeta, (System_variable_referenceContext) child);
         }
         else if (rule.expr_exist() != null) {
             return gen_exists(ctx, cursorMeta, rule.expr_exist());
@@ -461,31 +504,31 @@ public class ExprGenerator {
             return gen_cast(ctx, cursorMeta, rule.expr_cast());
         }
         else if (rule.expr_match() != null) {
-        	return gen_match(ctx, cursorMeta, rule.expr_match());
+            return gen_match(ctx, cursorMeta, rule.expr_match());
         }
         else {
             throw new NotImplementedException();
         }
     }
-    
+
     private static Operator gen_match(GeneratorContext ctx, Planner planner, Expr_matchContext rule) {
         boolean isBooleanMode = rule.K_BOOLEAN() != null;
         List<FieldValue> columns = new ArrayList<>();
-        rule.column_name_().forEach( (it) -> {
-        	Operator op = genColumnValue(ctx, planner, it);
-			if (!(op instanceof FieldValue)) {
-				throw new OrcaException("{} is not an column reference", op);
-			}
-			columns.add((FieldValue)op);
+        rule.column_name_().forEach((it) -> {
+            Operator op = genColumnValue(ctx, planner, it);
+            if (!(op instanceof FieldValue)) {
+                throw new OrcaException("{} is not an column reference", op);
+            }
+            columns.add((FieldValue) op);
         });
-		if (columns.size() <= 0) {
-			throw new OrcaException("column reference is missing");
-		}
+        if (columns.size() <= 0) {
+            throw new OrcaException("column reference is missing");
+        }
         Operator against = gen(ctx, planner, rule.expr());
-		return new OpMatch(columns, against, isBooleanMode);
-	}
+        return new OpMatch(columns, against, isBooleanMode);
+    }
 
-	private static Operator gen_cast(GeneratorContext ctx, Planner cursorMeta, Expr_castContext rule) {
+    private static Operator gen_cast(GeneratorContext ctx, Planner cursorMeta, Expr_castContext rule) {
         DataType type = DataType.parse(ctx.getTypeFactory(), rule.data_type());
         Operator expr = gen(ctx, cursorMeta, rule.expr());
         return new FuncCast(type, expr);
@@ -500,47 +543,47 @@ public class ExprGenerator {
     }
 
     private static Operator genFunction(GeneratorContext ctx, Planner cursorMeta, Expr_functionContext rule) {
-    	String name = rule.function_name().getText().toLowerCase();
-    	Function func = null;
-    	try {
-    		Class<? extends Function> klass = _functionByName.get(name);
-    		if (klass != null) {
-    			func = _functionByName.get(name).newInstance();
-    		}
-		}
-		catch (Exception x) {
-			throw new OrcaException(x);
-		}
-    	if (func == null) {
-    		// aggregate functions below
-	        if (name.equalsIgnoreCase("count")) {
-	            if (rule.expr_function_star_parameter() != null) {
-	                func = new FuncCount(ctx.allocVariable());
-	                func.addParameter(null);
-	            }
-	            else {
-	                if (rule.expr_function_parameters().expr().size() != 1) {
-	                    throw new OrcaException("count takes one and only one input parameter");
-	                }
-	                func = new FuncCount(ctx.allocVariable());
-	            }
-	        }
-	        else if (name.equalsIgnoreCase("max")) {
-	            func = new FuncMax(ctx.allocVariable());
-	        }
-	        else if (name.equalsIgnoreCase("min")) {
-	            func = new FuncMin(ctx.allocVariable());
-	        }
-	        else if (name.equalsIgnoreCase("sum")) {
-	            if (rule.expr_function_parameters() == null) {
-	                throw new OrcaException("count takes one and only one input parameter");
-	            }
-	            if (rule.expr_function_parameters().expr().size() != 1) {
-	                throw new OrcaException("count takes one and only one input parameter");
-	            }
-	            Operator expr = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
-	            func = new FuncSum(ctx.allocVariable(), expr);
-	        }
+        String name = rule.function_name().getText().toLowerCase();
+        Function func = null;
+        try {
+            Class<? extends Function> klass = _functionByName.get(name);
+            if (klass != null) {
+                func = _functionByName.get(name).newInstance();
+            }
+        }
+        catch (Exception x) {
+            throw new OrcaException(x);
+        }
+        if (func == null) {
+            // aggregate functions below
+            if (name.equalsIgnoreCase("count")) {
+                if (rule.expr_function_star_parameter() != null) {
+                    func = new FuncCount(ctx.allocVariable());
+                    func.addParameter(null);
+                }
+                else {
+                    if (rule.expr_function_parameters().expr().size() != 1) {
+                        throw new OrcaException("count takes one and only one input parameter");
+                    }
+                    func = new FuncCount(ctx.allocVariable());
+                }
+            }
+            else if (name.equalsIgnoreCase("max")) {
+                func = new FuncMax(ctx.allocVariable());
+            }
+            else if (name.equalsIgnoreCase("min")) {
+                func = new FuncMin(ctx.allocVariable());
+            }
+            else if (name.equalsIgnoreCase("sum")) {
+                if (rule.expr_function_parameters() == null) {
+                    throw new OrcaException("count takes one and only one input parameter");
+                }
+                if (rule.expr_function_parameters().expr().size() != 1) {
+                    throw new OrcaException("count takes one and only one input parameter");
+                }
+                Operator expr = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
+                func = new FuncSum(ctx.allocVariable(), expr);
+            }
             else if (name.equalsIgnoreCase("avg")) {
                 if (rule.expr_function_parameters() == null) {
                     throw new OrcaException("count takes one and only one input parameter");
@@ -551,30 +594,32 @@ public class ExprGenerator {
                 Operator expr = ExprGenerator.gen(ctx, cursorMeta, rule.expr_function_parameters().expr(0));
                 func = new FuncAvg(ctx.allocVariable(), expr);
             }
-	        else if (name.equalsIgnoreCase("GROUP_CONCAT")) {
-	            func = genGroupConcat(ctx, rule);
-	        }
-	        else {
-	            throw new NotImplementedException("function: " + name);
-	        }
-    	}
+            else if (name.equalsIgnoreCase("GROUP_CONCAT")) {
+                func = genGroupConcat(ctx, rule);
+            }
+            else {
+                throw new NotImplementedException("function: " + name);
+            }
+        }
         if (rule.expr_function_parameters() != null) {
-            for (ExprContext i:rule.expr_function_parameters().expr()) {
+            for (ExprContext i : rule.expr_function_parameters().expr()) {
                 func.addParameter(ExprGenerator.gen(ctx, cursorMeta, i));
             }
         }
         if (rule.group_concat_parameter() != null) {
             Group_concat_parameterContext params = rule.group_concat_parameter();
             Operator col = genColumnValue(ctx, cursorMeta, params.column_name_());
-            Operator separator = genLiteralValue(ctx, cursorMeta, params.literal_value());
             func.addParameter(col);
-            func.addParameter(separator);
+            if (params.literal_value() != null) {
+                Operator separator = genLiteralValue(ctx, cursorMeta, params.literal_value());
+                func.addParameter(separator);
+            }
         }
         if ((func.getMinParameters() >= 0) && (func.getChildren().size() < func.getMinParameters())) {
-        	throw new OrcaException("{}() requires at least {} parameters", name, func.getMinParameters());
+            throw new OrcaException("{}() requires at least {} parameters", name, func.getMinParameters());
         }
         if ((func.getMaxParameters() >= 0) && (func.getChildren().size() > func.getMaxParameters())) {
-        	throw new OrcaException("{}() cannot take more than {} parameters", name, func.getMaxParameters());
+            throw new OrcaException("{}() cannot take more than {} parameters", name, func.getMaxParameters());
         }
         return func;
     }
@@ -585,7 +630,18 @@ public class ExprGenerator {
                 throw new OrcaException("GROUP_CONCAT requires one input parameter");
             }
         }
-        FuncGroupConcat func = new FuncGroupConcat(ctx.allocVariable());
+        Group_concat_parameterContext param = rule.group_concat_parameter();
+        Boolean asc = null;
+        boolean distinct = false;
+        if (param != null) {
+            if (param.ordering_term() != null) {
+                if (param.ordering_term().size() > 0) {
+                    asc = param.ordering_term().get(0).K_DESC() == null;
+                }
+            }
+            distinct = param.K_DISTINCT() != null;
+        }
+        FuncGroupConcat func = new FuncGroupConcat(ctx.allocVariable(), distinct, asc);
         return func;
     }
 
@@ -597,19 +653,19 @@ public class ExprGenerator {
         ObjectName tableName = TableName.parse(ctx, rule.table_name_());
         String table = (tableName != null) ? tableName.getTableName() : null;
         String column = Utils.getIdentifier(rule.column_name().identifier());
-        
+
         // check built-in name
-        
+
         if ("rowid".equalsIgnoreCase(column)) {
             return new RowidValue();
         }
         if ("nextval".equalsIgnoreCase(column)) {
             return genSequenceValue(ctx, rule);
         }
-        
+
         // check table columns
-        
-        PlannerField pos = planner.findField( it -> {
+
+        PlannerField pos = planner.findField(it -> {
             if (!column.equalsIgnoreCase(it.getName())) {
                 return false;
             }
@@ -628,7 +684,7 @@ public class ExprGenerator {
     }
 
     private static Operator genSequenceValue(GeneratorContext ctx, Column_name_Context rule) {
-        ObjectName name = (rule.table_name_() != null) ? TableName.parse(ctx, rule.table_name_()) : null; 
+        ObjectName name = (rule.table_name_() != null) ? TableName.parse(ctx, rule.table_name_()) : null;
         return new OpSequenceValue(name);
     }
 
@@ -637,136 +693,137 @@ public class ExprGenerator {
             return new BytesValue(getBytes(rule.literal_value_binary()));
         }
         else if (rule.literal_interval() != null) {
-        	return parseInterval(ctx, planner, rule.literal_interval());
+            return parseInterval(ctx, planner, rule.literal_interval());
         }
-        TerminalNode token = (TerminalNode)rule.getChild(0);
+        TerminalNode token = (TerminalNode) rule.getChild(0);
         switch (token.getSymbol().getType()) {
-            case MysqlParser.NUMERIC_LITERAL: {
-            	BigDecimal bd = new BigDecimal(rule.getText());
-            	try {
-            		return new LongValue(bd.longValueExact());
-            	} 
-            	catch (Exception ignored) {}
-                return new NumericValue(new BigDecimal(rule.getText()));
+        case MysqlParser.NUMERIC_LITERAL: {
+            BigDecimal bd = new BigDecimal(rule.getText());
+            try {
+                return new LongValue(bd.longValueExact());
             }
-            case MysqlParser.STRING_LITERAL:
-            case MysqlParser.DOUBLE_QUOTED_LITERAL:
-                String value = Utils.getQuotedLiteralValue(rule);
-                return new StringLiteral(value);
-            case MysqlParser.K_NULL:
-                return new NullValue();
-            case MysqlParser.K_CURRENT_DATE:
-                return new SysDate();
-            case MysqlParser.K_CURRENT_TIME:
-                return new CurrentTime();
-            case MysqlParser.K_CURRENT_TIMESTAMP:
-                return new CurrentTimestamp();
-            case MysqlParser.K_TRUE:
-                return new LongValue(1);
-            case MysqlParser.K_FALSE:
-                return new LongValue(0);
-            case MysqlParser.BLOB_LITERAL:
-            	String text = rule.BLOB_LITERAL().getText();
-            	return new BytesValue(mysqlXBinaryToBytes(text));
-            case MysqlParser.HEX_LITERAL:
-            	String hextxt = rule.HEX_LITERAL().getText();
-            	hextxt = hextxt.substring(2, hextxt.length());
-            	if (hextxt.length() == 0) {
-            		return new BytesValue(new byte[0]);
-            	}
-            	return new BytesValue(BytesUtil.hexToBytes(hextxt));
-            default:
-                throw new NotImplementedException();
+            catch (Exception ignored) {
+            }
+            return new NumericValue(new BigDecimal(rule.getText()));
+        }
+        case MysqlParser.STRING_LITERAL:
+        case MysqlParser.DOUBLE_QUOTED_LITERAL:
+            String value = Utils.getQuotedLiteralValue(rule);
+            return new StringLiteral(value);
+        case MysqlParser.K_NULL:
+            return new NullValue();
+        case MysqlParser.K_CURRENT_DATE:
+            return new SysDate();
+        case MysqlParser.K_CURRENT_TIME:
+            return new CurrentTime();
+        case MysqlParser.K_CURRENT_TIMESTAMP:
+            return new CurrentTimestamp();
+        case MysqlParser.K_TRUE:
+            return new LongValue(1);
+        case MysqlParser.K_FALSE:
+            return new LongValue(0);
+        case MysqlParser.BLOB_LITERAL:
+            String text = rule.BLOB_LITERAL().getText();
+            return new BytesValue(mysqlXBinaryToBytes(text));
+        case MysqlParser.HEX_LITERAL:
+            String hextxt = rule.HEX_LITERAL().getText();
+            hextxt = hextxt.substring(2, hextxt.length());
+            if (hextxt.length() == 0) {
+                return new BytesValue(new byte[0]);
+            }
+            return new BytesValue(BytesUtil.hexToBytes(hextxt));
+        default:
+            throw new NotImplementedException();
         }
     }
 
     private static Operator parseInterval(GeneratorContext ctx, Planner planner, Literal_intervalContext rule) {
-    	Operator upstream = gen(ctx, planner, rule.expr());
-    	String unit = rule.WORD().getText();
-    	long multiplier; 
-    	if (unit.equalsIgnoreCase("SECOND")) {
-    		multiplier = 1000;
-    	}
-    	else if (unit.equalsIgnoreCase("MINUTE")) {
-    		multiplier = 1000 * 60;
-    	}
-    	else if (unit.equalsIgnoreCase("HOUR")) {
-    		multiplier = 1000 * 60 * 60;
-    	}
-    	else if (unit.equalsIgnoreCase("DAY")) {
-    		multiplier = 1000 * 60 * 60 * 24;
-    	}
-    	else if (unit.equalsIgnoreCase("WEEK")) {
-    		multiplier = 1000 * 60 * 60 * 24 * 7;
-    	}
-    	else {
-    		throw new OrcaException("unknown unit of time: " + unit);
-    	}
-    	return new OpInterval(upstream, multiplier);
-	}
-
-	private static byte[] mysqlXBinaryToBytes(String text) {
-    	if (text.length() < 3) {
-    		throw new IllegalArgumentException("invalid binary format: " + text);
-    	}
-    	if (text.length() % 2 != 1) {
-    		throw new IllegalArgumentException("invalid binary format: " + text);
-    	}
-    	byte[] bytes = new byte[(text.length() -3) / 2];
-    	for (int i=2; i<text.length()-1; i+=2) {
-    		int ch1 = text.charAt(i);
-    		int ch2 = text.charAt(i+1);
-    		ch1 = Character.digit(ch1, 16);
-    		ch2 = Character.digit(ch2, 16);
-    		int n = ch1 << 4 | ch2;
-    		bytes[i/2-1] = (byte)n;
-    	}
-    	return bytes;
+        Operator upstream = gen(ctx, planner, rule.expr());
+        String unit = rule.WORD().getText();
+        long multiplier;
+        if (unit.equalsIgnoreCase("SECOND")) {
+            multiplier = 1000;
+        }
+        else if (unit.equalsIgnoreCase("MINUTE")) {
+            multiplier = 1000 * 60;
+        }
+        else if (unit.equalsIgnoreCase("HOUR")) {
+            multiplier = 1000 * 60 * 60;
+        }
+        else if (unit.equalsIgnoreCase("DAY")) {
+            multiplier = 1000 * 60 * 60 * 24;
+        }
+        else if (unit.equalsIgnoreCase("WEEK")) {
+            multiplier = 1000 * 60 * 60 * 24 * 7;
+        }
+        else {
+            throw new OrcaException("unknown unit of time: " + unit);
+        }
+        return new OpInterval(upstream, multiplier);
     }
-    
-    private static byte[] getBytes(Literal_value_binaryContext rule) {
-    	Token token = rule.STRING_LITERAL().getSymbol();
-    	byte[] bytes = new byte[token.getStopIndex() - token.getStartIndex() - 1];
-    	CharStream cs = token.getInputStream();
-    	int pos = cs.index();
-    	cs.seek(token.getStartIndex() + 1);
-    	int j = 0;
-    	for (int i=0; i<bytes.length; i++) {
-    		int ch = cs.LA(i+1);
-    		if (ch == '\\') {
-    			i++;
-    			ch = cs.LA(i+1);
-    			if (ch == '0') {
-    				ch = 0;
-    			}
-    			else if (ch == 'n') {
-    				ch = '\n';
-    			}
-    			else if (ch == 'r') {
-    				ch = '\r';
-    			}
-    			else if (ch == 'Z') {
-    				ch = '\032';
-    			}
-    		}
-    		bytes[j] = (byte)ch;
-    		j++;
-    	}
-    	cs.seek(pos);
-    	if (j != bytes.length) {
-    		// esacpe characters
-    		byte[] old = bytes;
-    		bytes = new byte[j];
-    		System.arraycopy(old, 0, bytes, 0, j);
-    	}
-		return bytes;
-	}
 
-	private static Operator genBindParameter(GeneratorContext ctx, Bind_parameterContext rule) {
+    private static byte[] mysqlXBinaryToBytes(String text) {
+        if (text.length() < 3) {
+            throw new IllegalArgumentException("invalid binary format: " + text);
+        }
+        if (text.length() % 2 != 1) {
+            throw new IllegalArgumentException("invalid binary format: " + text);
+        }
+        byte[] bytes = new byte[(text.length() - 3) / 2];
+        for (int i = 2; i < text.length() - 1; i += 2) {
+            int ch1 = text.charAt(i);
+            int ch2 = text.charAt(i + 1);
+            ch1 = Character.digit(ch1, 16);
+            ch2 = Character.digit(ch2, 16);
+            int n = ch1 << 4 | ch2;
+            bytes[i / 2 - 1] = (byte) n;
+        }
+        return bytes;
+    }
+
+    private static byte[] getBytes(Literal_value_binaryContext rule) {
+        Token token = rule.STRING_LITERAL().getSymbol();
+        byte[] bytes = new byte[token.getStopIndex() - token.getStartIndex() - 1];
+        CharStream cs = token.getInputStream();
+        int pos = cs.index();
+        cs.seek(token.getStartIndex() + 1);
+        int j = 0;
+        for (int i = 0; i < bytes.length; i++) {
+            int ch = cs.LA(i + 1);
+            if (ch == '\\') {
+                i++;
+                ch = cs.LA(i + 1);
+                if (ch == '0') {
+                    ch = 0;
+                }
+                else if (ch == 'n') {
+                    ch = '\n';
+                }
+                else if (ch == 'r') {
+                    ch = '\r';
+                }
+                else if (ch == 'Z') {
+                    ch = '\032';
+                }
+            }
+            bytes[j] = (byte) ch;
+            j++;
+        }
+        cs.seek(pos);
+        if (j != bytes.length) {
+            // esacpe characters
+            byte[] old = bytes;
+            bytes = new byte[j];
+            System.arraycopy(old, 0, bytes, 0, j);
+        }
+        return bytes;
+    }
+
+    private static Operator genBindParameter(GeneratorContext ctx, Bind_parameterContext rule) {
         return new BindParameter(ctx.getParameterPosition(rule.BIND_PARAMETER()));
     }
 
-	public static Operator gen(GeneratorContext ctx, Planner cursorMeta, String expr) {
+    public static Operator gen(GeneratorContext ctx, Planner cursorMeta, String expr) {
         CharStream cs = new ANTLRInputStream(expr);
         MysqlLexer lexer = new MysqlLexer(cs);
         CommonTokenStream tokens = new CommonTokenStream(lexer);
@@ -775,5 +832,5 @@ public class ExprGenerator {
         parser.setErrorHandler(new BailErrorStrategy());
         MysqlParser.ExprContext rule = parser.expr();
         return gen(ctx, cursorMeta, rule);
-	}
+    }
 }

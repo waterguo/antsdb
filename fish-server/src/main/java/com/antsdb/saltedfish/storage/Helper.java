@@ -636,6 +636,9 @@ final class Helper {
     }
 
     public static long toIndexLine(Heap heap, Result r) {
+        if (r.isEmpty()) {
+            return 0;
+        }
         NavigableMap<byte[], byte[]> sys = r.getFamilyMap(SYS_COLUMN_FAMILY_BYTES);
         byte[] indexKey = r.getRow();
         byte[] rowKey = sys.get(SYS_COLUMN_INDEXKEY_BYTES);

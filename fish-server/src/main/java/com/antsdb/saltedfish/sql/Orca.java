@@ -121,9 +121,16 @@ public class Orca {
         
         this.statementCache = CacheBuilder.newBuilder().maximumSize(1000).build();
 
-        // 
+        // create system objects if not initialized 
         
         init();
+        
+        // upgrade
+        
+        upgrade();
+
+        // start services
+        
         this.idService = new IdentifierService(this);
         
         // skipping validation. it no longer applicable.
@@ -205,6 +212,7 @@ public class Orca {
         registerSystemView(SYSNS, "REPLICATOR_INFO", new SystemViewReplicatorInfo(this));
         registerSystemView(SYSNS, "SYNCHRONIZER_INFO", new SystemViewSynchronizerInfo(this));
         registerSystemView(SYSNS, "TABLE_STATS", new SystemViewTableStats(this));
+        registerSystemView(SYSNS, "PAGES", new SystemViewPages(this));
         registerSystemView(SYSNS, "x00000000", new SystemViewHumpbackMeta(this));
         registerSystemView(SYSNS, "x00000001", new SystemViewHumpbackNamespace(this));
         registerSystemView(SYSNS, "x00000002", new SystemViewTableStats(this));
@@ -242,6 +250,7 @@ public class Orca {
         // system sequence 
         
         createSystemSequence(IdentifierService.GLOBAL_SEQUENCE_NAME, 0, 0x100, 1);
+        createSystemSequence(IdentifierService.ROWID_SEQUENCE_NAME, 1, 0, 1);
 
         // script
         
@@ -252,7 +261,15 @@ public class Orca {
         this.config.set("databaseType", dbtype);            
     }
     
-    void createSystemSequence(ObjectName name, int id, int next, int increment) {
+    private void upgrade() {
+        SequenceMeta seq = this.metaService.getSequence(IdentifierService._trx, IdentifierService.ROWID_SEQUENCE_NAME);
+        if (seq == null) {
+            long value = this.humpback.getCheckPoint().getRowid();
+            createSystemSequence(IdentifierService.ROWID_SEQUENCE_NAME, 1, value, 1);
+        }
+    }
+
+    void createSystemSequence(ObjectName name, int id, long next, int increment) {
         SequenceMeta seq = new SequenceMeta(name, id);
         seq.setLastNumber(next);
         seq.setIncrement(increment);
@@ -378,9 +395,25 @@ public class Orca {
         }
         this.isClosed = true;
         
+        // close jobs
+        
+        if (this.replicator != null) {
+            this.replicator.close();
+        }
+        if (this.sessionSweeperFuture != null) {
+            this.sessionSweeperFuture.cancel(true);
+        }
+        if (this.recyclerFuture != null) {
+            this.recyclerFuture.cancel(true);
+        }
+        
         // close slave thread
         
         MysqlSlave.stopIfExists();
+        
+        // close services
+        
+        this.idService.close();
         
         // close all sessions
         
@@ -478,7 +511,7 @@ public class Orca {
 	}
 	
 	public long getNextRowid() {
-		return this.humpback.getCheckPoint().getAndIncrementRowid();
+		return this.idService.getNextRowid();
 	}
 
 	public File getHome() {

@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 /**
  * grouper when there is not GROUP BY clause
  * 
@@ -77,6 +79,11 @@ public class ThroughGrouper extends CursorMaker {
     }
 
     public CursorMaker getUpstream() {
-    	return this.upstream;
+        return this.upstream;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
     }
 }

@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 /**
  * most straight forward join by passing record one by one to the right side cursor maker. 
  * 
@@ -183,6 +185,11 @@ public class NestedJoin extends CursorMaker {
         records.add(rec);
         this.left.explain(level+1, records);
         this.right.explain(level+1, records);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.left.setSortingOrder(order);
     }
 
 }

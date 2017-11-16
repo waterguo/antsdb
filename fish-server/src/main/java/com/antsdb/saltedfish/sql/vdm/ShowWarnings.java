@@ -13,7 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.List;
+
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 /**
  * 
@@ -37,5 +40,10 @@ public class ShowWarnings extends CursorMaker {
 	public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
 		return new EmptyCursor(meta);
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 
 }

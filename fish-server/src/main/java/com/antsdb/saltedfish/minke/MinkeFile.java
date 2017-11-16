@@ -28,7 +28,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author *-xguo0<@
  */
-class MinkeFile implements Closeable {
+public class MinkeFile implements Closeable {
 	static final int HEADER_SIZE = 1024;
 	static final int SIGNATURE = 0x73746e61;
 	static final int OFFSET_SIG = 0;
@@ -118,7 +118,7 @@ class MinkeFile implements Closeable {
         return result;
     }
     
-    MinkePage[] getPages() {
+    public MinkePage[] getPages() {
         return this.pages;
     }
 

@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 /**
  * limits the result set. mysql limit clause
  * 
@@ -64,25 +66,30 @@ public class Limiter extends CursorMaker {
 	}
 	
     public Limiter(CursorMaker upstream, int offset, int count) {
-    	this.upstream = upstream;
-    	this.offset = offset;
-    	this.limit = count;
+        this.upstream = upstream;
+        this.offset = offset;
+        this.limit = count;
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	Cursor c = this.upstream.make(ctx, params, pMaster);
-    	c = new LimiterCursor(c);
-    	return c;
+        Cursor c = this.upstream.make(ctx, params, pMaster);
+        c = new LimiterCursor(c);
+        return c;
     }
-    
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.upstream.getCursorMeta();
-	}
 
-	@Override
-	public void explain(int level, List<ExplainRecord> records) {
-		this.upstream.explain(level, records);
-	}
+    @Override
+    public CursorMeta getCursorMeta() {
+        return this.upstream.getCursorMeta();
+    }
+
+    @Override
+    public void explain(int level, List<ExplainRecord> records) {
+        this.upstream.explain(level, records);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
+    }
 }

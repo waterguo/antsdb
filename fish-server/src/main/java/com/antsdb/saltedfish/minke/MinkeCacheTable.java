@@ -13,9 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.minke;
 
-import org.apache.commons.lang.NotImplementedException;
+import java.util.List;
+
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.ScanResult;
@@ -74,7 +76,34 @@ public class MinkeCacheTable implements StorageTable {
 
     @Override
     public long getIndex(long pKey) {
-        throw new NotImplementedException();
+        long pResult = this.mtable.get(pKey);
+        if (pResult == 1) {
+            // delete mark
+            verifyCacheGetIndex(pKey, 0, -1, false);
+            return 0;
+        }
+        if ((pResult == 0) && this.cache.isMutable) {
+            pResult = this.stable.getIndex(pKey);
+            if (pResult != 0) {
+                // the following code might throw OutofMinkeSpace exception. it is expected. we cannot use the memory
+                // address from HBaseTable because it will be reset in next get() call. it is not perfect. but until
+                // i find the perfect solution let's live with it
+                pResult = this.mtable.putIndex_(pKey, pResult, (byte)0);
+            }
+            else {
+                this.mtable.putDeleteMark(pKey);
+            }
+            _log.debug("fetched {} from storage count={} tableId={}", 
+                    KeyBytes.toString(pKey), 
+                    (pResult != 0) ? 1 : 0,
+                    getId());
+            verifyCacheGetIndex(pKey, -1, pResult, true);
+            this.cache.cacheMiss();
+        }
+        else {
+            verifyCacheGetIndex(pKey, pResult, -1, false);
+        }
+        return pResult;
     }
     
     @Override
@@ -198,6 +227,32 @@ public class MinkeCacheTable implements StorageTable {
         }
     }
 
+    private void verifyCacheGetIndex(long pKey, long pResultFromCache, long pResultFromStorage, boolean isCacheMiss) {
+        if (this.cache.getVerificationMode() < (isCacheMiss ? 1 : 2)) {
+            return;
+        }
+        if (pResultFromStorage == -1) {
+            pResultFromStorage = this.stable.get(pKey); 
+        }
+        if (pResultFromCache == -1) {
+            pResultFromCache = this.mtable.get(pKey);
+        }
+        if (Long.compareUnsigned(pResultFromCache, 1) <= 0) {
+            if (pResultFromStorage == 0) {
+                return;
+            }
+            else {
+                throw new CacheVerificationException(this.mtable.tableId, pKey, pResultFromCache, pResultFromStorage);
+            }
+        }
+        else if (pResultFromStorage == 0) {
+            throw new CacheVerificationException(this.mtable.tableId, pKey, pResultFromCache, pResultFromStorage);
+        }
+        if (KeyBytes.compare(pResultFromCache, pResultFromStorage) != 0) {
+            throw new CacheVerificationException(this.mtable.tableId, pKey, pResultFromCache, pResultFromStorage);
+        }
+    }
+
     @Override
     public String getLocation(long pKey) {
         String result = this.mtable.getLocation(pKey);
@@ -211,4 +266,8 @@ public class MinkeCacheTable implements StorageTable {
         return this.mtable.tableId;
     }
 
+    @Override
+    public boolean traceIo(long pKey, List<FileOffset> lines) {
+        return this.mtable.traceIo(pKey, lines);
+    }
 }

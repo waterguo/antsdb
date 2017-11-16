@@ -78,7 +78,7 @@ public class PreparedStmtHandler {
         }
         finally {
             if (!success) {
-                _log.debug("statement parameters:\n{}", pstmt.getParameters().toString());
+                _log.error("statement parameters:\n{}", pstmt.getParameters().toString());
             }
             pstmt.clear();
         }
@@ -148,13 +148,13 @@ public class PreparedStmtHandler {
     }
     
     public void close(MysqlServerHandler handler, StmtClosePacket packet) {
-    	int stmtId = (int)packet.statementId;
-    	MysqlPreparedStatement pstmt = handler.getPrepared().get(stmtId);
-    	if (pstmt == null) {
-    		return;
-    	}
-    	pstmt.close();
-    	handler.getPrepared().remove(packet.statementId);
+        int stmtId = (int) packet.statementId;
+        MysqlPreparedStatement pstmt = handler.getPrepared().get(stmtId);
+        if (pstmt == null) {
+            return;
+        }
+        pstmt.close();
+        handler.getPrepared().remove((int) packet.statementId);
     }
 
 }

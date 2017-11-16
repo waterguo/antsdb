@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 /**
  * purpose of this class is to collapse the grouped records into one.
  * 
@@ -75,6 +77,11 @@ public class GroupByPostProcesser extends CursorMaker {
         ExplainRecord rec = new ExplainRecord(level, getClass().getSimpleName());
         records.add(rec);
         this.upstream.explain(level+1, records);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 
 }

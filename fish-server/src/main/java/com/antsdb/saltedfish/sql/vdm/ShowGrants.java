@@ -14,8 +14,10 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.Collections;
+import java.util.List;
 
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
@@ -38,5 +40,10 @@ public class ShowGrants extends CursorMaker {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
         return c;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 }

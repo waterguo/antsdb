@@ -22,39 +22,32 @@ import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.nosql.SysNamespaceRow;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class SystemViewHumpbackNamespace extends CursorMaker {
+public class SystemViewHumpbackNamespace extends ViewMaker {
     private Orca orca;
-    private CursorMeta meta;
 
     public static class Line {
         public String NAMESPACE;
     }
     
     SystemViewHumpbackNamespace(Orca orca) {
+        super(CursorUtil.toMeta(Line.class));
         this.orca = orca;
-        this.meta = CursorUtil.toMeta(Line.class);
     }
     
-    @Override
-    public CursorMeta getCursorMeta() {
-        return this.meta;
-    }
-
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Line> list = new ArrayList<>();
         GTable sysns = this.orca.getHumpback().getTable(Humpback.SYSNS_TABLE_ID);
-        for (RowIterator i=sysns.scan(0, Long.MAX_VALUE);i.next();) {
+        for (RowIterator i=sysns.scan(0, Long.MAX_VALUE, true);i.next();) {
             list.add(toLine(i.getRow()));
         }
         Cursor c = CursorUtil.toCursor(meta, list);

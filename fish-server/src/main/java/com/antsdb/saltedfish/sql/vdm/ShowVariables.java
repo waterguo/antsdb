@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class ShowVariables extends CursorMaker {
@@ -59,6 +60,11 @@ public class ShowVariables extends CursorMaker {
     @Override
     public CursorMeta getCursorMeta() {
         return this.meta;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 
 }

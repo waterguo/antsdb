@@ -20,11 +20,11 @@ import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
@@ -40,12 +40,7 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
 	@Override
 	public Instruction gen(GeneratorContext ctx, Show_create_table_stmtContext rule) throws OrcaException {
 		CursorMeta meta = CursorUtil.toMeta(Item.class);
-        return new CursorMaker() {
-			@Override
-			public CursorMeta getCursorMeta() {
-		        return meta;
-			}
-			
+        return new ViewMaker(meta) {
 		    @Override
 		    public Object run(VdmContext ctx, Parameters params, long pMaster) {
 		        Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());

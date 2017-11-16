@@ -13,11 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.List;
+
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 /**
  * 
@@ -99,5 +102,10 @@ public class FullTextIndexScan extends CursorMaker {
 	public void setQueryTerm(Operator term) {
 		this.term = term;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 
 }

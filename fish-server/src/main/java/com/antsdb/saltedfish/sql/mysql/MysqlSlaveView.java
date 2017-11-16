@@ -17,18 +17,16 @@ import java.util.ArrayList;
 
 import com.antsdb.saltedfish.server.mysql.replication.MysqlSlave;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class MysqlSlaveView extends CursorMaker {
-    CursorMeta meta;
+public class MysqlSlaveView extends ViewMaker {
 
     public static class Item {
         public long TRX_COUNT;
@@ -38,14 +36,9 @@ public class MysqlSlaveView extends CursorMaker {
     }
     
     public MysqlSlaveView() {
-    	this.meta = CursorUtil.toMeta(Item.class); 
+        super(CursorUtil.toMeta(Item.class));
     }
     
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.meta;
-	}
-
     @Override
 	public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Item> list = new ArrayList<>();

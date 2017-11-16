@@ -13,8 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql;
 
+import java.util.List;
+
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.sql.meta.TableId;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
@@ -54,10 +57,15 @@ public class SysSequence extends CursorMaker {
         Cursor cursor = new DumbCursor(
                 ctx.getSpaceManager(),
                 this.meta, 
-                table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs()), 
+                table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), true), 
                 mapping,
                 ctx.getCursorStats(0));
         return cursor;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 
 }

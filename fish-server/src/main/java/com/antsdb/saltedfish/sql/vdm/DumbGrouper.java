@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class DumbGrouper extends CursorMaker {
@@ -157,6 +158,11 @@ public class DumbGrouper extends CursorMaker {
         rec.setMakerId(makerId);
         records.add(rec);
         this.upstream.explain(level+1, records);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 
 }

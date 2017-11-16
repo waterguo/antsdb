@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
@@ -1770,5 +1771,28 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         result += "->" + this.sm.getLocation(sp);
         result += " " + KeyBytes.toString(pKey);
         return result;
+    }
+
+    public boolean traceIo(long pKey, List<FileOffset> lines) {
+        long pOffset = this.slist.traceIo(pKey, this.file, this.base, lines);
+        if (pOffset == 0) {
+            return false;
+        }
+        int head = Unsafe.getInt(pOffset);
+        if (head == 0) {
+            return false;
+        }
+        for (ListNode i=ListNode.create(base, head); i!=null; i=i.getNextNode()) {
+            lines.add(new FileOffset(this.file, i.getOffset(), "version"));
+            long versionInList = i.getVersion();
+            if (versionInList < 0) {
+                continue;
+            }
+            long sp = i.getSpacePointer();
+            
+            lines.add(this.sm.getFileOffset(sp).setNote("row"));
+            return true;
+        }
+        return false;
     }
 }

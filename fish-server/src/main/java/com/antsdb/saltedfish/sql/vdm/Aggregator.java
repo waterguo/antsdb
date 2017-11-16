@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 public class Aggregator extends CursorMaker {
     CursorMaker upstream;
     CursorMeta meta;
@@ -60,5 +62,10 @@ public class Aggregator extends CursorMaker {
 
     public CursorMaker getUpstream() {
     	return this.upstream;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
     }
 }

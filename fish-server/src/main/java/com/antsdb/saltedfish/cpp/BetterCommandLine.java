@@ -19,6 +19,8 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.varia.NullAppender;
 
 import com.antsdb.saltedfish.util.ConsoleHelper;
 
@@ -29,6 +31,11 @@ import com.antsdb.saltedfish.util.ConsoleHelper;
 public abstract class BetterCommandLine implements ConsoleHelper {
     protected String[] args;
     protected CommandLine cmdline;
+    
+    static {
+        LogManager.getRootLogger().removeAllAppenders();
+        LogManager.getRootLogger().addAppender(new NullAppender());
+    }
     
     protected String getCommandName() {
         return getClass().getSimpleName();

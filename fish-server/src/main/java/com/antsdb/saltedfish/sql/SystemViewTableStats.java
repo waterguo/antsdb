@@ -17,10 +17,9 @@ import java.util.ArrayList;
 
 import com.antsdb.saltedfish.nosql.TableStats;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 import com.antsdb.saltedfish.util.UberFormatter;
 
@@ -28,9 +27,8 @@ import com.antsdb.saltedfish.util.UberFormatter;
  * 
  * @author *-xguo0<@
  */
-public class SystemViewTableStats extends CursorMaker {
+public class SystemViewTableStats extends ViewMaker {
     private Orca orca;
-    private CursorMeta meta;
 
     public static class Line {
         public Integer TABLE_ID;
@@ -42,15 +40,10 @@ public class SystemViewTableStats extends CursorMaker {
     }
     
     SystemViewTableStats(Orca orca) {
+        super(CursorUtil.toMeta(Line.class));
         this.orca = orca;
-        this.meta = CursorUtil.toMeta(Line.class);
     }
     
-    @Override
-    public CursorMeta getCursorMeta() {
-        return this.meta;
-    }
-
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Line> list = new ArrayList<>();

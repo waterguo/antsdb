@@ -13,9 +13,12 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
+import java.util.List;
+
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
@@ -89,5 +92,10 @@ public class ShowTables extends CursorMaker {
         Cursor c = (Cursor)this.upstream.run(ctx, params, 0);
         
         return c;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 }

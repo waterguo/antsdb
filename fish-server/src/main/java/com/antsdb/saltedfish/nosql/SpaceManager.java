@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -147,6 +148,17 @@ public final class SpaceManager {
 		return String.format("%s:%s", space.file, hex(spRow));
 	}
 
+    public FileOffset getFileOffset(long spRow) {
+        int spaceId = (int)(spRow >> 32);
+        int offset = (int)spRow & 0x7fffffff;
+        Space space = this.spaces[spaceId];
+        if ((offset < 0) || (offset >= space.getCapacity())) {
+            throw new IllegalArgumentException();
+        }
+        FileOffset result = new FileOffset(space.file, offset, "");
+        return result;
+    }
+    
 	public final long plus(long sp, long length, int bytes) {
 		int spaceId = (int)(sp >> 32);
 		int offset = (int)sp & 0x7fffffff;

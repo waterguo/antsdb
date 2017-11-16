@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.minke;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -22,6 +23,7 @@ import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
@@ -390,27 +392,27 @@ public final class MinkePage implements Comparable<MinkePage> {
         }
     }
     
-	public void putIndex(long pIndexKey, long pRowKey, byte misc) {
+    public long putIndex(long pIndexKey, long pRowKey, byte misc) {
         this.gate.incrementAndGet();
         try {
             ensureMutable(pIndexKey);
             KeyBytes rowkey = KeyBytes.create(pRowKey);
             KeyBytes newRowKey = KeyBytes.allocSet(heap, rowkey);
             newRowKey.setSuffixByte(misc);
-    		for (;;) {
-    			long pHead = this.rows.put(pIndexKey);
-    			int oHeadValue = Unsafe.getIntVolatile(pHead);
-    			int oNewRowKey = (int)(newRowKey.getAddress() - this.addr);
-    			if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oNewRowKey)) {
-    				break;
-    			}
-    		}
-            trackWrite();
+            for (;;) {
+                long pHead = this.rows.put(pIndexKey);
+                int oHeadValue = Unsafe.getIntVolatile(pHead);
+                int oNewRowKey = (int) (newRowKey.getAddress() - this.addr);
+                if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oNewRowKey)) {
+                    trackWrite();
+                    return newRowKey.getAddress();
+                }
+            }
         }
         finally {
             this.gate.decrementAndGet();
         }
-	}
+    }
 
     public long getAddress() {
         return this.addr;
@@ -1052,5 +1054,28 @@ public final class MinkePage implements Comparable<MinkePage> {
                 hex(offset), 
                 KeyBytes.toString(pKey));
         return result;
+    }
+    
+    public long getHits() {
+        return this.hit.get();
+    }
+
+    public long getLastRead() {
+        return this.lastAccess.get();
+    }
+
+    public boolean traceIo(long pKey, List<FileOffset> lines) {
+        long pHead = this.rows.traceIo(pKey, this.mfile.file, this.mfile.addr, lines);
+        if (pHead == 0) {
+            return false;
+        }
+        int oRow = Unsafe.getIntVolatile(pHead);
+        if (oRow <= 1) {
+            return false;
+        }
+        long pageOffset = this.addr - this.mfile.addr;
+        long offset = pageOffset + oRow;
+        lines.add(new FileOffset(this.mfile.file, offset, "row"));
+        return true;
     }
 }

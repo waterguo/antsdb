@@ -151,7 +151,7 @@ public class MetadataService {
     
     private TableMeta loadTable(Transaction trx, String ns, String tableName) {
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSTABLE);
-        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs()); i.next();) {
+        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs(), true); i.next();) {
             Row rrow = i.getRow();
             if (rrow == null) {
                 return null;
@@ -371,7 +371,7 @@ public class MetadataService {
     public List<String> getTables(Transaction trx, String ns) {
         List<String> tables = new ArrayList<String>();
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSTABLE);
-        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs()); i.next();) {
+        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs(), true); i.next();) {
             SlowRow row = SlowRow.from(i.getRow());
             if (row == null) {
                 break;

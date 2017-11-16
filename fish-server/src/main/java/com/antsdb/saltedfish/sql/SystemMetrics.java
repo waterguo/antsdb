@@ -16,17 +16,15 @@ package com.antsdb.saltedfish.sql;
 import java.util.ArrayList;
 
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Measure;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class SystemMetrics extends CursorMaker {
+public class SystemMetrics extends ViewMaker {
 	Orca orca;
-	CursorMeta meta;
 	
     public static class Item {
         public String SQL = "";
@@ -37,13 +35,8 @@ public class SystemMetrics extends CursorMaker {
     }
 
 	public SystemMetrics(Orca orca) {
+	    super(CursorUtil.toMeta(Item.class));
 		this.orca = orca;
-		meta = CursorUtil.toMeta(Item.class);
-	}
-
-	@Override
-	public CursorMeta getCursorMeta() {
-		return meta;
 	}
 
 	@Override

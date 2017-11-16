@@ -16,10 +16,13 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.List;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Limit_clauseContext;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 public abstract class CursorMaker extends Instruction {
-    public abstract CursorMeta getCursorMeta();
     int makerId;
+    
+    public abstract CursorMeta getCursorMeta();
+    public abstract boolean setSortingOrder(List<SortKey> order);
     
     public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
         return (Cursor)run(ctx, params, pMaster);

@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 public class Aliaser extends CursorMaker {
     String alias;
     CursorMaker upstream;
@@ -69,4 +71,8 @@ public class Aliaser extends CursorMaker {
         this.upstream.explain(level, records);
     }
 
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
+    }
 }

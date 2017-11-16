@@ -74,7 +74,7 @@ public class ConfigService {
             return;
         }
         
-        for (RowIterator i=table.scan(0, Integer.MAX_VALUE); i.next();) {
+        for (RowIterator i=table.scan(0, Integer.MAX_VALUE, true); i.next();) {
             Row rrow = i.getRow();
             if (rrow == null) {
                 break;

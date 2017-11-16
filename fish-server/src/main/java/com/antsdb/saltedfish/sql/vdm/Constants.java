@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
+
 /**
  * 
  * @author wgu0
@@ -70,4 +72,9 @@ public class Constants extends CursorMaker {
 		MyCursor c = new MyCursor(ctx, params, pMaster);
 		return c;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 }

@@ -18,66 +18,59 @@ import java.util.Collections;
 
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class ROUTINES extends CursorMaker {
+public class ROUTINES extends ViewMaker {
 
-	Orca orca;
-    CursorMeta meta;
-    
+    Orca orca;
+
     public static class Item {
-    	public String SPECIFIC_NAME;
-    	public String ROUTINE_CATALOG;
-    	public String ROUTINE_SCHEMA;
-    	public String ROUTINE_NAME;
-    	public String ROUTINE_TYPE;
-    	public Integer CHARACTER_MAXIMUM_LENGTH;
-    	public Integer CHARACTER_OCTET_LENGTH;
-    	public Integer NUMERIC_PRECISION;
-    	public Integer NUMERIC_SCALE;
-    	public Integer DATETIME_PRECISION;
-    	public String CHARACTER_SET_NAME;
-    	public String COLLATION_NAME;
-    	public String DTD_IDENTIFIER;
-    	public String ROUTINE_BODY;
-    	public String ROUTINE_DEFINITION;
-    	public String EXTERNAL_NAME;
-    	public String EXTERNAL_LANGUAGE;
-    	public String PARAMETER_STYLE;
-    	public String IS_DETERMINSTIC;
-    	public String SQL_DATA_ACCESS;
-    	public String SQL_PATH;
-    	public String SECURITY_TYPE;
-    	public Timestamp CREATED;
-    	public Timestamp LAST_ALTERED;
-    	public String SQL_MODE;
-    	public String ROUTINE_COMMENT;
-    	public String DEFINER;
-    	public String CHARACTER_SET_CLIENT;
-    	public String COLLATION_CONNECTION;
-    	public String DATABASE_COLLATION;
+        public String SPECIFIC_NAME;
+        public String ROUTINE_CATALOG;
+        public String ROUTINE_SCHEMA;
+        public String ROUTINE_NAME;
+        public String ROUTINE_TYPE;
+        public Integer CHARACTER_MAXIMUM_LENGTH;
+        public Integer CHARACTER_OCTET_LENGTH;
+        public Integer NUMERIC_PRECISION;
+        public Integer NUMERIC_SCALE;
+        public Integer DATETIME_PRECISION;
+        public String CHARACTER_SET_NAME;
+        public String COLLATION_NAME;
+        public String DTD_IDENTIFIER;
+        public String ROUTINE_BODY;
+        public String ROUTINE_DEFINITION;
+        public String EXTERNAL_NAME;
+        public String EXTERNAL_LANGUAGE;
+        public String PARAMETER_STYLE;
+        public String IS_DETERMINSTIC;
+        public String SQL_DATA_ACCESS;
+        public String SQL_PATH;
+        public String SECURITY_TYPE;
+        public Timestamp CREATED;
+        public Timestamp LAST_ALTERED;
+        public String SQL_MODE;
+        public String ROUTINE_COMMENT;
+        public String DEFINER;
+        public String CHARACTER_SET_CLIENT;
+        public String COLLATION_CONNECTION;
+        public String DATABASE_COLLATION;
     }
-    
+
     public ROUTINES(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
         this.orca = orca;
-    	this.meta = CursorUtil.toMeta(Item.class); 
     }
-    
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.meta;
-	}
 
     @Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
         Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
         return c;
     }

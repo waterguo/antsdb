@@ -13,6 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
+import java.util.List;
+
+import com.antsdb.saltedfish.cpp.FileOffset;
+
 /**
  * 
  * @author *-xguo0<@
@@ -31,4 +35,5 @@ public interface StorageTable {
     public void putIndex(long pIndexKey, long pRowKey, byte misc);
     public void put(Row row);
     public String getLocation(long pKey);
+    public boolean traceIo(long pKey, List<FileOffset> lines);
 }

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class Explain extends CursorMaker {
@@ -40,5 +41,10 @@ public class Explain extends CursorMaker {
         List<ExplainRecord> records = new ArrayList<ExplainRecord>();
         this.root.explain(1, records);
         return CursorUtil.toCursor(meta, records);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 }    

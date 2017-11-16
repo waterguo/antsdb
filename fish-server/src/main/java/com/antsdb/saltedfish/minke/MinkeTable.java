@@ -18,12 +18,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
 import com.antsdb.saltedfish.cpp.SkipListScanner;
@@ -544,7 +546,11 @@ public class MinkeTable implements StorageTable, Recycable {
         }
     }
     
-	public void putIndex(long pIndexKey, long pRowKey, byte misc) {
+    public void putIndex(long pIndexKey, long pRowKey, byte misc) {
+        putIndex_(pIndexKey, pRowKey, misc);
+    }
+    
+	long putIndex_(long pIndexKey, long pRowKey, byte misc) {
         for (;;) {
             MinkePage page = this.pages.getFloorPage(pIndexKey);
             if (page == null) {
@@ -552,8 +558,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 continue;
             }
             try {
-                page.putIndex(pIndexKey, pRowKey, misc);
-                return;
+                return page.putIndex(pIndexKey, pRowKey, misc);
             }
             catch (OutOfHeapMemory x) {
                 int size = KeyBytes.getRawSize(pIndexKey);
@@ -949,5 +954,14 @@ public class MinkeTable implements StorageTable, Recycable {
             return "";
         }
         return page.getLocation(pKey);
+    }
+
+    @Override
+    public boolean traceIo(long pKey, List<FileOffset> lines) {
+        MinkePage page = this.pages.getFloorPage(pKey);
+        if (page == null) {
+            return false;
+        }
+        return page.traceIo(pKey, lines);
     }
 }

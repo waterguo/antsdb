@@ -13,7 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.List;
+
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class ShowCollation extends CursorMaker {
@@ -45,6 +48,11 @@ public class ShowCollation extends CursorMaker {
            .set(5, 0);
         Cursor c = CursorUtil.toCursor(meta, rec);
         return c;
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
     }
 
 }

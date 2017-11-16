@@ -22,6 +22,7 @@ import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
 /**
  * cursor driven index seek. this is an optimization for in select
@@ -194,5 +195,10 @@ public class CursorIndexSeek extends CursorMaker {
 		this.prefix = prefix;
 		this.select = select;
 	}
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return false;
+    }
 
 }

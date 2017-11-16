@@ -13,6 +13,9 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
+import java.io.File;
+import java.util.List;
+
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.VaporizingRow;
@@ -698,6 +701,111 @@ public final class FishSkipList implements ConsoleHelper {
         return 0;
     }
 
+    private FileOffset traceIo(List<FileOffset> lines, File file, long fileAddr, int offset, String note) {
+        long fileOffset = this.addr - fileAddr + offset;
+        FileOffset result = new FileOffset(file, fileOffset, note);
+        lines.add(result);
+        return result;
+    }
+    
+    int traceIo(long pKey, int op, File file, long fileAddr, List<FileOffset> lines) {
+        if (pKey == 0) {
+            if ((op == OP_LE) || (op == OP_LT)) {
+                // find tail
+                return getTailNode();
+            }
+            else if ((op == OP_GE) || (op == OP_GT)) {
+                traceIo(lines, file, fileAddr, getHead(), "head");
+                traceIo(lines, file, fileAddr, getHeadNode(), "node");
+                return getHeadNode();
+            }
+            else {
+                return 0;
+            }
+        }
+        
+        // drill down
+        
+        int node = 0;
+        traceIo(lines, file, fileAddr, OFFSET_ROOT, "root");
+        traceIo(lines, file, fileAddr, getRoot(), "index");
+        for (int q = getRoot(), r = IndexNode.getRight(this.base, getRoot()),d;;) {
+            if (r > DELETE_MASK) {
+                traceIo(lines, file, fileAddr, r, "index");
+                int oNode = IndexNode.getNode(this.base, r);
+                traceIo(lines, file, fileAddr, oNode, "node");
+                int cmp = compare(pKey, Node.getKeyPointer(this.base, oNode));
+                if ((cmp == 0) && ((op == OP_GE) || (op == OP_LE) || (op == OP_EQUAL))) {
+                    // found it
+                    return oNode;
+                }
+                if (cmp > 0) {
+                    // we are greater than the node on the right, go right
+                    q = r;
+                    r = IndexNode.getRight(this.base, r);
+                    continue;
+                }
+            }
+            // reached bottom break the loop
+            if ((d = IndexNode.getDown(this.base, q)) == 0) {
+                node = IndexNode.getNode(this.base, q);
+                break;
+            }
+            // not at bottom, go down one level
+            q = d;
+            r = IndexNode.getRight(this.base, d);
+            traceIo(lines, file, fileAddr, q, "index");
+        }
+        
+        // step through linked list at the bottom
+        
+        traceIo(lines, file, fileAddr, node, "node");
+        for (int i=node; i!=0;) {
+            int next = Node.getNext(this.base, i);
+            if (next <= DELETE_MASK) {
+                // at the end of list
+                if ((op == OP_LE) || (op == OP_LT)) {
+                    traceIo(lines, file, fileAddr, getHead(), "head");
+                    return (i == getHead()) ? 0 : i;
+                }
+                else {
+                    return 0;
+                }
+            }
+            traceIo(lines, file, fileAddr, next, "node");
+            int cmp = compare(pKey, Node.getKeyPointer(this.base, next));
+            if (cmp > 0) {
+                // next
+                i = next;
+                continue;
+            }
+            if (cmp == 0) {
+                if ((op == OP_GE) || (op == OP_LE) || (op == OP_EQUAL)) {
+                    return next;
+                }
+                if (op == OP_LT) {
+                    return i;
+                }
+                else {
+                    return Node.getNext(this.base,next);
+                }
+            }
+            else {
+                // cmp < 0
+                if ((op == OP_LT) || (op == OP_LE)) {
+                    return (i == getHead()) ? 0 : i;
+                }
+                if ((op == OP_GT) || (op == OP_GE)) {
+                    return next;
+                }
+                else {
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
+
 	@Override
 	public String toString() {
 		StringBuilder buf = new StringBuilder();
@@ -881,6 +989,17 @@ public final class FishSkipList implements ConsoleHelper {
         }
         int node = findNode(pKey, OP_GT);
         if (node == 0) {
+            return 0;
+        }
+        return Node.getValuePointer(this.base, node);
+    }
+
+    public long traceIo(long pKey, File file, long fileAddr, List<FileOffset> lines) {
+        int node = this.traceIo(pKey, OP_EQUAL, file, fileAddr, lines);
+        if (node == 0) {
+            return 0;
+        }
+        if (Node.isDeleted(this.base, node)) {
             return 0;
         }
         return Node.getValuePointer(this.base, node);

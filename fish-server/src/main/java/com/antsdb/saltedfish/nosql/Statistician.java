@@ -145,7 +145,7 @@ public class Statistician extends ReplicationHandler implements Replicable {
         this.stats.clear();
         this.sp = this.humpback.getGobbler().getStartSp();
         GTable gtable = this.humpback.getTable(Humpback.SYSSTATS_TABLE_ID);
-        for (RowIterator i=gtable.scan(1, 1); i.next();) {
+        for (RowIterator i=gtable.scan(1, 1, true); i.next();) {
             Row row = i.getRow();
             TableStats tableStats = new TableStats();
             tableStats.load(row);

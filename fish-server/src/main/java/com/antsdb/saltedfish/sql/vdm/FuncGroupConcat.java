@@ -13,6 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+import java.util.TreeSet;
+
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
@@ -22,46 +30,79 @@ import com.antsdb.saltedfish.sql.DataType;
  * @author wgu0
  */
 public class FuncGroupConcat extends Function {
-	int variableId;
-	
+    int variableId;
+    Boolean asc;
+    boolean distinct;
+
     private static class Data {
         String seprator = ",";
-    	String result;
+        Collection<String> words;
+    }
+
+    public FuncGroupConcat(int variableId, boolean distinct, Boolean asc) {
+        this.variableId = variableId;
+        this.distinct = distinct;
+        this.asc = asc;
+    }
+
+    private Data createData(String separator) {
+        Data result = new Data();
+        result.seprator = separator;
+        if (this.distinct) {
+            if (this.asc == null) {
+                result.words = new ArrayList<>();
+            }
+            else {
+                result.words = new TreeSet<>(createComparator());
+            }
+        }
+        else {
+            if (this.asc == null) {
+                result.words = new ArrayList<>();
+            }
+            else {
+                result.words = new PriorityQueue<>(createComparator());
+            }
+        }
+        return result;
     }
     
-    public FuncGroupConcat(int variableId) {
-    	this.variableId = variableId;
+    private Comparator<String> createComparator() {
+        boolean asc = this.asc;
+        Comparator<String> result = new Comparator<String>() {
+            @Override
+            public int compare(String o1, String o2) {
+                return asc ? o1.compareTo(o2) : o2.compareTo(o1);
+            }
+        };
+        return result;
     }
-    
+
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	// initialize 
-    	
-    	Data data = (Data)ctx.getVariable(this.variableId);
-    	if (data == null) {
-    		data = new Data();
-    		if (this.parameters.size() >= 2) {
-    		    long pSeparator = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-    		    data.seprator = AutoCaster.getString(heap, pSeparator);
-    		}
-    		ctx.setVariable(variableId, data);
-    	}
+        // initialize
+
+        Data data = (Data) ctx.getVariable(this.variableId);
+        if (data == null) {
+            String separator = ",";
+            if (this.parameters.size() >= 2) {
+                long pSeparator = this.parameters.get(1).eval(ctx, heap, params, pRecord);
+                separator = AutoCaster.getString(heap, pSeparator);
+            }
+            data = createData(separator);
+            ctx.setVariable(variableId, data);
+        }
         if (Record.isGroupEnd(pRecord)) {
-            data.result = null;
+            data.words.clear();
             return 0;
         }
         long addrVal = this.parameters.get(0).eval(ctx, heap, params, pRecord);
         addrVal = AutoCaster.toString(heap, addrVal);
-        String val = (String)FishObject.get(heap, addrVal);
+        String val = (String) FishObject.get(heap, addrVal);
         if (val != null) {
-        	if (data.result == null) {
-                data.result = val;
-        	}
-        	else {
-                data.result += data.seprator + val;
-        	}
+            data.words.add(val);
         }
-        return FishObject.allocSet(heap, data.result);
+        return FishObject.allocSet(heap, StringUtils.join(data.words, data.seprator));
     }
 
     @Override
@@ -69,10 +110,10 @@ public class FuncGroupConcat extends Function {
         return DataType.varchar();
     }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 
     @Override
     public int getMaxParameters() {

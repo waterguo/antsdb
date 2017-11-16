@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.nosql.ConcurrentLinkedList.Node;
@@ -891,5 +892,18 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
         String result = mtable.getLocation(pKey);
         return result;
+    }
+
+    public void traceIo(long pKey, List<FileOffset> lines) {
+        for (MemTablet ii:this.tablets) {
+            if (ii.traceIo(pKey, lines)) {
+                return;
+            }
+        }
+        StorageTable mtable = getStorageTable();
+        if (mtable == null) {
+            return;
+        }
+        mtable.traceIo(pKey, lines);
     }
 }

@@ -17,43 +17,36 @@ import java.util.Collections;
 
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class COLUMN_PRIVILEGES extends CursorMaker {
+public class COLUMN_PRIVILEGES extends ViewMaker {
 
-	Orca orca;
-    CursorMeta meta;
-    
+    Orca orca;
+
     public static class Item {
-    	public String GRANTEE;
-    	public String TABLE_CATALOG;
-    	public String TABLE_SCHEMA;
-    	public String TABLE_NAME;
-    	public String COLUMN_NAME;
-    	public String PRIVILEGE_TYPE;
-    	public String IS_GRANTABLE;
-	}
-    
-    public COLUMN_PRIVILEGES(Orca orca) {
-        this.orca = orca;
-    	this.meta = CursorUtil.toMeta(Item.class); 
+        public String GRANTEE;
+        public String TABLE_CATALOG;
+        public String TABLE_SCHEMA;
+        public String TABLE_NAME;
+        public String COLUMN_NAME;
+        public String PRIVILEGE_TYPE;
+        public String IS_GRANTABLE;
     }
-    
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.meta;
-	}
+
+    public COLUMN_PRIVILEGES(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
+        this.orca = orca;
+    }
 
     @Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
         Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
         return c;
     }

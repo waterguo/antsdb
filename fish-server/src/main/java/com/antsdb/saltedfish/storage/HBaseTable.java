@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.storage;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.TableName;
@@ -26,6 +27,7 @@ import org.apache.hadoop.hbase.client.Table;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
+import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.IndexLine;
@@ -185,7 +187,20 @@ class HBaseTable implements StorageTable {
         if (_log.isTraceEnabled()) {
             _log.trace("getIndex {} {}", this.tn.toString(), KeyBytes.toString(pKey));
         }
-        throw new NotImplementedException();
+        try {
+            Table htable = getConnection().getTable(tn);
+            Get get = new Get(Helper.antsKeyToHBase(pKey));
+            Result r = htable.get(get);
+            long pLine = Helper.toIndexLine(getHeap(), r);
+            if (pLine == 0) {
+                return 0;
+            }
+            IndexLine line = new IndexLine(pLine);
+            return line.getRowKey();
+        }
+        catch (IOException x) {
+            throw new OrcaHBaseException(x);
+        }
     }
 
     @Override
@@ -280,5 +295,10 @@ class HBaseTable implements StorageTable {
     @Override
     public String getLocation(long pKey) {
         return "hbase:" + KeyBytes.toString(pKey);
+    }
+
+    @Override
+    public boolean traceIo(long pKey, List<FileOffset> lines) {
+        return false;
     }
 }

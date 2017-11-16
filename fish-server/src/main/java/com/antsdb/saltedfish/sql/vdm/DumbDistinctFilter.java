@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.TypeSafeUtil;
 
 /**
@@ -99,6 +100,11 @@ public class DumbDistinctFilter extends CursorMaker {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         Cursor c = this.upstream.make(ctx, params, pMaster);
         return new MyCursor(c);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
     }
 
 }

@@ -13,11 +13,15 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.Collections;
 import java.util.List;
 
+import com.antsdb.saltedfish.sql.meta.ColumnMeta;
+import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.planner.SortKey;
 
-public class TableScan extends CursorMaker {
+public class TableScan extends CursorMaker implements Ordered {
     CursorMaker upstream;
     TableMeta table;
     
@@ -46,7 +50,21 @@ public class TableScan extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-    	this.upstream.explain(level, records);
+    	    this.upstream.explain(level, records);
+    }
+
+    @Override
+    public List<ColumnMeta> getOrder() {
+        PrimaryKeyMeta key = this.table.getPrimaryKey();
+        if (key == null) {
+            return Collections.emptyList();
+        }
+        return this.table.getPrimaryKey().getColumns(table);
+    }
+
+    @Override
+    public boolean setSortingOrder(List<SortKey> order) {
+        return this.upstream.setSortingOrder(order);
     }
 
 }
