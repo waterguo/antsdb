@@ -51,7 +51,7 @@ public class TableStats {
         return row;
     }
     
-    void load(Row row) {
+    public TableStats load(Row row) {
         this.tableId = (Integer)row.get(COLUMN_TABLE_ID);
         this.sp = (Long)row.get(COLUMN_SP);
         this.count = (Long)row.get(COLUMN_COUNT);
@@ -59,6 +59,7 @@ public class TableStats {
         this.minRowSize = (Integer)row.get(COLUMN_MIN_ROW_SIZE);
         this.maxRowSize = (Integer)row.get(COLUMN_MAX_ROW_SIZE);
         this.averageRowSize = (Double)row.get(COLUMN_AVERAGE_ROW_SIZE);
+        return this;
     }
     
     private void setMaxRowSize(int value) {

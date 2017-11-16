@@ -55,6 +55,7 @@ sql_stmt
  | show_engines
  | show_grants
  | show_index_stmt
+ | show_table_status_stmt
  | show_tables_stmt
  | show_variable_stmt
  | show_warnings_stmt
@@ -519,7 +520,11 @@ show_grants
 show_index_stmt
  : K_SHOW (K_INDEX | K_INDEXES | K_KEYS) (K_FROM | K_IN) table_name_ ((K_FROM | K_IN) identifier)?
  ;
- 
+
+show_table_status_stmt
+ : K_SHOW K_TABLE K_STATUS ( K_FROM identifier )? ( K_LIKE string_value )?
+ ;
+  
 show_tables_stmt
  : K_SHOW K_FULL? K_TABLES ( K_FROM identifier )? (K_LIKE string_value)?
  ;
@@ -778,7 +783,7 @@ any_name
 name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
- | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE
+ | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS
  ;
  
 identifier
@@ -1017,6 +1022,7 @@ K_SET : S E T;
 K_SHOW : S H O W;
 K_SIGNED : S I G N E D;
 K_START : S T A R T;
+K_STATUS : S T A T U S;
 K_STOP : S T O P;
 K_SLAVE : S L A V E;
 K_TABLE : T A B L E;

@@ -41,9 +41,7 @@ public class OpLike extends BinaryOperator {
         }
         String textRight = (String)FishObject.get(heap, addrTextRight);
         String textLeft = (String)FishObject.get(heap, addrTextLeft);
-        textRight = textRight.replaceAll("_", ".");
-        textRight = textRight.replaceAll("%", ".*");
-        Pattern p = Pattern.compile(textRight, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Pattern p = compile(textRight);
         boolean result = p.matcher(textLeft).matches();
         return FishBool.allocSet(heap, result);
     }
@@ -56,5 +54,12 @@ public class OpLike extends BinaryOperator {
     @Override
     public List<Operator> getChildren() {
         return Arrays.asList(new Operator[]{left, right});
+    }
+    
+    public static Pattern compile(String spec) {
+        spec = spec.replaceAll("_", ".");
+        spec = spec.replaceAll("%", ".*");
+        Pattern p = Pattern.compile(spec, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        return p;
     }
 }
