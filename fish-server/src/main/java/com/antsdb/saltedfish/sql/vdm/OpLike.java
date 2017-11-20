@@ -57,9 +57,33 @@ public class OpLike extends BinaryOperator {
     }
     
     public static Pattern compile(String spec) {
-        spec = spec.replaceAll("_", ".");
-        spec = spec.replaceAll("%", ".*");
-        Pattern p = Pattern.compile(spec, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        final String escape = "\\\\?*[].()$^{}+|";
+        StringBuilder result = new StringBuilder();
+        for (int i=0; i<spec.length(); i++) {
+            char ch = spec.charAt(i);
+            if (ch == '_') {
+                result.append('.');
+            }
+            else if (ch == '%') {
+                result.append(".*");
+            }
+            else {
+                if (ch == '\\') {
+                    if (++i >= spec.length()) {
+                        throw new OrcaException("invalid pattern expression");
+                    }
+                    ch = spec.charAt(i);
+                }
+                if (escape.indexOf(ch) >= 0) {
+                    result.append('\\');
+                    result.append(ch);
+                }
+                else {
+                    result.append(ch);
+                }
+            }
+        }
+        Pattern p = Pattern.compile(result.toString(), Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         return p;
     }
 }

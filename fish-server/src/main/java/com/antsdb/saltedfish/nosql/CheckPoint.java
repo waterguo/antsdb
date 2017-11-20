@@ -105,7 +105,9 @@ public class CheckPoint implements AutoCloseable {
             }
         }
         finally {
-            this.ch.close();
+            if (this.ch != null) {
+                this.ch.close();
+            }
         }
         throw new IOException("unable to acquire lock on " + file.getAbsolutePath());
     }
