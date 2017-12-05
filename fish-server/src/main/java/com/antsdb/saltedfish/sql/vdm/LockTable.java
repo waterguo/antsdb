@@ -38,8 +38,8 @@ public class LockTable extends Statement {
 			if (!ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false)) {
 			    throw new OrcaException("unable to lock table " + table.getObjectName());
 			}
-			if (ctx.getOrca().getConfigService().isAsynchronousImportEnabled()) {
-	            GTable gtable = ctx.getHumpback().getTable(table.getId());
+			if (ctx.getOrca().getConfig().isAsynchronousImportEnabled()) {
+	            GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 	            if (gtable.size() == 0) {
 	                ctx.getSession().setImportMode(true);
 	            }

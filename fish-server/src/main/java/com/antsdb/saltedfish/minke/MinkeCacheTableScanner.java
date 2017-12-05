@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.minke;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import static com.antsdb.saltedfish.minke.BoundaryMark.*;
 
@@ -31,9 +32,14 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
     Range input;
     boolean ascending;
     boolean hasCacheMiss = false;
+    boolean cacheResult = true;
     
     MinkeCacheTableScanner(MinkeCacheTable mctable) {
         this.mctable = mctable;
+    }
+    
+    void setCacheResult(boolean value) {
+        this.cacheResult = value;
     }
     
     void setRange(long pKeyStart, boolean includeStart, long pKeyEnd, boolean includeEnd, boolean ascending) {
@@ -44,8 +50,8 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
         if (pKeyEnd == 0) {
             pKeyEnd = ascending ? KeyBytes.getMaxKey() : KeyBytes.getMinKey();
         }
-        this.keyStart = KeyBytes.newInstance(pKeyStart);
-        this.keyEnd = KeyBytes.newInstance(pKeyEnd);
+        this.keyStart = KeyBytes.alloc(pKeyStart);
+        this.keyEnd = KeyBytes.alloc(pKeyEnd);
         this.left = new Range();
         if (ascending) {
             left.pKeyStart = this.keyStart.getAddress();
@@ -90,25 +96,22 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
         if (result == null) {
             if (!this.left.isEmpty()) {
                 if (this.ascending) {
-                    this.upstream = this.mctable.stable.scan(
-                            this.left.pKeyStart, 
-                            this.left.startMark == NONE ? true : false, 
-                            this.left.pKeyEnd,
-                            this.left.endMark == NONE ? true : false, 
-                            this.ascending);
-                    if (isMutable()) {
+                    long options = 0;
+                    options = this.left.startMark == NONE ? options : ScanOptions.excludeStart(options);
+                    options = this.left.endMark == NONE ? options : ScanOptions.excludeEnd(options);
+                    this.upstream = this.mctable.stable.scan(this.left.pKeyStart, this.left.pKeyEnd, options);
+                    if (cacheResult()) {
                         this.upstream = new CacheResultFilter(this.upstream, mctable, this.left);
                         this.hasCacheMiss = true;
                     }
                 }
                 else {
-                    this.upstream = this.mctable.stable.scan(
-                            this.left.pKeyEnd, 
-                            this.left.endMark == NONE ? true : false, 
-                            this.left.pKeyStart,
-                            this.left.startMark == NONE ? true : false, 
-                            this.ascending);
-                    if (isMutable()) {
+                    long options = 0;
+                    options = this.left.endMark == NONE ? options : ScanOptions.excludeStart(options);
+                    options = this.left.startMark == NONE ? options : ScanOptions.excludeEnd(options);
+                    options = ScanOptions.descending(options);
+                    this.upstream = this.mctable.stable.scan(this.left.pKeyEnd, this.left.pKeyStart, options);
+                    if (cacheResult()) {
                         this.upstream = new CacheResultFilter(this.upstream, mctable, this.left);
                         this.hasCacheMiss = true;
                     }
@@ -173,22 +176,19 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
         ScanResult result;
         if (isNegativeRange) {
             if (ascending) {
-                result = this.mctable.stable.scan(
-                        range.pKeyStart, 
-                        range.startMark == NONE ? true : false, 
-                        range.pKeyEnd, 
-                        range.endMark == NONE ? true : false, 
-                        ascending);
+                long options = 0;
+                options = range.startMark == NONE ? options : ScanOptions.excludeStart(options);
+                options = range.endMark == NONE ? options : ScanOptions.excludeEnd(options);
+                result = this.mctable.stable.scan(range.pKeyStart, range.pKeyEnd, options);
             }
             else {
-                result = this.mctable.stable.scan(
-                        range.pKeyEnd, 
-                        range.endMark == NONE ? true : false, 
-                        range.pKeyStart, 
-                        range.startMark == NONE ? true : false, 
-                        ascending);
+                long options = 0;
+                options = range.endMark == NONE ? options : ScanOptions.excludeStart(options);
+                options = range.startMark == NONE ? options : ScanOptions.excludeEnd(options);
+                options = ScanOptions.descending(options);
+                result = this.mctable.stable.scan(range.pKeyEnd, range.pKeyStart, options);
             }
-            if ((result != null) && isMutable()) {
+            if ((result != null) && cacheResult()) {
                 this.hasCacheMiss = true;
                 result = new CacheResultFilter(result, mctable, range);
             }
@@ -211,8 +211,8 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
         return this.upstream.toString();
     }
     
-    private boolean isMutable() {
-        return this.mctable.cache.isMutable;
+    private boolean cacheResult() {
+        return this.cacheResult && this.mctable.cache.isMutable;
     }
 
     private void verifyCacheScan() {

@@ -15,10 +15,12 @@ package com.antsdb.saltedfish.util;
 
 import java.io.IOException;
 import java.net.URL;
-import java.net.URLClassLoader;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.jar.Manifest;
+
+import org.apache.commons.lang.StringUtils;
 
 /**
  * 
@@ -27,13 +29,23 @@ import java.util.jar.Manifest;
 public final class ManifestUtil {
     public static Map<String, String> load(Class<?> klass) {
         Map<String, String> result = new HashMap<>();
-        URLClassLoader cl = (URLClassLoader)klass.getClassLoader();
+        ClassLoader cl = klass.getClassLoader();
+        String daklass = klass.getSimpleName() + ".class";
+        URL daurl = klass.getResource(daklass);
+        String prefix = StringUtils.substringBefore(daurl.toString(), "!");
         try {
-            URL url = cl.findResource("META-INF/MANIFEST.MF");
-            Manifest manifest = new Manifest(url.openStream());
-            manifest.getMainAttributes().forEach((key, attr) -> {
-                result.put(key.toString(), attr.toString());
-            });
+            Enumeration<URL> it = cl.getResources("META-INF/MANIFEST.MF");
+            while(it.hasMoreElements()) {
+                URL url = it.nextElement();
+                if (!url.toString().startsWith(prefix)) {
+                    continue;
+                }
+                Manifest manifest = new Manifest(url.openStream());
+                manifest.getMainAttributes().forEach((key, attr) -> {
+                    result.put(key.toString(), attr.toString());
+                });
+                break;
+            }
         } 
         catch (IOException x) {
         }

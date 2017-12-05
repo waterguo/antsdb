@@ -33,6 +33,7 @@ import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.minke.MinkePage.ScanType;
 import com.antsdb.saltedfish.nosql.Recycable;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.ScanResultSynchronizer;
 import com.antsdb.saltedfish.nosql.SlowRow;
@@ -82,8 +83,8 @@ public class MinkeTable implements StorageTable, Recycable {
 
         public Scanner(Range range, boolean isAscending) {
             this.isAscending = isAscending;
-            this.start = KeyBytes.newInstance(range.pKeyStart);
-            this.end = KeyBytes.newInstance(range.pKeyEnd);
+            this.start = KeyBytes.alloc(range.pKeyStart);
+            this.end = KeyBytes.alloc(range.pKeyEnd);
             this.range = new Range();
             this.range.pKeyStart = this.start.getAddress();
             this.range.startMark = range.startMark;
@@ -606,26 +607,19 @@ public class MinkeTable implements StorageTable, Recycable {
 	    this.pages.clear();
 	}
 	
-    ScanResult scan(
-            byte[] keyStart, 
-            boolean includeStart, 
-            byte[] keyEnd, 
-            boolean includeEnd,
-            boolean isAscending) {
+    ScanResult scan(byte[] keyStart, byte[] keyEnd, long options) {
         try (BluntHeap heap = new BluntHeap()) {
             long pKeyStart = KeyBytes.allocSet(heap, keyStart).getAddress();
             long pKeyEnd = KeyBytes.allocSet(heap, keyEnd).getAddress();
-            return scan(pKeyStart, includeEnd, pKeyEnd, includeEnd, isAscending);
+            return scan(pKeyStart, pKeyEnd, options);
         }
     }
     
     @Override
-    public ScanResult scan(
-            long pKeyStart, 
-            boolean includeStart, 
-            long pKeyEnd, 
-            boolean includeEnd,
-            boolean isAscending) {
+    public ScanResult scan(long pKeyStart, long pKeyEnd, long options) {
+        boolean includeStart = ScanOptions.includeStart(options);
+        boolean includeEnd = ScanOptions.includeEnd(options);
+        boolean isAscending = ScanOptions.isAscending(options);
         Range range;
         if (isAscending) {
             range = new Range(pKeyStart, includeStart, pKeyEnd, includeEnd);

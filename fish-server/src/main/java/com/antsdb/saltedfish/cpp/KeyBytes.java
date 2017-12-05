@@ -93,19 +93,13 @@ public final class KeyBytes {
         return alloc(bytes);
     }
     
-    public static KeyBytes newInstance(long pKey) {
+    public static KeyBytes alloc(long pKey) {
         if (pKey == 0) {
             return null;
         }
-        int len = KeyBytes.getLength(pKey);
-        KeyBytes result = new KeyBytes();
-        result.buffer = ByteBuffer.allocateDirect(len + HEADER_SIZE);
-        result.addr = UberUtil.getAddress(result.buffer);
-        Unsafe.copyMemory(pKey, result.addr, len + HEADER_SIZE);
-        return result;
-    }
-    
-    public static KeyBytes alloc(long pKey) {
+        if (Unsafe.getByte(pKey) != Value.FORMAT_KEY_BYTES) {
+            throw new IllegalMemoryException(pKey);
+        }
         int len = KeyBytes.getRawSize(pKey);
         ByteBuffer buf = ByteBuffer.allocateDirect(len);
         long addr = UberUtil.getAddress(buf);

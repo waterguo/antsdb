@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.minke;
 
 import java.io.File;
 
+import org.apache.commons.cli.Options;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -42,6 +43,11 @@ public abstract class MinkeCommandLine extends BetterCommandLine {
         }
     }
     
+    @Override
+    protected void buildOptions(Options options) {
+        options.addOption(null, "home", true, "home directory");
+    }
+
     public File getHome() {
         String home = this.cmdline.getOptionValue("home");
         if (home == null) {

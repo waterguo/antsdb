@@ -28,7 +28,9 @@ import com.antsdb.saltedfish.nosql.HumpbackError;
 import com.antsdb.saltedfish.nosql.HumpbackException;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.SlowRow;
+import com.antsdb.saltedfish.sql.NativeAuthPlugin;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.RuleMeta.Rule;
@@ -205,7 +207,8 @@ public class MetadataService {
         }
         byte[] start = KeyMaker.gen(tableMeta.getId());
         byte[] end = KeyMaker.gen(tableMeta.getId() + 1);
-        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs(), start, true, end, false, true); i.next();) {
+        long options = ScanOptions.excludeEnd(0);
+        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs(), start, end, options); i.next();) {
             Row rrow = i.getRow();
             SlowRow row = SlowRow.from(rrow);
             if (row == null) {
@@ -239,7 +242,8 @@ public class MetadataService {
         List<ColumnMeta> list = new ArrayList<>();
         byte[] from = KeyMaker.gen(tableMeta.getId());
         byte[] to = KeyMaker.gen(tableMeta.getId() + 1);
-        for (RowIterator ii = table.scan(trx.getTrxId(), trx.getTrxTs(), from, true, to, false, true); ii.next();) {
+        long options = ScanOptions.excludeEnd(0);
+        for (RowIterator ii = table.scan(trx.getTrxId(), trx.getTrxTs(), from, to, options); ii.next();) {
             SlowRow i = SlowRow.from(ii.getRow());
             if (i == null) {
                 break;
@@ -299,6 +303,11 @@ public class MetadataService {
         return humpback.getTable(Orca.SYSNS, TABLEID_SYSRULE);
     }
 
+    GTable getSysUser() {
+        Humpback humpback = this.orca.getHumpback();
+        return humpback.getTable(Orca.SYSNS, TABLEID_SYSUSER);
+    }
+    
     public void dropTable(Transaction trx, TableMeta tableMeta) throws HumpbackException {
         long trxid = trx.getGuaranteedTrxId();
         GTable table = getSysTable();
@@ -347,7 +356,7 @@ public class MetadataService {
     public void modifyColumn(Transaction trx, ColumnMeta columnMeta) throws HumpbackException {
         long trxid = trx.getGuaranteedTrxId();
         GTable sysColumn = getSysColumn();
-        sysColumn.put(trxid, columnMeta.row, 0);
+        sysColumn.update(trxid, columnMeta.row, 0);
 
         // doh, this is a ddl transaction, remember it
         
@@ -514,4 +523,42 @@ public class MetadataService {
         trx.setDdl(true);
     }
 
+    public UserMeta getUser(String user) {
+        GTable sysuser = getSysUser();
+        for (RowIterator i=sysuser.scan(0, Long.MAX_VALUE, true);;) {
+            if (!i.next()) {
+                break;
+            }
+            Row row = i.getRow();
+            if (user.equals(row.get(ColumnId.sysuser_name.getId()))) {
+                UserMeta result = new UserMeta(SlowRow.from(row));
+                if (!result.isDeleted()) {
+                    return result;
+                }
+            }
+        }
+        return null;
+    }
+    
+    public void setPassword(String user, String password) {
+        GTable sysuser = getSysUser();
+        UserMeta userMeta = getUser(user);
+        if (userMeta == null) {
+            userMeta = new UserMeta((int)this.orca.getIdentityService().getNextGlobalId());
+        }
+        byte[] hash = new NativeAuthPlugin(orca).hash(password);
+        userMeta.setName(user);
+        userMeta.setPassword(hash);
+        sysuser.put(1, userMeta.row, 0);
+    }
+    
+    public void dropUser(String user) {
+        GTable sysuser = getSysUser();
+        UserMeta userMeta = getUser(user);
+        if (userMeta == null) {
+            throw new OrcaException("user {} is not found", user);
+        }
+        userMeta.setDeleteMark(true);
+        sysuser.update(1, userMeta.row, 0);
+    }
 }

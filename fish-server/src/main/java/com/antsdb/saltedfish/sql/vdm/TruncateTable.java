@@ -41,47 +41,47 @@ public class TruncateTable extends Statement {
         Humpback humpback = ctx.getOrca().getHumpback();
         MetadataService meta = ctx.getMetaService();
         TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
-    	try {
+        	try {
             // acquire exclusive lock
-            
-    	    Transaction trx = ctx.getTransaction(); 
-    	    trx.getGuaranteedTrxId();
-    		ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
-    		
-    		// refetch the table metadata to avoid concurrency
-    		
-    		table = ctx.getMetaService().getTable(trx, table.getId());
+                
+        	    Transaction trx = ctx.getTransaction(); 
+        	    trx.getGuaranteedTrxId();
+        		ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
+        		
+        		// refetch the table metadata to avoid concurrency
+        		
+        		table = ctx.getMetaService().getTable(trx, table.getId());
             TableMeta clone = table.clone();
             
             // new indexes blah blah
             
-    		createNewIndexes(ctx, clone, params);
-
-    		// new table
-    		
-    		clone.setHtableId((int)ctx.getOrca().getIdentityService().getNextGlobalId(0x10));
-    		humpback.truncateTable(table.getHtableId(), clone.getHtableId());
+        		createNewIndexes(ctx, clone, params);
+    
+        		// new table
+        		
+        		clone.setHtableId((int)ctx.getOrca().getIdentityService().getNextGlobalId(0x10));
+        		humpback.truncateTable(table.getHtableId(), clone.getHtableId());
             meta.updateTable(ctx.getTransaction(), clone);
             TableMeta stub = new TableMeta(ctx.getOrca(), clone.getHtableId());
             stub.setNamespace("#");
             stub.setTableName(String.valueOf(stub.getId())  + "-" + String.valueOf(table.getId()));
             stub.setHtableId(-table.getId());
             meta.addTable(ctx.getTransaction(), stub);
-    		
-    		// delete old indexes
-
-		    deleteOldIndexes(ctx, table);
-    		
-	        return null;
-    	}
-    	finally {
-    	    try {
-    	        ctx.getSession().unlockTable(table.getId());
-    	    }
-    	    catch (Exception x) {
-    	        _log.error("failed to unlock", x);
-    	    }
-    	}
+        		
+        		// delete old indexes
+    
+    		    deleteOldIndexes(ctx, table);
+        		
+    	        return null;
+        	}
+        	finally {
+        	    try {
+        	        ctx.getSession().unlockTable(table.getId());
+        	    }
+        	    catch (Exception x) {
+        	        _log.error("failed to unlock", x);
+        	    }
+        	}
     }
 
     @Override
