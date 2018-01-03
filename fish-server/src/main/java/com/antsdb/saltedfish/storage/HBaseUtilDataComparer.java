@@ -280,12 +280,7 @@ public class HBaseUtilDataComparer {
 
 			// Scanner for antsdb
 			RowIterator scanner;
-			scanner = table.scan(0, Long.MAX_VALUE,
-					0, 
-	                false, 
-	                0, 
-	                false, 
-	                true);
+			scanner = table.scan(0, Long.MAX_VALUE, 0, 0, 0);
 			
 			// check if it's index table
 			if (scanner.next()) {

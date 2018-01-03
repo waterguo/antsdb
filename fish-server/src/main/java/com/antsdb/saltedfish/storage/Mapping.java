@@ -17,6 +17,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
@@ -40,9 +41,10 @@ class Mapping {
         }
     }
     
-    Mapping(SysMetaRow tableInfo, TableMeta tableMeta) {
+    Mapping(String sysns, SysMetaRow tableInfo, TableMeta tableMeta) {
         this.tableId = tableInfo.getTableId();
         this.ns = tableInfo.getNamespace();
+        this.ns = (this.ns.equals(Orca.SYSNS)) ? sysns : this.ns; 
         this.tableName = tableInfo.getTableName();
         if (tableMeta != null) {
             this.qualifiers = new byte[tableMeta.getMaxColumnId()+1][];

@@ -17,7 +17,11 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Show_table_status_stmtContext;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.planner.Planner;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.Operator;
 
 /**
  * 
@@ -26,15 +30,27 @@ import com.antsdb.saltedfish.sql.vdm.Instruction;
 public class Show_table_status_stmtGenerator extends Generator<Show_table_status_stmtContext> {
     @Override
     public Instruction gen(GeneratorContext ctx, Show_table_status_stmtContext rule) throws OrcaException {
-        String db = null;
-        String like = null;
-        if (rule.K_FROM() != null) {
-            db = rule.identifier().getText();
+        String ns = (rule.identifier() != null) ? Utils.getIdentifier(rule.identifier()) : null;
+        if (ns == null) {
+            ns = ctx.getSession().getCurrentNamespace();
         }
+        if (ns == null) {
+            throw new OrcaException("no database selected");
+        }
+        if (rule.K_FROM() != null) {
+            ns = rule.identifier().getText();
+        }
+        String like = null;
         if (rule.K_LIKE() != null) {
             like = Utils.getLiteralValue(rule.string_value());
         }
-        ShowTableStatus stmt = new ShowTableStatus(db, like);
-        return stmt;
+        CursorMaker result = new ShowTableStatus(ns, like);
+        if (rule.where_clause() != null) {
+            Planner planner = new Planner(ctx);
+            planner.addTableOrView("", result, true, false);
+            Operator where = ExprGenerator.gen(ctx, planner, rule.where_clause().expr());
+            result = new Filter(result, where, ctx.getNextMakerId());
+        }
+        return result;
     }
 }

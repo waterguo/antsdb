@@ -85,6 +85,9 @@ public class CheckPoint implements AutoCloseable {
     }
 
     private void openMutable() throws IOException {
+        if (!this.file.exists()) {
+            _log.info("creating new checkpoint file {}", this.file);
+        }
         try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
             this.ch = raf.getChannel();
             for (UberTimer timer = new UberTimer(60 * 1000); !timer.isExpired();) {
@@ -138,24 +141,28 @@ public class CheckPoint implements AutoCloseable {
     }
     
     public long getRowid() {
-    	long rowid = Unsafe.getLong(this.addr + OFFSET_ROWID);
-    	return rowid;
+    	    long rowid = Unsafe.getLong(this.addr + OFFSET_ROWID);
+    	    return rowid;
     }
     
     public long getAndIncrementRowid() {
-    	long rowid = Unsafe.getAndAddLong(this.addr + OFFSET_ROWID, 1);
-    	return rowid;
+    	    long rowid = Unsafe.getAndAddLong(this.addr + OFFSET_ROWID, 1);
+    	    return rowid;
     }
     
     public void setRowid(long value) {
-    	Unsafe.putLong(this.addr + OFFSET_ROWID, value);
+    	    Unsafe.putLong(this.addr + OFFSET_ROWID, value);
     }
     
     public long getServerId() {
-    	long id = Unsafe.getLong(this.addr + OFFSET_SERVER_ID);
-    	return id;
+    	    long id = Unsafe.getLong(this.addr + OFFSET_SERVER_ID);
+    	    return id;
     }
 
+    public void setServerId(long value) {
+        Unsafe.putLong(this.addr + OFFSET_SERVER_ID, value);
+    }
+    
     public void setSlaveLogFile(String file) {
     	if (file.length() >= 0x20) {
     		throw new IllegalArgumentException();

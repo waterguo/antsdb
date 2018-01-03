@@ -44,7 +44,6 @@ public class Session {
             
     Orca orca;
     Map<String, Object> variables = new ConcurrentHashMap<String, Object>();
-    boolean autoCommit = true;
     String currentNameSpace = "TEST";
     FishParserFactory fishParser = new FishParserFactory();
     SqlParserFactory fac;
@@ -57,43 +56,44 @@ public class Session {
 	private boolean isClosed = false;
 	private long lastInsertId;
 	private int id = _id.incrementAndGet();
-	SessionParameters parameters = new SessionParameters();
     AsynchronusInsert asyncExecutor;
     private HumpbackSession hsession;
     public String remote;
+    private SystemParameters config;
     
     public Session(Orca orca, SqlParserFactory fac, String user) {
         this.orca = orca;
         this.fac = fac;
         this.user = user;
         this.hsession = orca.getHumpback().createSession();
+        this.config = new SystemParameters(orca.config);
     }
     
     public Object run(String sql) throws SQLException {
-    	return run(sql, new Parameters());
+    	    return run(sql, new Parameters());
     }
     
     public Object run(String sql, Parameters params) throws SQLException {
-    	return run(new ANTLRInputStream(sql), params);
+    	    return run(new ANTLRInputStream(sql), params);
     }
     
     public Object run(CharStream cs) throws SQLException {
-    	return run(cs, new Parameters());
+    	    return run(cs, new Parameters());
     }
     
     public Object run(CharStream cs, Parameters params) throws SQLException {
-    	if (this.isClosed) {
-    		throw new OrcaException("session is closed");
-    	}
-    	
-    	// import 
-    	
-    	if ((this.asyncExecutor != null) && isInsert(cs)) {
-    	    if (getTransaction().getTrxId() == 0) {
-    	        this.trx.getGuaranteedTrxId();
-    	    }
-    	    return asyncInsert(cs);
-    	}
+        	if (this.isClosed) {
+        		throw new OrcaException("session is closed");
+        	}
+        	
+        	// import 
+        	
+        	if ((this.asyncExecutor != null) && isInsert(cs)) {
+        	    if (getTransaction().getTrxId() == 0) {
+        	        this.trx.getGuaranteedTrxId();
+        	    }
+        	    return asyncInsert(cs);
+        	}
     	
         // main stuff
         
@@ -126,9 +126,9 @@ public class Session {
     }
 
     public Script parse(CharStream cs) {
-    	if (this.isClosed) {
-    		throw new OrcaException("session is closed");
-    	}
+    	    if (this.isClosed) {
+    	        throw new OrcaException("session is closed");
+    	    }
     	
         startTrx();
         
@@ -139,31 +139,31 @@ public class Session {
         // parse it for real if it is not cached
         
         if (script == null) {
-        	try {
-        	    if (cs.LA(1) == '.') {
-        	        cs.consume();
-        	        script = this.fishParser.parse(this, cs);
-        	    }
-        	    else {
+            	try {
+            	    if (cs.LA(1) == '.') {
+            	        cs.consume();
+            	        script = this.fishParser.parse(this, cs);
+            	    }
+            	    else {
                     script = this.fac.parse(this, cs);
-        	    }
-        	}
-        	catch (ParseCancellationException x) {
-        		if (x.getCause() instanceof InputMismatchException) {
-        			InputMismatchException xx = (InputMismatchException)x.getCause();
-        			String offend = xx.getOffendingToken().getText();
-            		throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
-        		}
-        		if (x.getCause() instanceof NoViableAltException) {
-        			NoViableAltException xx = (NoViableAltException)x.getCause();
-        			String offend = xx.getOffendingToken().getText();
-            		throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
-        		}
-        		throw new OrcaException("Invalid SQL", x);
-        	}
-        	catch (CompileDdlException x) {
-        		script = new Script(null, x.nParameters, 100, cs.toString());
-        	}
+            	    }
+            	}
+            	catch (ParseCancellationException x) {
+            		if (x.getCause() instanceof InputMismatchException) {
+            			InputMismatchException xx = (InputMismatchException)x.getCause();
+            			String offend = xx.getOffendingToken().getText();
+                		throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
+            		}
+            		if (x.getCause() instanceof NoViableAltException) {
+            			NoViableAltException xx = (NoViableAltException)x.getCause();
+            			String offend = xx.getOffendingToken().getText();
+                		throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
+            		}
+            		throw new OrcaException("Invalid SQL", x);
+            	}
+            	catch (CompileDdlException x) {
+            		script = new Script(null, x.nParameters, 100, cs.toString());
+            	}
             if (_log.isTraceEnabled()) {
                 _log.trace("{}-{}: {}", getId(), script.hashCode(), cs.toString());
             }
@@ -176,7 +176,7 @@ public class Session {
     }
     
     public Script parse(String text) {
-    	return parse(new ANTLRInputStream(text));
+        return parse(new ANTLRInputStream(text));
     }
 
     public String getCurrentCatalog() {
@@ -200,20 +200,29 @@ public class Session {
         return this.orca;
     }
     
-    public Map<String, Object> getVariables() {
-        return this.variables;
+    public void setVariable(String name, Object val) {
+        if (val == null) {
+            this.variables.remove(name);
+        }
+        else {
+            this.variables.put(name, val);
+        }
     }
     
     public Object getVariable(String key) {
         return this.variables.get(key);
     }
 
+    public Map<String, Object> getVariables() {
+        return this.variables;
+    }
+    
     public void setAutoCommit(boolean autoCommit) {
-        this.autoCommit = autoCommit;
+        this.config.set("autocommit", autoCommit ? "1" : "0");
     }
 
     public boolean isAutoCommit() {
-        return this.autoCommit;
+        return this.config.getAutoCommit();
     }
 
     public void commit() {
@@ -221,7 +230,7 @@ public class Session {
     }
 
     public void rollback() {
-    	endTransaction(false);
+        endTransaction(false);
     }
 
     public void close() {
@@ -238,59 +247,59 @@ public class Session {
     private void endTransaction(boolean success) {
         waitForAsyncExecution();
         
-    	// only if there is a transaction
-    	
-    	if (this.trx == null) {
-    		return;
-    	}
-
-    	try {
-        	// commit/rollback
+        	// only if there is a transaction
         	
-    		long trxid = trx.getTrxId(); 
-    		long trxts = -1;
-    		if (trxid < 0) {
-    			if (success) {
-    	            trxts = this.orca.getTrxMan().getNewVersion();
-    		    	_log.trace("commit trxid={} trxts={}", trxid, trxts);
-    				this.orca.getHumpback().commit(trxid, trxts);
-    			}
-    			else {
-    		    	_log.trace("rollback trxid={} trxts={}", trxid);
-    				this.orca.getHumpback().rollback(trxid);;
-    			}
-    		}
-    		else {
-    			_log.trace("autonomous trxid={}", trxid);
-    		}
-
-    		// notify metadata service 
-    		
-        	if (trx.isDddl()) {
-        		this.orca.getMetaService().commit(trx, trxts);
+        	if (this.trx == null) {
+        		return;
         	}
-        	
-        	// release all locks
-            
+    
+        	try {
+            	// commit/rollback
+            	
+        		long trxid = trx.getTrxId(); 
+        		long trxts = -1;
+        		if (trxid < 0) {
+        			if (success) {
+        	            trxts = this.orca.getTrxMan().getNewVersion();
+        		    	_log.trace("commit trxid={} trxts={}", trxid, trxts);
+        				this.orca.getHumpback().commit(trxid, trxts);
+        			}
+        			else {
+        		    	_log.trace("rollback trxid={} trxts={}", trxid);
+        				this.orca.getHumpback().rollback(trxid);;
+        			}
+        		}
+        		else {
+        			_log.trace("autonomous trxid={}", trxid);
+        		}
+    
+        		// notify metadata service 
+        		
+            	if (trx.isDddl()) {
+            		this.orca.getMetaService().commit(trx, trxts);
+            	}
+            	
+            	// release all locks
+                
             trx.releaseAllLocks();            
             
             // reset auto commit 
             
             if (this.resetAutoCommit > 0) {
-            	this.resetAutoCommit--;
-            	if (this.resetAutoCommit == 0) {
-                	this.autoCommit = true;
-            	}
+            	    this.resetAutoCommit--;
+            	    if (this.resetAutoCommit == 0) {
+            	        setAutoCommit(true);
+            	    }
             }
             
             // done
             
             this.trx.reset();
-    	}
-    	catch (Throwable x) {
-    		_log.error("fatal!!!", x);
-    		throw x;
-    	}
+        	}
+        	catch (Throwable x) {
+        		_log.error("fatal!!!", x);
+        		throw x;
+        	}
     }
     
     /**
@@ -319,10 +328,6 @@ public class Session {
         return this.trx;
     }
 
-    public void setParameter(String name, Object value) {
-    	this.parameters.setParameter(name, value);
-    }
-
     public int getId() {
         return this.id;
     }
@@ -346,11 +351,7 @@ public class Session {
     }
 
     public SqlParserFactory getParserFactory() {
-    	return this.fac;
-    }
-
-    public int getLockTimeoutMilliSeconds() {
-    	return this.parameters.getLockTimeout();
+        return this.fac;
     }
 
 	/**
@@ -415,7 +416,7 @@ public class Session {
 		
 		// lock the sucker
 		
-		if (!lock.acquire(owner, level, getLockTimeoutMilliSeconds())) {
+		if (!lock.acquire(owner, level, this.config.getLockTimeout())) {
 			return false;
 		}
 		
@@ -473,8 +474,8 @@ public class Session {
 		}
 	}
 	
-	public SessionParameters getParameters() {
-		return this.parameters;
+	public SystemParameters getConfig() {
+		return this.config;
 	}
 	
 	public void notifyStartQuery() {
@@ -512,8 +513,8 @@ public class Session {
             }
             // make all asynchronous in one transaction. otherwise session sweeper cant determine the transaction
             // window correctly
-            this.variables.put("##oldAutoCommit", this.autoCommit);
-            this.autoCommit = false;
+            this.variables.put("##oldAutoCommit", this.config.getAutoCommit());
+            setAutoCommit(false);
             this.asyncExecutor = new AsynchronusInsert(this);
         }
         else {
@@ -521,9 +522,9 @@ public class Session {
                 this.asyncExecutor.close();
                 commit();
                 this.asyncExecutor = null;
-                this.autoCommit = (Boolean)this.variables.get("##oldAutoCommit");
+                setAutoCommit((Boolean)this.variables.get("##oldAutoCommit"));
             }
         }
     }
-    
+
 }

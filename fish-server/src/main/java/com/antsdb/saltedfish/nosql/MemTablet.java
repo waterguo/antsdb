@@ -603,14 +603,10 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         return scanner;
     }
     
-    Scanner scan(
-            long trxid, 
-            long version, 
-            long pKeyStart, 
-            boolean includeStart, 
-            long pKeyEnd, 
-            boolean includeEnd,
-            boolean isAscending) {
+    Scanner scan(long trxid, long version, long pKeyStart, long pKeyEnd, long options) {
+        boolean includeStart = ScanOptions.includeStart(options);
+        boolean includeEnd = ScanOptions.includeEnd(options);
+        boolean isAscending = ScanOptions.isAscending(options);
         SkipListScanner upstream = null; 
         if (isAscending) {
             upstream = this.slist.scan(pKeyStart, includeStart, pKeyEnd, includeEnd);
@@ -1046,9 +1042,6 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
             UberTimer timer = new UberTimer(timeout);
 			this.gate.incrementAndGet();
 			long version = row.getVersion();
-            if (version == 0) {
-                throw new IllegalArgumentException();
-            }
 			long pKey = row.getKeyAddress();
 			for (;;) {
 				long pHead = this.slist.put(pKey);
@@ -1274,9 +1267,6 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
 			UberTimer timer = new UberTimer(timeout);
 			long pKey = row.getKeyAddress();
 			long version = row.getVersion();
-            if (version == 0) {
-                throw new IllegalArgumentException();
-            }
 			for (;;) {
 				long pHead = this.slist.put(pKey);
 				int oHeadValue = Unsafe.getIntVolatile(pHead);

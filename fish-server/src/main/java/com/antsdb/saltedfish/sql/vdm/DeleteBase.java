@@ -39,8 +39,8 @@ abstract class DeleteBase extends Statement {
 	}
 
 	protected boolean deleteSingleRow(VdmContext ctx, Parameters params, long pKey) {
-    	Transaction trx = ctx.getTransaction();
-    	int timeout = ctx.getSession().getLockTimeoutMilliSeconds();
+    	    Transaction trx = ctx.getTransaction();
+    	    int timeout = ctx.getSession().getConfig().getLockTimeout();
         try (Heap heap = new BluntHeap()) {
         	heap.reset(0);
         	Row row = null;

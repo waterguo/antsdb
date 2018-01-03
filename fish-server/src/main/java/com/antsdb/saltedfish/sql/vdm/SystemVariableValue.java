@@ -27,27 +27,29 @@ import com.antsdb.saltedfish.sql.DataType;
  */
 public class SystemVariableValue extends Operator {
     String name;
+    boolean isGlobal = false;
     
     public SystemVariableValue(String name) {
         super();
+        if (name.startsWith("global.")) {
+            name = name.substring(7);
+            this.isGlobal = true;
+        }
+        else if (name.startsWith("session.")) {
+            name = name.substring(8);
+        }
         this.name = name;
     }
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	String name = this.name.substring(2, this.name.length());
-    	Object value;
-    	if (name.startsWith("global.")) {
-            name = name.substring(7);
-            value = ctx.getOrca().getDefaultSession().getParameters().get(name);
-    	}
-    	else if (name.startsWith("session.")) {
-    	    name = name.substring(8);
-            value = ctx.getSession().getParameters().get(name);
-    	}
-    	else {
-            value = ctx.getSession().getParameters().get(name);
-    	}
+        	Object value;
+        	if (this.isGlobal) {
+        	    value = ctx.getOrca().getConfig().get(name);
+        	}
+        	else {
+            value = ctx.getSession().getConfig().get(name);
+        	}
         return FishObject.allocSet(heap, value);
     }
 

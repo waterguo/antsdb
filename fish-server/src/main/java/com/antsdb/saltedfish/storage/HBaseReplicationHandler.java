@@ -54,12 +54,19 @@ public class HBaseReplicationHandler extends ReplicationHandler {
         this.hbase = hbaseStorageService;
         int bufferSize = hbaseStorageService.getConfigBufferSize();
         this.buffer = new SyncBuffer(humpback, this.hbase, bufferSize);
+        this.sp = this.hbase.getCurrentSP();
     }
 
     @Override
     public void flush() throws Exception {
         this.buffer.flush();
-        this.hbase.updateLogPointer(this.sp);
+        long hbaseLp = this.hbase.getReplicateLogPointer();
+        if (this.sp > hbaseLp) {
+            this.hbase.updateLogPointer(this.sp);
+        }
+        else if (this.sp < hbaseLp){
+            _log.error("error: lp {} is less than the one in storage {}", this.sp, hbaseLp);
+        }
     }
     
     @Override

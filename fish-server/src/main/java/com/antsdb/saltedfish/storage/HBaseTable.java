@@ -32,10 +32,12 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.nosql.TableType;
+import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -161,7 +163,9 @@ class HBaseTable implements StorageTable {
         this.meta = meta;
         this.tableId = meta.getTableId();
         this.hbase = hbase;
-        this.tn = TableName.valueOf(meta.getNamespace(), meta.getTableName());
+        String ns = meta.getNamespace();
+        ns = (ns.equals(Orca.SYSNS)) ? hbase.getSystemNamespace() : ns;
+        this.tn = TableName.valueOf(ns, meta.getTableName());
     }
 
     @Override
@@ -171,7 +175,7 @@ class HBaseTable implements StorageTable {
         }
         try {
             TableMeta meta = this.hbase.getTableMeta(this.tableId);
-            Table htable = getConnection().getTable(tn);
+            Table htable = getConnection().getTable(this.tn);
             Get get = new Get(Helper.antsKeyToHBase(pKey));
             Result r = htable.get(get);
             long pRow = Helper.toRow(getHeap(), r, meta, this.tableId);
@@ -188,7 +192,7 @@ class HBaseTable implements StorageTable {
             _log.trace("getIndex {} {}", this.tn.toString(), KeyBytes.toString(pKey));
         }
         try {
-            Table htable = getConnection().getTable(tn);
+            Table htable = getConnection().getTable(this.tn);
             Get get = new Get(Helper.antsKeyToHBase(pKey));
             Result r = htable.get(get);
             long pLine = Helper.toIndexLine(getHeap(), r);
@@ -204,7 +208,10 @@ class HBaseTable implements StorageTable {
     }
 
     @Override
-    public ScanResult scan(long pKeyStart, boolean incStart, long pKeyEnd, boolean incEnd, boolean isAscending) {
+    public ScanResult scan(long pKeyStart, long pKeyEnd, long options) {
+        boolean incStart = ScanOptions.includeStart(options);
+        boolean incEnd = ScanOptions.includeEnd(options);
+        boolean isAscending = ScanOptions.isAscending(options);
         if (_log.isTraceEnabled()) {
             _log.trace("scan {} {}{}-{}{}", 
                     this.tn.toString(), 
@@ -233,7 +240,7 @@ class HBaseTable implements StorageTable {
                 scan.setStopRow(end);
             }
             scan.setReversed(!isAscending);
-            Table htable = getConnection().getTable(tn);
+            Table htable = getConnection().getTable(this.tn);
             ResultScanner rs = htable.getScanner(scan);
             TableMeta meta = this.hbase.getTableMeta(this.tableId);
             if (!isAscending && !incStart && (start != null)) {

@@ -267,8 +267,7 @@ public final class BufferUtils {
 */
     public static byte[] readBytesWithLength(ByteBuf in) {
         int length = (int) in.readByte();
-        if(length==NULL_LENGTH)
-        {
+        if(length==NULL_LENGTH) {
             return null;
         }
         if (length <= 0) {
@@ -282,8 +281,7 @@ public final class BufferUtils {
 
     // read bytes with known length
     public static byte[] readBytes(ByteBuf in, int length) {
-        if(length==NULL_LENGTH)
-        {
+        if(length==NULL_LENGTH) {
             return null;
         }
         if (length <= 0) {
@@ -583,9 +581,9 @@ public final class BufferUtils {
      * @return
      */
     public static CharBuffer readStringCrazy(Decoder decoder, ByteBuf buf) {
-    	CharBuffer cbuf = MysqlString.decode(decoder, buf.nioBuffer());
-    	cbuf.flip();
-    	return cbuf;
+        	CharBuffer cbuf = MysqlString.decode(decoder, buf.nioBuffer());
+        	cbuf.flip();
+        	return cbuf;
     }
 
 }

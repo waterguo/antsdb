@@ -17,6 +17,7 @@ import java.io.File;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
+import org.apache.commons.io.FileUtils;
 
 import com.antsdb.saltedfish.util.CommandLineHelper;
 
@@ -39,7 +40,13 @@ public class SaltedFishMain extends CommandLineHelper {
     }
     
     public static void main(String[] args) throws Exception {
-        new SaltedFishMain().run(getOptions(), args);
+        try {
+            new SaltedFishMain().run(getOptions(), args);
+        }
+        catch (Exception x) {
+            x.printStackTrace();
+            System.exit(-1);
+        }
     }
     
     private void run(Options options, String[] args) throws Exception {
@@ -57,6 +64,20 @@ public class SaltedFishMain extends CommandLineHelper {
             if (!home.isDirectory()) {
                 println("home directory is not valid: {}", home);
                 System.exit(-1);
+            }
+            File fileConfig = new File(home, "conf/conf.properties");
+            if (!fileConfig.exists()) {
+                File fileConfigTemplate = new File(home, "conf/conf.properties.template");
+                if (fileConfigTemplate.exists()) {
+                    FileUtils.copyFile(fileConfigTemplate, fileConfig);
+                }
+            }
+            File logConfig = new File(home, "conf/log4j.properties");
+            if (!logConfig.exists()) {
+                File fileConfigTemplate = new File(home, "conf/log4j.properties.template");
+                if (fileConfigTemplate.exists()) {
+                    FileUtils.copyFile(fileConfigTemplate, logConfig);
+                }
             }
             SaltedFish fish = new SaltedFish(home);
             fish.run();

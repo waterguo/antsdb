@@ -31,12 +31,7 @@ public class SetVariable extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Object val = Util.eval(ctx, this.expr, params, 0);
-        if (val != null) {
-            ctx.getSession().setParameter(this.name, val);
-        }
-        else {
-            ctx.getSession().setParameter(this.name, null);
-        }
+        ctx.getSession().setVariable(this.name, val);
         return null;
     }
 

@@ -96,7 +96,7 @@ public class InsertSingleRow extends Statement {
     }
 
     void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
-    	int timeout = ctx.getSession().getLockTimeoutMilliSeconds();
+    	int timeout = ctx.getSession().getConfig().getLockTimeout();
     	
     	// collect values 
     	

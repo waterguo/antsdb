@@ -107,4 +107,10 @@ public class DumbDistinctFilter extends CursorMaker {
         return this.upstream.setSortingOrder(order);
     }
 
+    @Override
+    public void explain(int level, List<ExplainRecord> records) {
+        super.explain(level, records);
+        this.upstream.explain(level+1, records);
+    }
+
 }

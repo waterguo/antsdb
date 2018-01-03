@@ -287,8 +287,7 @@ public class FishObject {
 			BigDecimal bd = FishDecimal.get(heap, addr);
 			return bd.longValueExact();
 		case Value.FORMAT_DATE:
-			Date dt = FishDate.get(heap, addr);
-			return dt.getTime();
+			return FishDate.getEpochMillisecond(heap, addr);
 		case Value.FORMAT_TIMESTAMP:
 			return FishTimestamp.getEpochMillisecond(heap, addr);
 		case Value.FORMAT_UTF8:

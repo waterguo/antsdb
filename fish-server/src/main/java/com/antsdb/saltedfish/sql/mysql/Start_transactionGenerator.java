@@ -24,8 +24,8 @@ public class Start_transactionGenerator extends Generator<Start_transactionConte
 
     @Override
     public Instruction gen(GeneratorContext ctx, Start_transactionContext rule) throws OrcaException {
-    	StartTransaction startTrans = new StartTransaction();
-    	return startTrans;
+    	    StartTransaction startTrans = new StartTransaction();
+    	    return startTrans;
     }
 
 }

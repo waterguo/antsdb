@@ -43,6 +43,7 @@ import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.server.mysql.packet.MySQLPacket;
 import com.antsdb.saltedfish.server.mysql.util.BufferUtils;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
+import com.antsdb.saltedfish.sql.AuthPlugin;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
@@ -630,13 +631,15 @@ public final class PacketEncoder {
     		                              int capability, 
     		                              byte charSet, 
     		                              int status,
-    		                              String authPlugin) {
+    		                              AuthPlugin plugin) {
+        byte[] seed = plugin.getSeed();
         buffer.writeByte(protocolVersion);
         BufferUtils.writeString(buffer, serverVersion);
         BufferUtils.writeUB4(buffer, threadId);
-        // seed
-        byte[] seed  = new byte[] {0x50, 0x3a, 0x6e, 0x3d, 0x25, 0x40, 0x51, 0x56};
-        buffer.writeBytes(seed);
+        // seed part 1, first 8 bytes
+        for (int i=0; i<8; i++) {
+            buffer.writeByte(seed[i]);
+        }
         buffer.writeByte(0);
         // lower 16 bits of sever capacity
         BufferUtils.writeInt(buffer, capability);
@@ -648,17 +651,19 @@ public final class PacketEncoder {
         BufferUtils.writeInt(buffer, capability >>> 16);
         // plugin data length
         if ((capability & MysqlServerHandler.CLIENT_PLUGIN_AUTH) != 0) {
-        	buffer.writeByte(0x15);
+        	    buffer.writeByte(0x15);
         }
         else {
-        	buffer.writeByte(0);
+        	    buffer.writeByte(0);
         }
         // fill the rest 10 bytes with 0
         buffer.writeZero(10);
         if ((capability & MysqlServerHandler.CLIENT_PLUGIN_AUTH) != 0) {
-        	// no idea what this means, copied from trace
-        	buffer.writeBytes(new byte[] {0x73, 0x68, 0x2f, 0x50, 0x27, 0x6f, 0x7a, 0x38, 0x46, 0x38, 0x26, 0x51, 0x00});
-        	BufferUtils.writeString(buffer, authPlugin);
+            for (int i=8; i<seed.length; i++) {
+                buffer.writeByte(seed[i]);
+            }
+            buffer.writeByte(0);
+        	    BufferUtils.writeString(buffer, plugin.getName());
         }
     }
 
@@ -891,10 +896,10 @@ public final class PacketEncoder {
     private Charset getEncoder() {
         Charset result = null;
         if (this.handler.session != null) {
-            result = this.handler.session.getParameters().getResultEncoder(); 
+            result = this.handler.session.getConfig().getResultEncoder(); 
         }
         if (result == null) {
-            result = this.handler.fish.getOrca().getDefaultSession().getParameters().getResultEncoder();
+            result = this.handler.fish.getOrca().getDefaultSession().getConfig().getResultEncoder();
         }
         return result;
     }

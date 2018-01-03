@@ -18,11 +18,11 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
-import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.varia.NullAppender;
 
 import com.antsdb.saltedfish.util.ConsoleHelper;
+import com.antsdb.saltedfish.util.ParseUtil;
 
 /**
  * 
@@ -62,26 +62,10 @@ public abstract class BetterCommandLine implements ConsoleHelper {
     }
 
     protected int parseInteger(String value) {
-        int result = 0;
-        if (value.startsWith("0x")) {
-            value = StringUtils.substring(value, 2);
-            result = Integer.parseInt(value, 16);
-        }
-        else {
-            result = Integer.parseInt(value);
-        }
-        return result;
+        return ParseUtil.parseInteger(value);
     }
 
     protected long parseLong(String value) {
-        long result = 0;
-        if (value.startsWith("0x")) {
-            value = StringUtils.substring(value, 2);
-            result = Long.parseLong(value, 16);
-        }
-        else {
-            result = Long.parseLong(value);
-        }
-        return result;
+        return ParseUtil.parseLong(value);
     }
 }

@@ -68,13 +68,17 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
                 set = createSetSessionVariable(ctx, i.variable_assignment_session());
             }
             else if (i.variable_assignment_global() != null) {
-                set = createSetGlobalVariable(ctx, i.variable_assignment_global());
+                SetSystemParameter ssp = createSetGlobalVariable(ctx, i.variable_assignment_global());
+                ssp.setPermanent(rule.K_PERMANENT() != null);
+                set = ssp;
             }
             else if (i.variable_assignment_session_transaction() != null) {
                 set = createSetSessionTransaction(ctx, i.variable_assignment_session_transaction());
             }
             else if (i.variable_assignment_global_transaction() != null) {
-                set = createSetGlobalTransaction(ctx, i.variable_assignment_global_transaction());
+                SetSystemParameter ssp = createSetGlobalTransaction(ctx, i.variable_assignment_global_transaction());
+                ssp.setPermanent(rule.K_PERMANENT() != null);
+                set = ssp;
             }
             else if (i.variable_assignment_transaction() != null) {
                 set = createSetTransaction(ctx, i.variable_assignment_transaction());
@@ -148,7 +152,10 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
 
     private SetSystemParameter createSetSessionVariable(GeneratorContext ctx, Variable_assignment_sessionContext rule) 
     throws OrcaException {
-        String name = rule.any_name().getText();
+        String name = rule.session_variable_name().getText();
+        if (name.startsWith("@@")) {
+            name = name.substring(2);
+        }
         SetSystemParameter set;
 
         // set to default value
@@ -181,33 +188,33 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
     private SetVariable createSetUserVariable(GeneratorContext ctx, Variable_assignment_userContext rule) 
     throws OrcaException {
         Operator expr = ExprGenerator.gen(ctx, null, rule.expr());
-        String name = rule.user_var_name().getText();
+        String name = rule.user_var_name().getText().substring(1);
         SetVariable set = new SetVariable(name, expr);
         return set;
     }
 
     private SetSystemParameter createSetGlobalTransaction(GeneratorContext ctx,Variable_assignment_global_transactionContext rule) 
     throws OrcaException {
-    	// Transaction setting is not fully supported. 
-    	// We won't handle dirty read, etc
-    	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.GLOBAL, "TRANSACTION", "");
-    	return set;
+        	// Transaction setting is not fully supported. 
+        	// We won't handle dirty read, etc
+        	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.GLOBAL, "TRANSACTION", "");
+        	return set;
     }
 
     private SetSystemParameter createSetSessionTransaction(GeneratorContext ctx, Variable_assignment_session_transactionContext rule) 
     throws OrcaException {
-    	// Transaction setting is not fully supported. 
-    	// We won't handle dirty read, etc
-    	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
-    	return set;
+        	// Transaction setting is not fully supported. 
+        	// We won't handle dirty read, etc
+        	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
+        	return set;
     }
 
     private SetSystemParameter createSetTransaction(GeneratorContext ctx, Variable_assignment_transactionContext rule) 
     throws OrcaException {
-    	// Transaction setting is not fully supported. 
-    	// We won't handle dirty read, etc
-    	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
-    	return set;
+        	// Transaction setting is not fully supported. 
+        	// We won't handle dirty read, etc
+        	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
+        	return set;
     }
     
     private String genNamesValue(Names_valueContext nmctx)

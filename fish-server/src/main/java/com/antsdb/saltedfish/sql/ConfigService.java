@@ -13,7 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql;
 
-import java.io.File;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -53,6 +52,10 @@ public class ConfigService {
         }
     }
 
+    public Object get(String key) {
+        return this.params.get(key);
+    }
+    
     public void set(String key, Object value) {
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSPARAM);
         if (value == null) {
@@ -104,14 +107,6 @@ public class ConfigService {
         return value;
     }
     
-    public File getHBaseConfFile() {
-    	String value = this.props.getProperty("hbase_conf", null);
-    	if (value == null) {
-    		return null;
-    	}
-    	return new File(this.orca.getHome(), value);
-    }
-
 	public int getSlaveServerId() {
 		int value = Integer.parseInt(this.props.getProperty("slave.server-id"));
 		return value;

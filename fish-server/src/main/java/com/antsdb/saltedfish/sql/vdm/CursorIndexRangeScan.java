@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -115,8 +116,8 @@ public class CursorIndexRangeScan extends CursorMaker {
 
             // scan !!
 
-            boolean isAsc = CursorIndexRangeScan.this.isAsc;
-            this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, true, pTo, true, isAsc);
+            long options = CursorIndexRangeScan.this.isAsc ? 0 : ScanOptions.descending(0);
+            this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, options);
         }
 
         @Override

@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.minke;
 
 import static com.antsdb.saltedfish.minke.BoundaryMark.*;
 
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.ScanResultComparator;
 import com.antsdb.saltedfish.nosql.StorageTable;
@@ -25,12 +26,14 @@ import com.antsdb.saltedfish.nosql.StorageTable;
  */
 class ScanVerifier {
     static void check(MinkeCacheTable mctable, Range range, boolean asc) {
-        boolean incStart = range.startMark == NONE;
-        boolean incEnd = range.endMark == NONE;
+        long options = 0;
+        options = range.startMark == NONE ? options : ScanOptions.excludeStart(options);
+        options = range.endMark == NONE ? options : ScanOptions.excludeEnd(options);
+        options = asc ? options : ScanOptions.descending(options);
         StorageTable stable = mctable.stable;
         MinkeTable mtable = mctable.mtable;
-        ScanResult srHbase = stable.scan(range.pKeyStart, incStart, range.pKeyEnd, incEnd, asc); 
-        ScanResult srMinke = stable.scan(range.pKeyStart, incStart, range.pKeyEnd, incEnd, asc);
+        ScanResult srHbase = stable.scan(range.pKeyStart, range.pKeyEnd, 0); 
+        ScanResult srMinke = stable.scan(range.pKeyStart, range.pKeyEnd, 0);
         boolean success = ScanResultComparator.compare(srHbase, srMinke, mtable.getType());
         if (!success) {
             throw new MinkeException(

@@ -104,6 +104,9 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
     static Planner gen(GeneratorContext ctx, Select_or_valuesContext rule, Planner parent) 
     throws OrcaException {
         Planner planner = new Planner(ctx, parent);
+        if (rule.K_SQL_NO_CACHE() != null) {
+            planner.setNoCache(true);
+        }
         
         // from items
         

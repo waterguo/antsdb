@@ -34,7 +34,7 @@ public class Show_variable_stmtGenerator extends Generator<Show_variable_stmtCon
 
     @Override
     public Instruction gen(GeneratorContext ctx, Show_variable_stmtContext rule) throws OrcaException {
-        CursorMaker maker = new ShowVariables();
+        CursorMaker maker = new ShowVariables(rule.K_GLOBAL() != null);
         
         if (rule.where_clause() != null) {
         	Planner planner = new Planner(ctx);

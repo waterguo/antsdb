@@ -70,7 +70,12 @@ public abstract class RuleMeta<T> extends UberObject {
     }
     
     public String getName() {
-    	return (String)row.get(ColumnId.sysrule_rule_name.getId());
+        return (String)row.get(ColumnId.sysrule_rule_name.getId());
+    }
+    
+    public int[] getRuleParentColumns() {
+        int[] result = (int[])this.row.get(ColumnId.sysrule_parent_columns.getId());
+        return result;
     }
     
     public void setRuleParentColumns(List<ColumnMeta> columns) {

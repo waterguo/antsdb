@@ -24,7 +24,7 @@ public class Use_stmtGenerator extends DdlGenerator<Use_stmtContext>{
 
     @Override
     public Instruction gen(GeneratorContext ctx, Use_stmtContext rule) throws OrcaException {
-        String name = rule.any_name().getText();
+        String name = Utils.getIdentifier(rule.identifier());
         return new Use(name);
     }
 

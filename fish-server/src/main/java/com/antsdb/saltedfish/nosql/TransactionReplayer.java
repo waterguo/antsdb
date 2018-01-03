@@ -126,7 +126,7 @@ public class TransactionReplayer implements ReplayHandler {
 
 	private boolean isTrxRolledBack(long trxid) {
 		long version = trxman.getTimestamp(trxid);
-		if (version > 0) {
+		if (version >= 0) {
 			return false;
 		}
 		if (version == TrxMan.MARK_ROLLED_BACK) {

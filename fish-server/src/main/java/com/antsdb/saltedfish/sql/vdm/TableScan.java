@@ -22,15 +22,12 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 
 public class TableScan extends CursorMaker implements Ordered {
-    CursorMaker upstream;
+    HumpbackTableScan upstream;
     TableMeta table;
     
     public TableScan(TableMeta table, int makerId) {
-    	this.table = table;
+    	    this.table = table;
         this.upstream = new HumpbackTableScan(table, makerId);
-        /* obsolete maybe
-        this.upstream = new ExternalTableScan(session, tableName);
-         */
     }
 
     @Override
@@ -65,6 +62,10 @@ public class TableScan extends CursorMaker implements Ordered {
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return this.upstream.setSortingOrder(order);
+    }
+
+    public void setNoCache(boolean value) {
+        this.upstream.setNoCache(value);
     }
 
 }

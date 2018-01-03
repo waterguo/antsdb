@@ -60,83 +60,86 @@ public class Gobbler {
         TIMESTAMP,
     } 
     public static class LogEntry {
-    	private final static int HEADER_SIZE = 6;
-    	protected final static int OFFSET_MAGIC = 0;
-    	protected final static int OFFSET_ENTRY_TYPE = 2;
-    	protected final static int OFFSET_SIZE = 3;
-    	protected final static int OFFSET_TRX_ID = 6;
-    	protected final static int OFFSET_TABLE_ID = 0xe;
-    	
-    	protected long sp;
-    	protected long addr;
-    	
-    	LogEntry(SpaceManager sm, EntryType type, int size) {
-    	    this.sp = sm.alloc(HEADER_SIZE + size);
-    	    this.addr = sm.toMemory(this.sp);
-    	    setMagic();
-    	    setType(type);
-    	    setSize(size);
-    	}
-    	
-    	public LogEntry(long sp, long addr) {
-    		this.sp = sp;
-    		this.addr = addr;
-    	}
-    	
-    	final short getMagic() {
-    		return Unsafe.getShortVolatile(addr + OFFSET_MAGIC);
-    	}
-    	
-    	final void setMagic() {
-    		Unsafe.putShortVolatile(addr + OFFSET_MAGIC, MAGIC);
-    	}
-    	
-    	public final EntryType getType() {
-    		byte bt = Unsafe.getByteVolatile(addr + OFFSET_ENTRY_TYPE);
-    		switch (bt) {
-    		case 0:
-    		    return EntryType.INSERT;
-    		case 1:
-    			return EntryType.UPDATE;
-    		case 2:
-    			return EntryType.PUT;
-    		case 3:
-    		    return EntryType.INDEX;
-    		case 4:
-    			return EntryType.DELETE;
-    		case 5:
-    			return EntryType.COMMIT;
-    		case 6:
-    			return EntryType.ROLLBACK;
-    		case 7:
-    			return EntryType.MESSAGE;
-    		case 8:
-    			return EntryType.TRXWINDOW;
-    		case 9:
-    		    return EntryType.TIMESTAMP;
-    		default:
-    			throw new IllegalArgumentException();
-    		}
-    	}
-    	
-    	final void setType(EntryType type) {
-    		byte bt = (byte)type.ordinal();
-    		Unsafe.putByteVolatile(addr + OFFSET_ENTRY_TYPE, bt);
-    	}
-    	
-    	public final int getSize() {
-    		return Unsafe.getInt3Volatile(addr + OFFSET_SIZE);
-    	}
-    	
-    	final void setSize(int size) {
-    		Unsafe.putInt3Volatile(addr + OFFSET_SIZE, size);
-    	}
-
-    	public final long getAddress() {
-    		return this.addr;
-    	}
-    	
-    	public final long getSpacePointer() {
+        	private final static int HEADER_SIZE = 6;
+        	protected final static int OFFSET_MAGIC = 0;
+        	protected final static int OFFSET_ENTRY_TYPE = 2;
+        	protected final static int OFFSET_SIZE = 3;
+        	protected final static int OFFSET_TRX_ID = 6;
+        	protected final static int OFFSET_TABLE_ID = 0xe;
+        	
+        	protected long sp;
+        	protected long addr;
+        	
+        	LogEntry(SpaceManager sm, int size) {
+        	    this.sp = sm.alloc(HEADER_SIZE + size);
+        	    this.addr = sm.toMemory(this.sp);
+        	    setSize(size);
+        	}
+        	
+        	public LogEntry(long sp, long addr) {
+        		this.sp = sp;
+        		this.addr = addr;
+        	}
+        	
+        	protected void finish(EntryType type) {
+            setType(type);
+            setMagic();
+        	}
+        	
+        	final short getMagic() {
+        		return Unsafe.getShortVolatile(addr + OFFSET_MAGIC);
+        	}
+        	
+        	final void setMagic() {
+        		Unsafe.putShortVolatile(addr + OFFSET_MAGIC, MAGIC);
+        	}
+        	
+        	public final EntryType getType() {
+        		byte bt = Unsafe.getByteVolatile(addr + OFFSET_ENTRY_TYPE);
+        		switch (bt) {
+        		case 0:
+        		    return EntryType.INSERT;
+        		case 1:
+        			return EntryType.UPDATE;
+        		case 2:
+        			return EntryType.PUT;
+        		case 3:
+        		    return EntryType.INDEX;
+        		case 4:
+        			return EntryType.DELETE;
+        		case 5:
+        			return EntryType.COMMIT;
+        		case 6:
+        			return EntryType.ROLLBACK;
+        		case 7:
+        			return EntryType.MESSAGE;
+        		case 8:
+        			return EntryType.TRXWINDOW;
+        		case 9:
+        		    return EntryType.TIMESTAMP;
+        		default:
+        			throw new IllegalArgumentException();
+        		}
+        	}
+        	
+        	final void setType(EntryType type) {
+        		byte bt = (byte)type.ordinal();
+        		Unsafe.putByteVolatile(addr + OFFSET_ENTRY_TYPE, bt);
+        	}
+        	
+        	public final int getSize() {
+        		return Unsafe.getInt3Volatile(addr + OFFSET_SIZE);
+        	}
+        	
+        	final void setSize(int size) {
+        		Unsafe.putInt3Volatile(addr + OFFSET_SIZE, size);
+        	}
+    
+        	public final long getAddress() {
+        		return this.addr;
+        	}
+        	
+        	public final long getSpacePointer() {
 			return this.sp;
 		}
     }
@@ -144,8 +147,9 @@ public class Gobbler {
     public static class TimestampEntry extends LogEntry {
         
         TimestampEntry(SpaceManager sm, long time) {
-            super(sm, EntryType.TIMESTAMP, 8);
+            super(sm, 8);
             setTimestamp(time);
+            finish(EntryType.TIMESTAMP);
         }
         
         protected TimestampEntry(long sp, long addr) {
@@ -170,18 +174,18 @@ public class Gobbler {
     public static class RowUpdateEntry extends LogEntry {
         protected final static int OFFSET_TABLE_ID = 6;
         
-        RowUpdateEntry(SpaceManager sm, EntryType type, int rowsize, int tableId) {
-            super(sm, type, 4 + rowsize);
+        RowUpdateEntry(SpaceManager sm, int rowsize, int tableId) {
+            super(sm, 4 + rowsize);
             setTableId(tableId);
         }
         
-    	protected RowUpdateEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
-    	
-    	public long getRowPointer() {
-    		return this.addr + OFFSET_TABLE_ID + 4;    		
-    	}
+        	protected RowUpdateEntry(long sp, long addr) {
+        		super(sp, addr);
+        	}
+        	
+        	public long getRowPointer() {
+        		return this.addr + OFFSET_TABLE_ID + 4;    		
+        	}
 
 		public long getRowSpacePointer() {
 			return this.sp + OFFSET_TABLE_ID + 4;
@@ -216,8 +220,9 @@ public class Gobbler {
     
     public static class InsertEntry extends RowUpdateEntry {
         InsertEntry(SpaceManager sm, VaporizingRow row, int tableId) {
-            super(sm, EntryType.INSERT, row.getSize(), tableId);
+            super(sm, row.getSize(), tableId);
             Row.from(getRowPointer(), row);
+            finish(EntryType.INSERT);
         }
         
         InsertEntry(long sp, long addr) {
@@ -227,8 +232,9 @@ public class Gobbler {
     
     public static class UpdateEntry extends RowUpdateEntry {
         UpdateEntry(SpaceManager sm, VaporizingRow row, int tableId) {
-            super(sm, EntryType.UPDATE, row.getSize(), tableId);
+            super(sm, row.getSize(), tableId);
             Row.from(getRowPointer(), row);
+            finish(EntryType.UPDATE);
         }
         
         UpdateEntry(long sp, long addr) {
@@ -238,13 +244,15 @@ public class Gobbler {
     
     public static class PutEntry extends RowUpdateEntry {
         PutEntry(SpaceManager sm, long pRow, int size, int tableId) {
-            super(sm, EntryType.PUT, size, tableId);
+            super(sm, size, tableId);
             Unsafe.copyMemory(pRow, getRowPointer(), size);
+            finish(EntryType.PUT);
         }
         
         PutEntry(SpaceManager sm, VaporizingRow row, int tableId) {
-            super(sm, EntryType.PUT, row.getSize(), tableId);
+            super(sm, row.getSize(), tableId);
             Row.from(getRowPointer(), row);
+            finish(EntryType.PUT);
         }
         
         PutEntry(long sp, long addr) {
@@ -253,44 +261,44 @@ public class Gobbler {
     }
     
     public final static class DeleteEntry extends LogEntry {
-    	protected final static int OFFSET_KEY = 0x12;
+    	    protected final static int OFFSET_KEY = 0x12;
 
-    	DeleteEntry(SpaceManager sm, int tableId, long trxid, long pKey, int length) {
-    	    super(sm, EntryType.DELETE, 4 + 8 + length);
+    	    DeleteEntry(SpaceManager sm, int tableId, long trxid, long pKey, int length) {
+    	        super(sm, 4 + 8 + length);
             setTrxId(trxid);
             setTableId(tableId);
             Unsafe.copyMemory(pKey, getKeyAddress(), length);
-    	}
+            finish(EntryType.DELETE);
+    	    }
     	
-    	DeleteEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
-
-    	public long getTrxid() {
-    		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
-    	}
-    	
-    	void setTrxId(long trxid) {
-    		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
-    	}
-
-    	public int getTableId() {
-    		return Unsafe.getInt(this.addr + OFFSET_TABLE_ID);
-    	}
-    	
-    	void setTableId(int tableId) {
-    		Unsafe.putInt(this.addr + OFFSET_TABLE_ID, tableId);
-    	}
-
-    	public long getKeyAddress() {
-    		return this.addr + OFFSET_KEY;
-    	}
-    	
+        	DeleteEntry(long sp, long addr) {
+        		super(sp, addr);
+        	}
+    
+        	public long getTrxid() {
+        		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
+        	}
+        	
+        	void setTrxId(long trxid) {
+        		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
+        	}
+    
+        	public int getTableId() {
+        		return Unsafe.getInt(this.addr + OFFSET_TABLE_ID);
+        	}
+        	
+        	void setTableId(int tableId) {
+        		Unsafe.putInt(this.addr + OFFSET_TABLE_ID, tableId);
+        	}
+    
+        	public long getKeyAddress() {
+        		return this.addr + OFFSET_KEY;
+        	}
     }
     
     public final static class IndexEntry extends LogEntry {
-    	protected final static int OFFSET_MISC = 0x12;
-    	protected final static int OFFSET_INDEX_KEY = 0x13;
+        protected final static int OFFSET_MISC = 0x12;
+    	    protected final static int OFFSET_INDEX_KEY = 0x13;
     	
 		static IndexEntry alloc(SpaceManager sm, int tableId, long trxid, long pIndexKey, long pRowKey, byte misc) {
 			int indexKeySize = KeyBytes.getRawSize(pIndexKey);
@@ -311,159 +319,162 @@ public class Gobbler {
 		}
 
 		private IndexEntry (SpaceManager sm, int size) {
-		    super(sm, EntryType.INDEX, size);
+		    super(sm, size);
+		    finish(EntryType.INDEX);
 		}
 		
-    	IndexEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
-
-    	public long getIndexLineAddress() {
-    	    return this.addr + OFFSET_MISC;
-    	}
+        	IndexEntry(long sp, long addr) {
+        		super(sp, addr);
+        	}
+    
+        	public long getIndexLineAddress() {
+        	    return this.addr + OFFSET_MISC;
+        	}
+        	
+        	public long getTrxid() {
+        		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
+        	}
+        	
+        	void setTrxId(long trxid) {
+        		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
+        	}
+    
+        	public int getTableId() {
+        		return Unsafe.getInt(this.addr + OFFSET_TABLE_ID);
+        	}
+        	
+        	void setTableId(int tableid) {
+        		Unsafe.putInt(this.addr + OFFSET_TABLE_ID, tableid);
+        	}
+    
+        	public long getIndexKeyAddress() {
+        		return this.addr + OFFSET_INDEX_KEY;
+        	}
     	
-    	public long getTrxid() {
-    		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
-    	}
-    	
-    	void setTrxId(long trxid) {
-    		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
-    	}
-
-    	public int getTableId() {
-    		return Unsafe.getInt(this.addr + OFFSET_TABLE_ID);
-    	}
-    	
-    	void setTableId(int tableid) {
-    		Unsafe.putInt(this.addr + OFFSET_TABLE_ID, tableid);
-    	}
-
-    	public long getIndexKeyAddress() {
-    		return this.addr + OFFSET_INDEX_KEY;
-    	}
-    	
-    	public long getRowKeyAddress() {
-    		long p = getIndexKeyAddress();
-    		int indexKeySize = KeyBytes.getRawSize(p);
-    		long pRowKey = p + indexKeySize;
-    		if (Value.getFormat(null, pRowKey) == Value.FORMAT_NULL) {
-    			return 0;
-    		}
-    		else {
-    			return pRowKey;
-    		}
-    	}
-    	
-    	public byte getMisc() {
-    		byte value =  Unsafe.getByte(this.addr + OFFSET_MISC);
-    		return value;
-    	}
-    	
-    	public void setMisc(byte value) {
-    		Unsafe.putByte(this.addr + OFFSET_MISC, value);
-    	}
+        	public long getRowKeyAddress() {
+        		long p = getIndexKeyAddress();
+        		int indexKeySize = KeyBytes.getRawSize(p);
+        		long pRowKey = p + indexKeySize;
+        		if (Value.getFormat(null, pRowKey) == Value.FORMAT_NULL) {
+        			return 0;
+        		}
+        		else {
+        			return pRowKey;
+        		}
+        	}
+        	
+        	public byte getMisc() {
+        		byte value =  Unsafe.getByte(this.addr + OFFSET_MISC);
+        		return value;
+        	}
+        	
+        	public void setMisc(byte value) {
+        		Unsafe.putByte(this.addr + OFFSET_MISC, value);
+        	}
     }
     
     public final static class CommitEntry extends LogEntry {
     	protected final static int OFFSET_VERSION = LogEntry.HEADER_SIZE + 8;
     	
 		CommitEntry(SpaceManager sm, long trxid, long trxts) {
-		    super(sm, EntryType.COMMIT, 8 + 8);
+		    super(sm, 8 + 8);
             setTrxId(trxid);
             setVersion(trxts);
+            finish(EntryType.COMMIT);
 		}
 		
-    	CommitEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
-
-    	public long getTrxid() {
-    		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
-    	}
-    	
-    	void setTrxId(long trxid) {
-    		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
-    	}
-
-    	public long getVersion() {
-    		return Unsafe.getLong(this.addr + OFFSET_VERSION);
-    	}
-    	
-    	void setVersion(long version) {
-    		Unsafe.putLong(this.addr + OFFSET_VERSION, version);
-    	}
-
+        	CommitEntry(long sp, long addr) {
+        		super(sp, addr);
+        	}
+    
+        	public long getTrxid() {
+        		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
+        	}
+        	
+        	void setTrxId(long trxid) {
+        		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
+        	}
+    
+        	public long getVersion() {
+        		return Unsafe.getLong(this.addr + OFFSET_VERSION);
+        	}
+        	
+        	void setVersion(long version) {
+        		Unsafe.putLong(this.addr + OFFSET_VERSION, version);
+        	}
     }
     
     public final static class RollbackEntry extends LogEntry {
         RollbackEntry(SpaceManager sm, long trxid) {
-            super(sm, EntryType.ROLLBACK, 8);
+            super(sm, 8);
             setTrxId(trxid);
+            finish(EntryType.ROLLBACK);
         }
         
-    	RollbackEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
-
-    	public long getTrxid() {
-    		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
-    	}
-    	
-    	void setTrxId(long trxid) {
-    		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
-    	}
-
+        	RollbackEntry(long sp, long addr) {
+        		super(sp, addr);
+        	}
+    
+        	public long getTrxid() {
+        		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
+        	}
+        	
+        	void setTrxId(long trxid) {
+        		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
+        	}
     }
     
     public final static class TransactionWindowEntry extends LogEntry {
 		TransactionWindowEntry(SpaceManager sm, long trxid) {
-		    super(sm, EntryType.TRXWINDOW, 8);
+		    super(sm, 8);
             setTrxId(trxid);
+            finish(EntryType.TRXWINDOW);
 		}
 		
 		TransactionWindowEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
+		    super(sp, addr);
+    	    }
 
-    	public long getTrxid() {
-    		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
-    	}
-    	
-    	void setTrxId(long trxid) {
-    		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
-    	}
-
-    }
+        	public long getTrxid() {
+        		return Unsafe.getLong(this.addr + OFFSET_TRX_ID);
+        	}
+        	
+        	void setTrxId(long trxid) {
+        		Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
+        	}
     
+    }
+        
     public final static class MessageEntry extends LogEntry {
-    	protected final static int OFFSET_MESSAGE = 6;
-    	
-		static MessageEntry alloc(SpaceManager sm, String message) {
-			byte[] bytes = message.getBytes(Charsets.UTF_8);
-    		MessageEntry entry = new MessageEntry(sm, bytes.length);
-    		long p = entry.addr;
-    		for (int i=0; i<bytes.length; i++) {
-    			Unsafe.putByte(p + OFFSET_MESSAGE + i, bytes[i]);
+        	protected final static int OFFSET_MESSAGE = 6;
+        	
+    		static MessageEntry alloc(SpaceManager sm, String message) {
+    			byte[] bytes = message.getBytes(Charsets.UTF_8);
+        		MessageEntry entry = new MessageEntry(sm, bytes.length);
+        		long p = entry.addr;
+        		for (int i=0; i<bytes.length; i++) {
+        			Unsafe.putByte(p + OFFSET_MESSAGE + i, bytes[i]);
+        		}
+        		return entry;
     		}
-    		return entry;
-		}
-		
-		private MessageEntry(SpaceManager sm, int size) {
-		    super(sm, EntryType.MESSAGE, size);
-		}
-		
-		MessageEntry(long sp, long addr) {
-    		super(sp, addr);
-    	}
-
-    	public String getMessage() {
-    		int size = getSize();
-    		byte[] bytes = new byte[size];
-    		for (int i=0; i<size; i++) {
-    			bytes[i] = Unsafe.getByte(this.addr + OFFSET_MESSAGE + i);
+    		
+    		private MessageEntry(SpaceManager sm, int size) {
+    		    super(sm, size);
+    		    finish(EntryType.MESSAGE);
     		}
-    		return new String(bytes, Charsets.UTF_8);
-    	}
+    		
+    		MessageEntry(long sp, long addr) {
+        		super(sp, addr);
+        	}
+    
+        	public String getMessage() {
+        		int size = getSize();
+        		byte[] bytes = new byte[size];
+        		for (int i=0; i<size; i++) {
+        			bytes[i] = Unsafe.getByte(this.addr + OFFSET_MESSAGE + i);
+        		}
+        		return new String(bytes, Charsets.UTF_8);
+        	}
     }
     
     public Gobbler(SpaceManager spaceman, boolean enableWriter) throws IOException {
@@ -502,37 +513,37 @@ public class Gobbler {
     }
     
     public void logMessage(String message) {
-    	MessageEntry entry = MessageEntry.alloc(spaceman, message);
-    	long sp = entry.getSpacePointer();
-    	updatePersistencePointer(sp);
+    	    MessageEntry entry = MessageEntry.alloc(spaceman, message);
+    	    long sp = entry.getSpacePointer();
+    	    updatePersistencePointer(sp);
     }
     
 	public void logTransactionWindow(long trxid) {
 		TransactionWindowEntry entry = new TransactionWindowEntry(spaceman, trxid);
-    	long sp = entry.getSpacePointer();
-    	updatePersistencePointer(sp);
+    	    long sp = entry.getSpacePointer();
+    	    updatePersistencePointer(sp);
 	}
 
 	public void logCommit(long trxid, long trxts) {
 		CommitEntry entry = new CommitEntry(spaceman, trxid, trxts);
-    	long sp = entry.getSpacePointer();
-    	updatePersistencePointer(sp);
-    	logTimestamp();
+    	    long sp = entry.getSpacePointer();
+    	    updatePersistencePointer(sp);
+    	    logTimestamp();
     }
 
     void logRollback(long trxid) {
 		RollbackEntry entry = new RollbackEntry(spaceman, trxid);
-    	long sp = entry.getSpacePointer();
-    	updatePersistencePointer(sp);
+    	    long sp = entry.getSpacePointer();
+    	    updatePersistencePointer(sp);
         logTimestamp();
     }
 
 	long logIndex(int tableId, long trxid, long pIndexKey, long pRowKey, byte misc) {
 		IndexEntry entry = IndexEntry.alloc(spaceman, tableId, trxid, pIndexKey, pRowKey, misc);
 		long sp = entry.getSpacePointer();
-    	updatePersistencePointer(sp);
+    	    updatePersistencePointer(sp);
         logTimestamp();
-    	return sp + ENTRY_HEADER_SIZE;
+    	    return sp + ENTRY_HEADER_SIZE;
 	}
 	
     long logInsert(VaporizingRow row, int tableId) {
@@ -630,10 +641,10 @@ public class Gobbler {
 				_log.trace("recover type {} length {} @ {}", type, length, sp);
 			}
 			if (sp >= spStart) {
-    			if ((sp != spStart) || inclusive) {
-    			    replayCallback(type, sp, p, handler);
-    				end = sp;
-    			}
+        			if ((sp != spStart) || inclusive) {
+        			    replayCallback(type, sp, p, handler);
+        				end = sp;
+        			}
 			}
 			sp = this.spaceman.plus(sp, length + ENTRY_HEADER_SIZE, 2);
 			if (sp == Long.MAX_VALUE) {
@@ -712,6 +723,9 @@ public class Gobbler {
     private long findStart(long spStart) {
         if (spStart >= this.spaceman.getAllocationPointer()) {
             return 0;
+        }
+        if (spStart == 0) {
+            spStart = getStartSp();
         }
         long p = this.spaceman.toMemory(spStart);
         if (p == 0) {

@@ -37,7 +37,7 @@ public class ModifyColumn extends Statement implements ColumnAttributes {
     public Object run(VdmContext ctx, Parameters params) {
         // create metadata
 
-    	MetadataService meta = ctx.getOrca().getMetaService();
+    	    MetadataService meta = ctx.getOrca().getMetaService();
         Transaction trx = ctx.getTransaction();
         TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
         ColumnMeta column = Checks.columnExist(table, oldName);
@@ -46,7 +46,7 @@ public class ModifyColumn extends Statement implements ColumnAttributes {
         column.setType(this.type);
         column.setNullable(this.nullable);
         if (this.defaultValue != null) {
-        	column.setDefault(this.defaultValue);
+        	    column.setDefault(this.defaultValue);
         }
         column.setAutoIncrement(this.autoIncrement);
         meta.modifyColumn(trx, column);

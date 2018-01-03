@@ -233,23 +233,17 @@ final class Helper {
     }
     
 	public static boolean existsTable(Connection conn, String ns, String name) {
-    	return existsTable(conn, TableName.valueOf(ns, name));            
+    	    return existsTable(conn, TableName.valueOf(ns, name));            
 	}
 
     public static void createNamespace(Connection connection, String namespace) {        
-        // Check whether namespace exists
-        if (!Helper.existsNamespace(connection, namespace)) {
-            try (Admin admin = connection.getAdmin()) {
-                NamespaceDescriptor nsDescriptor = NamespaceDescriptor.create(namespace).build();
-                _log.debug("creating namespace {}", namespace);
-                admin.createNamespace(nsDescriptor);
-            } 
-            catch(Exception ex) {
-                throw new OrcaHBaseException("Failed to create namespace - " + namespace, ex);
-            }
-        }
-        else {
-            //throw new HumpbackException("Namespace already exists - " + namespace);
+        try (Admin admin = connection.getAdmin()) {
+            NamespaceDescriptor nsDescriptor = NamespaceDescriptor.create(namespace).build();
+            _log.debug("creating namespace {}", namespace);
+            admin.createNamespace(nsDescriptor);
+        } 
+        catch(Exception ex) {
+            throw new OrcaHBaseException(ex, "Failed to create namespace - " + namespace);
         }
     }
 
@@ -295,23 +289,20 @@ final class Helper {
         if (Helper.existsTable(conn, namespace, tableName)) {
             Helper.dropTable(conn, namespace, tableName);
         }
-    	if (!Helper.existsTable(conn, namespace, tableName)) {
-    		
-        	// Create namespace first
-        	createNamespace(conn, namespace);
-        
-        	// Create table
-        	try (Admin admin = conn.getAdmin()) {
+    	    if (!Helper.existsTable(conn, namespace, tableName)) {
+        		
+            	// Create table
+            	try (Admin admin = conn.getAdmin()) {
                 HTableDescriptor table = new HTableDescriptor(TableName.valueOf(namespace, tableName));
                 table.addFamily(new HColumnDescriptor(SYS_COLUMN_FAMILY).setCompressionType(compressionType));
                 table.addFamily(new HColumnDescriptor(DATA_COLUMN_FAMILY).setCompressionType(compressionType));
                 _log.debug("creating table {}", table.toString());
                 admin.createTable(table);
-			} 
-        	catch (Exception ex) {
-				throw new OrcaHBaseException(ex, "Failed to create table - " + tableName);
-			}
-    	}
+            	} 
+        	    catch (Exception ex) {
+        	        throw new OrcaHBaseException(ex, "Failed to create table - " + tableName);
+            	}
+    	    }
     }
     
     public static void dropTable(Connection connection, String namespace, String tableName) {
@@ -402,15 +393,16 @@ final class Helper {
 	    
 		VaporizingRow row = null;
 	    if (table != null) {
-	    	row = populateUsingMetadata(heap, table, dataFamilyMap, colDataType, size);
+	    	    row = populateUsingMetadata(heap, table, dataFamilyMap, colDataType, size);
 	    }
 	    else {
-	    	row = populateDirect(heap, dataFamilyMap, colDataType, size);
+	    	    row = populateDirect(heap, dataFamilyMap, colDataType, size);
 	    }
 		byte[] key = hbaseKeyToAnts(r.getRow());
 		row.setKey(key);
-    	long pRow = Row.from(heap, row);
-    	return pRow;
+		row.setVersion(1);
+    	    long pRow = Row.from(heap, row);
+    	    return pRow;
 	}
 
 	public static byte[] hbaseKeyToAnts(byte[] bytes) {
@@ -432,7 +424,7 @@ final class Helper {
 				continue;
 			}
 			long pValue = toMemory(heap, types[column], i.getValue());
-        	row.setFieldAddress(column, pValue);
+        	    row.setFieldAddress(column, pValue);
 		}
 		return row;
 	}
@@ -454,14 +446,14 @@ final class Helper {
                 continue;
             }
             ColumnMeta colMeta;
-        	colMeta = table.getColumnByColumnId(i);
+        	    colMeta = table.getColumnByColumnId(i);
             // skip invalid column - not found column meta
             if (colMeta == null) {
-            	continue;
+            	    continue;
             }
             // skip non-existing column
             if (i >= types.length) {
-            	break;
+            	    break;
             }
             // Add column
             // Get column name

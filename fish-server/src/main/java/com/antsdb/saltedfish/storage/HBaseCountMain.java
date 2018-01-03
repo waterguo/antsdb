@@ -13,89 +13,60 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
+import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.TableNotFoundException;
-import org.apache.hadoop.hbase.mapreduce.RowCounter;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
+
+import com.antsdb.saltedfish.cpp.BetterCommandLine;
+import com.antsdb.saltedfish.util.ExecResult;
+import com.antsdb.saltedfish.util.ExecUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class HBaseCountMain extends HBaseCommandLine {
-
-    static MyAppender _appender = new MyAppender();
-    
-    static {
-        // Logger.getLogger(Configuration.class).setLevel(Level.OFF);
-        Logger.getLogger(Job.class).setLevel(Level.INFO);
-        Logger.getLogger(Job.class).addAppender(_appender);
-    }
-    
-    static class MyAppender extends AppenderSkeleton {
-        long result = 0;
-        
-        @Override
-        public void close() {
-        }
-
-        @Override
-        public boolean requiresLayout() {
-            return false;
-        }
-
-        @Override
-        protected void append(LoggingEvent event) {
-            String message = event.getMessage().toString();
-            int idx = message.indexOf("ROWS=");
-            if (idx <= 0) {
-                return;
-            }
-            int idx2 = message.indexOf('\n', idx);
-            result = Long.parseLong(message.substring(idx + 5, idx2));
-        }
-    }
-    
-    public HBaseCountMain(String[] args) throws ParseException {
-        super(args);
-    }
+public class HBaseCountMain extends BetterCommandLine {
 
     public static void main(String[] args) throws Exception {
-        new HBaseCountMain(args).run();
+        new HBaseCountMain().parseAndRun(args);
     }
-
-    @Override
-    protected Options getOptions() {
-        return new Options();
-    }
-
     
     @Override
     protected String getCommandName() {
         return "hbase-count <table name...>";
     }
 
-    private void run() throws Exception {
-        Configuration conf = getConfiguration();
-        for (String i:this.parser.getArgList()) {
-            String[] args = new String[] {i};
-            try {
-                Job job = RowCounter.createSubmittableJob(conf, args);
-                job.waitForCompletion(true);
-                println("%s: %d", i, _appender.result);
+    @Override
+    protected void buildOptions(Options options) {
+        options.addOption(null, "config", true, "directory of the hbase configuration");
+    }
+
+    @Override
+    protected void run() throws Exception {
+        for (String i:this.cmdline.getArgList()) {
+            ArrayList<String> args = new ArrayList<>();
+            args.add("hbase");
+            if (this.cmdline.hasOption("config")) {
+                args.add("--config");
+                args.add(this.cmdline.getOptionValue("config"));
             }
-            catch (TableNotFoundException x) {
-                println("%s: not found", i);
+            args.add("org.apache.hadoop.hbase.mapreduce.RowCounter");
+            args.add(i);
+            ExecResult result = ExecUtil.exec(args.toArray(new String[args.size()]));
+            if (result.exit != 0) {
+                println("error: %d return from hbase rowcounter for table %s", result.exit, i);
+                continue;
             }
-            catch (Exception x) {
-                x.printStackTrace();
+            String err = new String(result.stderr);
+            Matcher m = Pattern.compile("ROWS=([0-9]+)").matcher(err);
+            if (!m.find()) {
+                println(err);
+                continue;
             }
+            long count = Long.parseLong(m.group(1));
+            println("%s: %d", i, count);
         }
     }
 

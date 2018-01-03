@@ -259,7 +259,7 @@ public class Replicator extends Thread {
                 else {
                     this.state = "idling";
                     this.latency = 0;
-                    UberUtil.sleep(2000);
+                    UberUtil.sleep(500);
                 }
                 this.error = null;
             }

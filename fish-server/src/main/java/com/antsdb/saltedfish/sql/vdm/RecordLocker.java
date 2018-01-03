@@ -47,7 +47,7 @@ public class RecordLocker extends CursorMaker {
             }
             long pKey = Record.getKey(pRecord);
             if (pKey != 0) {
-            	int timeout = ctx.getSession().getLockTimeoutMilliSeconds();
+            	int timeout = ctx.getSession().getConfig().getLockTimeout();
                 Transaction trx = ctx.getTransaction();
             	HumpbackError error = gtable.lock(trx.getGuaranteedTrxId(), pKey, timeout);
             	if (error != HumpbackError.SUCCESS) {

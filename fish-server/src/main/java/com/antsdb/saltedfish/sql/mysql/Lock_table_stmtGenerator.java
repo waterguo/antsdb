@@ -18,8 +18,8 @@ import java.util.List;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.lexer.MysqlParser.Lock_table_itemContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Lock_table_stmtContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.Table_name_Context;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -38,8 +38,8 @@ public class Lock_table_stmtGenerator extends Generator<Lock_table_stmtContext> 
 	@Override
 	public Instruction gen(GeneratorContext ctx, Lock_table_stmtContext rule) throws OrcaException {
 		List<ObjectName> names = new ArrayList<>();
-		for (Table_name_Context i:rule.table_name_()) {
-			ObjectName name = TableName.parse(ctx, i);
+		for (Lock_table_itemContext i:rule.lock_table_item()) {
+			ObjectName name = TableName.parse(ctx, i.table_name_());
 			names.add(name);
 		}
 		return new LockTable(names);

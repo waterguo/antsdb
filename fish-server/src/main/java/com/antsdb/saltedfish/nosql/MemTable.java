@@ -324,27 +324,20 @@ public final class MemTable extends ScalableData implements LogSpan {
         return scanner;
     }
 
-    public Scanner scan(
-            long trxid, 
-            long version,
-            long pKeyStart, 
-            boolean fromInclusive, 
-            long pKeyEnd, 
-            boolean toInclusive, 
-            boolean isAscending) {
+    public Scanner scan(long trxid, long version,long pKeyStart, long pKeyEnd, long options) {
         Scanner scanner = new Scanner();
-        scanner.isAscending = isAscending;
+        scanner.isAscending = ScanOptions.isAscending(options);
         scanner.spaceman = this.spaceman;
         for (MemTablet i:this.tablets) {
             MemTablet.Scanner upstream;
-            upstream = i.scan(trxid, version, pKeyStart, fromInclusive, pKeyEnd, toInclusive, isAscending);
+            upstream = i.scan(trxid, version, pKeyStart, pKeyEnd, options);
             if (upstream != null) {
                 scanner.upstreams.add(upstream);
             }
         }
         StorageTable mtable = getStorageTable();
         if (mtable != null) {
-            ScanResult upstream = mtable.scan(pKeyStart, fromInclusive, pKeyEnd, toInclusive, isAscending);
+            ScanResult upstream = mtable.scan(pKeyStart, pKeyEnd, options);
             if (upstream != null) {
                 scanner.upstreams.add(upstream);
             }

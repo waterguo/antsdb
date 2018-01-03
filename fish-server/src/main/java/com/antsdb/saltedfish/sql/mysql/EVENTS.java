@@ -18,7 +18,6 @@ import java.util.Collections;
 
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.sql.vdm.ViewMaker;
@@ -31,7 +30,6 @@ import com.antsdb.saltedfish.util.CursorUtil;
 public class EVENTS extends ViewMaker {
 
     Orca orca;
-    CursorMeta meta;
 
     public static class Item {
         public String EVENT_CATALOG;

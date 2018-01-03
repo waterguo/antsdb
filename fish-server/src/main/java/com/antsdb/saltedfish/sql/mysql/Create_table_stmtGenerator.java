@@ -127,7 +127,7 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
         ObjectName parentTableName = TableName.parse(ctx, rule.table_name_());
         List<String> childColumns = Utils.getColumns(rule.columns(0));
         List<String> parentColumns = Utils.getColumns(rule.columns(1));
-        String name = rule.identifier().getText();
+        String name = (rule.identifier() == null) ? null : rule.identifier().getText();
 		CreateForeignKey fk = new CreateForeignKey(tableName, name, parentTableName, childColumns, parentColumns);
 		fk.setRebuildIndex(false);
 		return fk;
@@ -159,12 +159,12 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
     	boolean isUnique = rule.K_UNIQUE() != null;
     	String indexName = null;
         List<String> columns = Utils.getColumns(rule.index_columns());
-    	if (rule.identifier() != null) {
-    		indexName = Utils.getIdentifier(rule.identifier());
-    	}
-    	else {
-    		indexName = columns.get(0); 
-    	}
+        	if (rule.identifier() != null) {
+        		indexName = Utils.getIdentifier(rule.identifier());
+        	}
+        	else {
+        		indexName = columns.get(0); 
+        	}
         boolean isFullText = rule.K_FULLTEXT() != null;
         CreateIndex step = new CreateIndex(indexName, isFullText, isUnique, false, tableName, columns);
         step.setRebuild(false);

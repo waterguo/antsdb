@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -132,6 +133,11 @@ public class Script extends Instruction {
      * @return
      */
     public boolean worthCache() {
+        if (StringUtils.startsWithIgnoreCase(this.sql, "SHOW ")) {
+            // dont cache SHOW .... statement because some of them return dynamic cursor meta, such as
+            // SHOW TABLES
+            return false;
+        }
         if (this.nParameters > 0) {
             return true;
         }

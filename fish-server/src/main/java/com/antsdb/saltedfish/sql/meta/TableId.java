@@ -19,6 +19,7 @@ public final class TableId {
     public static final int SYSCOLUMN = 0x52;
     public static final int SYSPARAM = 0x53;
     public static final int SYSRULE = 0x54;
+    public static final int SYSUSER = 0x55;
     public static final int MAX = 0xff;
             
     public static int valueOf(String name) {

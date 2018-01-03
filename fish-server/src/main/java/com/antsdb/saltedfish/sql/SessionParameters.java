@@ -74,6 +74,10 @@ public class SessionParameters {
                 if (codec.equalsIgnoreCase("utf8mb4")) {
                     codec = "utf8";
                 }
+                else if (codec.equalsIgnoreCase("binary")) {
+                    // internal format of strings in mysql is utf8
+                    codec = "utf8";
+                }
                 Charset cs = Charset.forName(codec);
                 if (cs == null) {
                     throw new OrcaException("unknown character set name", codec);

@@ -170,6 +170,7 @@ public final class Humpback {
 
         this.cp = new CheckPoint(new File(this.data, "checkpoint.bin"), this.isMutable);
         this.cp.open();
+        _log.info("server id: {}", this.cp.getServerId());
         boolean isRecovering = false;
         if (this.isMutable) {
             isRecovering = this.cp.isDatabaseOpen();
@@ -580,23 +581,28 @@ public final class Humpback {
         }
     }
 
-    public void createNamespace(String name) throws HumpbackException {
+    public synchronized void createNamespace(String name) throws HumpbackException {
         String key = name.toLowerCase();
-        if (this.namespaces.putIfAbsent(key, name) != null) {
+        if (this.namespaces.get(key) != null) {
             throw new HumpbackException("namespace folder already exists");
         }
-        File nsfolder = new File(this.data, name);
-        if (!nsfolder.mkdirs()) {
-            this.namespaces.remove(key);
-            throw new HumpbackException("failed to create namespace folder");
-        }
-
         // Create name space in HBase
 
         this.storage.createNamespace(name);
+
+        // create folder
         
+        File nsfolder = new File(this.data, name);
+        if (!nsfolder.exists()) {
+            if (!nsfolder.mkdirs()) {
+                this.namespaces.remove(key);
+                throw new HumpbackException("failed to create namespace folder");
+            }
+        }
+
         // remember it in metadata
         
+        this.namespaces.putIfAbsent(key, name);
         SysNamespaceRow meta = new SysNamespaceRow(name);
         this.sysns.put(1, meta.row, 0);
     }

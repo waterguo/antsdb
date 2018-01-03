@@ -13,8 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql.packet;
 
-import java.nio.charset.Charset;
-
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.server.mysql.MysqlServerHandler;
@@ -28,7 +26,8 @@ public class AuthPacket extends RecievePacket {
     public int clientParam;
     int maxThreeBytes;
     public String user;
-    public String rawPwd;
+    public String password;
+    public byte[] passwordRaw;
     public String dbname;
     // ssl request packet if true 
     public boolean isSSL = false;
@@ -41,76 +40,55 @@ public class AuthPacket extends RecievePacket {
 
     @Override
     public void read(MysqlServerHandler handler, ByteBuf in) {
-    	if (!checkResponseVer41(in)) {
+        if (!checkResponseVer41(in)) {
             clientParam = BufferUtils.readInt(in);
             maxThreeBytes = BufferUtils.readLongInt(in);
             user = BufferUtils.readString(in);
-            rawPwd = BufferUtils.readString(in);
+            password = BufferUtils.readString(in);
             dbname = BufferUtils.readString(in);
-    	}
-    	else {
+        }
+        else {
             clientParam = BufferUtils.readLong(in);
             maxThreeBytes = BufferUtils.readLong(in);
-    		in.readByte(); // charset
-    		in.skipBytes(23); // reserved for future
+            in.readByte(); // charset
+            in.skipBytes(23); // reserved for future
 
             if ((clientParam & MysqlServerHandler.CLIENT_SSL) != 0 && !handler.sslConnected) {
-            	// flag this packet as SSL request and handler will establish SSL connection
-            	isSSL = true;
-            	return;
-        	}
+                // flag this packet as SSL request and handler will establish
+                // SSL connection
+                isSSL = true;
+                return;
+            }
             else {
-            	// process as handshake packet
+                // process as handshake packet
                 try {
-                	user = BufferUtils.readString(in);
-                    if ((clientParam & MysqlServerHandler.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA ) != 0){
-		                int passwordLength = (int)BufferUtils.readLength(in);
-		                // there's null at the end of string
-		                if (passwordLength>0)
-		                {
-			                byte[] bytes = new byte[passwordLength];
-			                in.readBytes(bytes);
-			                int len = passwordLength;
-			                if (bytes[passwordLength-1]==0) {
-			                	len = passwordLength-1;
-			                };
-		                	rawPwd = new String(bytes, 0, len, Charset.defaultCharset());
-		                }
-		            } else if ((clientParam & MysqlServerHandler.CLIENT_SECURE_CONNECTION ) != 0){
-		                int passwordLength = BufferUtils.readByte(in);
-		                // there's null at the end of string
-		                if (passwordLength>0)
-		                {
-			                byte[] bytes = new byte[passwordLength];
-			                in.readBytes(bytes);
-			                int len = passwordLength;
-			                if (bytes[passwordLength-1]==0) {
-			                	len = passwordLength-1;
-			                };
-		                	rawPwd = new String(bytes, 0, len, Charset.defaultCharset());
-		                }
-		            }
-		            else
-		            {
-		            	rawPwd = BufferUtils.readString(in);
-		            }
-	                
+                    user = BufferUtils.readString(in);
+                    if ((clientParam & MysqlServerHandler.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) != 0) {
+                        int passwordLength = (int) BufferUtils.readLength(in);
+                        this.passwordRaw = BufferUtils.readBytes(in, passwordLength);
+                    }
+                    else if ((clientParam & MysqlServerHandler.CLIENT_SECURE_CONNECTION) != 0) {
+                        int passwordLength = (int) BufferUtils.readLength(in);
+                        this.passwordRaw = BufferUtils.readBytes(in, passwordLength);
+                    }
+                    else {
+                        password = BufferUtils.readString(in);
+                    }
                 }
-                catch (Exception e)
-                {
-                	throw new CodingError("Failed to parse client packet, please verify client options: " + e);
+                catch (Exception e) {
+                    throw new CodingError("Failed to parse client packet, please verify client options: " + e);
                 }
             }
 
             if ((clientParam & MysqlServerHandler.CLIENT_CONNECT_WITH_DB) != 0) {
-            	dbname = BufferUtils.readString(in);
+                dbname = BufferUtils.readString(in);
             }
-            
+
             if ((clientParam & MysqlServerHandler.CLIENT_PLUGIN_AUTH) != 0) {
-            	plugin = BufferUtils.readString(in);
+                plugin = BufferUtils.readString(in);
             }
-    	}
-    	handler.isHandshaken = true;
+        }
+        handler.isHandshaken = true;
     }
     
     /**
@@ -120,7 +98,7 @@ public class AuthPacket extends RecievePacket {
      */
     private boolean checkResponseVer41(ByteBuf in) 
     {
-    	boolean is41 = false;
+    	    boolean is41 = false;
 		in.markReaderIndex();
 		int reserved;
 		

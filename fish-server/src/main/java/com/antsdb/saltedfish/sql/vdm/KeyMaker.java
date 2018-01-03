@@ -263,8 +263,12 @@ public final class KeyMaker {
 				return -8;
 			}
 			else {
-				long pDate = FishObject.toDate(heap, pValue);
+				long pDate = AutoCaster.toDate(heap, pValue);
 				long n = FishObject.toLong(heap, pDate);
+				if (n == Long.MIN_VALUE) {
+				    // mysql 0000-00-00
+				    n = 1;
+				}
 				if (n == 0) {
 					// minimum value allowed for timestamp is 1
 					throw new IllegalArgumentException("Date column cannot be 0");

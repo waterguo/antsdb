@@ -54,10 +54,12 @@ public class SaltedFish {
 
     public void start() throws Exception {
         try {
-            startLogging();
             this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
-            startDatabase();
+            startLogging();
+            // MUST start netty before starting database. use the port to lock out database instance. otherwise, the
+            // 2nd database will corrupt the database files.
             startNetty();
+            startDatabase();
         }
         catch (Exception x) {
             _log.error("failed to start", x);
@@ -78,7 +80,7 @@ public class SaltedFish {
     }
 
     void startLogging() {
-    	Pattern ptn = Pattern.compile("log4j\\.appender\\..+\\.file");
+    	    Pattern ptn = Pattern.compile("log4j\\.appender\\..+\\.file");
         Properties props = getLoggingConf();
         for (Map.Entry<Object, Object> i:props.entrySet()) {
         	String key = (String)i.getKey();
@@ -88,13 +90,16 @@ public class SaltedFish {
         	String value = (String)i.getValue();
         	File file = new File(this.home, value);
         	i.setValue(file.getAbsolutePath());
-        	System.out.println("log file: " + file.getAbsolutePath());
+        	    System.out.println("log file: " + file.getAbsolutePath());
         }
         PropertyConfigurator.configure(props);
     }
     
     Properties getLoggingConf() {
         File logConf = new File(getConfigFolder(home), "log4j.properties");
+        if (!logConf.exists()) {
+            logConf = new File(getConfigFolder(home), "conf/log4j.properties");
+        }
         Properties props = new Properties();
         if (logConf.exists()) {
             System.out.println("using log configuration: " + logConf.getAbsolutePath());
@@ -106,8 +111,8 @@ public class SaltedFish {
         }
         try (InputStream in=getClass().getResourceAsStream("/log4j.properties")) {
             System.out.println("using log configuration: " + getClass().getResource("/log4j.properties"));
-        	props.load(in);
-        	return props;
+            props.load(in);
+        	    return props;
         }
         catch (Exception ignored) {}
         return props;
@@ -119,7 +124,8 @@ public class SaltedFish {
     }
     
     void startDatabase() throws Exception {        
-    	this.orca = new Orca(this.home, this.configService.getProperties());
+    	    Orca orca = new Orca(this.home, this.configService.getProperties());
+    	    this.orca = orca;
     }
     
     /**

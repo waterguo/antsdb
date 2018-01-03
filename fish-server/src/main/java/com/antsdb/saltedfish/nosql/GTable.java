@@ -93,15 +93,15 @@ public final class GTable implements AutoCloseable, LogSpan {
     }
     
     public HumpbackError update(VaporizingRow row, long oldVersion, int timeout) {
-    	return this.memtable.update(row, oldVersion, timeout);
+    	    return this.memtable.update(row, oldVersion, timeout);
     }
     
     public HumpbackError put(long trxid, SlowRow row, int timeout) {
-    	try (BluntHeap heap = new BluntHeap()) {
-    		VaporizingRow vrow = row.toVaporisingRow(heap);
-    		vrow.setVersion(trxid);
-    		return put(vrow, timeout);
-    	}
+        	try (BluntHeap heap = new BluntHeap()) {
+        		VaporizingRow vrow = row.toVaporisingRow(heap);
+        		vrow.setVersion(trxid);
+        		return put(vrow, timeout);
+        	}
     }
     
     public HumpbackError put(VaporizingRow row, int timeout) {
@@ -109,10 +109,10 @@ public final class GTable implements AutoCloseable, LogSpan {
     }
     
     public HumpbackError delete(long trxid, byte[] key, int timeout) {
-    	try (BluntHeap heap = new BluntHeap()) {
-    		long pKey = KeyBytes.allocSet(heap, key).getAddress();
-    		return delete(trxid, pKey, timeout);
-    	}
+        	try (BluntHeap heap = new BluntHeap()) {
+        		long pKey = KeyBytes.allocSet(heap, key).getAddress();
+        		return delete(trxid, pKey, timeout);
+        	}
     }
     
     public HumpbackError delete(long trxid, long pKey, int timeout) {
@@ -162,58 +162,24 @@ public final class GTable implements AutoCloseable, LogSpan {
         return this.memtable.getRow(trxid, trxts, pKey);
     }
     
-    public RowIterator scan(
-            long trxid,
-            long trxts,
-            byte[] from, 
-            boolean fromInclusive, 
-            byte[] to, 
-            boolean toInclusive, 
-            boolean isAscending) {
+    public RowIterator scan(long trxid, long trxts, byte[] from, byte[] to, long options) {
     	try (BluntHeap heap = new BluntHeap()) {
     		long pKeyStart = (from != null) ? KeyBytes.allocSet(heap, from).getAddress() : 0;
     		long pKeyEnd = (to != null) ? KeyBytes.allocSet(heap, to).getAddress() : 0;
-            RowIterator result = scan(
-                    trxid,
-                    trxts,
-                    pKeyStart, 
-                    fromInclusive, 
-                    pKeyEnd, 
-                    toInclusive, 
-                    isAscending);
+            RowIterator result = scan(trxid, trxts, pKeyStart, pKeyEnd, options);
             return result;
     	}
     }
     
-    public RowIterator scan(
-            long trxid,
-            long trxts,
-            long pFrom, 
-            boolean fromInclusive, 
-            long pTo, 
-            boolean toInclusive, 
-            boolean isAscending) {
-        RowIterator result = this.memtable.scan(
-                trxid,
-                trxts,
-                pFrom, 
-                fromInclusive, 
-                pTo, 
-                toInclusive, 
-                isAscending);
+    public RowIterator scan(long trxid, long trxts, long pFrom, long pTo, long options) {
+        RowIterator result = this.memtable.scan(trxid, trxts, pFrom, pTo, options);
         result = new TombstoneEliminator(result);
         return result;
     }
     
     public RowIterator scan(long trxid, long trxts, boolean asc) {
-        RowIterator result = scan(
-                trxid,
-                trxts,
-                0, 
-                false, 
-                0, 
-                false, 
-                asc);
+        long options = asc ? 0 : ScanOptions.descending(0);
+        RowIterator result = scan(trxid, trxts, 0, 0, options);
         return result;
     }
 

@@ -61,34 +61,34 @@ public class CreateForeignKey extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-    	// find out columns from child
+        // find out columns from child
     	
-    	TableMeta child = Checks.tableExist(ctx.getSession(), this.spec.childTableName);
+    	    TableMeta child = Checks.tableExist(ctx.getSession(), this.spec.childTableName);
         List<ColumnMeta> childColumns = getColumns(child, spec.childColumns);
-    	ctx.getSession().lockTable(child.getId(), LockLevel.EXCLUSIVE, false);
-    	try {
-	    	// add the foreign key meta data
-	    	
-    	    TableMeta parent = findParent(ctx, spec.parentTableName);
-    	    if (parent != null) {
+    	    ctx.getSession().lockTable(child.getId(), LockLevel.EXCLUSIVE, false);
+    	    try {
+    	    	// add the foreign key meta data
+    	    	
+        	    TableMeta parent = findParent(ctx, spec.parentTableName);
+        	    if (parent != null) {
                 createMeta(ctx, parent, child, this.spec);
-    	    } 
-    	    else {
+        	    } 
+        	    else {
                 _delayed.add(this.spec);
-    	    }
-	    	
-	        // create index on child columns if there is none
-	
-	    	if (!isIndexed(child, this.spec.childColumns)) {
-	        	String indexName = getDefaultIndexName(child);
-	        	CreateIndex.createIndex(ctx, child, indexName, false, false, childColumns, this.rebuildIndex);
-	    	}
-    	}
-    	finally {
-    		ctx.getSession().unlockTable(child.getId());
-    	}
+        	    }
+    	    	
+    	        // create index on child columns if there is none
     	
-    	return null;
+        	    	if (!isIndexed(child, this.spec.childColumns)) {
+        	        	String indexName = getDefaultIndexName(child);
+        	        	CreateIndex.createIndex(ctx, child, indexName, false, false, childColumns, this.rebuildIndex);
+        	    	}
+        	}
+        	finally {
+        		ctx.getSession().unlockTable(child.getId());
+        	}
+        	
+        	return null;
     }
 
     private static List<ColumnMeta> getColumns(TableMeta table, List<String> names) {
@@ -107,7 +107,7 @@ public class CreateForeignKey extends Statement {
 	    MetadataService meta = ctx.getMetaService();
         TableMeta table = meta.getTable(ctx.getTransaction(), name);
         if (table == null) {
-            if (isForeignKeyCheckEnabled(ctx)) {
+            if (ctx.getSession().getConfig().getForeignKeyCheck()) {
                 throw new OrcaException("table {} is not found", name);
             }
         }
@@ -122,61 +122,52 @@ public class CreateForeignKey extends Statement {
         fk.setNamespace(child.getNamespace());
         fk.setName(fkname);
         fk.setRuleColumns(child.getColumnsByName(spec.childColumns));
+        fk.setParentTable(parent.getId());
         fk.setRuleParentColumns(parent.getColumnsByName(spec.parentColumns));
         ctx.getMetaService().addRule(trx, fk);
     }
 
     private static boolean checkParentTable(VdmContext ctx, TableMeta parent, TableMeta child, ForeignKeySpec spec) {
-    	// target column must be a unique key
-    	
-    	RuleMeta<?> rule = null;
-    	if (doesMatch(parent, parent.getPrimaryKey(), spec.parentColumns)) {
-    		rule = parent.getPrimaryKey();
-    	}
-    	if (rule == null) {
-    		for (IndexMeta index:parent.getIndexes()) {
-    			if (index.isUnique()) {
-        			if (doesMatch(parent, index, spec.parentColumns)) {
-        				rule = index;
-        				break;
-        			}
-    			}
-    		}
-    	}
-    	if (rule == null) {
-    		throw new OrcaException("parent columns are neither primary key or unique key");
-    	}
-    	
-    	// find out columns from parent
-    	
-    	List<ColumnMeta> parentColumns = rule.getColumns(parent);
-    	
-    	// parent columns and child columns must match in terms of data type
-    	
-    	List<ColumnMeta> childColumns = getColumns(child, spec.childColumns); 
-    	if (parentColumns.size() != childColumns.size()) {
-			throw new OrcaException("number of child columns must be the same as number of parent columns");
-    	}
-    	for (int i=0; i<childColumns.size(); i++) {
-    		ColumnMeta columnP = parentColumns.get(i);
-    		ColumnMeta columnC = childColumns.get(i);
-    		if (!columnP.getDataType().equals(columnC.getDataType())) {
-    			throw new OrcaException(
-    					"data type of {} is not same as data type of {}", 
-    					columnC.getColumnName(), 
-    					columnP.getColumnName());
-    		}
-    	}
-    	return true;
-	}
+        // target column must be a unique key
 
-	private boolean isForeignKeyCheckEnabled(VdmContext ctx) {
-    	Object value = ctx.getSession().getParameters().getParameters().get("foreign_key_checks");
-    	if (value == null) {
-    		return true;
-    	}
-		return Integer.valueOf(1).equals(value);
-	}
+        RuleMeta<?> rule = null;
+        if (doesMatch(parent, parent.getPrimaryKey(), spec.parentColumns)) {
+            rule = parent.getPrimaryKey();
+        }
+        if (rule == null) {
+            for (IndexMeta index : parent.getIndexes()) {
+                if (index.isUnique()) {
+                    if (doesMatch(parent, index, spec.parentColumns)) {
+                        rule = index;
+                        break;
+                    }
+                }
+            }
+        }
+        if (rule == null) {
+            throw new OrcaException("parent columns are neither primary key or unique key");
+        }
+
+        // find out columns from parent
+
+        List<ColumnMeta> parentColumns = rule.getColumns(parent);
+
+        // parent columns and child columns must match in terms of data type
+
+        List<ColumnMeta> childColumns = getColumns(child, spec.childColumns);
+        if (parentColumns.size() != childColumns.size()) {
+            throw new OrcaException("number of child columns must be the same as number of parent columns");
+        }
+        for (int i = 0; i < childColumns.size(); i++) {
+            ColumnMeta columnP = parentColumns.get(i);
+            ColumnMeta columnC = childColumns.get(i);
+            if (!columnP.getDataType().equals(columnC.getDataType())) {
+                throw new OrcaException("data type of {} is not same as data type of {}", columnC.getColumnName(),
+                        columnP.getColumnName());
+            }
+        }
+        return true;
+    }
 
 	private boolean isIndexed(TableMeta table, List<String> columns) {
 		if (doesMatch(table, table.getPrimaryKey(), columns)) {

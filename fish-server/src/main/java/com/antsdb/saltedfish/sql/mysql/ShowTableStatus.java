@@ -22,21 +22,20 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.Statistician;
 import com.antsdb.saltedfish.nosql.TableStats;
-import com.antsdb.saltedfish.sql.planner.SortKey;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.OpLike;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.SysTableRow;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class ShowTableStatus  extends CursorMaker {
+public class ShowTableStatus extends ViewMaker {
     private static final CursorMeta META = CursorUtil.toMeta(Line.class);
     
     private String db;
@@ -66,6 +65,7 @@ public class ShowTableStatus  extends CursorMaker {
     }
     
     public ShowTableStatus(String db, String like) {
+        super(META);
         this.db = db;
         this.like = like;
         if (like != null) {
@@ -96,16 +96,6 @@ public class ShowTableStatus  extends CursorMaker {
         return CursorUtil.toCursor(META, result);
     }
 
-    @Override
-    public CursorMeta getCursorMeta() {
-        return META;
-    }
-
-    @Override
-    public boolean setSortingOrder(List<SortKey> order) {
-        return false;
-    }
-    
     private Line toLine(VdmContext ctx, SysTableRow table) {
         Line result = new Line();
         result.Name = table.getTableName();

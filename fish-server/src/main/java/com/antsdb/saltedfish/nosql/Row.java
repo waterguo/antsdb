@@ -86,32 +86,32 @@ public class Row extends UberObject implements Map<Integer, Object> {
     }
     
     final static long from(long p, VaporizingRow from) {
-    	int size = from.getSize();
-    	long pRow = p;
-    	int headerSize = getHeaderSize(from.getMaxColumnId());
-    	long pData = pRow + headerSize;
-    	Unsafe.putByte(pRow, FILE_VERSION);
-    	Unsafe.putInt3(pRow + OFFSET_LENGTH, size);
-    	Unsafe.putLong(pRow + OFFSET_TRX_TS, from.getTrxTimestamp());
-    	Unsafe.putShort(pRow + OFFSET_MAX_COLUMN_ID, (short)from.getMaxColumnId());
-    	Unsafe.putInt(pRow + OFFSET_KEY_OFFSET, (int)(pData - pRow));
-    	pData = copyValue(from.getKeyAddress(), pData);
-    	for (int i=0; i<=from.getMaxColumnId(); i++) {
-    		long pValue = from.getFieldAddress(i);
-    		if (pValue == 0) {
-        		Unsafe.putInt(pRow + OFFSET_VALUES_OFFSETS + i * 4, 0);
-        		continue;
-    		}
-    		int offset = (int)(pData - pRow);
-    		Unsafe.putInt(pRow + OFFSET_VALUES_OFFSETS + i * 4, offset);
-    		pData = copyValue(pValue, pData);
-    	}
-    	if ((pData - pRow) != size) {
-    		throw new CodingError();
-    	}
-    	long hash = MurmurHash.hash64(pRow + headerSize, size - headerSize);
-    	Unsafe.putLong(pRow + OFFSET_HASH, hash);
-    	return pRow;
+        	int size = from.getSize();
+        	long pRow = p;
+        	int headerSize = getHeaderSize(from.getMaxColumnId());
+        	long pData = pRow + headerSize;
+        	Unsafe.putByte(pRow, FILE_VERSION);
+        	Unsafe.putInt3(pRow + OFFSET_LENGTH, size);
+        	Unsafe.putLong(pRow + OFFSET_TRX_TS, from.getTrxTimestamp());
+        	Unsafe.putShort(pRow + OFFSET_MAX_COLUMN_ID, (short)from.getMaxColumnId());
+        	Unsafe.putInt(pRow + OFFSET_KEY_OFFSET, (int)(pData - pRow));
+        	pData = copyValue(from.getKeyAddress(), pData);
+        	for (int i=0; i<=from.getMaxColumnId(); i++) {
+        		long pValue = from.getFieldAddress(i);
+        		if (pValue == 0) {
+            		Unsafe.putInt(pRow + OFFSET_VALUES_OFFSETS + i * 4, 0);
+            		continue;
+        		}
+        		int offset = (int)(pData - pRow);
+        		Unsafe.putInt(pRow + OFFSET_VALUES_OFFSETS + i * 4, offset);
+        		pData = copyValue(pValue, pData);
+        	}
+        	if ((pData - pRow) != size) {
+        		throw new CodingError();
+        	}
+        	long hash = MurmurHash.hash64(pRow + headerSize, size - headerSize);
+        	Unsafe.putLong(pRow + OFFSET_HASH, hash);
+        	return pRow;
     }
     
     public final static long from(Heap heap, VaporizingRow from) {

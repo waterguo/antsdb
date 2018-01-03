@@ -70,12 +70,12 @@ public abstract class FishCommandLine extends CommandLineHelper {
 		}
 		if (home == null) {
 			println("error: home directory is not specified");
-			return null;
+			System.exit(-1);
 		}
 		File file = new File(home);
-		if (!new File(file, "data/checkpoint.bin").exists()) {
+		if (!new File(file, "data").isDirectory()) {
 			println("error: home directory '%s' is invalid", file.getAbsolutePath());
-			return null;
+            System.exit(-1);
 		}
 		return file;
 	}

@@ -48,7 +48,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Like_exprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_intervalContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.System_variable_referenceContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Session_variable_referenceContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Unary_operatorContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Variable_referenceContext;
 import com.antsdb.saltedfish.sql.DataType;
@@ -61,6 +61,7 @@ import com.antsdb.saltedfish.sql.vdm.BytesValue;
 import com.antsdb.saltedfish.sql.vdm.CurrentTime;
 import com.antsdb.saltedfish.sql.vdm.CurrentTimestamp;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.DumbDistinctFilter;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.FuncAbs;
 import com.antsdb.saltedfish.sql.vdm.FuncAvg;
@@ -209,8 +210,8 @@ public class ExprGenerator {
         else if (child instanceof Variable_referenceContext) {
             result = genUserVariableRef(ctx, planner, (Variable_referenceContext)child);
         }
-        else if (child instanceof System_variable_referenceContext) {
-            result = genSystemVariableRef(ctx, planner, (System_variable_referenceContext)child);
+        else if (child instanceof Session_variable_referenceContext) {
+            result = genSystemVariableRef(ctx, planner, (Session_variable_referenceContext)child);
         }
         else if (child instanceof Expr_functionContext) {
             result = genFunction(ctx, planner, (Expr_functionContext)child);
@@ -401,7 +402,10 @@ public class ExprGenerator {
         }
     }
 
-    private static Operator gen_unary(GeneratorContext ctx, Planner cursorMeta, Unary_operatorContext rule,
+    private static Operator gen_unary(
+            GeneratorContext ctx, 
+            Planner cursorMeta, 
+            Unary_operatorContext rule,
             Operator right) {
         TerminalNode token = (TerminalNode) rule.getChild(0);
         if (token.getSymbol().getType() == MysqlParser.K_NOT) {
@@ -422,7 +426,9 @@ public class ExprGenerator {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
         }
-        CursorMaker select = (CursorMaker) new Select_or_valuesGenerator().genSubquery(ctx, rule.select_stmt(),
+        CursorMaker select = (CursorMaker) new Select_or_valuesGenerator().genSubquery(
+                ctx, 
+                rule.select_stmt(),
                 cursorMeta);
         Operator in = new OpExists(select);
         if (rule.K_NOT() != null) {
@@ -431,7 +437,10 @@ public class ExprGenerator {
         return in;
     }
 
-    private static Operator gen_in_select(GeneratorContext ctx, Planner cursorMeta, Expr_in_selectContext rule,
+    private static Operator gen_in_select(
+            GeneratorContext ctx, 
+            Planner cursorMeta, 
+            Expr_in_selectContext rule,
             Operator left) {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
@@ -442,6 +451,7 @@ public class ExprGenerator {
          * cursorMeta);
          */
         CursorMaker select = (CursorMaker) new Select_stmtGenerator().gen(ctx, rule.select_stmt());
+        select = new DumbDistinctFilter(select);
         Operator in = new OpInSelect(left, select);
         if (rule.K_NOT() != null) {
             in = new OpNot(in);
@@ -494,8 +504,8 @@ public class ExprGenerator {
         else if (child instanceof Variable_referenceContext) {
             return genUserVariableRef(ctx, cursorMeta, (Variable_referenceContext) child);
         }
-        else if (child instanceof System_variable_referenceContext) {
-            return genSystemVariableRef(ctx, cursorMeta, (System_variable_referenceContext) child);
+        else if (child instanceof Session_variable_referenceContext) {
+            return genSystemVariableRef(ctx, cursorMeta, (Session_variable_referenceContext) child);
         }
         else if (rule.expr_exist() != null) {
             return gen_exists(ctx, cursorMeta, rule.expr_exist());
@@ -534,12 +544,14 @@ public class ExprGenerator {
         return new FuncCast(type, expr);
     }
 
-    static Operator genSystemVariableRef(GeneratorContext ctx, Planner meta, System_variable_referenceContext rule) {
-        return new SystemVariableValue(rule.getText());
+    static Operator genSystemVariableRef(GeneratorContext ctx, Planner meta, Session_variable_referenceContext rule) {
+        String name = rule.getText().substring(2);
+        return new SystemVariableValue(name);
     }
 
     static Operator genUserVariableRef(GeneratorContext ctx, Planner meta, Variable_referenceContext rule) {
-        return new UserVariableValue(rule.getText());
+        String name = rule.getText().substring(1);
+        return new UserVariableValue(name);
     }
 
     private static Operator genFunction(GeneratorContext ctx, Planner cursorMeta, Expr_functionContext rule) {

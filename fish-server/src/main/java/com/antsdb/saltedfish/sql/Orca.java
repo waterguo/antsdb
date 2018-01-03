@@ -37,7 +37,6 @@ import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.server.mysql.replication.MysqlSlave;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
-import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 import com.antsdb.saltedfish.sql.meta.TableId;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.mysql.MysqlDialect;
@@ -76,8 +75,6 @@ public class Orca {
     Humpback humpback;
     IdentifierService idService;
     MetadataService metaService;
-    ConfigService config;
-    ClusterService clusterService;
     Map<String, Object> variables = new ConcurrentHashMap<String, Object>();
     Cache<String, Script> statementCache;
     Map<String, CursorMaker> sysviews = new HashMap<>();
@@ -91,6 +88,7 @@ public class Orca {
     private ScheduledFuture<?> recyclerFuture;
     private Replicator replicator;
     private Session sysdefault;
+    SystemParameters config;
     
     static {
         Map<String, String> manifest = ManifestUtil.load(Orca.class);
@@ -107,27 +105,37 @@ public class Orca {
     }
     
     public Orca(File home, Properties props) throws Exception {
-        _log.info("starting orca at {}", home);
+        _log.info("starting orca at {} version {}", home, _version);
         this.home = home;
         _instances.add(this);
         String hbaseConf = props.getProperty("hbase_conf", null);
         this.humpback = new Humpback(home, hbaseConf==null);
         this.humpback.open();
         this.humpback.disableShutdownHook();
-        this.config = new ConfigService(this, props);
         this.metaService = new MetadataService(this);
-        
-        // init statement cache
-        
-        this.statementCache = CacheBuilder.newBuilder().maximumSize(1000).build();
 
-        // create system objects if not initialized 
+        // create seed 
         
         init();
         
-        // upgrade
+        // global parameters
         
-        upgrade();
+        this.config = new SystemParameters(this.humpback);
+        this.config.set("autocommit", "1");
+        this.config.set("auto_increment_increment", "1");
+        this.config.set("character_set_client", "utf8");
+        this.config.set("character_set_results", "utf8");
+        this.config.set("character_set_connection", "utf8");
+        this.config.set("collation_database", "utf8_general_ci");
+        this.config.set("max_allowed_packet", String.valueOf(32 * 1024 * 1024));
+        this.config.set("sql_mode", "");
+        this.config.set("tx_isolation", "READ-COMMITTED");
+        this.config.set("version", _version);
+        this.config.set("version_comment", Orca._version + " Enterprise");
+
+        // init statement cache
+        
+        this.statementCache = CacheBuilder.newBuilder().maximumSize(1000).build();
 
         // start services
         
@@ -141,7 +149,7 @@ public class Orca {
         _log.info("orca dialect: {}", this.config.getDatabaseType());
         this.dialect = getDialect(this.config.getDatabaseType());
         if (this.dialect == null) {
-        	throw new OrcaException("unknown dialect {}", this.config.getDatabaseType());
+        	    throw new OrcaException("unknown dialect {}", this.config.getDatabaseType());
         }
         this.dialect.init(this);
         
@@ -156,10 +164,6 @@ public class Orca {
         // system views
 
         initViews();
-        
-        // cluster service
-        
-        this.clusterService = new ClusterService(this.config);
         
         // backend jobs
         
@@ -184,12 +188,6 @@ public class Orca {
         // system default session. used as the template for the use sessions
         
         this.sysdefault = createSession("system", "default");
-        this.sysdefault.setParameter("character_set_client", "utf8");
-        this.sysdefault.setParameter("character_set_results", "utf8");
-        this.sysdefault.setParameter("character_set_connection", "utf8");
-        this.sysdefault.setParameter("auto_increment_increment", 1);
-        this.sysdefault.setParameter("version", _version);
-        this.sysdefault.setParameter("version_comment", "AntsDB");
     }
     
     private void initViews() {
@@ -198,6 +196,7 @@ public class Orca {
         registerSystemView(SYSNS, TABLENAME_SYSCOLUMN, new SysColumn(this));
         registerSystemView(SYSNS, TABLENAME_SYSPARAM, new SysParam(this));
         registerSystemView(SYSNS, TABLENAME_SYSRULE, new SysRule(this));
+        registerSystemView(SYSNS, TABLENAME_SYSUSER, new SysUser());
 
         registerSystemView(SYSNS, "STATEMENT_METRICS", new SystemMetrics(this));
         registerSystemView(SYSNS, "TRX", new SystemViewTrx(this));
@@ -231,58 +230,12 @@ public class Orca {
 	}
 
 	void init() throws Exception {
-        if (isOrcaEnabled()) {
-            return;
-        }
-        String dbtype = this.config.getDefaultDatabaseType();
-        this.dialect = getDialect(dbtype);
-        
-        _log.info("database is not found. creating seed database with type {}", dbtype);
-        
-        // system tables
-        
-        createSystemTable(TABLEID_SYSSEQUENCE);
-        createSystemTable(TABLEID_SYSTABLE);
-        createSystemTable(TABLEID_SYSCOLUMN);
-        createSystemTable(TABLEID_SYSPARAM);
-        createSystemTable(TABLEID_SYSRULE);
-        
-        // system sequence 
-        
-        createSystemSequence(IdentifierService.GLOBAL_SEQUENCE_NAME, 0, 0x100, 1);
-        createSystemSequence(IdentifierService.ROWID_SEQUENCE_NAME, 1, 0, 1);
-
-        // script
-        
-        _log.info("database is created");
-        
-        // setting up initial parameters
-        
-        this.config.set("databaseType", dbtype);            
-    }
-    
-    private void upgrade() {
-        SequenceMeta seq = this.metaService.getSequence(IdentifierService._trx, IdentifierService.ROWID_SEQUENCE_NAME);
-        if (seq == null) {
-            long value = this.humpback.getCheckPoint().getRowid();
-            createSystemSequence(IdentifierService.ROWID_SEQUENCE_NAME, 1, value, 1);
-        }
-    }
-
-    void createSystemSequence(ObjectName name, int id, long next, int increment) {
-        SequenceMeta seq = new SequenceMeta(name, id);
-        seq.setLastNumber(next);
-        seq.setIncrement(increment);
-        getMetaService().addSequence(Transaction.getSystemTransaction(), seq);
-    }
-    
-    boolean isOrcaEnabled() {
-        GTable gtable = this.humpback.getTable(TABLEID_SYSSEQUENCE);
-        return gtable != null;
+	    Seed seed = new Seed(this);
+	    seed.run();
     }
     
     public HBaseStorageService getHBaseStorageService() {
-    	return this.humpback.getHBaseService();
+        return this.humpback.getHBaseService();
     }
     
     public IdentifierService getIdentityService() {
@@ -372,15 +325,14 @@ public class Orca {
                 TableLock newlock = lock.clone(session.getId());
                 session.tableLocks.put(tableId, newlock);
             }
-            session.parameters = this.sysdefault.parameters.clone();
         }
         this.sessions.add(session);
         return session;
     }
     
     public void closeSession(Session session) {
-    	session.close();
-    	this.sessions.remove(session);
+    	    session.close();
+    	    this.sessions.remove(session);
     }
     
     public Session createSystemSession() {
@@ -490,11 +442,7 @@ public class Orca {
         return this.namespaces.get(ns.toLowerCase());
     }
 
-    public ClusterService getClusterService() {
-        return this.clusterService;
-    }
-
-    public ConfigService getConfigService() {
+    public SystemParameters getConfig() {
         return this.config;
     }
 
@@ -607,11 +555,17 @@ public class Orca {
         return this.replicator;
     }
     
-    private void createSystemTable(int tableId) {
-        this.humpback.createTable(SYSNS, String.format("x%08x", tableId), tableId, TableType.DATA);
-    }
-
     public Session getDefaultSession() {
         return this.sysdefault;
+    }
+    
+    public AuthPlugin getAuthPlugin() {
+        String name = this.config.getAuthPlugin();
+        if ("mysql_native_password".equals(name)) {
+            return new NativeAuthPlugin(this);
+        }
+        else {
+            return new NoPasswordAuthPlugin(this);
+        }
     }
 }

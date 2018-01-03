@@ -34,8 +34,8 @@ import com.antsdb.saltedfish.server.mysql.packet.replication.XIDPacket;
 import com.antsdb.saltedfish.server.mysql.util.BindValue;
 import com.antsdb.saltedfish.server.mysql.util.BindValueUtil;
 import com.antsdb.saltedfish.server.mysql.util.ReplicatedRow;
-import com.antsdb.saltedfish.sql.ConfigService;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.SystemParameters;
 import com.antsdb.saltedfish.util.UberUtil;
 
 import io.netty.buffer.ByteBuf;
@@ -246,59 +246,45 @@ public class MysqlClientHandler extends ChannelInboundHandlerAdapter
         return flag;
     }
 
-	private boolean enableSSL()
-	{
-    	String keyFile = fish.getConfig().getSSLKeyFile();
-    	String password = fish.getConfig().getSSLPassword();
-    	if (keyFile!=null || password!=null)
-    	{
-    		return true;
-    	}
-    	return false;
-	}
+    private boolean enableSSL() {
+        String keyFile = fish.getConfig().getSSLKeyFile();
+        String password = fish.getConfig().getSSLPassword();
+        if (keyFile != null || password != null) {
+            return true;
+        }
+        return false;
+    }
 	
-    public void state(ChannelHandlerContext ctx, StateIndicator msg)
-	{
+    public void state(ChannelHandlerContext ctx, StateIndicator msg) {
         ByteBuf buf = ctx.alloc().buffer();
-    	if (msg.eventType == StateIndicator.INITIAL_STATE)
-    	{
-            PacketEncoder.writePacket(buf, (byte)1, () -> packetEncoder.writeHandshakeResponse(
-            		buf,
-            		getCapabilities(),
-            		masterUser, 
-            		masterPassword));
+        if (msg.eventType == StateIndicator.INITIAL_STATE) {
+            PacketEncoder.writePacket(buf, (byte) 1,
+                    () -> packetEncoder.writeHandshakeResponse(buf, getCapabilities(), masterUser, masterPassword));
             ctx.writeAndFlush(buf);
-    	}
-    	else if (msg.eventType == StateIndicator.HANDSHAKEN_STATE)
-    	{
-            PacketEncoder.writePacket(buf, (byte)0, () -> packetEncoder.writeRegisterSlave(
-            		buf,
-            		getConfig().getSlaveServerId()));
+        }
+        else if (msg.eventType == StateIndicator.HANDSHAKEN_STATE) {
+            PacketEncoder.writePacket(buf, (byte) 0,
+                    () -> packetEncoder.writeRegisterSlave(buf, getConfig().getSlaveServerId()));
             ctx.writeAndFlush(buf);
-            _log.info("Replication handshaken" );
-    	}
-    	else if (msg.eventType == StateIndicator.REGISTERED_STATE)
-    	{
+            _log.info("Replication handshaken");
+        }
+        else if (msg.eventType == StateIndicator.REGISTERED_STATE) {
             this.session = this.fish.getOrca().createSession(masterUser, getClass().getSimpleName());
-            PacketEncoder.writePacket(buf, (byte)0, () -> packetEncoder.writeBinlogDump(
-            		buf,
-            		masterLogPos,
-            		getConfig().getSlaveServerId(), 
-            		masterBinlog));
+            PacketEncoder.writePacket(buf, (byte) 0, () -> packetEncoder.writeBinlogDump(buf, masterLogPos,
+                    getConfig().getSlaveServerId(), masterBinlog));
             ctx.writeAndFlush(buf);
-            _log.info("Slave registered" );
-    	}
-    	else if (msg.eventType == StateIndicator.HANDSHAKE_FAIL_STATE ||
-    			msg.eventType == StateIndicator.REGISTER_FAIL_STATE)
-    	{
-            _log.error("Replication failed to start" );
-    		close(ctx);
-    	}
-    	
-	}
+            _log.info("Slave registered");
+        }
+        else if (msg.eventType == StateIndicator.HANDSHAKE_FAIL_STATE
+                || msg.eventType == StateIndicator.REGISTER_FAIL_STATE) {
+            _log.error("Replication failed to start");
+            close(ctx);
+        }
+
+    }
 	
-	private ConfigService getConfig() {
-		return this.fish.getOrca().getConfigService();
+	private SystemParameters getConfig() {
+		return this.fish.getOrca().getConfig();
 	}
 
 	public void close(ChannelHandlerContext ctx) {

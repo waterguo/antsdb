@@ -48,16 +48,16 @@ public class Filter extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-    	String text = getClass().getSimpleName() + "(" + this.expr.toString() + ")";
+    	    String text = getClass().getSimpleName() + "(" + this.expr.toString() + ")";
         ExplainRecord rec = new ExplainRecord(level, text);
         rec.setMakerId(makerId);
         records.add(rec);
         this.upstream.explain(level+1, records);
         this.expr.visit(it ->{
-        	if (it instanceof OpInSelect) {
-        		OpInSelect select = (OpInSelect)it;
-        		select.explain(level+1, records);
-        	}
+            	if (it instanceof OpInSelect) {
+            		OpInSelect select = (OpInSelect)it;
+            		select.explain(level+1, records);
+            	}
         });
     }
 

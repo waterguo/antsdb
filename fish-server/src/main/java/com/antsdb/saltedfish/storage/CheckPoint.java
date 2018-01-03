@@ -14,6 +14,8 @@
 package com.antsdb.saltedfish.storage;
 
 import java.io.IOException;
+import java.sql.Timestamp;
+import java.util.Optional;
 
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
@@ -23,15 +25,13 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.sql.OrcaConstant;
+import com.antsdb.saltedfish.sql.Orca;
 
 /**
  * 
  * @author wgu0
  */
 public class CheckPoint {
-    final static String TABLE_SYNC_PARAM = "SYNCPARAM";
     final static byte[] COLUMN_FAMILY = Bytes.toBytes("d");
     final static byte[] KEY = Bytes.toBytes(0);
     final static byte[] TRUNCATE_KEY = Bytes.toBytes(1);
@@ -44,11 +44,18 @@ public class CheckPoint {
 	
 	Connection conn;
     private boolean isMutable;
+    private TableName tn;
+    private long createTimestamp;
+    private long updateTimestamp;
+    private String createOrcaVersion;
+    private String updateorcaVersion;
+    private boolean isActive;
 	
-	CheckPoint(Humpback humpback, Connection conn, boolean isMutable) throws IOException {
+	CheckPoint(Connection conn, TableName tn, boolean isMutable) throws IOException {
 		this.conn = conn;
 		this.isMutable = isMutable;
-		readFromHBase(humpback);
+		this.tn = tn;
+		readFromHBase();
 	}
 	
 	public long getCurrentSp() {
@@ -59,8 +66,8 @@ public class CheckPoint {
         if (!this.isMutable) {
             throw new OrcaHBaseException("failed to update since it is realy only mode");
         }
-	    updateHBase(this.conn, lp, this.serverId);
-	    this.currentSp = lp;
+        this.currentSp = lp;
+	    updateHBase();
 	}
 	
 	public long getServerId() {
@@ -71,20 +78,21 @@ public class CheckPoint {
 		this.serverId = value;
 	}
 	
-	public void readFromHBase(Humpback humpback) throws IOException {
+	public void readFromHBase() throws IOException {
 		// Get table object
-		Table table = this.conn.getTable(TableName.valueOf(OrcaConstant.SYSNS, TABLE_SYNC_PARAM));
+		Table table = this.conn.getTable(this.tn);
 		
 		// Query row
 		Get get = new Get(KEY);
 		Result result = table.get(get);
 		if (!result.isEmpty()) {
-			this.currentSp = Bytes.toLong(result.getValue(COLUMN_FAMILY, Bytes.toBytes("currentSp")));
-			this.serverId = Bytes.toLong(result.getValue(COLUMN_FAMILY, Bytes.toBytes("serverId")));
-		}
-		else {
-			this.serverId = humpback.getServerId();
-			this.currentSp = humpback.getGobbler().getStartSp(); 
+			this.currentSp = Bytes.toLong(get(result, "currentSp"));
+			this.serverId = Bytes.toLong(get(result, "serverId"));
+            this.createTimestamp = Optional.ofNullable(get(result, "createTimestamp")).map(Bytes::toLong).orElse(0l);
+            this.updateTimestamp = Optional.ofNullable(get(result, "updateTimestamp")).map(Bytes::toLong).orElse(0l);
+            this.createOrcaVersion = Bytes.toString(get(result, "createOrcaVersion"));
+            this.updateorcaVersion = Bytes.toString(get(result, "updateOrcaVersion"));
+            this.isActive = Optional.ofNullable(get(result, "isActive")).map(Bytes::toBoolean).orElse(Boolean.FALSE);
 		}
 	}
 	
@@ -96,44 +104,71 @@ public class CheckPoint {
 	    if (!this.isMutable) {
 	        throw new OrcaHBaseException("failed to update since it is realy only mode");
 	    }
-		updateHBase(this.conn, getCurrentSp(), getServerId());
+        // Get table object
+        Table table = conn.getTable(tn);
+        
+        // Generate put data
+        Put put = new Put(KEY);
+        set(put, "currentSp", this.currentSp);
+        set(put, "serverId", this.serverId);
+        if (this.createTimestamp == 0l) {
+            this.createTimestamp = System.currentTimeMillis();
+        }
+        this.updateTimestamp = System.currentTimeMillis();
+        if (this.createOrcaVersion == null) {
+            this.createOrcaVersion = Orca._version;
+        }
+        this.updateorcaVersion = Orca._version;
+        set(put, "createTimestamp", this.createTimestamp);
+        set(put, "updateTimestamp", this.updateTimestamp);
+        set(put, "createOrcaVersion", this.createOrcaVersion);
+        set(put, "updateOrcaVersion", this.updateorcaVersion);
+        set(put, "isActive", this.isActive);
+        
+        // put row
+        table.put(put);
 	}
 
-	private static void updateHBase(Connection conn, long currentSp, long serverId) throws IOException {
-		// Get table object
-		Table table = conn.getTable(TableName.valueOf(OrcaConstant.SYSNS, TABLE_SYNC_PARAM));
-		
-		// Generate put data
-		Put put = new Put(KEY);
-	    put.addColumn(COLUMN_FAMILY, Bytes.toBytes("currentSp"), Bytes.toBytes(currentSp));
-	    put.addColumn(COLUMN_FAMILY, Bytes.toBytes("serverId"), Bytes.toBytes(serverId));
-	    
-		// Add row
-		table.put(put);
+	private byte[] get(Result r, String column) {
+	    byte[] result = r.getValue(COLUMN_FAMILY, Bytes.toBytes(column));
+	    return result;
 	}
 	
-	public static long readCurrentSPFromHBase(Connection conn) throws IOException {
-		// Get table object
-		Table table = conn.getTable(TableName.valueOf(OrcaConstant.SYSNS, TABLE_SYNC_PARAM));
-		long currentSp = -1;
-		// Query row
-		Get get = new Get(KEY);
-		Result result = table.get(get);
-		if (!result.isEmpty()) {
-			currentSp = Bytes.toLong(result.getValue(COLUMN_FAMILY, Bytes.toBytes("currentSp")));
-		}
-		return currentSp;
+	private void set(Put put, String column, Object value) {
+	    byte[] bytes;
+	    if (value instanceof Long) {
+	        bytes = Bytes.toBytes((Long)value);
+	    }
+	    else if (value instanceof String) {
+	        bytes = Bytes.toBytes((String)value);
+	    }
+	    else if (value instanceof Boolean) {
+	        bytes = Bytes.toBytes((Boolean)value);
+	    }
+	    else {
+	        throw new IllegalArgumentException();
+	    }
+        put.addColumn(COLUMN_FAMILY, Bytes.toBytes(column), bytes);
 	}
 	
-	public static void udpateCurrentSPToHBase(Connection conn, long currentSp) throws IOException {
-		// Get table object
-		Table table = conn.getTable(TableName.valueOf(OrcaConstant.SYSNS, TABLE_SYNC_PARAM));
-		
-		// Generate put data
-		Put put = new Put(KEY);
-	    put.addColumn(COLUMN_FAMILY, Bytes.toBytes("currentSp"), Bytes.toBytes(currentSp));
-		
-		// Add row
-		table.put(put);
-	}
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        buf.append(String.format("sever id: %d", getServerId()));
+        buf.append(String.format("\nlog pointer: %x", getCurrentSp()));
+        buf.append(String.format("\ncreate orca version: %s", this.createOrcaVersion));
+        buf.append(String.format("\nupdate orca version: %s", this.updateorcaVersion));
+        buf.append(String.format("\ncreate timestamp: %s", new Timestamp(this.createTimestamp).toString()));
+        buf.append(String.format("\nupdate timestamp: %s", new Timestamp(this.updateTimestamp).toString()));
+        buf.append(String.format("\nactive: %b", this.isActive));
+        return buf.toString();
+    }
+
+    public void setActive(boolean b) {
+        this.isActive = true;
+    }
+
+    public void setLogPointer(long value) {
+        this.currentSp = value;
+    }
 }

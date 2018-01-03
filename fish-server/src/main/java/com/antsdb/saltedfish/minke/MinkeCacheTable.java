@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -107,8 +108,14 @@ public class MinkeCacheTable implements StorageTable {
     }
     
     @Override
-    public ScanResult scan(long pKeyStart, boolean includeStart, long pKeyEnd, boolean includeEnd, boolean ascending) {
+    public ScanResult scan(long pKeyStart, long pKeyEnd, long options) {
+        boolean includeStart = ScanOptions.includeStart(options);
+        boolean includeEnd = ScanOptions.includeEnd(options);
+        boolean ascending = ScanOptions.isAscending(options);
         MinkeCacheTableScanner result = new MinkeCacheTableScanner(this);
+        if (ScanOptions.has(options, ScanOptions.NO_CACHE)) {
+            result.setCacheResult(false);
+        }
         result.setRange(pKeyStart, includeStart, pKeyEnd, includeEnd, ascending);
         return result;
     }
@@ -145,7 +152,7 @@ public class MinkeCacheTable implements StorageTable {
             return false;
         }
         boolean result = false;
-        ScanResult sr = this.stable.scan(pKey, true, KeyBytes.getMaxKey(), true, true);
+        ScanResult sr = this.stable.scan(pKey, KeyBytes.getMaxKey(), 0);
         range = new Range();
         try {
             int count = 0;
@@ -269,5 +276,9 @@ public class MinkeCacheTable implements StorageTable {
     @Override
     public boolean traceIo(long pKey, List<FileOffset> lines) {
         return this.mtable.traceIo(pKey, lines);
+    }
+    
+    public MinkeTable getMinkeTable() {
+        return this.mtable;
     }
 }

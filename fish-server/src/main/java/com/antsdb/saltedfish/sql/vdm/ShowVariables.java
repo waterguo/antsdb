@@ -14,38 +14,44 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
-import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class ShowVariables extends CursorMaker {
-    CursorMeta meta = new CursorMeta();
+    static CursorMeta META = CursorUtil.toMeta(Line.class);
+    private boolean isGlobal;
 
-    public ShowVariables() {
-    	FieldMeta field = new FieldMeta("Variable_name", DataType.varchar(192));
-    	field.setTableAlias("VARIABLES");
-    	field.setSourceColumnName("VARIABLE_NAME");
-    	field.setSourceTable(new ObjectName("information_schema", "VARIABLES"));
-    	meta.addColumn(field);
-    	field = new FieldMeta("Value", DataType.varchar(3072));
-    	field.setTableAlias("VARIABLES");
-    	field.setSourceTable(new ObjectName("information_schema", "VARIABLES"));
-    	field.setSourceColumnName("VARIABLE_VALUE");
-        meta.addColumn(field);
+    public static class Line {
+        public String Variable_name;
+        public String Value;
+    }
+
+    public ShowVariables(boolean global) {
+        this.isGlobal = global;
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        // Map<String, Object> variables = session.getVariables();
+        Map<String, String> map = new TreeMap<>();
+        map.putAll(ctx.getOrca().getConfig().getAll());
+        if (!this.isGlobal) {
+            map.putAll(ctx.getSession().getConfig().getAll());
+        }
+        List<Line> list = new ArrayList<>();
+        map.entrySet().forEach(it -> {
+            Line line = new Line();
+            line.Variable_name = it.getKey();
+            line.Value = it.getValue();
+            list.add(line);
+        });
+        Cursor c = CursorUtil.toCursor(META, list);
+        return c;
+        /*
         Map<String, Object> variables = new HashMap<String, Object>();
-        variables.put("character_set_results", "utf8");
-        variables.put("max_allowed_packet", 32 * 1024 * 1024);
-        variables.put("tx_isolation", "READ-COMMITTED");
-        variables.put("sql_mode", "STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION");
         List<Record> list = new ArrayList<>();
         variables.entrySet().forEach((it) -> {
             Record rec = new HashMapRecord();
@@ -53,13 +59,12 @@ public class ShowVariables extends CursorMaker {
                .set(1, it.getValue().toString());
             list.add(rec);
         });
-        Cursor c = CursorUtil.toCursor(meta, list);
-        return c;
+        */
     }
 
     @Override
     public CursorMeta getCursorMeta() {
-        return this.meta;
+        return META;
     }
 
     @Override

@@ -99,10 +99,10 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             type = new TypeBlob("longblob", Types.BLOB, 0xffffffffl);
         }
         else if ("binary".equals(name)) {
-        	type = new TypeBlob("binary", Types.BLOB, 0xffffffffl);
+        	    type = new TypeBlob("binary", Types.BLOB, 0xffffffffl);
         }
         else if ("varbinary".equals(name)) {
-        	type = new TypeBlob("binary", Types.BLOB, 0xffffffffl);
+        	    type = new TypeBlob("binary", Types.BLOB, 0xffffffffl);
         }
         else if ("bool".equals(name) || "boolean".equals(name)) {
             type = new TypeInteger(
@@ -162,7 +162,7 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             		Long.MIN_VALUE + 1); 
         }
         else if ("date".equals(name)) {
-        	type = new TypeDate("date");
+        	    type = new TypeDate("date");
         }
         else if ("enum".equals(name)) {
             type = new TypeInteger(

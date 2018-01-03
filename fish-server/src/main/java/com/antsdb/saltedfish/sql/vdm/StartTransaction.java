@@ -26,14 +26,13 @@ public class StartTransaction extends Instruction {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	if (ctx.getSession().isAutoCommit()) {
-    		ctx.getSession().resetAutoCommitAfterTrx();
+        	if (ctx.getSession().isAutoCommit()) {
+        		ctx.getSession().resetAutoCommitAfterTrx();
             ctx.session.setAutoCommit(false);
-    	}
-    	else
-    	{
-    		ctx.session.commit();
-    	}
+        	}
+        	else {
+        		ctx.session.commit();
+        	}
         ctx.session.startTrx();
         ctx.getTransaction().getGuaranteedTrxId();
         if (this.next != null) {

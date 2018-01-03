@@ -84,7 +84,8 @@ final class SyncBuffer {
         }
     }
     
-    void flush() {
+    int flush() {
+        int result = 0;
         List<Long> puts = new ArrayList<>();
         List<Long> deletes = new ArrayList<>();
         for (Map.Entry<Integer, Map<Long, Long>> i:this.tableById.entrySet()) {
@@ -109,13 +110,16 @@ final class SyncBuffer {
                 else {
                     this.replicable.putIndexLines(tableId, puts);
                 }
+                result += puts.size();
             }
             if (deletes.size() != 0) {
                 this.replicable.deletes(tableId, deletes);
+                result += deletes.size();
             }
         }
         this.tableById.clear();
         this.count = 0;
+        return result;
     }
     
     private Map<Long, Long> getTable(int tableId) {

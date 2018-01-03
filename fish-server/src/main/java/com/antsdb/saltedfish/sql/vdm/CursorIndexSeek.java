@@ -119,14 +119,7 @@ public class CursorIndexSeek extends CursorMaker {
 			
 			// scan !!
 			
-	        this.iter = gindex.scan(
-	                trx.getTrxId(), 
-	                trx.getTrxTs(),
-	                pFrom,
-	                true,
-	                pTo,
-	                true,
-	                true);
+	        this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
 		}
 
 		@Override

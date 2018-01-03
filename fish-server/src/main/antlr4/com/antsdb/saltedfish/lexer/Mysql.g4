@@ -29,6 +29,7 @@ script
 sql_stmt
  : (
    alter_table_stmt
+ | alter_user_stmt
  | begin_stmt
  | change_master_stmt
  | commit_stmt
@@ -36,10 +37,12 @@ sql_stmt
  | create_index_stmt
  | create_table_stmt
  | create_table_like_stmt
+ | create_user_stmt
  | delete_stmt
  | drop_database_stmt
- | drop_table_stmt
  | drop_index_stmt
+ | drop_table_stmt
+ | drop_user_stmt
  | explain_stmt
  | insert_stmt
  | load_data_infile_stmt
@@ -55,15 +58,18 @@ sql_stmt
  | show_engines
  | show_grants
  | show_index_stmt
+ | show_privileges
+ | show_processlist
+ | show_status
  | show_table_status_stmt
  | show_tables_stmt
+ | show_triggers_stmt
  | show_variable_stmt
  | show_warnings_stmt
  | truncate_table_stmt
  | unlock_table_stmt
  | update_stmt
  | use_stmt
- | commented_stmt
  | start_transaction
  | start_slave
  | stop_slave
@@ -71,6 +77,10 @@ sql_stmt
  ) { this.lastStatement = _localctx; }
  ;
 
+alter_user_stmt
+ : K_ALTER K_USER string_value K_IDENTIFIED K_BY string_value
+ ;
+ 
 begin_stmt
  : K_BEGIN
  ;
@@ -79,8 +89,6 @@ delete_stmt__
  : K___DELETE number_value K_WHERE K_KEY '=' STRING_LITERAL 
  ;
  
-commented_stmt: MULTILINE_STATEMENT;
-
 start_transaction
  : K_START K_TRANSACTION 
  ;
@@ -293,7 +301,8 @@ index_column
  ;
  
 constraint_def
- : K_CONSTRAINT identifier K_FOREIGN K_KEY '(' columns ')' K_REFERENCES table_name_ '(' columns ')' cascade_options
+ : ((K_CONSTRAINT identifier K_FOREIGN K_KEY) | (K_CONSTRAINT? K_FOREIGN K_KEY identifier?))  
+   '(' columns ')' K_REFERENCES table_name_ '(' columns ')' cascade_options
  ;
 
 cascade_options
@@ -333,6 +342,10 @@ create_table_like_stmt
  : K_CREATE K_TABLE table_name_ K_LIKE table_name_
  ;
  
+create_user_stmt
+ : K_CREATE K_USER (K_IF K_NOT K_EXISTS)? string_value K_IDENTIFIED K_BY string_value
+ ;
+  
 delete_stmt
  : K_DELETE table_name_? from_clause ( K_WHERE expr )?
  ;
@@ -340,6 +353,8 @@ delete_stmt
 drop_database_stmt: K_DROP K_DATABASE (K_IF K_EXISTS)? any_name;
 
 drop_table_stmt: K_DROP K_TABLE (K_IF K_EXISTS)? table_names_ ;
+
+drop_user_stmt : K_DROP K_USER (K_IF K_EXISTS)? string_value;
 
 drop_index_stmt: K_DROP K_INDEX index_name K_ON table_name_ ;
 
@@ -349,7 +364,11 @@ load_data_infile_stmt: K_LOAD K_DATA K_INFILE file_name K_INTO K_TABLE table_nam
 
 file_name: STRING_LITERAL;
  
-lock_table_stmt: K_LOCK K_TABLES table_name_* K_WRITE?;
+lock_table_stmt: K_LOCK K_TABLES lock_table_item (',' lock_table_item)*;
+
+lock_table_item
+ : table_name_ (K_READ | K_WRITE)?  K_LOCAL?
+ ;
  
 insert_stmt
  : (K_INSERT | K_REPLACE) HINT? K_IGNORE? K_INTO table_name_ (insert_stmt_values | insert_stmt_select) 
@@ -372,7 +391,7 @@ insert_stmt_select
  ;
  
 set_stmt
- : K_SET (set_stmt_variable | set_stmt_names | set_stmt_character_set)
+ : K_SET K_OPTION? (set_stmt_variable | set_stmt_names | set_stmt_character_set)
  ;
 
 set_stmt_names
@@ -392,8 +411,9 @@ names_value
  | WORD
  | DOUBLE_QUOTED_LITERAL
  ; 
+ 
 set_stmt_variable
- : variable_assignment (',' variable_assignment)*
+ : K_PERMANENT? variable_assignment (',' variable_assignment)* 
  ;
  
 rollback_stmt
@@ -412,7 +432,7 @@ compound_operator
  ;
  
 select_or_values
- : K_SELECT HINT? MULTILINE_STATEMENT? ( K_DISTINCT | K_ALL )? select_columns 
+ : K_SELECT HINT? K_SQL_NO_CACHE? 'SQL_CACHE'? ( K_DISTINCT | K_ALL )? select_columns 
    from_clause ? 
    where_clause ? 
    group_by_clause ?
@@ -489,7 +509,7 @@ join_item
  ;
  
 join_operator
- : (K_LEFT | K_RIGHT)? (K_OUTER | K_INNER | K_CROSS)? K_JOIN
+ : (K_LEFT | K_RIGHT)? (K_OUTER | K_INNER | K_CROSS)? (K_JOIN | K_STRAIGHT_JOIN)
  ;
 
 join_constraint
@@ -517,18 +537,34 @@ show_grants
  : K_SHOW K_GRANTS
  ;
  
+show_privileges
+ : K_SHOW K_PRIVILEGES
+ ;
+  
+show_processlist
+ : K_SHOW K_FULL? K_PROCESSLIST
+ ;
+ 
+show_status
+ : K_SHOW K_GLOBAL? K_SESSION? K_STATUS ( K_LIKE string_value )?
+ ;
+  
 show_index_stmt
  : K_SHOW (K_INDEX | K_INDEXES | K_KEYS) (K_FROM | K_IN) table_name_ ((K_FROM | K_IN) identifier)?
  ;
 
 show_table_status_stmt
- : K_SHOW K_TABLE K_STATUS ( K_FROM identifier )? ( K_LIKE string_value )?
+ : K_SHOW K_TABLE K_STATUS ( K_FROM identifier )? ( K_LIKE string_value )? where_clause?
  ;
   
 show_tables_stmt
- : K_SHOW K_FULL? K_TABLES ( K_FROM identifier )? (K_LIKE string_value)?
+ : K_SHOW K_FULL? K_TABLES ( K_FROM identifier )? (K_LIKE string_value)? where_clause?
  ;
   
+show_triggers_stmt
+ : K_SHOW K_FULL? K_TRIGGERS ( K_FROM identifier )? (K_LIKE string_value)?
+ ;
+ 
 show_columns_stmt
  : K_SHOW K_FULL? (K_COLUMNS | K_FIELDS) K_FROM table_name_ (K_FROM identifier)? (K_LIKE string_value)?
  ;
@@ -538,7 +574,7 @@ show_create_table_stmt
  ;
    
 show_variable_stmt
- : K_SHOW K_GLOBAL? K_VARIABLES (where_clause | show_variable_like_clause)?  
+ : K_SHOW K_GLOBAL? K_SESSION? K_VARIABLES (where_clause | show_variable_like_clause)?  
  ;
 
 show_variable_like_clause
@@ -563,7 +599,7 @@ update_stmt_set
  : column_name '=' expr
  ;
 
-use_stmt: K_USE any_name;
+use_stmt: K_USE identifier;
 
 variable_assignment
  : variable_assignment_user
@@ -575,7 +611,11 @@ variable_assignment
  ;
  
 variable_assignment_session
- : K_SESSION? any_name '=' set_expr
+ : K_SESSION? session_variable_name '=' set_expr
+ ;
+ 
+session_variable_name
+ : SESSION_VARIABLE | any_name
  ;
  
 variable_assignment_global
@@ -620,7 +660,7 @@ set_expr
  ;
  
 user_var_name
- : VARIABLE
+ : USER_VARIABLE
  ;
  
 with_clause
@@ -633,7 +673,7 @@ expr
  | column_name_
  | K_ROWNUM
  | variable_reference
- | system_variable_reference
+ | session_variable_reference
  | column_reference
  | unary_operator expr
  | expr_match
@@ -667,7 +707,7 @@ expr_simple
  | bind_parameter
  | column_name_
  | variable_reference
- | system_variable_reference
+ | session_variable_reference
  | expr_function
  | expr_select 
  ;
@@ -736,9 +776,9 @@ expr_in_table
  : K_NOT? K_IN table_name_
  ;
   
-variable_reference: VARIABLE;
+variable_reference: USER_VARIABLE;
 
-system_variable_reference: SYSTEM_VARIABLE;
+session_variable_reference: SESSION_VARIABLE;
 
 column_reference: ( ( any_name '.' )? any_name '.' )? any_name;
 
@@ -783,7 +823,8 @@ any_name
 name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
- | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS
+ | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
+ | K_IDENTIFIED | K_PERMANENT | K_OPTION
  ;
  
 identifier
@@ -954,6 +995,7 @@ K_GLOB : G L O B;
 K_GLOBAL : G L O B A L;
 K_GROUP : G R O U P;
 K_HAVING : H A V I N G;
+K_IDENTIFIED : I D E N T I F I E D;
 K_IF : I F;
 K_IGNORE : I G N O R E;
 K_IMMEDIATE : I M M E D I A T E;
@@ -978,6 +1020,7 @@ K_LEFT : L E F T;
 K_LIKE : L I K E;
 K_LIMIT : L I M I T;
 K_LOAD : L O A D;
+K_LOCAL : L O C A L;
 K_LOCK : L O C K;
 K_MASTER : M A S T E R;
 K_MATCH : M A T C H;
@@ -992,12 +1035,16 @@ K_NULL : N U L L;
 K_OF : O F;
 K_OFFSET : O F F S E T;
 K_ON : O N;
+K_OPTION : O P T I O N;
 K_OR : O R;
 K_ORDER : O R D E R;
 K_OUTER : O U T E R;
+K_PERMANENT : P E R M A N E N T;
 K_PLAN : P L A N;
 K_PRAGMA : P R A G M A;
 K_PRIMARY : P R I M A R Y;
+K_PRIVILEGES : P R I V I L E G E S;
+K_PROCESSLIST : P R O C E S S L I S T;
 K_PROFILE : P R O F I L E;
 K_QUERY : Q U E R Y;
 K_RAISE : R A I S E;
@@ -1021,9 +1068,11 @@ K_SESSION: S E S S I O N;
 K_SET : S E T;
 K_SHOW : S H O W;
 K_SIGNED : S I G N E D;
+K_SQL_NO_CACHE : S Q L '_' N O '_' C A C H E;
 K_START : S T A R T;
 K_STATUS : S T A T U S;
 K_STOP : S T O P;
+K_STRAIGHT_JOIN : S T R A I G H T '_' J O I N;
 K_SLAVE : S L A V E;
 K_TABLE : T A B L E;
 K_TABLES : T A B L E S;
@@ -1033,6 +1082,7 @@ K_THEN : T H E N;
 K_TO : T O;
 K_TRANSACTION : T R A N S A C T I O N;
 K_TRIGGER : T R I G G E R;
+K_TRIGGERS : T R I G G E R S;
 K_TRUE : T R U E;
 K_TRUNCATE : T R U N C A T E;
 K_UNION : U N I O N;
@@ -1041,6 +1091,7 @@ K_UNLOCK : U N L O C K;
 K_UNSIGNED : U N S I G N E D;
 K_UPDATE : U P D A T E;
 K_USE : U S E;
+K_USER : U S E R;
 K_USING : U S I N G;
 K_VACUUM : V A C U U M;
 K_VALUES : V A L U E S;
@@ -1064,9 +1115,9 @@ K_SERIALIZABLE : S E R I A L I Z A B L E;
 K_HEX : '0' X;
 K___DELETE : '_' '_' D E L E T E;
 
-VARIABLE: '@' [a-zA-Z_] [a-zA-Z_0-9]* ;
+USER_VARIABLE: '@' [a-zA-Z_] [a-zA-Z_0-9]* ;
  
-SYSTEM_VARIABLE: '@' '@' [$.a-zA-Z_] [$.a-zA-Z_0-9]* ;
+SESSION_VARIABLE: '@' '@' [$.a-zA-Z_] [$.a-zA-Z_0-9]* ;
  
 WORD
  : [a-zA-Z_] [a-zA-Z_0-9\u00c0-\u00ff]*
@@ -1109,10 +1160,6 @@ SINGLE_LINE_COMMENT2
  : '#' ~[\r\n]* -> channel(HIDDEN)
  ;
 
-MULTILINE_STATEMENT
- : '/*!' .*? ( '*/' | EOF )
- ;
- 
 MULTILINE_COMMENT
  : '/*' .*? ( '*/' | EOF )  -> channel(HIDDEN)
  ;

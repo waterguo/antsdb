@@ -19,6 +19,7 @@ import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishBoundary;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -89,14 +90,11 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
 	        GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
 	        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
 	        Transaction trx = ctx.getTransaction();
-	        RowIterator it = gindex.scan(
-	                trx.getTrxId(), 
-	                trx.getTrxTs(),
-	                pKeyFrom,
-	                fromInclusive,
-	                pKeyTo,
-	                toInclusive,
-	                this.isAsc);
+	        long options = 0;
+	        options = fromInclusive ? options : ScanOptions.excludeStart(options);
+	        options = toInclusive ? options : ScanOptions.excludeEnd(options);
+	        options = this.isAsc ? options : ScanOptions.descending(options);
+	        RowIterator it = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pKeyFrom, pKeyTo, options);
 	        IndexCursor cursor = new IndexCursor(
 	        		ctx.getSpaceManager(), 
 	        		this.meta, 

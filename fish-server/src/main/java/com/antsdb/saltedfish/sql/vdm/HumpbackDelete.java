@@ -37,7 +37,7 @@ public class HumpbackDelete extends Instruction {
 			throw new OrcaException("table {} is not found", tableId);
 		}
 		long trxid = ctx.getHumpback().getTrxMan().getNewVersion();
-		HumpbackError error = table.delete(trxid, key, ctx.getSession().getLockTimeoutMilliSeconds());
+		HumpbackError error = table.delete(trxid, key, ctx.getSession().getConfig().getLockTimeout());
 		if (error != HumpbackError.SUCCESS) {
 			throw new OrcaException(error);
 		}

@@ -27,7 +27,7 @@ public class SetSessionParameter extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Object val = Util.eval(ctx, this.op, params, 0);
-        ctx.getSession().setParameter(this.name, val);
+        ctx.getSession().getConfig().set(this.name, val == null ? null : val.toString());
         return null;
     }
 

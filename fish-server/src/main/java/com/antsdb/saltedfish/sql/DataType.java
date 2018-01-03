@@ -44,20 +44,20 @@ public class DataType {
     
     @Override
 	public boolean equals(Object obj) {
-    	if (!(obj instanceof DataType)) {
-    		return false;
-    	}
-    	DataType that =(DataType)obj;
-    	if (this.fishType != that.fishType) {
-    		return false;
-    	}
-    	if (this.length != that.length) {
-    		return false;
-    	}
-    	if (this.scale != that.scale) {
-    		return false;
-    	}
-    	return true;
+        	if (!(obj instanceof DataType)) {
+        		return false;
+        	}
+        	DataType that =(DataType)obj;
+        	if (this.fishType != that.fishType) {
+        		return false;
+        	}
+        	if (this.length != that.length) {
+        		return false;
+        	}
+        	if (this.scale != that.scale) {
+        		return false;
+        	}
+        	return true;
 	}
 
     public int getLength() {
@@ -65,7 +65,7 @@ public class DataType {
     }
 
 	public void setLength(int value) {
-    	this.length = value;
+    	    this.length = value;
     }
     
     public int getScale() {
@@ -73,11 +73,11 @@ public class DataType {
     }
 
     public int getSqlType() {
-    	return this.sqlType;
+    	    return this.sqlType;
     }
 
     public Class<?> getJavaType() {
-    	return this.klass;
+        return this.klass;
     }
 
     static DataType _varchar = new TypeString("_varchar", 4000, Types.VARCHAR);
@@ -86,7 +86,7 @@ public class DataType {
     }
 
     public static DataType varchar(int length) {
-    	return new TypeString("_varchar", length, Types.VARCHAR);
+    	    return new TypeString("_varchar", length, Types.VARCHAR);
 	}
 
     static DataType _number = new TypeDecimal("_decimal", 38, 10);
@@ -148,7 +148,7 @@ public class DataType {
 
     static DataType _clob = new TypeClob("_clob", Types.CLOB, Long.MAX_VALUE);
     public static DataType clob() { 
-    	return _clob; 
+        return _clob; 
 	}
 
     static DataType _blob = new TypeBlob("_blob", Types.BLOB, Long.MAX_VALUE);
@@ -177,8 +177,19 @@ public class DataType {
     
     @Override
     public String toString() {
-    	String text;
-        text = this.name + '(' + length + ',' + scale + ')';
+    	    String text;
+    	    if (this.getJavaType() == String.class) {
+    	        text = this.name + '(' + length + ')';
+    	    }
+    	    else if (this.getJavaType() == byte[].class) {
+            text = this.name + '(' + length + ')';
+        }
+    	    else if (this.getJavaType() == BigDecimal.class) {
+    	        text = this.name + '(' + length + ',' + scale + ')';
+    	    } 
+    	    else {
+    	        text = this.name;
+    	    }
         return text;
     }
 

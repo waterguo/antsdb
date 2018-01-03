@@ -26,7 +26,7 @@ public class Variable_referenceGenerator extends Generator<Variable_referenceCon
     @Override
     public Instruction gen(GeneratorContext ctx, Variable_referenceContext rule)
     throws OrcaException {
-        String name = rule.VARIABLE().getText();
+        String name = rule.USER_VARIABLE().getText();
         name = StringUtils.removeStart(name, "@");
         return new GetSessionVarible(name);
     }

@@ -27,8 +27,11 @@ class MysqlString {
 	static CharBuffer decode(Decoder decoder, ByteBuffer buf) {
 		CharBuffer cbuf = CharBuffer.allocate(buf.remaining());
 		while (buf.remaining() > 0) {
+		    if (readMysqlExtension(decoder, buf, cbuf)) {
+		        continue;
+		    }
 			char ch = (char)decoder.get(buf);
-			cbuf.put(ch);
+            cbuf.put(ch);
 			if (ch == '\\') {
 				readByte(decoder, buf, cbuf);
 			}
@@ -54,6 +57,61 @@ class MysqlString {
 		return cbuf;
 	}
 
+	/*
+	 * https://dev.mysql.com/doc/refman/5.7/en/comments.html
+	 * 
+	 * mysql extensions starts with "/*!", end with * /
+	 */
+	private static boolean readMysqlExtension(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
+	    // check leading mark
+	    
+	    if (!skipToken(decoder, buf, "/*!")) {
+	        return false;
+	    }
+	    skipUntil(decoder, buf, ' ');
+	    
+	    // read stuff
+	    
+	    while (buf.hasRemaining()) {
+	        if (skipToken(decoder, buf, "*/")) {
+	            break;
+	        }
+	        char ch = (char)decoder.get(buf);
+	        cbuf.put(ch);
+	    }
+        return true;
+	}
+	
+	private static boolean skipToken(Decoder decoder, ByteBuffer buf, String token) {
+        int mark = buf.position();
+        int i=0; 
+        while (buf.hasRemaining() && (i < token.length())) {
+            int ch = decoder.get(buf);
+            if (ch != token.charAt(i)) {
+                break;
+            }
+            i++;
+        }
+        if (i == token.length()) {
+            return true;
+        }
+        else {
+            buf.position(mark);
+            return false;
+        }
+	}
+	
+    private static void skipUntil(Decoder decoder, ByteBuffer buf, char end) {
+        while (buf.hasRemaining()) {
+            int mark = buf.position();
+            int ch = decoder.get(buf);
+            if (ch == end) {
+                buf.position(mark);
+                return;
+            }
+        }
+    }
+    
 	private static boolean readBinary(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
 		if (!readByteIf(decoder, 'b', 'B', buf, cbuf)) {
 			return false;

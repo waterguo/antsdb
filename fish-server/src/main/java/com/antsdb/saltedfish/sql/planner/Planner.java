@@ -97,6 +97,7 @@ public class Planner {
     private GeneratorContext ctx;
     private Node last;
     private Node current;
+    private boolean noCache = false;
 
     static {
         KEY.setColumnId(-1);
@@ -735,7 +736,9 @@ public class Planner {
         if (link == null) {
             link = new Link(node);
             if (node.table != null) {
-                link.maker = new TableScan(node.table, ctx.getNextMakerId());
+                TableScan ts = new TableScan(node.table, ctx.getNextMakerId());
+                ts.setNoCache(this.noCache);
+                link.maker = ts;
             }
             else if (node.maker != null) {
                 link.maker = node.maker;
@@ -1073,5 +1076,9 @@ public class Planner {
 
     public List<OutputField> getOutputFields() {
         return this.fields;
+    }
+    
+    public void setNoCache(boolean value) {
+        this.noCache = value;
     }
 }

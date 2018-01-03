@@ -24,11 +24,12 @@ public class OrcaConstant {
     public static final String TABLENAME_SYSCOLUMN = "SYSCOLUMN";
     public static final String TABLENAME_SYSPARAM = "SYSPARAM";
     public static final String TABLENAME_SYSRULE = "SYSRULE";
-    public static final String TABLENAME_SYSRULECOL = "SYSRULECOL";
+    public static final String TABLENAME_SYSUSER = "SYSUSER";
     
     public static final int TABLEID_SYSSEQUENCE = TableId.SYSSEQUENCE;
     public static final int TABLEID_SYSTABLE = TableId.SYSTABLE;
     public static final int TABLEID_SYSCOLUMN = TableId.SYSCOLUMN;
     public static final int TABLEID_SYSPARAM = TableId.SYSPARAM;
     public static final int TABLEID_SYSRULE = TableId.SYSRULE;
+    public static final int TABLEID_SYSUSER = TableId.SYSUSER;
 }

@@ -19,6 +19,7 @@ import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishBoundary;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -76,8 +77,11 @@ public class TableRangeScan extends CursorMaker implements RangeScannable, Order
             }
             GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
             Transaction trx = ctx.getTransaction();
-            RowIterator it = gtable.scan(trx.getTrxId(), trx.getTrxTs(), pKeyFrom, fromInclusive, pKeyTo, toInclusive,
-                    this.isAsc);
+            long options = 0;
+            options = fromInclusive ? options : ScanOptions.excludeStart(options);
+            options = toInclusive ? options : ScanOptions.excludeEnd(options);
+            options = this.isAsc ? options : ScanOptions.descending(options);
+            RowIterator it = gtable.scan(trx.getTrxId(), trx.getTrxTs(), pKeyFrom, pKeyTo, options);
             DumbCursor cursor = new DumbCursor(ctx.getSpaceManager(), this.meta, it, mapping,
                     ctx.getCursorStats(makerId));
             cursor.setName(this.toString());

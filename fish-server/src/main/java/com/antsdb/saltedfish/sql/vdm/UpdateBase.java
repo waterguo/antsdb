@@ -64,11 +64,11 @@ abstract class UpdateBase extends Statement {
 	}
 
 	protected boolean updateSingleRow(VdmContext ctx, Heap heap, Parameters params, long pKey) {
-    	boolean success = false;
-    	Transaction trx = ctx.getTransaction();
-    	trx.getGuaranteedTrxId();
-    	int timeout = ctx.getSession().getLockTimeoutMilliSeconds();
-    	long heapMark = heap.position();
+        	boolean success = false;
+        	Transaction trx = ctx.getTransaction();
+        	trx.getGuaranteedTrxId();
+        	int timeout = ctx.getSession().getConfig().getLockTimeout();
+        	long heapMark = heap.position();
         for (;;) {
         	heap.reset(heapMark);
             // get the __latest__ version of the row 

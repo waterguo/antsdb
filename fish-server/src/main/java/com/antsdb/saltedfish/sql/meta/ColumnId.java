@@ -66,6 +66,13 @@ public enum ColumnId {
     sysparam_type(2),
     sysparam_value(3),
     sysparam_end_of_columns(4),
+    /* sysuser */
+    sysuser_id(1),
+    sysuser_name(2),
+    sysuser_password(3),
+    sysuser_auth_type(4),
+    sysuser_delete_mark(5),
+    sysuser_end_of_columns(6),
     ;
     
 	private final int id;

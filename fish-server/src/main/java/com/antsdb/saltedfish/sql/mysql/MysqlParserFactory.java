@@ -94,16 +94,10 @@ public class MysqlParserFactory extends SqlParserFactory {
 	}
 
     static MysqlParser.ScriptContext parse(String sql) {
-    	return parse(new ANTLRInputStream(sql));
+    	    return parse(new ANTLRInputStream(sql));
     }
     
     static MysqlParser.ScriptContext parse(CharStream cs) {
-    	if (isCommentedStatement(cs)) {
-    		String s = cs.toString();
-    		s = s.substring(9);
-    		s = s.substring(0, s.length()-3);
-    		cs = new ANTLRInputStream(s);
-    	}
         MysqlLexer lexer = new MysqlLexer(cs);
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         tokens.setTokenSource(lexer);
@@ -121,27 +115,4 @@ public class MysqlParserFactory extends SqlParserFactory {
             }
         }
     }
-
-    /**
-     * mysql executes statement in a specially formatted comment like
-     * / *!40101 SET NAMES utf8 * /;
-     * @param cs
-     * @return
-     */
-	private static boolean isCommentedStatement(CharStream cs) {
-		int idx = cs.index();
-		if (cs.LA(idx+1) != '/') {
-			return false;
-		}
-		if (cs.LA(idx+2) != '*') {
-			return false;
-		}
-		if (cs.LA(idx+3) != '!') {
-			return false;
-		}
-		if (cs.LA(idx+4) != '4') {
-			return false;
-		}
-		return true;
-	}
 }

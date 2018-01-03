@@ -200,4 +200,19 @@ public class ConfigService {
     public int getCacheVerificationMode() {
         return getInt("cache.verification-mode", 0);
     }
+
+    public String getSystemNamespace() {
+        String result = props.getProperty("humpback.hbase-system-ns");
+        return result != null ? result : "ANTSDB";
+    }
+
+    public String getDefaultDatabaseType() {
+        try {
+            String s = props.getProperty("orca.defaultDatabaseType", "mysql").toUpperCase(); 
+            return s; 
+        }
+        catch (Exception x) {
+            return "MYSQL";
+        }
+    }
 }

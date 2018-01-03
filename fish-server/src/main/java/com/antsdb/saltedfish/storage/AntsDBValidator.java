@@ -96,12 +96,7 @@ public class AntsDBValidator {
 
 		// Scan from head to get top #### rows
 		RowIterator scanner;
-		scanner = table.scan(0, Long.MAX_VALUE,
-				0, 
-                false, 
-                0, 
-                false, 
-                true);
+		scanner = table.scan(0, Long.MAX_VALUE, 0, 0, 0);
 		long count = 0;
 		while (scanner.next()) {
 			// skip index table at this time

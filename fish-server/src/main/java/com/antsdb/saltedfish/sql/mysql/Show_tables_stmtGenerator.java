@@ -17,7 +17,11 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Show_tables_stmtContext;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.planner.Planner;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.Operator;
 
 public class Show_tables_stmtGenerator extends Generator<Show_tables_stmtContext>{
 
@@ -25,8 +29,21 @@ public class Show_tables_stmtGenerator extends Generator<Show_tables_stmtContext
     public Instruction gen(GeneratorContext ctx, Show_tables_stmtContext rule) throws OrcaException {
         boolean isFull = (rule.K_FULL() != null);
         String ns = (rule.identifier() != null) ? Utils.getIdentifier(rule.identifier()) : null;
-        ShowTables stmt = new ShowTables(ctx.getSession(), ns, isFull, Utils.getLiteralValue(rule.string_value()));
-        return stmt;
+        if (ns == null) {
+            ns = ctx.getSession().getCurrentNamespace();
+        }
+        if (ns == null) {
+            throw new OrcaException("no database selected");
+        }
+        String like = Utils.getLiteralValue(rule.string_value());
+        CursorMaker result = new ShowTables(ctx.getSession(), ns, isFull, like);
+        if (rule.where_clause() != null) {
+            Planner planner = new Planner(ctx);
+            planner.addTableOrView("", result, true, false);
+            Operator where = ExprGenerator.gen(ctx, planner, rule.where_clause().expr());
+            result = new Filter(result, where, ctx.getNextMakerId());
+        }
+        return result;
     }
 
 }

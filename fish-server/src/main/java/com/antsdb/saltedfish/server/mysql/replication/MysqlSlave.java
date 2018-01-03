@@ -30,10 +30,10 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.nosql.CheckPoint;
 import com.antsdb.saltedfish.server.SaltedFish;
 import com.antsdb.saltedfish.server.mysql.PreparedStmtHandler;
-import com.antsdb.saltedfish.sql.ConfigService;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.PreparedStatement;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.SystemParameters;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
@@ -115,8 +115,8 @@ public class MysqlSlave implements BinlogEventListener {
 		or.setBinlogEventListener(this);
 	}
 	
-	private ConfigService getConfig() {
-		return fish.getOrca().getConfigService();
+	private SystemParameters getConfig() {
+		return fish.getOrca().getConfig();
 	}
 
 	CheckPoint getCheckPoint() {

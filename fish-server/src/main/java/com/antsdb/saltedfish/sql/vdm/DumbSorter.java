@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -22,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -132,14 +135,25 @@ public class DumbSorter extends CursorMaker {
     }
 
     private Object[] getSortKey(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	Object[] key = new Object[this.exprs.size()];
-    	int i=0;
-    	for (Operator expr:this.exprs) {
-    		long pValue = expr.eval(ctx, heap, params, pRecord);
-    		Object value = FishObject.get(heap, pValue);
-    		key[i] = value;
-    		i++;
-    	}
+        	Object[] key = new Object[this.exprs.size()];
+        	int i=0;
+        	for (Operator expr:this.exprs) {
+        		long pValue = expr.eval(ctx, heap, params, pRecord);
+        		Object value = FishObject.get(heap, pValue);
+        		if ((pValue != 0) && (value == null)) {
+        		    byte format = Value.getFormat(heap, pValue);
+        		    if (format == Value.FORMAT_DATE) {
+        		        // mysql '0000-00-00'
+        		        value = new Date(1);
+        		    }
+        		    else if (format == Value.FORMAT_TIMESTAMP) {
+                        // mysql '0000-00-00 00:00:00'
+                    value = new Timestamp(1);
+        		    }
+        		}
+        		key[i] = value;
+        		i++;
+        	}
 		return key;
 	}
 

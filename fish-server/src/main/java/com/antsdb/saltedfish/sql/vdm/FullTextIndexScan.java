@@ -87,14 +87,7 @@ public class FullTextIndexScan extends CursorMaker {
 	        
 	        GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
 	        Transaction trx = ctx.getTransaction();
-	        RowIterator it = gindex.scan(
-	                trx.getTrxId(), 
-	                trx.getTrxTs(),
-	                pFrom,
-	                true,
-	                pTo,
-	                true,
-	                true);
+	        RowIterator it = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
 	        return it;
 		}
 	}

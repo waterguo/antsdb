@@ -25,12 +25,7 @@ public interface StorageTable {
     public long get(long pKey);
     public boolean exist(long pKey);
     public long getIndex(long pKey);
-    public ScanResult scan(
-            long pKeyStart, 
-            boolean includeStart, 
-            long pKeyEnd, 
-            boolean includeEnd,
-            boolean isAscending);
+    public ScanResult scan(long pKeyStart, long pKeyEnd, long options);
     public void delete(long pKey);
     public void putIndex(long pIndexKey, long pRowKey, byte misc);
     public void put(Row row);

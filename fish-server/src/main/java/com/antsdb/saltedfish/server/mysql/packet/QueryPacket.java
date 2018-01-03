@@ -39,8 +39,9 @@ public class QueryPacket extends RecievePacket {
         sql = BufferUtils.readString(in);
         in.resetReaderIndex();
         this.buf = BufferUtils.readStringCrazy(handler.getDecoder(), in);
-        if (_log.isTraceEnabled()) 
-        	_log.trace("Query:"+sql);
+        if (_log.isTraceEnabled()) { 
+        	    _log.trace("Query:"+sql);
+        }
     }
 
 	public CharStream getSql() {

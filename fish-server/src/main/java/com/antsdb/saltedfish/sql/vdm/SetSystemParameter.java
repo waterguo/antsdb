@@ -18,23 +18,23 @@ import java.util.List;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class SetSystemParameter extends Statement {
     static Logger _log = UberUtil.getThisLogger();
     
-    public enum Scope {
-        USER,
-        SESSION,
-        GLOBAL,
-    }
-    
     Scope scope;
     String name;
     Operator expr;
     String constant;
+
+    private boolean permanent;
+    
+    public enum Scope {
+        SESSION,
+        GLOBAL,
+    }
     
     // set to default
     public SetSystemParameter(Scope scope, String name) {
@@ -56,6 +56,10 @@ public class SetSystemParameter extends Statement {
         this.constant = value;
     }
 
+    public void setPermanent(boolean value) {
+        this.permanent = value;
+    }
+    
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Object value = null;
@@ -64,20 +68,18 @@ public class SetSystemParameter extends Statement {
             value = Util.eval(ctx, this.expr, params, 0);
         }
         else {
-        	value = this.constant;
+        	    value = this.constant;
         }
-        if (this.name.equalsIgnoreCase("autocommit")) {
-            if (!(value instanceof Number)) {
-                throw new OrcaException("autocommit must be 1 or 0");
+        if (this.scope == Scope.GLOBAL) {
+            if (this.permanent) {
+                ctx.getOrca().getConfig().setPermanent(name, value == null ? null : value.toString());
             }
-            Integer autoCommit = ((Number)value).intValue();
-            if ((autoCommit > 1) || (autoCommit < 0)) {
-                throw new OrcaException("autocommit must be 1 or 0");
+            else {
+                ctx.getOrca().getConfig().set(name, value == null ? null : value.toString());
             }
-            ctx.getSession().setAutoCommit(autoCommit == 1);
         }
         else {
-        	ctx.getSession().setParameter(name, value);
+            ctx.getSession().getConfig().set(name, value == null ? null : value.toString());
         }
         return null;
     }
