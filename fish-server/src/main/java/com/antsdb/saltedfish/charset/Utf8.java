@@ -15,7 +15,6 @@ package com.antsdb.saltedfish.charset;
 
 import java.nio.ByteBuffer;
 import java.util.function.IntConsumer;
-import java.util.function.IntPredicate;
 import java.util.function.IntSupplier;
 
 /**
@@ -57,7 +56,7 @@ public final class Utf8 implements Decoder {
 		return ch;
 	}
 
-	public static int get(IntSupplier supplier) {
+	public int get(IntSupplier supplier) {
 		int ch = supplier.getAsInt();
 		if (ch == -1) {
 			return -1;
@@ -98,20 +97,32 @@ public final class Utf8 implements Decoder {
 		throw new IllegalArgumentException();
 	}
 	
-	public static String decode(IntSupplier supplier) {
+    public IntSupplier mapDecode(IntSupplier supplier) {
+        IntSupplier result = new IntSupplier() {
+            @Override
+            public int getAsInt() {
+                int ch = get(supplier);
+                return ch;
+            }
+        };
+        return result;
+    }
+    
+	public String decode(IntSupplier supplier) {
 		StringBuilder buf = new StringBuilder();
-		for (;;) {
-			int ch = get(supplier);
-			if (ch >= 0) {
-				buf.append((char)ch);
-			}
-			else {
-				break;
-			}
+		IntSupplier output = mapDecode(supplier);
+		for (int ch = output.getAsInt(); ch != -1; ch=output.getAsInt()) {
+	           buf.append((char)ch); 
 		}
 		return buf.toString();
 	}
 
+    public static void encode(IntSupplier supplier, IntConsumer consumer) {
+        for (int ch=supplier.getAsInt(); ch!=-1; ch=supplier.getAsInt()) {
+            encode(ch, consumer);
+        }
+    }
+    
 	public static void encode(String s, IntConsumer consumer) {
 		for (int i=0; i<s.length(); i++) {
 			encode(s.charAt(i), consumer);
@@ -136,18 +147,6 @@ public final class Utf8 implements Decoder {
 			consumer.accept((byte) (0xE0 | ((ch >> 12) & 0X0F)));
 			consumer.accept((byte) (0x80 | ((ch >> 6) & 0x3F)));
 			consumer.accept((byte) (0x80 | (ch & 0x3F)));
-		}
-	}
-	
-	public static void scan(IntSupplier supplier, IntPredicate consumer) {
-		for (;;) {
-			int ch = get(supplier);
-			if (ch < 0) {
-				break;
-			}
-			if (!consumer.test(ch)) {
-				break;
-			}
 		}
 	}
 }

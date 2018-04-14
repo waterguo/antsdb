@@ -53,6 +53,16 @@ public class FuncCast extends UnaryOperator {
             if (value instanceof byte[]) {
                 return FishObject.allocSet(heap, new String((byte[]) value));
             }
+            else if (value instanceof Date) {
+                if (((Date)value).getTime() == Long.MIN_VALUE) {
+                    value = "0000-00-00";
+                }
+            }
+            else if (value instanceof Timestamp) {
+                if (((Timestamp)value).getTime() == Long.MIN_VALUE) {
+                    value = "0000-00-00 00:00:00";
+                }
+            }
             return FishObject.allocSet(heap, value.toString());
         }
         else if (type.getJavaType() == Date.class) {

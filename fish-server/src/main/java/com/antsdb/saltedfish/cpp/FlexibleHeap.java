@@ -81,7 +81,6 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
 		Unsafe.setMemory(address, size, (byte)0);
 		return address;
 	}
-
 	
 	private Node allocNode(int size) {
 		Node result = null;

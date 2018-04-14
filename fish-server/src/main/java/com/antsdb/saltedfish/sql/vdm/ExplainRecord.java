@@ -13,40 +13,17 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-class ExplainRecord extends HashMapRecord {
+public class ExplainRecord {
+    public Integer id;
+    public Integer level;
+    public String plan;
+    
     ExplainRecord() {
     }
     
-    ExplainRecord(int level, String plan) {
-        this.setLevel(level)
-            .setPlan(plan)
-            .setMakerId(0);
-    }
-    
-    int getLevel() {
-        return (int)this.get(0);
-    }
-    
-    ExplainRecord setLevel(int level) {
-        this.set(0, level);
-        return this;
-    }
-    
-    String getPlan() {
-        return (String)this.get(1);
-    }
-    
-    ExplainRecord setPlan(String plan) {
-        this.set(1, plan);
-        return this;
-    }
-    
-    int getMakerId() {
-    	return (int)this.get(2);
-    }
-    
-    ExplainRecord setMakerId(int value) {
-    	this.set(2, value);
-    	return this;
+    ExplainRecord(int id, int level, String plan) {
+        this.id = id;
+        this.level = level;
+        this.plan = plan;
     }
 }

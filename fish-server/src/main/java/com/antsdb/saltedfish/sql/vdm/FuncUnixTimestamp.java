@@ -42,6 +42,9 @@ public class FuncUnixTimestamp extends Function {
             if (ts == null) {
                 return 0;
             }
+            if (ts.getTime() == Long.MIN_VALUE) {
+                return 0;
+            }
             result = ts.getTime();
         }
         return Int8.allocSet(heap, result / 1000);

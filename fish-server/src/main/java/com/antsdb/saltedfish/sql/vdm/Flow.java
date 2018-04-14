@@ -18,6 +18,13 @@ import java.util.List;
 
 public class Flow extends Instruction {
     List<Instruction> instructions = new ArrayList<>();
+
+    public Flow() {
+    }
+    
+    public Flow(List<? extends Instruction> instructions) {
+        this.instructions.addAll(instructions);
+    }
     
     public void add(Instruction instruction) {
         this.instructions.add(instruction);
@@ -27,7 +34,16 @@ public class Flow extends Instruction {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         Object result = null;
         for (Instruction i:this.instructions) {
-            result = i.run(ctx, params, pMaster);
+            Object r = i.run(ctx, params, pMaster);
+            if ((result instanceof Integer) && (r instanceof Integer)) {
+                result = ((Integer)result) + ((Integer)r);
+            }
+            else if ((result instanceof Long) && (r instanceof Long)) {
+                result = ((Long)result) + ((Long)r);
+            }
+            else {
+                result = r;
+            }
         }
         return result;
     }

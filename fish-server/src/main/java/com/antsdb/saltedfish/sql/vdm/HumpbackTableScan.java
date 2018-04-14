@@ -28,14 +28,14 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 
 public class HumpbackTableScan extends CursorMaker {
-	TableMeta table;
+    TableMeta table;
     CursorMeta cursorMeta;
     int[] mapping;
     boolean isAsc = true;
     boolean noCache = false;
     
     public HumpbackTableScan(TableMeta table, int makerId) {
-    	    this.table = table;
+            this.table = table;
         this.cursorMeta = CursorMeta.from(table);
         this.mapping = new int[this.cursorMeta.fields.size()];
         this.mapping = this.cursorMeta.getHumpbackMapping();
@@ -54,7 +54,7 @@ public class HumpbackTableScan extends CursorMaker {
         options = this.isAsc ? options : ScanOptions.descending(options);
         options = this.noCache ? ScanOptions.noCache(options) : options;
         Cursor cursor = new DumbCursor(
-        		ctx.getSpaceManager(),
+                ctx.getSpaceManager(),
                 this.cursorMeta, 
                 table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), 0, 0, options), 
                 mapping,
@@ -77,11 +77,11 @@ public class HumpbackTableScan extends CursorMaker {
             mapping[i] = column.getColumnId();
         }
         Cursor cursor = new DumbCursor(
-        		session.getOrca().getSpaceManager(), 
-        		meta, 
-        		table.scan(trx.getTrxId(), trx.getTrxTs(), true), 
-        		mapping,
-        		new AtomicLong());
+                session.getOrca().getSpaceManager(), 
+                meta, 
+                table.scan(trx.getTrxId(), trx.getTrxTs(), true), 
+                mapping,
+                new AtomicLong());
         return cursor;
     }
 
@@ -108,10 +108,10 @@ public class HumpbackTableScan extends CursorMaker {
         return cursorMeta;
     }
 
-	@Override
-	public String toString() {
+    @Override
+    public String toString() {
         return "Table Scan (" + this.table.getObjectName() + ")";
-	}
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {

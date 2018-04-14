@@ -172,29 +172,29 @@ public final class PacketEncoder {
      * @param meta
      */
     public void writeColumnDefBody(ByteBuf buffer, FieldMeta meta) {
-        //catalog
+        // catalog
         BufferUtils.writeLenString(buffer, "def", getEncoder());
-        //db, schema
+        // db, schema
         if (meta.getSourceTable() != null) {
-        	BufferUtils.writeLenString(buffer, meta.getSourceTable().getNamespace(), getEncoder());
+            BufferUtils.writeLenString(buffer, meta.getSourceTable().getNamespace(), getEncoder());
         }
         else {
-        	BufferUtils.writeLenString(buffer, "", getEncoder());
+            BufferUtils.writeLenString(buffer, "", getEncoder());
         }
         // table
         BufferUtils.writeLenString(buffer, meta.getTableAlias(), getEncoder());
         // orgTable
         if (meta.getSourceTable() != null) {
-        	BufferUtils.writeLenString(buffer, meta.getSourceTable().getTableName(), getEncoder());
+            BufferUtils.writeLenString(buffer, meta.getSourceTable().getTableName(), getEncoder());
         }
         else {
-        	BufferUtils.writeLenString(buffer, "", getEncoder());
+            BufferUtils.writeLenString(buffer, "", getEncoder());
         }
         // col name
         BufferUtils.writeLenString(buffer, meta.getName(), getEncoder());
         // col original name
         BufferUtils.writeLenString(buffer, meta.getSourceName(), getEncoder());
-        // next length 
+        // next length
         buffer.writeByte((byte) 0x0C);
         if (meta.getType() == null) {
             BufferUtils.writeInt(buffer, 0x3f);
@@ -403,13 +403,13 @@ public final class PacketEncoder {
 
             for (int i=0; i<nColumns; i++)
             {
-            	long pValue = Record.getValueAddress(pRecord, i);
-            	if (pValue != 0) {
-                	writeValue(buffer, meta.getColumn(i), pValue);
-            	}
-            	else {
-                	nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
-            	}
+                	long pValue = Record.getValueAddress(pRecord, i);
+                	if (pValue != 0) {
+                    	writeValue(buffer, meta.getColumn(i), pValue);
+                	}
+                	else {
+                    	nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
+                	}
             }
     
             int endPos = buffer.writerIndex();
@@ -422,68 +422,68 @@ public final class PacketEncoder {
     }
 
     private void writeValue(ByteBuf buffer, FieldMeta meta, long pValue) {
-    	if (writeValueFast(buffer, meta, pValue)) {
-    		return;
-    	}
-    	writeValueSlow(buffer, meta, pValue);
-	}
+        if (writeValueFast(buffer, meta, pValue)) {
+            return;
+        }
+        writeValueSlow(buffer, meta, pValue);
+    }
 
-	private boolean writeValueFast(ByteBuf buffer, FieldMeta meta, long pValue) {
-		DataType type = meta.getType();
-		byte format = Value.getFormat(null, pValue);
+    private boolean writeValueFast(ByteBuf buffer, FieldMeta meta, long pValue) {
+        DataType type = meta.getType();
+        byte format = Value.getFormat(null, pValue);
         if (type.getSqlType() == Types.TINYINT) {
-        	if (format == Value.FORMAT_INT4) {
-        		buffer.writeByte(Int4.get(pValue));
-        		return true;
-        	}
-        	else if (format == Value.FORMAT_INT8) {
-        		buffer.writeByte((int)Int8.get(null, pValue));
-        		return true;
-        	}
+            if (format == Value.FORMAT_INT4) {
+                buffer.writeByte(Int4.get(pValue));
+                return true;
+            }
+            else if (format == Value.FORMAT_INT8) {
+                buffer.writeByte((int) Int8.get(null, pValue));
+                return true;
+            }
         }
-        else if (type.getJavaType()==Boolean.class) {
-        	boolean b = FishBool.get(null, pValue);
-    		buffer.writeByte(b ? 1 : 0);
-    		return true;
+        else if (type.getJavaType() == Boolean.class) {
+            boolean b = FishBool.get(null, pValue);
+            buffer.writeByte(b ? 1 : 0);
+            return true;
         }
-        else if (type.getJavaType()==Integer.class) {
-        	if (format == Value.FORMAT_INT4) {
-        		BufferUtils.writeUB4(buffer, Int4.get(pValue));
-        		return true;
-        	}
-        	else if (format == Value.FORMAT_INT8) {
-        		BufferUtils.writeUB4(buffer, (int)Int8.get(null, pValue));
-        		return true;
-        	}
+        else if (type.getJavaType() == Integer.class) {
+            if (format == Value.FORMAT_INT4) {
+                BufferUtils.writeUB4(buffer, Int4.get(pValue));
+                return true;
+            }
+            else if (format == Value.FORMAT_INT8) {
+                BufferUtils.writeUB4(buffer, (int) Int8.get(null, pValue));
+                return true;
+            }
         }
-        else if (type.getJavaType()==Long.class) {
-        	if (format == Value.FORMAT_INT4) {
-        		BufferUtils.writeLongLong(buffer, Int4.get(pValue));
-        		return true;
-        	}
-        	else if (format == Value.FORMAT_INT8) {
-        		BufferUtils.writeLongLong(buffer, Int8.get(null, pValue));
-        		return true;
-        	}
+        else if (type.getJavaType() == Long.class) {
+            if (format == Value.FORMAT_INT4) {
+                BufferUtils.writeLongLong(buffer, Int4.get(pValue));
+                return true;
+            }
+            else if (format == Value.FORMAT_INT8) {
+                BufferUtils.writeLongLong(buffer, Int8.get(null, pValue));
+                return true;
+            }
         }
-        else if (type.getJavaType()==Float.class) {
-        	if (format == Value.FORMAT_FLOAT4) {
+        else if (type.getJavaType() == Float.class) {
+            if (format == Value.FORMAT_FLOAT4) {
                 BufferUtils.writeUB4(buffer, Float.floatToIntBits(Float4.get(null, pValue)));
-        		return true;
-        	}
+                return true;
+            }
         }
-        else if (type.getJavaType()==Double.class) {
-        	if (format == Value.FORMAT_FLOAT4) {
-                BufferUtils.writeLongLong(buffer,Double.doubleToLongBits(Float8.get(null, pValue)));
-        		return true;
-        	}
+        else if (type.getJavaType() == Double.class) {
+            if (format == Value.FORMAT_FLOAT4) {
+                BufferUtils.writeLongLong(buffer, Double.doubleToLongBits(Float8.get(null, pValue)));
+                return true;
+            }
         }
-		return false;
-	}
-	
-	private void writeValueSlow(ByteBuf buffer, FieldMeta meta, long pValue) {
-		Object value = FishObject.get(null, pValue);
-		DataType type = meta.getType();
+        return false;
+    }
+
+    private void writeValueSlow(ByteBuf buffer, FieldMeta meta, long pValue) {
+        Object value = FishObject.get(null, pValue);
+        DataType type = meta.getType();
         if (type.getSqlType() == Types.TINYINT) {
             buffer.writeByte((Integer)value);
         }
@@ -550,35 +550,35 @@ public final class PacketEncoder {
                 buffer.writeByte((byte) 251);
             } 
             else if (fv instanceof Duration) {
-            	Duration t = (Duration)fv;
-            	String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
-            	BufferUtils.writeLenString(buffer, text, getEncoder());
+            	    Duration t = (Duration)fv;
+            	    String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
+            	    BufferUtils.writeLenString(buffer, text, getEncoder());
             }
             else if (fv instanceof Timestamp) {
                 // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
                 // to get a Date from a datetime column
-            	Timestamp ts = (Timestamp)fv;
-            	if (ts.getTime() == Long.MIN_VALUE) {
-                	// mysql '0000-00-00 00:00:00' is treated as null in jdbc
-                    buffer.writeByte((byte) 251);
-            	}
-            	else {
-                	String text;
-                	if (ts.getNanos() == 0) {
-                		text = TIMESTAMP19_FORMAT.format(ts);
-                	}
-                	else {
-                		text = TIMESTAMP29_FORMAT.format(ts);
-                	}
+                Timestamp ts = (Timestamp)fv;
+                if (ts.getTime() == Long.MIN_VALUE) {
+                    // special case for mysql '0000-00-00 00:00:00'
+                    BufferUtils.writeLenString(buffer, "0000-00-00 00:00:00", getEncoder());
+                }
+                else {
+                    String text;
+                    if (ts.getNanos() == 0) {
+                        text = TIMESTAMP19_FORMAT.format(ts);
+                    }
+                    else {
+                        text = TIMESTAMP29_FORMAT.format(ts);
+                    }
                     BufferUtils.writeLenString(buffer, text, getEncoder());
-            	}
+                }
             }
             else if (fv instanceof byte[]){
                 BufferUtils.writeWithLength(buffer, (byte[])fv);
             }
             else if ((fv instanceof Date) && (((Date)fv).getTime() == Long.MIN_VALUE)) {
-            	// mysql '0000-00-00' is treated as null in jdbc
-                buffer.writeByte((byte) 251);
+                // special case for mysql '0000-00-00' 
+                BufferUtils.writeLenString(buffer, "0000-00-00", getEncoder());
             }
             else 
             {

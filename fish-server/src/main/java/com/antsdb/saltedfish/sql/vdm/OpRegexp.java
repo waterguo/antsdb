@@ -45,7 +45,7 @@ public class OpRegexp extends Operator {
 		Pattern ptn = (Pattern)ctx.getVariable(this.variableId);
 		if (ptn == null) {
 		    long pPattern = this.pattern.eval(ctx, heap, params, pRecord);
-		    String patternString = (String)FishObject.get(heap, pPattern);
+		    String patternString = AutoCaster.getString(heap, pPattern);
 		    if (patternString == null) {
 		        return 0;
 		    }

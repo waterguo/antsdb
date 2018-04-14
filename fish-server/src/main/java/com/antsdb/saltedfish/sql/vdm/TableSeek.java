@@ -104,8 +104,7 @@ public class TableSeek extends CursorMaker implements Seekable {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, toString());
-        rec.setMakerId(makerId);
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
         records.add(rec);
     }
 

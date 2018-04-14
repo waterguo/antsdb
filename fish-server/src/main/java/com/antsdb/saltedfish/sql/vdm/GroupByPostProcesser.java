@@ -74,7 +74,7 @@ public class GroupByPostProcesser extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, getClass().getSimpleName());
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, getClass().getSimpleName());
         records.add(rec);
         this.upstream.explain(level+1, records);
     }

@@ -26,54 +26,54 @@ public class ThroughGrouper extends CursorMaker {
     CursorMaker upstream;
 
     static class MyCursor extends Cursor {
-    	Cursor upstream;
-    	boolean isEof = false;
-    	
-		public MyCursor(Cursor upstream) {
-			super(upstream.meta);
-			this.upstream = upstream;
-		}
+        Cursor upstream;
+        boolean isEof = false;
 
-		@Override
-		public long next() {
-			long pRecord = this.upstream.next();
-			if (pRecord != 0) {
-				return pRecord;
-			}
-			if (!this.isEof) {
-				this.isEof = true;
-				return Record.GROUP_END;
-			}
-			return 0;
-		}
+        public MyCursor(Cursor upstream) {
+            super(upstream.meta);
+            this.upstream = upstream;
+        }
 
-		@Override
-		public void close() {
-			this.upstream.close();
-		}
+        @Override
+        public long next() {
+            long pRecord = this.upstream.next();
+            if (pRecord != 0) {
+                return pRecord;
+            }
+            if (!this.isEof) {
+                this.isEof = true;
+                return Record.GROUP_END;
+            }
+            return 0;
+        }
+
+        @Override
+        public void close() {
+            this.upstream.close();
+        }
 
     }
-    
-	public ThroughGrouper(CursorMaker upstream) {
-		super();
-		this.upstream = upstream;
-	}
 
-	@Override
+    public ThroughGrouper(CursorMaker upstream) {
+        super();
+        this.upstream = upstream;
+    }
+
+    @Override
     public CursorMeta getCursorMeta() {
         return this.upstream.getCursorMeta();
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	Cursor c = this.upstream.make(ctx, params, pMaster);
-    	c = new MyCursor(c);
-    	return c;
+        Cursor c = this.upstream.make(ctx, params, pMaster);
+        c = new MyCursor(c);
+        return c;
     }
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, getClass().getSimpleName());
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, getClass().getSimpleName());
         records.add(rec);
         this.upstream.explain(level+1, records);
     }

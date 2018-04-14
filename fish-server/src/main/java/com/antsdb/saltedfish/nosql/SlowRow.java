@@ -25,16 +25,16 @@ import com.antsdb.saltedfish.sql.vdm.KeyMaker;
  * @author wgu0
  */
 public class SlowRow extends HashMap<Integer, Object> {
-	private static final long serialVersionUID = 1L;
-	
-	byte[] key;
-	long version = 1;
-	int maxColumnId = 0;
-	boolean isMutable = true;
-	
-	private SlowRow() {
-	}
-	
+    private static final long serialVersionUID = 1L;
+    
+    byte[] key;
+    long version = 1;
+    int maxColumnId = 0;
+    boolean isMutable = true;
+    
+    private SlowRow() {
+    }
+    
     public SlowRow(Object... values) {
         if (values.length == 0) {
             throw new IllegalArgumentException();
@@ -47,76 +47,76 @@ public class SlowRow extends HashMap<Integer, Object> {
         }
     }
 
-	public byte[] getKey() {
-		return this.key;
-	}
-	
-	public void setKey(byte[] byteArray) {
-	    if (!this.isMutable) {
-	        throw new IllegalArgumentException();
-	    }
-		this.key = byteArray;
-	}
-	
-	public void set(Integer index, Object value) {
+    public byte[] getKey() {
+        return this.key;
+    }
+    
+    public void setKey(byte[] byteArray) {
         if (!this.isMutable) {
             throw new IllegalArgumentException();
         }
-		put(index, value);
-		this.maxColumnId = Math.max(this.maxColumnId, index);
-	}
+        this.key = byteArray;
+    }
+    
+    public void set(Integer index, Object value) {
+        if (!this.isMutable) {
+            throw new IllegalArgumentException();
+        }
+        put(index, value);
+        this.maxColumnId = Math.max(this.maxColumnId, index);
+    }
 
-	@Override
-	public SlowRow clone() {
-		SlowRow result = new SlowRow(this.key);
+    @Override
+    public SlowRow clone() {
+        SlowRow result = new SlowRow(this.key);
         result.maxColumnId = this.maxColumnId;
-		result.key = this.key;
-		result.version = this.version;
-		result.putAll(this);
+        result.key = this.key;
+        result.version = this.version;
+        result.putAll(this);
         result.isMutable = true;
-		return result;
-	}
+        return result;
+    }
 
-	public static SlowRow from(Row row) {
-		if (row == null) {
-			return null;
-		}
-		SlowRow result = new SlowRow();
-		result.setKey(row.getKey());
-		result.setTrxTimestamp(row.getTrxTimestamp());
-		for (int i=0; i<=row.maxColumnid; i++) {
-			Object value = row.get(i);
-			result.set(i, value);
-		}
-		return result;
-	}
+    public static SlowRow from(Row row) {
+        if (row == null) {
+            return null;
+        }
+        SlowRow result = new SlowRow();
+        result.setKey(row.getKey());
+        result.setTrxTimestamp(row.getTrxTimestamp());
+        for (int i=0; i<=row.maxColumnid; i++) {
+            Object value = row.get(i);
+            result.set(i, value);
+        }
+        return result;
+    }
 
-	public static SlowRow fromRowPointer(long pRow, long version) {
-		if (pRow == 0) {
-			return null;
-		}
-		Row row = Row.fromMemoryPointer(pRow, version);
-		return from(row);
-	}
+    public static SlowRow fromRowPointer(long pRow, long version) {
+        if (pRow == 0) {
+            return null;
+        }
+        Row row = Row.fromMemoryPointer(pRow, version);
+        return from(row);
+    }
 
-	public void setTrxTimestamp(long trxTimestamp) {
+    public void setTrxTimestamp(long trxTimestamp) {
         if (!this.isMutable) {
             throw new IllegalArgumentException();
         }
-		this.version = trxTimestamp;
-	}
+        this.version = trxTimestamp;
+    }
 
-	public long getTrxTimestamp() {
-		return this.version;
-	}
+    public long getTrxTimestamp() {
+        return this.version;
+    }
 
-	public VaporizingRow toVaporisingRow(BluntHeap heap) {
-		return new VaporizingRow(heap, this);
-	}
-	
-	public int getMaxColumnId() {
-		return this.maxColumnId; 
-	}
+    public VaporizingRow toVaporisingRow(BluntHeap heap) {
+        return new VaporizingRow(heap, this);
+    }
+    
+    public int getMaxColumnId() {
+        return this.maxColumnId; 
+    }
 
     public void setMutable(boolean value) {
         if (!this.isMutable && value) {

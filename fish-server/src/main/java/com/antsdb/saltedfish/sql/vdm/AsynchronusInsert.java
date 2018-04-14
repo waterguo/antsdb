@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.nio.CharBuffer;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.SynchronousQueue;
@@ -20,7 +21,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.antlr.v4.runtime.CharStream;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -43,10 +43,10 @@ public class AsynchronusInsert implements AutoCloseable {
     
     private class Task implements Runnable {
         
-        CharStream cs;
+        CharBuffer cs;
         
-        public Task(CharStream cs) {
-            this.cs = cs;
+        public Task(CharBuffer cbuf) {
+            this.cs = cbuf;
         }
 
         public void run() {
@@ -57,10 +57,8 @@ public class AsynchronusInsert implements AutoCloseable {
             }
             
             try {
-                Script script = session.parse(cs);
+                Script script = session.parse(this.cs);
                 Instruction step = script.getRoot();
-                Flow flow = (Flow)step;
-                step = ((StatementWrapper)flow.instructions.get(0)).stmt;
                 VdmContext ctx = new VdmContext(session, script.getVariableCount()); 
                 step.run(ctx, new Parameters(), 0);
             }
@@ -94,7 +92,7 @@ public class AsynchronusInsert implements AutoCloseable {
         });
     }
     
-    public void add(CharStream cs) {
+    public void add(CharBuffer cs) {
         this.count++;
         this.executor.submit(new Task(cs));
     }

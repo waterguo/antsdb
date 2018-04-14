@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -64,7 +65,7 @@ import static com.antsdb.saltedfish.sql.OrcaConstant.*;
  *
  */
 public class Orca {
-	public static String _version = "5.5.0-antsdb";
+    public static String _version = "5.5.0-antsdb";
     public static final String SYSNS = Humpback.SYS_NAMESAPCE;
     
     static Logger _log = UberUtil.getThisLogger();
@@ -81,20 +82,31 @@ public class Orca {
     Map<String, String> namespaces = new HashMap<>();
     boolean isClosed = false;
     Set<Session> sessions = ConcurrentHashMap.newKeySet();
-	private ScheduledFuture<?> sessionSweeperFuture;
-	private File home;
-	private SqlDialect dialect;
+    private ScheduledFuture<?> sessionSweeperFuture;
+    private File home;
+    private SqlDialect dialect;
     private SessionSweeper sessionSweeper;
     private ScheduledFuture<?> recyclerFuture;
     private Replicator replicator;
     private Session sysdefault;
     SystemParameters config;
+    ConcurrentLinkedQueue<DeadSession> deadSessions = new ConcurrentLinkedQueue<>();
     
     static {
         Map<String, String> manifest = ManifestUtil.load(Orca.class);
         String version = manifest.get("Implementation-Version");
         version = StringUtils.replace(version, ".", "");
         _version = String.format("5.5.0-antsdb%s", version);
+    }
+    
+    static class DeadSession {
+        Session session;
+        long timestamp;
+        
+        DeadSession(Session session) {
+            this.session = session;
+            this.timestamp = System.currentTimeMillis();
+        }
     }
     
     class ShutdownThread extends Thread {
@@ -149,7 +161,7 @@ public class Orca {
         _log.info("orca dialect: {}", this.config.getDatabaseType());
         this.dialect = getDialect(this.config.getDatabaseType());
         if (this.dialect == null) {
-        	    throw new OrcaException("unknown dialect {}", this.config.getDatabaseType());
+            throw new OrcaException("unknown dialect {}", this.config.getDatabaseType());
         }
         this.dialect.init(this);
         
@@ -176,6 +188,15 @@ public class Orca {
             this.sessionSweeperFuture = jobman.scheduleWithFixedDelay(this.sessionSweeper, 2, TimeUnit.SECONDS);
             ResourceRecycler recycler = new ResourceRecycler(this);
             this.recyclerFuture = getJobManager().scheduleWithFixedDelay(recycler, 60, TimeUnit.SECONDS);
+        });
+        jobman.scheduleWithFixedDelay(60, TimeUnit.SECONDS, ()-> {
+            // remove dead sessions 
+            long now = System.currentTimeMillis();
+            for (DeadSession i:this.deadSessions) {
+                if ((now - i.timestamp) > 60 * 1000) {
+                    this.deadSessions.remove(i);
+                }
+            }
         });
         Runtime.getRuntime().addShutdownHook(new ShutdownThread());
         if (this.humpback.getStorageEngine().supportReplication()) {
@@ -215,23 +236,24 @@ public class Orca {
         registerSystemView(SYSNS, "x00000000", new SystemViewHumpbackMeta(this));
         registerSystemView(SYSNS, "x00000001", new SystemViewHumpbackNamespace(this));
         registerSystemView(SYSNS, "x00000002", new SystemViewTableStats(this));
+        registerSystemView(SYSNS, "SLOW_QUERIES", new SlowQueries());
     }
 
     private void verifySystem() {
-    	if (this.humpback.getNamespace(SYSNS) == null) {
-    		throw new OrcaException("namespace " + Orca.SYSNS + " is not found");
-    	}
-    	if (this.humpback.getTable(TableId.SYSTABLE) == null) {
-    		throw new OrcaException("systable is not found");
-    	}
-    	if (this.humpback.getTable(TableId.SYSSEQUENCE) == null) {
-    		throw new OrcaException("syssequence is not found");
-    	}
-	}
+        if (this.humpback.getNamespace(SYSNS) == null) {
+            throw new OrcaException("namespace " + Orca.SYSNS + " is not found");
+        }
+        if (this.humpback.getTable(TableId.SYSTABLE) == null) {
+            throw new OrcaException("systable is not found");
+        }
+        if (this.humpback.getTable(TableId.SYSSEQUENCE) == null) {
+            throw new OrcaException("syssequence is not found");
+        }
+    }
 
-	void init() throws Exception {
-	    Seed seed = new Seed(this);
-	    seed.run();
+    void init() throws Exception {
+        Seed seed = new Seed(this);
+        seed.run();
     }
     
     public HBaseStorageService getHBaseStorageService() {
@@ -284,10 +306,10 @@ public class Orca {
                 
                 if (gtable == null) {
                     gtable = this.humpback.createTable(
-                    		name.getNamespace(), 
-                    		table.getTableName(), 
-                    		table.getHtableId(), 
-                    		TableType.DATA);
+                            name.getNamespace(), 
+                            table.getTableName(), 
+                            table.getHtableId(), 
+                            TableType.DATA);
                     _log.warn("table {} not found in humpback, created ", name);
                 }
                 else {
@@ -331,8 +353,12 @@ public class Orca {
     }
     
     public void closeSession(Session session) {
-    	    session.close();
-    	    this.sessions.remove(session);
+        session.close();
+        this.sessions.remove(session);
+        this.deadSessions.add(new DeadSession(session));
+        while (this.deadSessions.size() > 200) {
+            this.deadSessions.poll();
+        }
     }
     
     public Session createSystemSession() {
@@ -346,9 +372,9 @@ public class Orca {
             return;
         }
         this.isClosed = true;
-        
+
         // close jobs
-        
+
         if (this.replicator != null) {
             this.replicator.close();
         }
@@ -358,17 +384,17 @@ public class Orca {
         if (this.recyclerFuture != null) {
             this.recyclerFuture.cancel(true);
         }
-        
+
         // close slave thread
-        
+
         MysqlSlave.stopIfExists();
-        
+
         // close services
-        
+
         this.idService.close();
-        
+
         // close all sessions
-        
+
         if (this.sessionSweeperFuture != null) {
             this.sessionSweeperFuture.cancel(false);
         }
@@ -376,27 +402,27 @@ public class Orca {
             this.recyclerFuture.cancel(false);
         }
         for (Session i:this.sessions) {
-        	closeSession(i);
+            closeSession(i);
         }
-        
+
         // shutdown hbase storage service
-        
+
         try {
             if (this.replicator != null) {
                 this.replicator.close();
             }
-        	if (getHBaseStorageService() != null) {
-        	    getHBaseStorageService().shutdown();
-        	}
+            if (getHBaseStorageService() != null) {
+                getHBaseStorageService().shutdown();
+            }
         }
         catch(Exception e) {
-        	
+            
         }
 
         // shutdown humpback
-        
+
         humpback.shutdown();
-        
+
     }
     
     public Humpback getHumpback() {
@@ -404,14 +430,14 @@ public class Orca {
     }
     
     SqlParserFactory getSqlParserFactory() {
-    	return this.dialect.getParserFactory();
+        return this.dialect.getParserFactory();
     }
     
-	public Object getSystemView(String ns, String table) {
+    public Object getSystemView(String ns, String table) {
         String key = (ns + '.' + table).toLowerCase();
         return this.sysviews.get(key);
-	}
-	
+    }
+    
     public void registerSystemView(String ns, String tableName, CursorMaker maker) {
         // register namespace if absent
         
@@ -446,66 +472,66 @@ public class Orca {
         return this.config;
     }
 
-	public final SpaceManager getSpaceManager() {
-		return this.humpback.getSpaceManager();
-	}
+    public final SpaceManager getSpaceManager() {
+        return this.humpback.getSpaceManager();
+    }
 
-	public TrxMan getTrxMan() {
-		return this.humpback.getTrxMan();
-	}
+    public TrxMan getTrxMan() {
+        return this.humpback.getTrxMan();
+    }
 
-	public DataTypeFactory getTypeFactory() {
-		return this.dialect.getTypeFactory();
-	}
-	
-	public long getNextRowid() {
-		return this.idService.getNextRowid();
-	}
+    public DataTypeFactory getTypeFactory() {
+        return this.dialect.getTypeFactory();
+    }
+    
+    public long getNextRowid() {
+        return this.idService.getNextRowid();
+    }
 
-	public File getHome() {
-		return this.home;
-	}
-	
-	public FishJobManager getJobManager() {
-		return this.humpback.getJobManager();
-	}
+    public File getHome() {
+        return this.home;
+    }
+    
+    public FishJobManager getJobManager() {
+        return this.humpback.getJobManager();
+    }
 
-	public SqlDialect getDialect() {
-		return this.dialect;
-	}
-	
-	public static void registerDialect(SqlDialect dialect) {
-		_dialects.put(dialect.getName(), dialect);
-	}
+    public SqlDialect getDialect() {
+        return this.dialect;
+    }
+    
+    public static void registerDialect(SqlDialect dialect) {
+        _dialects.put(dialect.getName(), dialect);
+    }
 
-	public static SqlDialect getDialect(String name) {
-		SqlDialect dialect = _dialects.get(name);
-		if (dialect == null) {
-			dialect = new MysqlDialect();
-		}
-		return dialect;
-	}
-	
-	public SessionSweeper getSessionSweeper() {
-	    return this.sessionSweeper;
-	}
-	
-	/**
-	 * get the start sp of any active or future transaction
-	 * 
-	 * @return never 0
-	 */
-	public long getStartSp() {
-	    long result = this.humpback.getSpaceManager().getAllocationPointer();
-	    for (Session session:this.sessions) {
-	        long sp = session.getStartSp();
-	        if (sp == 0) {
-	            continue;
-	        }
-	        result = Math.min(result, sp);
-	    }
-	    return result;
-	}
+    public static SqlDialect getDialect(String name) {
+        SqlDialect dialect = _dialects.get(name);
+        if (dialect == null) {
+            dialect = new MysqlDialect();
+        }
+        return dialect;
+    }
+    
+    public SessionSweeper getSessionSweeper() {
+        return this.sessionSweeper;
+    }
+    
+    /**
+     * get the start sp of any active or future transaction
+     * 
+     * @return never 0
+     */
+    public long getStartSp() {
+        long result = this.humpback.getSpaceManager().getAllocationPointer();
+        for (Session session:this.sessions) {
+            long sp = session.getStartSp();
+            if (sp == 0) {
+                continue;
+            }
+            result = Math.min(result, sp);
+        }
+        return result;
+    }
 
     /**
      * free unused resource
@@ -537,6 +563,7 @@ public class Orca {
     
     public long getLastClosedTransactionId() {
         long currentTrxId = getTrxMan().getLastTrxId();
+        UberUtil.sleep(200);
         long oldest = getOldestTrxId();
         if (oldest == 0) {
             // no active trx, get last of the current trxid
@@ -549,6 +576,15 @@ public class Orca {
     
     public Set<Session> getSessions() {
         return this.sessions;
+    }
+    
+    public Session getSession(int sessionId) {
+        for (Session i:this.sessions) {
+            if (i.getId() == sessionId) {
+                return i;
+            }
+        }
+        return null;
     }
     
     public Replicator getReplicator() {
@@ -568,4 +604,5 @@ public class Orca {
             return new NoPasswordAuthPlugin(this);
         }
     }
+
 }

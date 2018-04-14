@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
@@ -62,6 +63,7 @@ public class Replicator extends Thread {
     private String state = "";
     private int retries = 0;
     private int errors = 0;
+    private TransactionReplayer trxFilter;
 
     static class Stats {
         long inserts;
@@ -142,6 +144,12 @@ public class Replicator extends Thread {
         }
 
         @Override
+        public void deleteRow(DeleteRowEntry entry) throws Exception {
+            this.downstream.deleteRow(entry);
+            Replicator.this.stats.deletes++;
+        }
+
+        @Override
         public void delete(DeleteEntry entry) throws Exception {
             this.downstream.delete(entry);
             Replicator.this.stats.deletes++;
@@ -172,7 +180,6 @@ public class Replicator extends Thread {
         public void timestamp(TimestampEntry entry) {
             this.timestamp = entry.getTimestamp();
             Replicator.this.state = "busy";
-            Replicator.this.error = null;
             Replicator.this.latency = UberTime.getTime() - Replicator.this.relay.timestamp;
         }
     }
@@ -183,8 +190,8 @@ public class Replicator extends Thread {
         this.replicable = replicable;
         this.gobbler = this.humpback.getGobbler();
         this.replicationHandler = replicable.getReplayHandler();
-        ReplayHandler handler = new TransactionReplayer(this.humpback.getTrxMan(), this.replicationHandler);
-        this.relay = new Relay(handler);
+        this.trxFilter  = new TransactionReplayer(this.humpback.getGobbler(), this.replicationHandler);
+        this.relay = new Relay(trxFilter);
         setName(name);
         setDaemon(true);
     }
@@ -213,6 +220,7 @@ public class Replicator extends Thread {
                 if (this.error != null) {
                     this.retries++;
                 }
+                this.trxFilter.resetTransactionWindow();
                 this.gobbler.replay(startSp, false, this.relay);
             }
             catch (InterruptedIOException x) {

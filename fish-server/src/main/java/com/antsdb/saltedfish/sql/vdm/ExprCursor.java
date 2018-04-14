@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.nosql.InterruptException;
 
 public class ExprCursor extends CursorWithHeap {
     Cursor upstream;
@@ -26,6 +27,7 @@ public class ExprCursor extends CursorWithHeap {
     long bufferedRecord = 0;
     boolean isEmptyCursor = true;
 	private AtomicLong counter;
+    private Script source;
     
     public ExprCursor(CursorMaker maker, Cursor upstream, Parameters params, AtomicLong counter) {
         super(maker);
@@ -36,16 +38,20 @@ public class ExprCursor extends CursorWithHeap {
 
     @Override
     public long next() {
-    	// buffering logic
-    	
-    	if (this.bufferedRecord != 0) {
-    		long pRecord = this.bufferedRecord;
-    		this.bufferedRecord = 0;
-    		return pRecord;
-    	}
-    	
-    	// pulling from upstream
-    	
+        if (Thread.interrupted()) {
+            throw new InterruptException();
+        }
+        
+        // buffering logic
+
+        if (this.bufferedRecord != 0) {
+            long pRecord = this.bufferedRecord;
+            this.bufferedRecord = 0;
+            return pRecord;
+        }
+
+        // pulling from upstream
+        
         long pRecUpstream = this.upstream.next();
         if (pRecUpstream == 0) {
             return 0;
@@ -54,17 +60,18 @@ public class ExprCursor extends CursorWithHeap {
         //  if this is group end, well it is getting complex
         
         if (Record.isGroupEnd(pRecUpstream)) {
-        	if (!this.isEmptyCursor) {
-        		// group end record doesn't produce anything.
-        		resetAggregationFunctions(pRecUpstream);
-        		return pRecUpstream;
-        	}
-        	else {
-        		// except if the cursor is empty, we need to product at least 1 record
-        		this.bufferedRecord = pRecUpstream;
+            	if (!this.isEmptyCursor) {
+                // group end record doesn't produce anything.
+                resetAggregationFunctions(pRecUpstream);
+                return pRecUpstream;
+            }
+            else {
+                // except if the cursor is empty, we need to product at least 1
+                // record
+                this.bufferedRecord = pRecUpstream;
                 long pResult = populateRecord(pRecUpstream);
                 return pResult;
-        	}
+            }
         }
         
         // WARNING. newRecord() and newHeap() must be after _group_end detection
@@ -103,5 +110,13 @@ public class ExprCursor extends CursorWithHeap {
             Operator it = this.exprs.get(i);
             it.eval(ctx, getHeap(), params, pRecord);
         }
+    }
+
+    public void setSource(Script source) {
+        this.source = source;
+    }
+    
+    public Script getSource() {
+        return this.source;
     }
 }

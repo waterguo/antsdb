@@ -73,7 +73,7 @@ public class Update extends UpdateBase {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, "Update");
+        ExplainRecord rec = new ExplainRecord(-1, level, "Update");
         records.add(rec);
         this.maker.explain(level, records);
     }

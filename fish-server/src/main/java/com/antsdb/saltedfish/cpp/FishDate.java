@@ -18,10 +18,6 @@ import java.sql.Date;;
 public class FishDate {
 	public final static Date get(Heap heap, long address) {
 		long lvalue = Unsafe.getLong(address+1);
-        if (lvalue == Long.MIN_VALUE) {
-            // this is 0000-00-00  in mysql
-            return null;
-        }
 		Date value = new Date(lvalue);
 		return value;
 	}

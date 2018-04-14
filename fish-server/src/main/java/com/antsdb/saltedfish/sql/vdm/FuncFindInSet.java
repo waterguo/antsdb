@@ -27,35 +27,35 @@ import com.antsdb.saltedfish.sql.DataType;
  * @author wgu0
  */
 public class FuncFindInSet extends Function {
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pValue = this.parameters.get(0).eval(ctx, heap, params, pRecord);
         if (pValue == 0) {
-        	return 0;
+            return 0;
         }
         long pSet = this.parameters.get(1).eval(ctx, heap, params, pRecord);
         if (pSet == 0) {
-        	return 0;
+            return 0;
         }
         int result = 0;
         String value = (String)FishObject.get(heap, AutoCaster.toString(heap, pValue));
         String set = (String)FishObject.get(heap, AutoCaster.toString(heap, pSet));
         String[] array = StringUtils.split(set, ',');
         for (int i=0; i<array.length; i++) {
-        	if (value.equals(array[i])) {
-        		result = i+1;
-        	}
+            if (value.equals(array[i])) {
+                result = i+1;
+            }
         }
         return Int4.allocSet(heap, result);
-	}
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return DataType.integer();
-	}
+    @Override
+    public DataType getReturnType() {
+        return DataType.integer();
+    }
 
-	@Override
-	public int getMinParameters() {
-		return 2;
-	}
+    @Override
+    public int getMinParameters() {
+        return 2;
+    }
 }

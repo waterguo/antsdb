@@ -31,6 +31,7 @@ import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.IndexLine;
+import com.antsdb.saltedfish.nosql.InterruptException;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
@@ -79,6 +80,9 @@ class HBaseTable implements StorageTable {
 
         @Override
         public boolean next() {
+            if (Thread.interrupted()) {
+                throw new InterruptException();
+            }
             try {
                 Result r = this.rs.next();
                 if (r == null) {
@@ -173,6 +177,9 @@ class HBaseTable implements StorageTable {
         if (_log.isTraceEnabled()) {
             _log.trace("get {} {}", this.tn.toString(), KeyBytes.toString(pKey));
         }
+        if (Thread.interrupted()) {
+            throw new InterruptException();
+        }
         try {
             TableMeta meta = this.hbase.getTableMeta(this.tableId);
             Table htable = getConnection().getTable(this.tn);
@@ -190,6 +197,9 @@ class HBaseTable implements StorageTable {
     public long getIndex(long pKey) {
         if (_log.isTraceEnabled()) {
             _log.trace("getIndex {} {}", this.tn.toString(), KeyBytes.toString(pKey));
+        }
+        if (Thread.interrupted()) {
+            throw new InterruptException();
         }
         try {
             Table htable = getConnection().getTable(this.tn);

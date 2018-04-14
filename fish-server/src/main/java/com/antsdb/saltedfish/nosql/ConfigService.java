@@ -215,4 +215,38 @@ public class ConfigService {
             return "MYSQL";
         }
     }
+    
+    public LogRetentionStrategy getLogRetentionStrategy() {
+        String value = props.getProperty("humpback.log-retention", "").toLowerCase();
+        if ("time".equals(value)) {
+            long time = getLong("humpback.log-retention.time", 60 * 10);
+            return new LogRetentionByTime(time);
+        }
+        else if ("size".equals(value)) {
+            long bytes = getLong("humpback.log-retention.size", SizeConstants.mb(256));
+            return new LogRetentionBySize(bytes);
+        }
+        else if (value.isEmpty()) {
+            return new LogRetentionStrategy();
+        }
+        else {
+            return new LogRetentionStrategy();
+        }
+    }
+    
+    public boolean isSlaveEnabled() {
+        return getBoolean("humpback.slave", false);
+    }
+    
+    public String getSlaveUrl() {
+        return this.props.getProperty("humpback.slave.url");
+    }
+
+    public String getSlaveUser() {
+        return this.props.getProperty("humpback.slave.user");
+    }
+
+    public String getSlavePassword() {
+        return this.props.getProperty("humpback.slave.password");
+    }
 }

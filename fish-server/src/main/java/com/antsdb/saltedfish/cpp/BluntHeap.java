@@ -26,7 +26,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 public class BluntHeap extends Heap implements AutoCloseable {
 	static final int DEFAULT_SIZE = 1024 * 1024;
-	static final int ALIGNMENT = 4;
+	static final int ALIGNMENT = 8;
     static final int ALIGNMENT_MASK = ALIGNMENT - 1;
 	
 	ByteBuffer buf;

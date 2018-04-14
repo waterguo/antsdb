@@ -14,6 +14,8 @@
 package com.antsdb.saltedfish.server.mysql;
 
 import java.io.Closeable;
+import java.nio.CharBuffer;
+import java.util.function.Consumer;
 
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
@@ -39,7 +41,9 @@ public class MysqlPreparedStatement implements Closeable {
     public MysqlPreparedStatement(Orca orca, PreparedStatement script) {
         super();
         this.script = script;
-        this.row = new VaporizingRow(heap, script.getParameterCount()-1);
+        if (script.getParameterCount() > 0) {
+            this.row = new VaporizingRow(heap, script.getParameterCount()-1);
+        }
     }
 
     public int getId() {
@@ -50,50 +54,50 @@ public class MysqlPreparedStatement implements Closeable {
         return this.script.getParameterCount();
     }
 
-	public Heap getHeap() {
-		return this.heap;
-	}
+    public Heap getHeap() {
+        return this.heap;
+    }
 
-	public void setParam(int paramId, long pValue) {
-    	row.setFieldAddress(paramId, pValue);
-	}
+    public void setParam(int paramId, long pValue) {
+        row.setFieldAddress(paramId, pValue);
+    }
 
-	public Parameters getParams() {
-		return new FishParameters(this.row);
-	}
+    public Parameters getParams() {
+        return new FishParameters(this.row);
+    }
 
-	public Object run(Session session) {
-		FishParameters params = new FishParameters(row);
-		Object result = this.script.run(session, params);
-		return result;
-	}
+    public Object run(Session session, Consumer<Object> callback) {
+        FishParameters params = new FishParameters(row);
+        Object result = session.run(this.script, params, callback);
+        return result;
+    }
 
-	@Override
-	public void close() {
-		if (this.heap != null) {
-			this.heap.free();
-		}
-		this.row = null;
-		this.heap = null;
-	}
+    @Override
+    public void close() {
+        if (this.heap != null) {
+            this.heap.free();
+        }
+        this.row = null;
+        this.heap = null;
+    }
 
-	public void clear() {
-		this.heap.reset(0);
-		this.row = new VaporizingRow(heap, getParameterCount()-1);
-	}
+    public void clear() {
+        this.heap.reset(0);
+        this.row = new VaporizingRow(heap, getParameterCount()-1);
+    }
 
-	public void setParam(int paramId, ByteBuf content) {
-	}
+    public void setParam(int paramId, ByteBuf content) {
+    }
 
-	public ByteBuf getLongData(int i) {
-		return null;
-	}
-	
-	public String getSql() {
-		return this.script.getSql();
-	}
-	
-	public VaporizingRow getParameters() {
-	    return this.row;
-	}
+    public ByteBuf getLongData(int i) {
+        return null;
+    }
+    
+    public CharBuffer getSql() {
+        return this.script.getSql();
+    }
+    
+    public VaporizingRow getParameters() {
+        return this.row;
+    }
 }

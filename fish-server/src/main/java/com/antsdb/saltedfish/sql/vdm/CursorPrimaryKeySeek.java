@@ -156,8 +156,7 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, toString());
-        rec.setMakerId(this.makerId);
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
         records.add(rec);
         this.select.explain(level+1, records);
     }

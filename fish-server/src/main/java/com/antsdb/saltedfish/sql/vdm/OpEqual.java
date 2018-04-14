@@ -32,13 +32,11 @@ public class OpEqual extends BinaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long xAddr = this.left.eval(ctx, heap, params, pRecord);
-        long yAddr = this.right.eval(ctx, heap, params, pRecord);
-        if ((xAddr == 0) || (yAddr == 0)) {
-        	return 0;
+        Integer result = ctx.compare(heap, params, pRecord, this.left, this.right);
+        if (result == null) {
+            return 0;
         }
-        boolean result = AutoCaster.equals(heap, xAddr, yAddr);
-        return FishBool.allocSet(heap, result);
+        return FishBool.allocSet(heap, result == 0);
     }
 
     @Override

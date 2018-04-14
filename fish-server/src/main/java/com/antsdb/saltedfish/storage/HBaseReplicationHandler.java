@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
+import java.io.IOException;
+
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Humpback;
@@ -20,6 +22,7 @@ import com.antsdb.saltedfish.nosql.ReplicationHandler;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
@@ -106,6 +109,19 @@ public class HBaseReplicationHandler extends ReplicationHandler {
         }
     }
 
+
+    @Override
+    public void deleteRow(DeleteRowEntry entry) throws IOException {
+        int tableId = entry.getTableId();
+        long pRow = entry.getRowPointer();
+        long pKey = Row.getKeyAddress(pRow);
+        this.buffer.addDelete(tableId, pKey);
+        this.sp = entry.getSpacePointer();
+        if (this.buffer.flushIfFull()) {
+            this.hbase.updateLogPointer(this.sp);
+        }
+    }
+    
     @Override
     public void index(IndexEntry entry) throws Exception {
         int tableId = entry.getTableId();
@@ -141,5 +157,4 @@ public class HBaseReplicationHandler extends ReplicationHandler {
     public void timestamp(TimestampEntry entry) {
         this.sp = entry.getSpacePointer();
     }
-
 }

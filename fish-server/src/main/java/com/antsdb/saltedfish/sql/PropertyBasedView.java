@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import com.antsdb.saltedfish.sql.vdm.Cursor;
+import com.antsdb.saltedfish.sql.vdm.EmptyCursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.sql.vdm.ViewMaker;
@@ -35,7 +36,14 @@ public abstract class PropertyBasedView extends ViewMaker {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        Cursor c = CursorUtil.toCursor(meta, getProperties());
+        Map<String, Object> props = getProperties();
+        Cursor c;
+        if (props != null) {
+            c = CursorUtil.toCursor(meta, props);
+        }
+        else {
+            c = new EmptyCursor(meta);
+        }
         return c;
     }
 }

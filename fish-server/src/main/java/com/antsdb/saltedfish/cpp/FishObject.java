@@ -18,8 +18,8 @@ import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Timestamp;
 
+import com.antsdb.saltedfish.sql.vdm.AutoCaster;
 import com.antsdb.saltedfish.sql.vdm.ToTimestampRelaxed;
-import com.google.common.base.Charsets;
 
 public class FishObject {
 
@@ -384,41 +384,7 @@ public class FishObject {
 	}
 	
 	public static long toString(Heap heap, long pValue) {
-		if (pValue == 0) {
-			return 0;
-		}
-		byte format = Value.getFormat(null, pValue);
-		switch (format) {
-		case Value.FORMAT_UTF8:
-			return pValue;
-		case Value.FORMAT_UNICODE16:
-			return pValue;
-		case Value.FORMAT_INT4: {
-			long value = Int4.get(heap, pValue);
-			return Unicode16.allocSet(heap, String.valueOf(value));
-		}
-		case Value.FORMAT_INT8: {
-			long value = Int8.get(heap, pValue);
-			return Unicode16.allocSet(heap, String.valueOf(value));
-		}
-		case Value.FORMAT_DECIMAL: {
-		    BigDecimal value = FishDecimal.get(heap, pValue);
-		    return Unicode16.allocSet(heap, value.toString());
-		}
-        case Value.FORMAT_FAST_DECIMAL: {
-            BigDecimal value = FastDecimal.get(heap, pValue);
-            return Unicode16.allocSet(heap, value.toString());
-        }
-		case Value.FORMAT_BYTES: {
-			byte[] bytes = Bytes.get(heap, pValue);
-			return Unicode16.allocSet(heap, new String(bytes, Charsets.UTF_8));
-		}
-		case Value.FORMAT_KEY_BYTES: {
-			return Unicode16.allocSet(heap, KeyBytes.create(pValue).toString());
-		}
-		default:
-			throw new IllegalArgumentException();
-		}
+	    return AutoCaster.toString(heap, pValue);
 	}
 	
 	public static String debug(long pValue) {

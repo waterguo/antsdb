@@ -32,68 +32,68 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author *-xguo0<@
  */
 public class FullTextIndexEntryHandler extends IndexEntryHandler {
-	List<ColumnMeta> columns;
+    List<ColumnMeta> columns;
     KeyMaker keyMaker = KeyMaker.getFullTextIndexKeyMaker();
-	
-	public FullTextIndexEntryHandler(GTable gindex, TableMeta table, IndexMeta index) {
-		super(gindex, table, index);
-		this.columns = index.getColumns(table);
-	}
+    
+    public FullTextIndexEntryHandler(GTable gindex, TableMeta table, IndexMeta index) {
+        super(gindex, table, index);
+        this.columns = index.getColumns(table);
+    }
 
-	@Override
-	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
-		HashMap<String, AtomicInteger> terms = new HashMap<>();
-		for (ColumnMeta i:this.columns) {
-			String text = (String)row.get(i.getColumnId());
-			if (text == null) {
-				return;
-			}
-			LuceneUtil.tokenize(text, (type, term) -> {
-				term = term.toLowerCase();
-				AtomicInteger count = terms.get(term);
-				if (count == null) {
-					count = new AtomicInteger(0);
-					terms.put(term, count);
-				}
-				count.incrementAndGet();
-			});
-		}
-		VaporizingRow frow = new VaporizingRow(heap, 1);
-		frow.setFieldAddress(0, row.getFieldAddress(0));
-		for (Map.Entry<String, AtomicInteger> term:terms.entrySet()) {
-			frow.set(1, term.getKey());
-			long pIndexKey = this.keyMaker.make(heap, frow);
-			int count = term.getValue().get();
-			byte misc = (byte)((count > 0xff) ? 0xff : count);
-			insert(heap, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace);
-		}
-	}
+    @Override
+    void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
+        HashMap<String, AtomicInteger> terms = new HashMap<>();
+        for (ColumnMeta i:this.columns) {
+            String text = (String)row.get(i.getColumnId());
+            if (text == null) {
+                return;
+            }
+            LuceneUtil.tokenize(text, (type, term) -> {
+                term = term.toLowerCase();
+                AtomicInteger count = terms.get(term);
+                if (count == null) {
+                    count = new AtomicInteger(0);
+                    terms.put(term, count);
+                }
+                count.incrementAndGet();
+            });
+        }
+        VaporizingRow frow = new VaporizingRow(heap, 1);
+        frow.setFieldAddress(0, row.getFieldAddress(0));
+        for (Map.Entry<String, AtomicInteger> term:terms.entrySet()) {
+            frow.set(1, term.getKey());
+            long pIndexKey = this.keyMaker.make(heap, frow);
+            int count = term.getValue().get();
+            byte misc = (byte)((count > 0xff) ? 0xff : count);
+            insert(heap, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace);
+        }
+    }
 
-	@Override
-	void delete(Heap heap, Transaction trx, Row row, int timeout) {
-		HashSet<String> terms = new HashSet<>();
-		for (ColumnMeta i:this.columns) {
-			String text = (String)row.get(i.getColumnId());
-			if (text == null) {
-				return;
-			}
-			LuceneUtil.tokenize(text, (type, term) -> {
-				terms.add(term.toLowerCase());
-			});
-		}
-		VaporizingRow frow = new VaporizingRow(heap, 1);
-		frow.setFieldAddress(0, row.getFieldAddress(0));
-		for (String term:terms) {
-			frow.set(1, term);
-			long pIndexKey = this.keyMaker.make(heap, frow);
-			delete(heap, trx, pIndexKey, timeout);
-		}
-	}
+    @Override
+    void delete(Heap heap, Transaction trx, Row row, int timeout) {
+        HashSet<String> terms = new HashSet<>();
+        for (ColumnMeta i:this.columns) {
+            String text = (String)row.get(i.getColumnId());
+            if (text == null) {
+                return;
+            }
+            LuceneUtil.tokenize(text, (type, term) -> {
+                terms.add(term.toLowerCase());
+            });
+        }
+        VaporizingRow frow = new VaporizingRow(heap, 1);
+        frow.setFieldAddress(0, row.getFieldAddress(0));
+        for (String term:terms) {
+            frow.set(1, term);
+            long pIndexKey = this.keyMaker.make(heap, frow);
+            delete(heap, trx, pIndexKey, timeout);
+        }
+    }
 
-	@Override
-	void update(Heap heap, Transaction trx, Row oldRow, VaporizingRow newRow, boolean force, int timeout) {
-		delete(heap, trx, oldRow, timeout);
-		insert(heap, trx, newRow, timeout, true);
-	}
+    @Override
+    void update(Heap heap, Transaction trx, Row oldRow, VaporizingRow newRow, boolean force, int timeout) {
+        delete(heap, trx, oldRow, timeout);
+        insert(heap, trx, newRow, timeout, true);
+    }
 
 }

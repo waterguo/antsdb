@@ -30,23 +30,23 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  *  
  * @author wgu0
  */
-final class IndexEntryHandlers {
+public final class IndexEntryHandlers {
 	List<IndexEntryHandler> handlers = new ArrayList<>();
 	
 	IndexEntryHandlers(Orca orca, TableMeta table) {
-    	Humpback humpback = orca.getHumpback();
-    	for (IndexMeta i:table.getIndexes()) {
-    		IndexEntryHandler handler;
-    		GTable gindex = humpback.getTable(i.getIndexTableId());
-    		if (i.isFullText()) {
-    			handler = new FullTextIndexEntryHandler(gindex, table, i);
-    		} 
-    		else {
-    			handler = new IndexEntryHandler(gindex, table, i);
-    		}
-    		handlers.add(handler);
-    		handler.keyMaker = i.getKeyMaker();
-    	}
+        	Humpback humpback = orca.getHumpback();
+        	for (IndexMeta i:table.getIndexes()) {
+        		IndexEntryHandler handler;
+        		GTable gindex = humpback.getTable(i.getIndexTableId());
+        		if (i.isFullText()) {
+        			handler = new FullTextIndexEntryHandler(gindex, table, i);
+        		} 
+        		else {
+        			handler = new IndexEntryHandler(gindex, table, i);
+        		}
+        		handlers.add(handler);
+        		handler.keyMaker = i.getKeyMaker();
+        	}
 	}
 	
 	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {

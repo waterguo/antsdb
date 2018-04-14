@@ -11,7 +11,7 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.server.mysql.packet;
+package com.antsdb.saltedfish.sql;
 
 import java.nio.CharBuffer;
 
@@ -24,7 +24,7 @@ import org.antlr.v4.runtime.misc.Interval;
  *  
  * @author wgu0
  */
-class MysqlCharStream implements CharStream {
+class CharBufferStream implements CharStream {
 	/** How many characters are actually in the buffer */
 	protected int n;
 
@@ -33,7 +33,7 @@ class MysqlCharStream implements CharStream {
 	
 	CharBuffer buf;
 	
-	MysqlCharStream(CharBuffer buf) {
+	CharBufferStream(CharBuffer buf) {
 		this.buf = buf.slice();
 		this.n = this.buf.limit();
 	}

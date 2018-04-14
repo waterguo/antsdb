@@ -384,7 +384,6 @@ public class Synchronizer extends FishServiceThread {
                 this.speedometer.sample(this.totalOps);
                 MemTablet next = TabletUtil.findOldestTablet(this.humpback, source.getLogSpan().x + 1, false);
                 this.sp = (next != null) ? next.getLogSpan().x - 1 : source.getLogSpan().y + 1;
-     
                 getStorage().setEndSpacePointer(this.sp);
                 success = true;
                 return count;

@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.charset;
 
 import java.nio.ByteBuffer;
+import java.util.function.IntSupplier;
 
 /**
  * ISO8859 decoder
@@ -27,5 +28,26 @@ public class Iso8859 implements Decoder {
 		int ch = buf.get() & 0xff;
 		return ch;
 	}
+
+    @Override
+    public IntSupplier mapDecode(IntSupplier input) {
+        IntSupplier result = new IntSupplier() {
+            @Override
+            public int getAsInt() {
+                int ch = get(input);
+                return ch;
+            }
+        };
+        return result;
+    }
+
+    @Override
+    public int get(IntSupplier input) {
+        int result = input.getAsInt();
+        if (result == -1) {
+            return -1;
+        }
+        return result & 0xffff;
+    }
 
 }

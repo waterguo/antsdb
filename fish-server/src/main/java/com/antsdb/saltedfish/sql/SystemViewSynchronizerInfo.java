@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql;
 
 import java.util.Map;
 
+import com.antsdb.saltedfish.nosql.Synchronizer;
+
 /**
  * 
  * @author *-xguo0<@
@@ -29,7 +31,8 @@ public class SystemViewSynchronizerInfo extends PropertyBasedView {
 
     @Override
     public Map<String, Object> getProperties() {
-        return this.orca.getHumpback().getSynchronizer().getSummary();
+        Synchronizer synchronizer = this.orca.getHumpback().getSynchronizer();
+        return synchronizer!=null ? synchronizer.getSummary() : null;
     }
 
 }

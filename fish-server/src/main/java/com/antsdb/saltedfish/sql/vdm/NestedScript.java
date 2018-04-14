@@ -26,8 +26,10 @@ public class NestedScript extends Instruction {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         Parameters full = new Parameters(this.params);
-        for (Object i:params.values) {
-            full.values.add(i);
+        if (params != null) {
+            for (Object i:params.values) {
+                full.values.add(i);
+            }
         }
         Object result = this.source.run(ctx, full, pMaster);
         return result;

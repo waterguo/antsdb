@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package debug;
 
+import java.nio.CharBuffer;
 import java.sql.Timestamp;
 
 import com.antsdb.saltedfish.cpp.FishObject;
@@ -22,6 +23,7 @@ import com.antsdb.saltedfish.cpp.Int4Array;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.vdm.Record;
+import com.antsdb.saltedfish.util.BytesUtil;
 
 /**
  * 
@@ -52,5 +54,25 @@ public class debug {
             return "[" + Integer.toHexString(Value.FORMAT_INT4_ARRAY & 0xff) + "]" + new Int4Array(p).toString();
         }
 		return FishObject.debug(p);
+	}
+	
+	public static String dumpHex(CharBuffer buf) {
+	    StringBuilder s = new StringBuilder();
+	    buf = buf.duplicate();
+	    buf.position(0);
+	    for (int i=0; buf.hasRemaining(); i++) {
+	        char ch = buf.get();
+	        String hex = BytesUtil.toHex(ch);
+	        s.append(hex);
+	        s.append(' ');
+	        if ((i > 0) && (i % 8 == 0)) {
+	           buf.append("\n"); 
+	        }
+	    }
+	    return s.toString();
+	}
+	
+	public String dumpHex(String s) {
+	    return dumpHex(CharBuffer.wrap(s));
 	}
 }

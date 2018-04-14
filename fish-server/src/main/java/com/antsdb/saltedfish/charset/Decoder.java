@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.charset;
 
 import java.nio.ByteBuffer;
+import java.util.function.IntSupplier;
 
 /**
  * 
@@ -21,4 +22,15 @@ import java.nio.ByteBuffer;
  */
 public interface Decoder {
 	public int get(ByteBuffer buf);
+	public IntSupplier mapDecode(IntSupplier supplier);
+	public int get(IntSupplier supplier);
+	
+	public default String toString(IntSupplier input) {
+        StringBuilder buf = new StringBuilder();
+        IntSupplier output = mapDecode(input);
+        for (int ch = output.getAsInt(); ch != -1; ch=output.getAsInt()) {
+               buf.append((char)ch); 
+        }
+        return buf.toString();
+	}
 }

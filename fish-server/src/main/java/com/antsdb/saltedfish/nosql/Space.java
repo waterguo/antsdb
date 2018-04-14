@@ -34,21 +34,21 @@ import com.antsdb.saltedfish.util.UberUtil;
 final class Space implements AutoCloseable {
     static Logger _log = UberUtil.getThisLogger();
     
-	int id;
-	File file;
-	long addr;
-	long spStart;
-	long spEnd;
-	AccessToken token;
-	AtomicInteger allocPointer;
-	MemoryMappedFile mmf;
-	int capacity;
+    int id;
+    File file;
+    long addr;
+    long spStart;
+    long spEnd;
+    AccessToken token;
+    AtomicInteger allocPointer;
+    MemoryMappedFile mmf;
+    int capacity;
     boolean isGarbage = false;
-	
-	public void open(MapMode mode, int fileSize) throws IOException {
+    
+    public void open(MapMode mode, int fileSize) throws IOException {
         int fileLength = (int)this.file.length();
         int size = (mode == MapMode.READ_WRITE) ? fileSize : fileLength;
-	    this.mmf = new MemoryMappedFile(this.file, size, mode == MapMode.READ_WRITE ? "rw" : "r");
+        this.mmf = new MemoryMappedFile(this.file, size, mode == MapMode.READ_WRITE ? "rw" : "r");
         if (mode == MapMode.READ_WRITE) {
             File parent = file.getAbsoluteFile().getParentFile();
             long free = parent.getUsableSpace();
@@ -65,8 +65,8 @@ final class Space implements AutoCloseable {
         this.spEnd = fileSize + this.spStart;
         this.allocPointer = new AtomicInteger(fileLength);
         this.capacity = this.mmf.buf.capacity();
-	}
-	
+    }
+    
     @Override
     public void close() throws Exception {
         if (this.mmf == null) {

@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql.packet;
 
+import java.nio.CharBuffer;
+
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.server.mysql.MysqlServerHandler;
@@ -22,7 +24,7 @@ import com.antsdb.saltedfish.util.UberUtil;
 import io.netty.buffer.ByteBuf;
 
 public class StmtPreparePacket extends RecievePacket {
-    public String sql;
+    public CharBuffer sql;
     static Logger _log = UberUtil.getThisLogger();
     
     public StmtPreparePacket(int command) {
@@ -31,7 +33,7 @@ public class StmtPreparePacket extends RecievePacket {
 
     @Override
     public void read(MysqlServerHandler handler, ByteBuf in) {
-        sql = BufferUtils.readString(in);
+        sql = BufferUtils.readStringCrazy(handler.getDecoder(), in);
         if (_log.isTraceEnabled()) 
         	_log.trace("Prepare:"+sql);
     }

@@ -36,18 +36,18 @@ public class DumbSorter extends CursorMaker {
     class MyComparator implements Comparator<Item> {
         @Override
         public int compare(Item x, Item y) {
-			for (int i=0; i<x.key.length; i++) {
-				Object xx = x.key[i];
-				Object yy = y.key[i];
+            for (int i = 0; i < x.key.length; i++) {
+                Object xx = x.key[i];
+                Object yy = y.key[i];
                 int result = UberUtil.safeCompare(xx, yy);
                 if (!DumbSorter.this.sortAsc.get(i)) {
-                    result = - result;
+                    result = -result;
                 }
                 if (result != 0) {
                     return result;
                 }
-			}
-			return 0;
+            }
+            return 0;
         }
 
         @Override
@@ -57,14 +57,14 @@ public class DumbSorter extends CursorMaker {
     }
 
     private static class Item {
-    	Object[] key;
-    	long pRecord;
+        Object[] key;
+        long pRecord;
     }
     
     private static class MyCursor extends Cursor {
         private List<Item> items;
         private Cursor upstream;
-        int i=0;
+        int i = 0;
 
         public MyCursor(Cursor upstream, CursorMeta meta, List<Item> items) {
             super(meta);
@@ -86,7 +86,10 @@ public class DumbSorter extends CursorMaker {
         public void close() {
             this.upstream.close();
         }
-        
+    }
+    
+    public DumbSorter(CursorMaker upstream, Operator expr, boolean asc, int makerId) {
+        this(upstream, Collections.singletonList(expr), Collections.singletonList((Boolean)asc), makerId);
     }
     
     public DumbSorter(CursorMaker upstream, List<Operator> exprs, List<Boolean> sortAsc, int makerId) {
@@ -104,62 +107,66 @@ public class DumbSorter extends CursorMaker {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	AtomicLong counter = ctx.getCursorStats(makerId);
-    	Heap heap = new FlexibleHeap();
-    	Cursor c = this.upstream.make(ctx, params, pMaster);
-    	c = new RecordBuffer(c);
-    	try {
-	        List<Item> items = new ArrayList<>();
-	        for (long pRecord = c.next(); pRecord != 0; pRecord = c.next()) {
-	        	Item item = new Item();
-	        	item.pRecord = pRecord;
-	        	heap.reset(0);
-	        	item.key = getSortKey(ctx, heap, params, pRecord);
-	        	items.add(item);
-	        }
-	        counter.addAndGet(items.size());
-	        Collections.sort(items, new MyComparator());
-	        Cursor result = new MyCursor(c, getCursorMeta(), items);
-	        return result;
-    	}
-    	finally {
-    		heap.free();
-    	}
+         AtomicLong counter = ctx.getCursorStats(makerId);
+         Heap heap = new FlexibleHeap();
+         Cursor c = this.upstream.make(ctx, params, pMaster);
+         c = new RecordBuffer(c);
+         try {
+             List<Item> items = new ArrayList<>();
+             for (long pRecord = c.next(); pRecord != 0; pRecord = c.next()) {
+                  Item item = new Item();
+                  item.pRecord = pRecord;
+                  heap.reset(0);
+                  item.key = getSortKey(ctx, heap, params, pRecord);
+                  items.add(item);
+             }
+             counter.addAndGet(items.size());
+             Collections.sort(items, new MyComparator());
+             Cursor result = new MyCursor(c, getCursorMeta(), items);
+             return result;
+         }
+         finally {
+             heap.free();
+         }
     }
 
-	@Override
+    @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, getClass().getSimpleName());
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, getClass().getSimpleName());
         records.add(rec);
         this.upstream.explain(level+1, records);
     }
 
     private Object[] getSortKey(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        	Object[] key = new Object[this.exprs.size()];
-        	int i=0;
-        	for (Operator expr:this.exprs) {
-        		long pValue = expr.eval(ctx, heap, params, pRecord);
-        		Object value = FishObject.get(heap, pValue);
-        		if ((pValue != 0) && (value == null)) {
-        		    byte format = Value.getFormat(heap, pValue);
-        		    if (format == Value.FORMAT_DATE) {
-        		        // mysql '0000-00-00'
-        		        value = new Date(1);
-        		    }
-        		    else if (format == Value.FORMAT_TIMESTAMP) {
-                        // mysql '0000-00-00 00:00:00'
-                    value = new Timestamp(1);
-        		    }
-        		}
-        		key[i] = value;
-        		i++;
-        	}
-		return key;
-	}
+         Object[] key = new Object[this.exprs.size()];
+         int i=0;
+         for (Operator expr:this.exprs) {
+             long pValue = expr.eval(ctx, heap, params, pRecord);
+             Object value = FishObject.get(heap, pValue);
+             if ((pValue != 0) && (value == null)) {
+                 byte format = Value.getFormat(heap, pValue);
+                 if (format == Value.FORMAT_DATE) {
+                  // mysql '0000-00-00'
+                  value = new Date(1);
+                 }
+                 else if (format == Value.FORMAT_TIMESTAMP) {
+               // mysql '0000-00-00 00:00:00'
+              value = new Timestamp(1);
+                 }
+             }
+             key[i] = value;
+             i++;
+         }
+        return key;
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return false;
+    }
+
+    public CursorMaker getUpstream() {
+        return this.upstream;
     }
 
 }

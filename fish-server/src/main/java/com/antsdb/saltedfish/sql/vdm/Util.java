@@ -18,11 +18,11 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.FishObject;
 
 class Util {
-	static Object eval(VdmContext ctx, Operator expr, Parameters params, long pMaster) {
-		try (Heap heap = new FlexibleHeap()) {
-			long addr = expr.eval(ctx, heap, params, pMaster);
-			Object result = FishObject.get(heap, addr);
-			return result;
-		}
-	}
+    static Object eval(VdmContext ctx, Operator expr, Parameters params, long pMaster) {
+        try (Heap heap = new FlexibleHeap()) {
+            long addr = expr.eval(ctx, heap, params, pMaster);
+            Object result = FishObject.get(heap, addr);
+            return result;
+        }
+    }
 }

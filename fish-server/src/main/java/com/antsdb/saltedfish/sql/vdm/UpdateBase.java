@@ -55,10 +55,10 @@ abstract class UpdateBase extends Statement {
         if (pk != null) {
 	        List<ColumnMeta> pkColumns = table.getPrimaryKey().getColumns(table);
 	        for (ColumnMeta i:columns) {
-	        	if (pkColumns.contains(i)) {
-	        		this.isPrimaryKeyAffected = true;
-	        		break;
-	        	}
+	            if (pkColumns.contains(i)) {
+    	        		    this.isPrimaryKeyAffected = true;
+    	        		    break;
+    	        	    }
 	        }
         }
 	}
@@ -75,7 +75,7 @@ abstract class UpdateBase extends Statement {
 
             Row oldRow = this.gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey);
 	        if (oldRow == null) {
-	        	// row could be deleted between query and here
+	            // row could be deleted between query and here
 	            return false;
 	        }
 	        long pRecord = Record.fromRow(heap, table, oldRow);

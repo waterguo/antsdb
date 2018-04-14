@@ -40,7 +40,13 @@ public abstract class Function extends Operator {
     }
 
     public abstract int getMinParameters();
+    
     public int getMaxParameters() {
-    	return getMinParameters();
+        return getMinParameters();
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName().substring(4);
     }
 }

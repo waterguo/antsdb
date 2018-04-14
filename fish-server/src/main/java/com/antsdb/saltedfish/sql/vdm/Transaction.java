@@ -27,8 +27,8 @@ import com.antsdb.saltedfish.util.UberUtil;
  *
  */
 public final class Transaction {
-	static Logger _log = UberUtil.getThisLogger();
-	
+    static Logger _log = UberUtil.getThisLogger();
+    
     private volatile long trxid;
     long trxts;
     boolean isDdl = false;
@@ -38,18 +38,18 @@ public final class Transaction {
 
     /* debug code below
     @Override
-	protected void finalize() throws Throwable {
-    	if (this.trxid < 0) {
-    		if (this.trxman.getTimestamp(trxid) < -10) {
-    			_log.error("leaked trx {}", trxid);
-    		}
-    	}
-		super.finalize();
-	}
-	*/
+    protected void finalize() throws Throwable {
+        if (this.trxid < 0) {
+            if (this.trxman.getTimestamp(trxid) < -10) {
+                _log.error("leaked trx {}", trxid);
+            }
+        }
+        super.finalize();
+    }
+    */
 
     public Transaction(TrxMan trxman) {
-    	this.trxman = trxman;
+        this.trxman = trxman;
     }
     
     public Transaction(long trxid, long trxts) {
@@ -64,11 +64,10 @@ public final class Transaction {
     
     public long getGuaranteedTrxId() {
         if (this.trxid == 0) {
-	        if (this.trxman == null) {
-	        	throw new CodingError();
-	        }
+            if (this.trxman == null) {
+                throw new CodingError();
+            }
             this.trxid = this.trxman.getNewTrxId();
-            this.spStart = this.trxman.getCurrentSp();
         }
         return this.trxid;
     }
@@ -112,50 +111,50 @@ public final class Transaction {
         return trx;
     }
 
-	public void setDdl(boolean b) {
-		this.isDdl = b;
-	}
+    public void setDdl(boolean b) {
+        this.isDdl = b;
+    }
 
-	public boolean isDddl() {
-		return this.isDdl;
-	}
+    public boolean isDddl() {
+        return this.isDdl;
+    }
 
-	public void releaseAllLocks() {
-		// release all table locks
-		
-		if (this.tableLock != null) {
-			this.tableLock.releaseAll();
-		}
-		this.tableLock = null;
-	}
+    public void releaseAllLocks() {
+        // release all table locks
+        
+        if (this.tableLock != null) {
+            this.tableLock.releaseAll();
+        }
+        this.tableLock = null;
+    }
 
-	@Override
-	public String toString() {
-		StringBuilder buf = new StringBuilder();
-		buf.append("trxid=");
-		buf.append(this.trxid);
-		buf.append(",trxts=");
-		buf.append(this.trxts);
-		return buf.toString();
-	}
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        buf.append("trxid=");
+        buf.append(this.trxid);
+        buf.append(",trxts=");
+        buf.append(this.trxts);
+        return buf.toString();
+    }
 
-	public void newTrxTs() {
-		this.trxts = this.trxman.getNewVersion();
-	}
+    public void newTrxTs() {
+        this.trxts = this.trxman.getNewVersion();
+    }
 
-	public void addLock(TableLock lock) {
-		lock.makeTransactional(this.tableLock);
-		this.tableLock = lock;
-	}
+    public void addLock(TableLock lock) {
+        lock.makeTransactional(this.tableLock);
+        this.tableLock = lock;
+    }
 
-	public void reset() {
-		this.trxid = 0;
-		this.trxts = 0;
-		this.spStart = 0;
-		this.isDdl = false;
-	}
-	
-	public long getStartSp() {
-	    return this.spStart;
-	}
+    public void reset() {
+        this.trxid = 0;
+        this.trxts = 0;
+        this.spStart = 0;
+        this.isDdl = false;
+    }
+    
+    public long getStartSp() {
+        return this.spStart;
+    }
 }

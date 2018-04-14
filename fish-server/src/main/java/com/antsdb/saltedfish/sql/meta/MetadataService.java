@@ -55,7 +55,7 @@ public class MetadataService {
     
     Orca orca;
     Map<Integer, TableMeta> cache = new ConcurrentHashMap<>();
-	private long version;
+    private long version;
     
     public MetadataService(Orca orca) {
         super();
@@ -144,7 +144,7 @@ public class MetadataService {
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSTABLE);
         Row rrow = table.getRow(trx.getTrxId(), trx.getTrxTs(), KeyMaker.make(id));
         if (rrow == null) {
-        	return null;
+            return null;
         }
         SlowRow row = SlowRow.from(rrow);
         row.setMutable(false);
@@ -181,17 +181,17 @@ public class MetadataService {
         // create primary key maker
         
         if (tableMeta.pk != null) {
-        	tableMeta.keyMaker = new KeyMaker(tableMeta.pk.getColumns(tableMeta), true);
+            tableMeta.keyMaker = new KeyMaker(tableMeta.pk.getColumns(tableMeta), true);
         }
         else {
-        	tableMeta.keyMaker = new KeyMaker(Collections.emptyList(), true);
+            tableMeta.keyMaker = new KeyMaker(Collections.emptyList(), true);
         }
         
         // create index key maker
         
         for (IndexMeta i:tableMeta.indexes) {
-        	KeyMaker maker = new KeyMaker(i.getColumns(tableMeta), i.isUnique());
-        	i.keyMaker = maker;
+            KeyMaker maker = new KeyMaker(i.getColumns(tableMeta), i.isUnique());
+            i.keyMaker = maker;
         }
         
         // done
@@ -203,7 +203,7 @@ public class MetadataService {
         int tableId = tableMeta.getId();
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSRULE);
         if (table == null) {
-        	return;
+            return;
         }
         byte[] start = KeyMaker.gen(tableMeta.getId());
         byte[] end = KeyMaker.gen(tableMeta.getId() + 1);
@@ -315,7 +315,7 @@ public class MetadataService {
         String location = table.getLocation(trxid, Long.MAX_VALUE, tableMeta.getKey());
         _log.debug("table {}/{} is deleted at {}", trx, tableMeta.getObjectName().toString(), location);
         if (error != HumpbackError.SUCCESS) {
-        	throw new OrcaException(error);
+            throw new OrcaException(error);
         }
         
         GTable sysColumn = getSysColumn();
@@ -342,7 +342,7 @@ public class MetadataService {
         trx.setDdl(true);
     }
 
-    public void addColumn(Transaction trx, ColumnMeta columnMeta) throws HumpbackException {
+    public void addColumn(Transaction trx, TableMeta table, ColumnMeta columnMeta) throws HumpbackException {
         long trxid = trx.getGuaranteedTrxId();
         GTable sysColumn = getSysColumn();
         columnMeta.row.setTrxTimestamp(trxid);
@@ -351,6 +351,14 @@ public class MetadataService {
         // doh, this is a ddl transaction, remember it
         
         trx.setDdl(true);
+        
+        // inform humpback
+        
+        this.orca.getHumpback().addColumn(
+                trxid, 
+                table.getHtableId(), 
+                columnMeta.getColumnId(), 
+                columnMeta.getColumnName());
     }
     
     public void modifyColumn(Transaction trx, ColumnMeta columnMeta) throws HumpbackException {
@@ -363,7 +371,7 @@ public class MetadataService {
         trx.setDdl(true);
     }
     
-	public void deleteColumn(Transaction trx, ColumnMeta column) {
+    public void deleteColumn(Transaction trx, TableMeta table, ColumnMeta column) {
         long trxid = trx.getGuaranteedTrxId();
         GTable sysColumn = getSysColumn();
         sysColumn.delete(trxid, column.row.getKey(), 1000);
@@ -371,8 +379,12 @@ public class MetadataService {
         // doh, this is a ddl transaction, remember it
         
         trx.setDdl(true);
-	}
-	
+        
+        // inform humpback
+        
+        this.orca.getHumpback().deleteColumn(trxid, table.getHtableId(), column.getColumnId());
+    }
+    
     public List<String> getNamespaces() {
         return this.orca.getHumpback().getNamespaces();
     }
@@ -412,7 +424,7 @@ public class MetadataService {
         seq.row.setTrxTimestamp(trxid);
         HumpbackError error = table.insert(seq.row, 0);
         if (error != HumpbackError.SUCCESS) {
-        	throw new OrcaException(error);
+            throw new OrcaException(error);
         }
 
         // doh, this is a ddl transaction, remember it
@@ -434,7 +446,7 @@ public class MetadataService {
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSSEQUENCE);
         HumpbackError error = table.update(trxid, seq.row, 0);
         if (error != HumpbackError.SUCCESS) {
-        	throw new OrcaException(error);
+            throw new OrcaException(error);
         }
     }
 
@@ -448,7 +460,7 @@ public class MetadataService {
         trx.setDdl(true);
     }
     
-	public void updateRule(Transaction trx, RuleMeta<?> rule) {
+    public void updateRule(Transaction trx, RuleMeta<?> rule) {
         GTable ruleTable = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSRULE);
         rule.row.setTrxTimestamp(trx.getGuaranteedTrxId());
         ruleTable.update(trx.getGuaranteedTrxId(), rule.row, 0);
@@ -456,12 +468,12 @@ public class MetadataService {
         // doh, this is a ddl transaction, remember it
         
         trx.setDdl(true);
-	}
+    }
 
     public synchronized void commit(Transaction trx, long version) {
-    	if (version > 0) {
-    		this.version = version;
-    	}
+        if (version > 0) {
+            this.version = version;
+        }
         Map<Integer, TableMeta> aged = this.cache;
         this.cache = new ConcurrentHashMap<>(); 
         for (TableMeta i:aged.values()) {
@@ -473,8 +485,8 @@ public class MetadataService {
         this.orca.clearStatementCache();
     }
 
-	public void deleteRule(Transaction trx, RuleMeta<?> rule) {
-		trx.setDdl(true);
+    public void deleteRule(Transaction trx, RuleMeta<?> rule) {
+        trx.setDdl(true);
         long trxid = trx.getGuaranteedTrxId();
         GTable sysRule = getSysRule();
         sysRule.delete(trxid, rule.row.getKey(), 0);
@@ -482,26 +494,26 @@ public class MetadataService {
         // doh, this is a ddl transaction, remember it
         
         trx.setDdl(true);
-	}
+    }
 
-	/**
-	 * find a new unique name using the input as prefix
-	 * 
-	 * @param tableName
-	 * @return
-	 */
-	public ObjectName findUniqueName(Transaction trx, ObjectName tableName) {
-		for (;;) {
-			if (getTable(trx, tableName) == null) {
-				return tableName;
-			}
-			tableName.table = tableName.table + "_";
-		}
-	}
+    /**
+     * find a new unique name using the input as prefix
+     * 
+     * @param tableName
+     * @return
+     */
+    public ObjectName findUniqueName(Transaction trx, ObjectName tableName) {
+        for (;;) {
+            if (getTable(trx, tableName) == null) {
+                return tableName;
+            }
+            tableName.table = tableName.table + "_";
+        }
+    }
 
-	public long getVersion() {
-		return this.version;
-	}
+    public long getVersion() {
+        return this.version;
+    }
 
     public void updateTable(Transaction trx, TableMeta table) {
         trx.getGuaranteedTrxId();

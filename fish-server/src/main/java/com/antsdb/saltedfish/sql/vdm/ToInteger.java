@@ -31,54 +31,39 @@ public class ToInteger extends UnaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long addrVal = this.upstream.eval(ctx, heap, params, pRecord);
-        byte format = Value.getFormat(heap, addrVal);
+        long pValue = this.upstream.eval(ctx, heap, params, pRecord);
+        pValue = AutoCaster.toNumber(heap, pValue);
+        byte format = Value.getFormat(heap, pValue);
         if (format == Value.FORMAT_INT4) {
-        	return addrVal;
+        	    return pValue;
         }
         else if (format == Value.FORMAT_INT8) {
-        	long value = Int8.get(heap, addrVal);
-        	if ((value > Integer.MAX_VALUE) || (value < Integer.MIN_VALUE)) {
-        		throw new IllegalArgumentException(String.valueOf(value));
-        	}
-        	return Int4.allocSet(heap, (int)value);
+        	    long value = Int8.get(heap, pValue);
+            	if ((value > Integer.MAX_VALUE) || (value < Integer.MIN_VALUE)) {
+            		throw new IllegalArgumentException(String.valueOf(value));
+            	}
+            	return Int4.allocSet(heap, (int)value);
         }
-        Object val = FishObject.get(heap, addrVal);
+        Object val = FishObject.get(heap, pValue);
         Object result = null;
         if (val == null) {
         }
         else if (val instanceof Integer) {
-        	result = val;
+            result = val;
         }
         else if (val instanceof Long) {
-        	long n = (Long)val;
-        	if ((n > Integer.MAX_VALUE) || (n < Integer.MIN_VALUE)) {
-        		throw new IllegalArgumentException(String.valueOf(n));
-        	}
-        	result = (int)n;
+        	    long n = (Long)val;
+            	if ((n > Integer.MAX_VALUE) || (n < Integer.MIN_VALUE)) {
+            		throw new IllegalArgumentException(String.valueOf(n));
+            	}
+            	result = (int)n;
         }
         else if (val instanceof BigDecimal) {
             BigDecimal value = (BigDecimal)val;
             result = value.intValueExact();
         }
-        else if (val instanceof String) {
-            String s = (String)val;
-            if (s.isEmpty()) {
-                // mysql behavior. tested with 5.5.5-10.0.31-MariaDB
-                result = 0; 
-            }
-            else {
-                try {
-                    result = Integer.valueOf(s);
-                }
-                catch (Exception x) {
-                    // need to make sure 10.0 also works in this case
-                	result = new BigDecimal((String)val).intValueExact(); 
-                }
-            }
-        }
         else if (val instanceof Double) {
-        	val = ((Double)val).intValue();
+        	    val = ((Double)val).intValue();
         }
         else {
             throw new CodingError(val.getClass().toGenericString());

@@ -59,19 +59,19 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class Minke implements Closeable, LogSpan, StorageEngine {
     
     static Logger _log = UberUtil.getThisLogger();
-	
+    
     /** time to wait before gc the object, it is to prevent racing condition */
     static final int GC_WAIT_MS = 1000;
     
-	File home;
-	Set<MinkePage> garbage = new ConcurrentSkipListSet<>();
+    File home;
+    Set<MinkePage> garbage = new ConcurrentSkipListSet<>();
     Queue<MinkePage> free = new ConcurrentLinkedDeque<>();
     ConcurrentMap<Integer, MinkeTable> tableById = new ConcurrentHashMap<>();
-	CopyOnWriteArrayList<MinkeFile> files = new CopyOnWriteArrayList<>();
-	Map<Integer, MinkePage> lastFreeze = new ConcurrentHashMap<>();
-	GarbageCollector gc = new GarbageCollector();
-	int nextFileId = 0x100-1;
-	PageIndexFile pif;
+    CopyOnWriteArrayList<MinkeFile> files = new CopyOnWriteArrayList<>();
+    Map<Integer, MinkePage> lastFreeze = new ConcurrentHashMap<>();
+    GarbageCollector gc = new GarbageCollector();
+    int nextFileId = 0x100-1;
+    PageIndexFile pif;
     int fileSize = 1024 * 1024 * 1024;
     int pageSize = 16 * 1024 * 1024;
     boolean isClosed = false;
@@ -85,7 +85,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     private volatile int nOpenFiles;
     /** max number of files */
     private int nFiles;
-	
+    
     static class GarbagePage implements Comparable<GarbagePage> {
         int child1;
         int child2;
@@ -110,29 +110,29 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         this.pageSize = pageSize;
     }
     
-	public MinkeTable createTableIfAbsent(int tableId, TableType type) {
+    public MinkeTable createTableIfAbsent(int tableId, TableType type) {
         MinkeTable table = this.tableById.get(tableId);
-	    if (table != null) {
-	        return table;
-	    }
+        if (table != null) {
+            return table;
+        }
         table = new MinkeTable(this, tableId, type);
         this.tableById.put(tableId, table);
         return table;
-	}
-	
+    }
+    
     public MinkePage alloc(int tableId, KeyBytes startKey, KeyBytes endKey) throws IOException {
         MinkePage result = alloc(tableId);
         result.assign(tableId, startKey, endKey);
         return result;
     }
     
-	public synchronized MinkePage alloc(int tableId, long pStartKey, long pEndKey) throws IOException {
+    public synchronized MinkePage alloc(int tableId, long pStartKey, long pEndKey) throws IOException {
         MinkePage result = alloc(tableId);
         result.assign(tableId, pStartKey, pEndKey);
         return result;
-	}
+    }
 
-	private MinkePage alloc(int tableId) throws IOException {
+    private MinkePage alloc(int tableId) throws IOException {
         MinkePage result = null;
         for (;;) {
             result = this.free.poll();
@@ -147,8 +147,8 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
             }
             allocFileIfFull();
         }
-	}
-	
+    }
+    
     private synchronized MinkeFile allocFileIfFull() throws IOException {
         if (this.free.size() > 0) {
             return null;
@@ -178,22 +178,22 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     }
 
     public int getPageSize() {
-		return this.pageSize;
-	}
+        return this.pageSize;
+    }
 
     @Override
     public void open(File home, ConfigService config, boolean isMutable) throws Exception {
         if (this.files.size() != 0) {
             throw new CodingError("reopen is not supported");
         }
-	    if (config != null) {
-	        this.fileSize = config.getMinkeFileSize();
-	        this.pageSize = config.getMinkePageSize();
-	        this.size = config.getMinkeSize();
-	        this.nFiles = (int)(this.size / this.fileSize);
-	        this.pagesPerFile = (this.fileSize - MinkeFile.HEADER_SIZE) / this.pageSize;
-	        this.nPages = this.pagesPerFile * this.nFiles;
-	    }
+        if (config != null) {
+            this.fileSize = config.getMinkeFileSize();
+            this.pageSize = config.getMinkePageSize();
+            this.size = config.getMinkeSize();
+            this.nFiles = (int)(this.size / this.fileSize);
+            this.pagesPerFile = (this.fileSize - MinkeFile.HEADER_SIZE) / this.pageSize;
+            this.nPages = this.pagesPerFile * this.nFiles;
+        }
         if (pageSize >= fileSize) {
             throw new IllegalArgumentException();
         }
@@ -202,44 +202,44 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
         this.home = home;
         _log.info("openning minke {} ...", this.home);
-	    
-	    // create directory if necessary
-	    
-		if (!this.home.exists() && isMutable) {
-	        _log.info("minke does not exist, creating at {} ...", this.home);
-			this.home.mkdirs();
-		}
-		
-		// open pages
-		
-		Map<Integer, MinkePage> pages = new HashMap<>();
-		int maxFileId = this.nextFileId;
-		for (File i:this.home.listFiles()) {
-		    String name = i.getName(); 
-		    if ((name.length() == 12) && (name.endsWith(".psf"))) {
-		        int fileId = Integer.parseInt(name.substring(0,  8), 16);
-		        maxFileId = Math.max(maxFileId, fileId);
-		        MinkeFile mfile = new MinkeFile(fileId, i, fileSize, pageSize, this.isMutable);
-		        mfile.open();
-		        if (this.files.size() == 0) {
-    		        this.fileSize = mfile.getFileSize();
-    		        this.pageSize = mfile.getPageSize();
-		        }
-		        while (this.files.size() <= (fileId+1)) {
-		            this.files.add(null);
-		        }
-		        this.files.set(fileId, mfile);
-		        this.nOpenFiles++;
-		        for (MinkePage j:mfile.getPages()) {
-		            pages.put(j.id, j);
-		        }
-		    }
-		}
-		this.nextFileId = maxFileId + 1;
-		int nPages = pages.size();
-		
-		// open page index file
-		
+        
+        // create directory if necessary
+        
+        if (!this.home.exists() && isMutable) {
+            _log.info("minke does not exist, creating at {} ...", this.home);
+            this.home.mkdirs();
+        }
+        
+        // open pages
+        
+        Map<Integer, MinkePage> pages = new HashMap<>();
+        int maxFileId = this.nextFileId;
+        for (File i:this.home.listFiles()) {
+            String name = i.getName(); 
+            if ((name.length() == 12) && (name.endsWith(".psf"))) {
+                int fileId = Integer.parseInt(name.substring(0,  8), 16);
+                maxFileId = Math.max(maxFileId, fileId);
+                MinkeFile mfile = new MinkeFile(fileId, i, fileSize, pageSize, this.isMutable);
+                mfile.open();
+                if (this.files.size() == 0) {
+                    this.fileSize = mfile.getFileSize();
+                    this.pageSize = mfile.getPageSize();
+                }
+                while (this.files.size() <= (fileId+1)) {
+                    this.files.add(null);
+                }
+                this.files.set(fileId, mfile);
+                this.nOpenFiles++;
+                for (MinkePage j:mfile.getPages()) {
+                    pages.put(j.id, j);
+                }
+            }
+        }
+        this.nextFileId = maxFileId + 1;
+        int nPages = pages.size();
+        
+        // open page index file
+        
         this.pif = PageIndexFile.find(this.home);
         if (this.pif != null) {
             this.syncSp = this.pif.load(this, this.tableById);
@@ -250,47 +250,47 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
             pages.remove(it.id);
             this.lastFreeze.put(it.id, it);
         });
-		
-		// done
-		
-		this.free.addAll(pages.values());
-		this.isClosed = false;
+        
+        // done
+        
+        this.free.addAll(pages.values());
+        this.isClosed = false;
         _log.info("minke @ {} is successfully initialzied. {} pages free. {} pages allocated",
                   this.home,
                   nPages - pages.size(), 
                   pages.size());
-	}
-	
-	@Override
-	public synchronized void close() throws IOException {
-	    if (isClosed) {
-	        return;
-	    }
-	    if (this.isMutable) {
-	        checkpoint();
-	    }
+    }
+    
+    @Override
+    public synchronized void close() throws IOException {
+        if (isClosed) {
+            return;
+        }
+        if (this.isMutable) {
+            checkpoint();
+        }
         for (MinkeFile i:this.files) {
             if (i == null) {
                 continue;
             }
             i.close();
         }
-	    this.isClosed = true;
+        this.isClosed = true;
         _log.info("minke is closed");
-	}
+    }
 
-	public synchronized void checkpoint() throws IOException {
-	    if (!this.isMutable) {
-	        // this is impossible in read only mode
-	        throw new IllegalArgumentException();
-	    }
-	    
-	    long sp = this.syncSp;
-	    _log.info("creating new checkpoint with sp={}...", hex(sp));
-	    
+    public synchronized void checkpoint() throws IOException {
+        if (!this.isMutable) {
+            // this is impossible in read only mode
+            throw new IllegalArgumentException();
+        }
+        
+        long sp = this.syncSp;
+        _log.info("creating new checkpoint with sp={}...", hex(sp));
+        
         // carbonfreeze
         
-	    Map<Integer, MinkePage> newFreeze = new HashMap<>();
+        Map<Integer, MinkePage> newFreeze = new HashMap<>();
         for (MinkeTable mtable:this.tableById.values()) {
             for (MinkePage i:mtable.getPages()) {
                 newFreeze.put(i.id, i);
@@ -332,20 +332,20 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         // done
         
         _log.info("checkpoint {} is created", next.file);
-	}
-	
-	void clear() {
-	    for (MinkeTable i:this.tableById.values()) {
-	        i.drop();
-	    }
-	    this.tableById.clear();
-	    try {
+    }
+    
+    void clear() {
+        for (MinkeTable i:this.tableById.values()) {
+            i.drop();
+        }
+        this.tableById.clear();
+        try {
             Thread.sleep(5);
         }
         catch (InterruptedException e) {
         }
-	    gc(UberTime.getTime());
-	}
+        gc(UberTime.getTime());
+    }
 
     @Override
     public LongLong getLogSpan() {

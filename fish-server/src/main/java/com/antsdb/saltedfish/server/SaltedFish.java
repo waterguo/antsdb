@@ -60,6 +60,7 @@ public class SaltedFish {
             // 2nd database will corrupt the database files.
             startNetty();
             startDatabase();
+            startWeb();
         }
         catch (Exception x) {
             _log.error("failed to start", x);
@@ -67,6 +68,11 @@ public class SaltedFish {
         }
     }
     
+    private void startWeb() {
+        SaltedFishWeb web = new SaltedFishWeb(this.orca);
+        web.start();
+    }
+
     public void startOrcaOnly() throws Exception {
         startLogging();
         

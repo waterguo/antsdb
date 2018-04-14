@@ -30,8 +30,8 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
  * @author wgu0
  */
 public class IndexRangeScan extends CursorMaker implements RangeScannable {
-	TableMeta table;
-	IndexMeta index;
+    TableMeta table;
+    IndexMeta index;
     CursorMeta meta;
     int[] mapping;
     Vector from;
@@ -41,8 +41,8 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
     private boolean isAsc = true;
 
     public IndexRangeScan(TableMeta table, IndexMeta index, int makerId) {
-    	this.table = table;
-    	this.index = index;
+            this.table = table;
+            this.index = index;
         this.meta = CursorMeta.from(table);
         this.mapping = this.meta.getHumpbackMapping();
         setMakerId(makerId);
@@ -59,52 +59,52 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
             return new EmptyCursor(meta);
         }
         try (BluntHeap heap = new BluntHeap()) {
-        	
-        	// calculate boundary
-        	
-	        long pKeyFrom = 0;
-	        boolean fromInclusive = true;
-	        if (this.from != null) {
-	        	long pFrom = this.exprFrom.eval(ctx, heap, params, pMaster);
-	        	if (pFrom == 0) {
-	        		return new EmptyCursor(meta);
-	        	}
-	        	FishBoundary from = FishBoundary.create(pFrom);
-	        	pKeyFrom = from.getKeyAddress();
-	        	fromInclusive = from.isInclusive();
-	        }
-	        long pKeyTo = 0;
-	        boolean toInclusive = true;
-	        if (this.to != null) {
-	            long pTo = this.exprTo.eval(ctx, heap, params, pMaster);
-	        	if (pTo == 0) {
-	        		return new EmptyCursor(meta);
-	        	}
-		        FishBoundary to = FishBoundary.create(pTo);
-		        pKeyTo = to.getKeyAddress();
-		        toInclusive = to.isInclusive();
-	        }
-	        
-	        // create index scanner
-	        
-	        GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
-	        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
-	        Transaction trx = ctx.getTransaction();
-	        long options = 0;
-	        options = fromInclusive ? options : ScanOptions.excludeStart(options);
-	        options = toInclusive ? options : ScanOptions.excludeEnd(options);
-	        options = this.isAsc ? options : ScanOptions.descending(options);
-	        RowIterator it = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pKeyFrom, pKeyTo, options);
-	        IndexCursor cursor = new IndexCursor(
-	        		ctx.getSpaceManager(), 
-	        		this.meta, 
-	        		it, 
-	        		mapping, 
-	        		gtable, 
-	        		trx, 
-	        		ctx.getCursorStats(makerId));
-	        cursor.setName(this.toString());
-	        return cursor;
+            
+            // calculate boundary
+            
+            long pKeyFrom = 0;
+            boolean fromInclusive = true;
+            if (this.from != null) {
+                long pFrom = this.exprFrom.eval(ctx, heap, params, pMaster);
+                if (pFrom == 0) {
+                    return new EmptyCursor(meta);
+                }
+                FishBoundary from = FishBoundary.create(pFrom);
+                pKeyFrom = from.getKeyAddress();
+                fromInclusive = from.isInclusive();
+            }
+            long pKeyTo = 0;
+            boolean toInclusive = true;
+            if (this.to != null) {
+                long pTo = this.exprTo.eval(ctx, heap, params, pMaster);
+                if (pTo == 0) {
+                    return new EmptyCursor(meta);
+                }
+                FishBoundary to = FishBoundary.create(pTo);
+                pKeyTo = to.getKeyAddress();
+                toInclusive = to.isInclusive();
+            }
+            
+            // create index scanner
+            
+            GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
+            GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
+            Transaction trx = ctx.getTransaction();
+            long options = 0;
+            options = fromInclusive ? options : ScanOptions.excludeStart(options);
+            options = toInclusive ? options : ScanOptions.excludeEnd(options);
+            options = this.isAsc ? options : ScanOptions.descending(options);
+            RowIterator it = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pKeyFrom, pKeyTo, options);
+            IndexCursor cursor = new IndexCursor(
+                    ctx.getSpaceManager(), 
+                    this.meta, 
+                    it, 
+                    mapping, 
+                    gtable, 
+                    trx, 
+                    ctx.getCursorStats(makerId));
+            cursor.setName(this.toString());
+            return cursor;
         }
     }
 
@@ -115,37 +115,36 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, toString());
-        rec.setMakerId(this.makerId);
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
         records.add(rec);
     }
 
-	@Override
-	public void setFrom(Vector from) {
-		this.from = from;
-		this.exprFrom = new FuncGenerateKey(this.index.getKeyMaker(), from, false);
-	}
+    @Override
+    public void setFrom(Vector from) {
+        this.from = from;
+        this.exprFrom = new FuncGenerateKey(this.index.getKeyMaker(), from, false);
+    }
 
-	@Override
-	public Vector getFrom() {
-		return this.from;
-	}
+    @Override
+    public Vector getFrom() {
+        return this.from;
+    }
 
-	@Override
-	public void setTo(Vector to) {
-		this.to = to;
-		this.exprTo = new FuncGenerateKey(this.index.getKeyMaker(), to, true);
-	}
+    @Override
+    public void setTo(Vector to) {
+        this.to = to;
+        this.exprTo = new FuncGenerateKey(this.index.getKeyMaker(), to, true);
+    }
 
-	@Override
-	public Vector getTo() {
-		return this.to;
-	}
+    @Override
+    public Vector getTo() {
+        return this.to;
+    }
 
-	@Override
-	public List<ColumnMeta> getOrder() {
-		return this.index.getColumns(table);
-	}
+    @Override
+    public List<ColumnMeta> getOrder() {
+        return this.index.getColumns(table);
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {

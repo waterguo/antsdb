@@ -39,13 +39,13 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
     }
 
     public boolean isUnique() {
-    	Object obj = row.get(ColumnId.sysrule_is_unique.getId());
-    	if (obj instanceof Integer) {
-    		return ((Integer)obj) == 1;
-    	}
-    	else {
-    		return false;
-    	}
+        	Object obj = row.get(ColumnId.sysrule_is_unique.getId());
+        	if (obj instanceof Integer) {
+        		return ((Integer)obj) == 1;
+        	}
+        	else {
+        		return false;
+        	}
     }
     
 	public KeyMaker getKeyMaker() {

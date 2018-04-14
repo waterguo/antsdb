@@ -14,12 +14,49 @@
 package com.antsdb.saltedfish.cpp;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 import com.antsdb.saltedfish.charset.Utf8;
 
 public class Unicode16 {
 	public final static int HEADER_SIZE = 4;
 	
+	private long addr;
+	private int length;
+	
+    public final static class Scanner implements IntSupplier {
+        long p;
+        long pEnd;
+        
+        Scanner(long addr, int length) {
+            this.p = addr;
+            this.pEnd = addr + length * 2;
+        }
+        
+        @Override
+        public int getAsInt() {
+            if (p >= pEnd) {
+                return -1;
+            }
+            int ch = Unsafe.getShort(p) & 0xffff;
+            p += 2;
+            return ch;
+        }
+    }
+
+    public Unicode16(long addr) {
+        int format = Unsafe.getByte(addr);
+        if (format != Value.FORMAT_UNICODE16) {
+            throw new IllegalArgumentException();
+        }
+        this.addr = addr;
+        this.length = Unsafe.getInt3(addr+1);
+    }
+
+    public IntSupplier scan() {
+        return new Scanner(this.addr + HEADER_SIZE, this.length);
+    }
+    
 	public final static String get(Heap heap, long addr) {
 		int format = Unsafe.getByte(addr);
 		if (format != Value.FORMAT_UNICODE16) {
@@ -141,5 +178,39 @@ public class Unicode16 {
 		Unsafe.putInt3(pResult+1, size.get());
 		return pResult;
 	}
+
+    public static void set(long pResult, int idx, char value) {
+        long p = pResult + HEADER_SIZE + idx * 2;
+        Unsafe.putShort(p, (short)value);
+    }
+
+    public static void resize(long addr, int value) {
+        int len = getLength(Value.FORMAT_UNICODE16, addr);
+        if (value > len) {
+            throw new IllegalArgumentException();
+        }
+        Unsafe.putInt3(addr+1, value);
+    }
+
+    public int getLength() {
+        return this.length;
+    }
+
+    public long getAddress() {
+        return this.addr;
+    }
+
+    public void resize(int value) {
+        if (value > this.length) {
+            throw new IllegalArgumentException();
+        }
+        if (value < this.length) {
+            Unsafe.putInt3(this.addr+1, value);
+        }
+    }
+
+    public void put(int i, char ch) {
+        Unsafe.putShort(this.addr + HEADER_SIZE + i * 2, (short)ch);
+    }
 
 }

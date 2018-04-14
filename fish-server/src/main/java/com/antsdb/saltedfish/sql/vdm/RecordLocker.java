@@ -102,4 +102,8 @@ public class RecordLocker extends CursorMaker {
         return this.upstream.setSortingOrder(order);
     }
 
+    public CursorMaker getUpstream() {
+        return this.upstream;
+    }
+
 }

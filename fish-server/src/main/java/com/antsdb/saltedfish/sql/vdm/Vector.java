@@ -20,26 +20,26 @@ import java.util.List;
  * @author wgu0
  */
 public class Vector {
-	private List<Operator> values; 
-	private boolean inclusive;
-	private boolean isNullable;
-	
-	public Vector(List<Operator> values, boolean inclusive, boolean isNullable) {
-		this.values = values;
-		this.inclusive = inclusive;
-		this.isNullable = isNullable;
-	}
+    private List<Operator> values; 
+    private boolean inclusive;
+    private boolean isNullable;
+    
+    public Vector(List<Operator> values, boolean inclusive, boolean isNullable) {
+        this.values = values;
+        this.inclusive = inclusive;
+        this.isNullable = isNullable;
+    }
 
-	public List<Operator> getValues() {
-		return values;
-	}
+    public List<Operator> getValues() {
+        return values;
+    }
 
-	public boolean isInclusive() {
-		return inclusive;
-	}
+    public boolean isInclusive() {
+        return inclusive;
+    }
 
-	public boolean isNullable() {
-		return isNullable;
-	}
-	
+    public boolean isNullable() {
+        return isNullable;
+    }
+    
 }

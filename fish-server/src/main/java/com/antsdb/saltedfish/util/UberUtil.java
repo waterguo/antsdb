@@ -52,24 +52,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class UberUtil {
 
     private static final Unsafe unsafe;
-	private static Field ADDRESS_FIELD;
-    
+    private static Field ADDRESS_FIELD;
+
     static {
         try {
-			ADDRESS_FIELD = Buffer.class.getDeclaredField("address");
-			ADDRESS_FIELD.setAccessible(true);
+            ADDRESS_FIELD = Buffer.class.getDeclaredField("address");
+            ADDRESS_FIELD.setAccessible(true);
             Field field = Unsafe.class.getDeclaredField("theUnsafe");
             field.setAccessible(true);
-            unsafe = (Unsafe)field.get(null);
+            unsafe = (Unsafe) field.get(null);
         }
         catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
+
     public static Unsafe getUnsafe() {
-    	return unsafe;
+        return unsafe;
     }
-    
+
     public static String getThisClassName() {
         String result = "";
         Exception x = new Exception();
@@ -104,7 +105,7 @@ public class UberUtil {
             throw new RuntimeException(e);
         }
     }
-    
+
     public static Logger getThisLogger() {
         Exception x = new Exception();
         StackTraceElement[] stack = x.getStackTrace();
@@ -138,35 +139,65 @@ public class UberUtil {
             return 1;
         }
         if (val1.getClass() != val2.getClass()) {
+            if ((val1 instanceof Number) && (val2 instanceof Number)) {
+                double dx = ((Number)val1).doubleValue();
+                double dy = ((Number)val2).doubleValue();
+                return Double.compare(dx, dy);
+            }
             throw new IllegalArgumentException();
         }
         if (val1 instanceof String) {
-            return ((String) val1).compareTo((String)val2);
+            return ((String) val1).compareTo((String) val2);
         }
         else if (val1 instanceof Integer) {
-            return ((Integer) val1).compareTo((Integer)val2);
+            return ((Integer) val1).compareTo((Integer) val2);
         }
         else if (val1 instanceof Long) {
-            return ((Long) val1).compareTo((Long)val2);
+            return ((Long) val1).compareTo((Long) val2);
         }
         else if (val1 instanceof Float) {
-            return ((Float) val1).compareTo((Float)val2);
+            return ((Float) val1).compareTo((Float) val2);
         }
         else if (val1 instanceof Double) {
-            return ((Double) val1).compareTo((Double)val2);
+            return ((Double) val1).compareTo((Double) val2);
         }
         else if (val1 instanceof BigDecimal) {
-            return ((BigDecimal) val1).compareTo((BigDecimal)val2);
+            return ((BigDecimal) val1).compareTo((BigDecimal) val2);
         }
         else if (val1 instanceof Date) {
-            return ((Date) val1).compareTo((Date)val2);
+            return ((Date) val1).compareTo((Date) val2);
         }
         else if (val1 instanceof Timestamp) {
-            return ((Timestamp) val1).compareTo((Timestamp)val2);
+            return ((Timestamp) val1).compareTo((Timestamp) val2);
+        }
+        else if (val1 instanceof byte[]) {
+            return compare((byte[]) val1, (byte[]) val2);
+        }
+        else if (val1 instanceof byte[]) {
+            return compare((byte[]) val1, (byte[])val2);
         }
         throw new IllegalArgumentException("type: " + val1.getClass());
     }
 
+    private static int compare(byte[] x, byte[] y) {
+        int minLenght = Math.min(x.length,  y.length);
+        for (int i=0; i<minLenght; i++) {
+            int result = Integer.compare(x[i] & 0xff, y[i] & 0xff);
+            if (result != 0) {
+                return result;
+            }
+        }
+        if (x.length > minLenght) {
+            return 1;
+        }
+        else if (y.length > minLenght) {
+            return -1;
+        }
+        else {
+            return 0;
+        }
+    }
+    
     @SuppressWarnings("unchecked")
     public static <T> T toObject(Class<T> klass, Object val) {
         if (val == null) {
@@ -179,10 +210,10 @@ public class UberUtil {
             if (((byte[]) val).length == 0) {
                 return null;
             }
-            val = new String((byte[])val, Charsets.UTF_8);
+            val = new String((byte[]) val, Charsets.UTF_8);
         }
         if (klass == String.class) {
-            return (T)String.valueOf(val);
+            return (T) String.valueOf(val);
         }
         if (val instanceof String) {
             String text = (String) val;
@@ -216,54 +247,55 @@ public class UberUtil {
         }
         if (val instanceof BigDecimal) {
             if (klass == Long.class) {
-                Long n = ((BigDecimal)val).longValueExact();
-                return (T)n;
+                Long n = ((BigDecimal) val).longValueExact();
+                return (T) n;
             }
             else if (klass == Integer.class) {
-                Integer n = ((BigDecimal)val).intValueExact();
-                return (T)n;
+                Integer n = ((BigDecimal) val).intValueExact();
+                return (T) n;
             }
             else if (klass == Double.class) {
-                Double n = ((BigDecimal)val).doubleValue();
-                return (T)n;
+                Double n = ((BigDecimal) val).doubleValue();
+                return (T) n;
             }
             else if (klass == Boolean.class) {
-                Integer n = ((BigDecimal)val).intValueExact();
-                return (T)(Boolean)(n != 0);
+                Integer n = ((BigDecimal) val).intValueExact();
+                return (T) (Boolean) (n != 0);
             }
         }
         if (val instanceof Integer) {
             if (klass == BigDecimal.class) {
-                return (T)BigDecimal.valueOf((Integer)val);
+                return (T) BigDecimal.valueOf((Integer) val);
             }
             else if (klass == Long.class) {
-                return (T)Long.valueOf((Integer)val);
+                return (T) Long.valueOf((Integer) val);
             }
             else if (klass == Boolean.class) {
-                Integer n = (Integer)val;
-                return (T)(Boolean)(n != 0);
+                Integer n = (Integer) val;
+                return (T) (Boolean) (n != 0);
             }
         }
         if (val instanceof Long) {
             if (klass == BigDecimal.class) {
-                return (T)BigDecimal.valueOf((Long)val);
+                return (T) BigDecimal.valueOf((Long) val);
             }
             else if (klass == Boolean.class) {
-                Long n = (Long)val;
-                return (T)(Boolean)(n != 0);
+                Long n = (Long) val;
+                return (T) (Boolean) (n != 0);
             }
         }
         if (val instanceof Boolean) {
             if (klass == Long.class) {
-                return (T)Long.valueOf((Boolean)val ? 1 : 0);
+                return (T) Long.valueOf((Boolean) val ? 1 : 0);
             }
         }
         throw new IllegalArgumentException("class: " + val.getClass());
-    }    
+    }
 
     public static <T> Iterable<T> once(final Iterator<T> source) {
         return new Iterable<T>() {
             private AtomicBoolean exhausted = new AtomicBoolean();
+
             public Iterator<T> iterator() {
                 Preconditions.checkState(!exhausted.getAndSet(true));
                 return source;
@@ -278,47 +310,46 @@ public class UberUtil {
      * @return
      */
     public static String toJson(Object obj) {
-    	Gson gson = new GsonBuilder()
-    		    .disableHtmlEscaping()
-    		    .create();
+        Gson gson = new GsonBuilder().disableHtmlEscaping().create();
         return gson.toJson(obj);
     }
-    
+
     /**
-     * warning, this method has no consideration of performance. it is written to help logging objects
+     * warning, this method has no consideration of performance. it is written
+     * to help logging objects
      * 
      * @param obj
      * @return
      */
     public static String toString(Object obj) {
-    	if (obj == null) {
-    		return "NULL";
-    	}
-    	StringBuilder buf = new StringBuilder();
-    	for (Field i:obj.getClass().getFields()) {
-    		if ((i.getModifiers() & Modifier.STATIC) != 0) {
-    			continue;
-    		}
-    		buf.append(i.getName());
-    		buf.append(":");
-    		Object value;
-			try {
-				value = i.get(obj);
-			}
-			catch (Exception x) {
-				value = x.getMessage();
-			}
-    		if (value != null) {
-    			buf.append(value.toString());
-    		}
-    		else {
-    			buf.append("NULL");
-    		}
-    		buf.append('\n');
-    	}
-    	return buf.toString();
+        if (obj == null) {
+            return "NULL";
+        }
+        StringBuilder buf = new StringBuilder();
+        for (Field i : obj.getClass().getFields()) {
+            if ((i.getModifiers() & Modifier.STATIC) != 0) {
+                continue;
+            }
+            buf.append(i.getName());
+            buf.append(":");
+            Object value;
+            try {
+                value = i.get(obj);
+            }
+            catch (Exception x) {
+                value = x.getMessage();
+            }
+            if (value != null) {
+                buf.append(value.toString());
+            }
+            else {
+                buf.append("NULL");
+            }
+            buf.append('\n');
+        }
+        return buf.toString();
     }
-    
+
     public static String hexDump(byte[] bytes) {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         try {
@@ -329,82 +360,82 @@ public class UberUtil {
         }
         return "";
     }
-    
+
     public static byte[] toUtf8(String s) {
         return Charsets.UTF_8.encode(s).array();
     }
-    
-    public static long getAddress(ByteBuffer buf) {
-		try {
-			long address;
-			address = ADDRESS_FIELD.getLong(buf);
-			return address;
-		}
-		catch (Exception x) {
-			throw new RuntimeException(x);
-		}
-    }
-    
-	@SuppressWarnings("unchecked")
-	public static <T> T clone(final T obj) throws CloneNotSupportedException {
-		if (obj == null) {
-			return null;
-		}
-		if (obj instanceof Cloneable) {
-			Class<?> clazz = obj.getClass();
-			Method m;
-			try {
-				m = clazz.getMethod("clone", (Class[]) null);
-			}
-			catch (NoSuchMethodException ex) {
-				throw new NoSuchMethodError(ex.getMessage());
-			}
-			try {
-				return (T)m.invoke(obj, (Object[]) null);
-			}
-			catch (InvocationTargetException ex) {
-				Throwable cause = ex.getCause();
-				if (cause instanceof CloneNotSupportedException) {
-					throw ((CloneNotSupportedException) cause);
-				}
-				else {
-					throw new Error("Unexpected exception", cause);
-				}
-			}
-			catch (IllegalAccessException ex) {
-				throw new IllegalAccessError(ex.getMessage());
-			}
-		}
-		else {
-			throw new CloneNotSupportedException();
-		}
-	}
 
-	public static <T> List<T> runParallel(int nThreads, Callable<T> callback) throws Exception {
-		ExecutorService pool = Executors.newFixedThreadPool(nThreads);
-		List<Future<T>> futures = new ArrayList<>();
-		for (int i=0; i<nThreads; i++) {
-			Callable<T> run = (Callable<T>)UberUtil.clone(callback);
-			futures.add(pool.submit(run));
-		}
-		List<T> result = new ArrayList<>();
-		for (Future<T> i:futures) {
-			result.add(i.get());
-		}
-		pool.shutdown();
-		return result;
-	}
-	
-	public static double getSystemCpuLoad() {
-	    OperatingSystemMXBean bean = (OperatingSystemMXBean)ManagementFactory.getOperatingSystemMXBean();
-	    return bean.getSystemCpuLoad();
-	}
-	
+    public static long getAddress(ByteBuffer buf) {
+        try {
+            long address;
+            address = ADDRESS_FIELD.getLong(buf);
+            return address;
+        }
+        catch (Exception x) {
+            throw new RuntimeException(x);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T clone(final T obj) throws CloneNotSupportedException {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof Cloneable) {
+            Class<?> clazz = obj.getClass();
+            Method m;
+            try {
+                m = clazz.getMethod("clone", (Class[]) null);
+            }
+            catch (NoSuchMethodException ex) {
+                throw new NoSuchMethodError(ex.getMessage());
+            }
+            try {
+                return (T) m.invoke(obj, (Object[]) null);
+            }
+            catch (InvocationTargetException ex) {
+                Throwable cause = ex.getCause();
+                if (cause instanceof CloneNotSupportedException) {
+                    throw ((CloneNotSupportedException) cause);
+                }
+                else {
+                    throw new Error("Unexpected exception", cause);
+                }
+            }
+            catch (IllegalAccessException ex) {
+                throw new IllegalAccessError(ex.getMessage());
+            }
+        }
+        else {
+            throw new CloneNotSupportedException();
+        }
+    }
+
+    public static <T> List<T> runParallel(int nThreads, Callable<T> callback) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(nThreads);
+        List<Future<T>> futures = new ArrayList<>();
+        for (int i = 0; i < nThreads; i++) {
+            Callable<T> run = (Callable<T>) UberUtil.clone(callback);
+            futures.add(pool.submit(run));
+        }
+        List<T> result = new ArrayList<>();
+        for (Future<T> i : futures) {
+            result.add(i.get());
+        }
+        pool.shutdown();
+        return result;
+    }
+
+    public static double getSystemCpuLoad() {
+        OperatingSystemMXBean bean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+        return bean.getSystemCpuLoad();
+    }
+
     public static double getProcessCpuLoad() {
-        OperatingSystemMXBean bean = (OperatingSystemMXBean)ManagementFactory.getOperatingSystemMXBean();
+        OperatingSystemMXBean bean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
         return bean.getProcessCpuLoad();
     }
-    
+
     public static void sleep(long ms) {
         try {
             Thread.sleep(ms);

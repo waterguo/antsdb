@@ -49,46 +49,46 @@ public class ToTimestampRelaxed extends UnaryOperator {
 
     @SuppressWarnings("deprecation")
     public static long toTimestamp(Heap heap, long pValue) {
-    	int format = Value.getFormat(heap, pValue);
-    	if (format == Value.FORMAT_TIMESTAMP) {
-    		return pValue;
-    	}
+        	int format = Value.getFormat(heap, pValue);
+        	if (format == Value.FORMAT_TIMESTAMP) {
+        		return pValue;
+        	}
         Object val = FishObject.get(heap, pValue);
         if (val instanceof byte[]) {
             val = new String((byte[])val);
         }
         if (val instanceof BigDecimal) {
-        	val = ((BigDecimal)val).longValueExact();
+            val = ((BigDecimal)val).longValueExact();
         }
         if (val == null) {
         }
         else if (val instanceof Timestamp) {
         }
         else if (val instanceof String) {
-        	long pResult = AutoCaster.toTimestamp(heap, pValue);
-        	return pResult;
+            	long pResult = AutoCaster.toTimestamp(heap, pValue);
+            	return pResult;
         }
         else if (val instanceof Long) {
-        	long n = (Long)val;
-        	if (n == 0) {
-        		val = new Timestamp(Long.MIN_VALUE);
-        	}
-        	else {
-	        	int sec = (int)(n % 100);
-	        	n = n / 100;
-	        	int min = (int)(n % 100);
-	        	n = n / 100;
-	        	int hour = (int)(n % 100);
-	        	n = n / 100;
-	        	int day = (int)(n % 100);
-	        	n = n / 100;
-	        	int month = (int)(n % 100);
-	        	int year = (int)(n / 100);
-	        	val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
-        	}
+            	long n = (Long)val;
+            	if (n == 0) {
+            		val = new Timestamp(Long.MIN_VALUE);
+            	}
+            	else {
+    	        	int sec = (int)(n % 100);
+    	        	n = n / 100;
+    	        	int min = (int)(n % 100);
+    	        	n = n / 100;
+    	        	int hour = (int)(n % 100);
+    	        	n = n / 100;
+    	        	int day = (int)(n % 100);
+    	        	n = n / 100;
+    	        	int month = (int)(n % 100);
+    	        	int year = (int)(n / 100);
+    	        	val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
+            	}
         }
         else if (val instanceof Date) {
-        	val = new Timestamp(((Date)val).getTime());
+            val = new Timestamp(((Date)val).getTime());
         }
         else {
             throw new CodingError();

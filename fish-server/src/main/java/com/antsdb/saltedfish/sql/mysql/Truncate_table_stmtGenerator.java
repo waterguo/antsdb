@@ -14,14 +14,14 @@
 package com.antsdb.saltedfish.sql.mysql;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.*;
-import com.antsdb.saltedfish.sql.Generator;
+import com.antsdb.saltedfish.sql.DdlGenerator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.TruncateTable;
 
-public class Truncate_table_stmtGenerator extends Generator<Truncate_table_stmtContext>{
+public class Truncate_table_stmtGenerator extends DdlGenerator<Truncate_table_stmtContext>{
 
     @Override
     public Instruction gen(GeneratorContext ctx, Truncate_table_stmtContext rule) throws OrcaException {

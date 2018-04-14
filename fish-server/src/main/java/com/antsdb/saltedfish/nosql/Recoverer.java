@@ -65,7 +65,7 @@ class Recoverer implements ReplayHandler {
         long start;
         LongLong span = this.humpback.getStorageEngine().getLogSpan();
         if (span != null) {
-            start = span.y - Gobbler.ENTRY_HEADER_SIZE - 4;
+            start = span.y;
             if (start < gobbler.getStartSp()) {
                 start = gobbler.getStartSp();
             }

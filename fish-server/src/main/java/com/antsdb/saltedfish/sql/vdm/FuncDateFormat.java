@@ -40,7 +40,7 @@ public class FuncDateFormat extends Function {
         pDate = AutoCaster.toTimestamp(heap, pDate);
         Timestamp time = FishTimestamp.isAllZero(pDate) ? null : (Timestamp)FishObject.get(heap, pDate);
         long pFormat = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-        String format = (String)FishObject.get(heap, pFormat);
+        String format = AutoCaster.getString(heap, pFormat);
 		String result = format(format, time);
 		return FishObject.allocSet(heap, result);
 	}

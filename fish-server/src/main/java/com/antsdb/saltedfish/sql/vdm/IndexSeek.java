@@ -34,42 +34,42 @@ public class IndexSeek extends CursorMaker implements Seekable {
     int[] mapping;
     TableMeta table;
     Operator op;
-	IndexMeta index;
-	private Vector key;
+    IndexMeta index;
+    private Vector key;
     
     class MyCursor extends CursorWithHeap {
-    	long pRow;
+        long pRow;
 
-		public MyCursor(long pRow) {
-			super(IndexSeek.this.meta);
-			this.pRow = pRow;
-		}
+        public MyCursor(long pRow) {
+            super(IndexSeek.this.meta);
+            this.pRow = pRow;
+        }
 
-		@Override
-		public long next() {
-			if (this.pRow == 0) {
-				return 0;
-			}
-	    	long pRecord = newRecord();
-	        Row row = Row.fromMemoryPointer(pRow, 0);
-	        Record.setKey(pRecord, row.getKeyAddress());
-	        for (int i=0; i<this.meta.getColumnCount(); i++) {
-	        	long pValue = row.getFieldAddress(IndexSeek.this.mapping[i]);
-	        	Record.set(pRecord, i, pValue);
-	        }
-	        this.pRow = 0;
-	        return pRecord;
-		}
+        @Override
+        public long next() {
+            if (this.pRow == 0) {
+                return 0;
+            }
+            long pRecord = newRecord();
+            Row row = Row.fromMemoryPointer(pRow, 0);
+            Record.setKey(pRecord, row.getKeyAddress());
+            for (int i=0; i<this.meta.getColumnCount(); i++) {
+                long pValue = row.getFieldAddress(IndexSeek.this.mapping[i]);
+                Record.set(pRecord, i, pValue);
+            }
+            this.pRow = 0;
+            return pRecord;
+        }
 
-		@Override
-		public void close() {
-			super.close();
-		}
+        @Override
+        public void close() {
+            super.close();
+        }
 
     }
     
     public IndexSeek(TableMeta table, IndexMeta index, int makerId) {
-    	this.index = index;
+        this.index = index;
         this.table = table;
         this.meta = CursorMeta.from(table);
         this.mapping = this.meta.getHumpbackMapping();
@@ -86,37 +86,37 @@ public class IndexSeek extends CursorMaker implements Seekable {
         if (this.op == null) {
             return null;
         }
-    	try (BluntHeap heap = new BluntHeap()) {
-    		
-    		// Calculate the key
-    		
-	        long pBoundary = this.op.eval(ctx, heap, params, pMaster);
-	        if (pBoundary == 0) {
-	            Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
-	            return c;
-	        }
-	        
-	        // find the key in index
-	        
-	        Transaction trx = ctx.getTransaction();
-	        FishBoundary boundary = new FishBoundary(pBoundary);
-	        long pIndexKey = boundary.getKeyAddress();
-	        GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
-	        long pRowKey = gindex.getIndex(trx.getTrxId(), trx.getTrxTs(), pIndexKey);
-	        if (pRowKey == 0) {
-	            Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
-	            return c;
-	        }
+        try (BluntHeap heap = new BluntHeap()) {
+            
+            // Calculate the key
+            
+            long pBoundary = this.op.eval(ctx, heap, params, pMaster);
+            if (pBoundary == 0) {
+                Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
+                return c;
+            }
+            
+            // find the key in index
+            
+            Transaction trx = ctx.getTransaction();
+            FishBoundary boundary = new FishBoundary(pBoundary);
+            long pIndexKey = boundary.getKeyAddress();
+            GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
+            long pRowKey = gindex.getIndex(trx.getTrxId(), trx.getTrxTs(), pIndexKey);
+            if (pRowKey == 0) {
+                Cursor c = CursorUtil.toCursor(meta, Collections.emptyList());
+                return c;
+            }
 
-	        // find the row 
-	        
-	        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
-	        long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
-	        if (pRow != 0) {
-		        ctx.getCursorStats(makerId).incrementAndGet();
-	        }
-	        return new MyCursor(pRow);
-    	}
+            // find the row 
+            
+            GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+            if (pRow != 0) {
+                ctx.getCursorStats(makerId).incrementAndGet();
+            }
+            return new MyCursor(pRow);
+        }
     }
 
     @Override
@@ -126,21 +126,20 @@ public class IndexSeek extends CursorMaker implements Seekable {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, toString());
-        rec.setMakerId(makerId);
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
         records.add(rec);
     }
 
-	@Override
-	public void setSeekKey(Vector key) {
-		this.key = key;
-		this.op = new FuncGenerateKey(this.index.getKeyMaker(), key, false);
-	}
+    @Override
+    public void setSeekKey(Vector key) {
+        this.key = key;
+        this.op = new FuncGenerateKey(this.index.getKeyMaker(), key, false);
+    }
 
-	@Override
-	public Vector getSeekKey() {
-		return this.key;
-	}
+    @Override
+    public Vector getSeekKey() {
+        return this.key;
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {

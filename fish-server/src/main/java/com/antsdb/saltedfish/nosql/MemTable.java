@@ -44,9 +44,9 @@ public final class MemTable extends ScalableData implements LogSpan {
 
     Humpback owner;
     volatile MemTablet tablet;
-	private int tabletSize;
-	private boolean isClosed = true;
-	private Map<Integer, MemTablet> retired = Collections.synchronizedMap(new HashMap<>());
+    private int tabletSize;
+    private boolean isClosed = true;
+    private Map<Integer, MemTablet> retired = Collections.synchronizedMap(new HashMap<>());
     private boolean isMutable = true;
     private boolean isRecoveryMode = false;
     int tableId;
@@ -75,6 +75,9 @@ public final class MemTable extends ScalableData implements LogSpan {
         public boolean next_() {
             if (this.eof) {
                 return false;
+            }
+            if (Thread.interrupted()) {
+                throw new HumpbackException("thread killed");
             }
             
             // 1 step forward
@@ -394,283 +397,299 @@ public final class MemTable extends ScalableData implements LogSpan {
         LongLong result = LogSpan.union((Collection<LogSpan>)(Collection<?>)this.tablets);
         return result;
     }
-	/**
-	 * open the mem table
-	 * 
-	 * @param deleteCorruptedFile delete tablets not closed properly in last shutdown if true
-	 * @throws IOException 
-	 */
-	public void open() throws IOException {
-    	// find the matching files
-    	
-    	List<File> files = new ArrayList<>();
-    	for (File i:ns.listFiles()) {
+    /**
+     * open the mem table
+     * 
+     * @param deleteCorruptedFile delete tablets not closed properly in last shutdown if true
+     * @throws IOException 
+     */
+    public void open() throws IOException {
+        // find the matching files
+        
+        List<File> files = new ArrayList<>();
+        for (File i:ns.listFiles()) {
             int fileTableId = MemTablet.getTableId(i);
             if (fileTableId != this.tableId) {
-            	continue;
+                continue;
             }
             files.add(i);
-    	}
-    	
-    	// must ordered by tablet id
-    	
-    	Collections.sort(files);
-    	Collections.reverse(files);
-    	
-    	// load tablets
+        }
+        
+        // must ordered by tablet id
+        
+        Collections.sort(files);
+        Collections.reverse(files);
+        
+        // load tablets
 
-    	for (File i:files) {
-    	    if (!i.getName().endsWith(".tbl")) {
-    	        continue;
-    	    }
+        for (File i:files) {
+            if (!i.getName().endsWith(".tbl")) {
+                continue;
+            }
             MemTablet tablet = new MemTablet(i);
             tablet.setMinkeTable(getStorageTable());
             tablet.setMutable(false);
             tablet.setSpaceManager(this.owner.spaceman);
             tablet.open();
             if (isRecoveryMode && !tablet.isCarbonfrozen()) {
-            	_log.warn("{} is not properly closed. deleting ... {}", i, i.exists());
-            	tablet.close();
-            	if (!i.delete()) {
-            		throw new HumpbackException("unable to delete file " + i.toString());
-            	}
-            	continue;
+                _log.warn("{} is not properly closed. deleting ... {}", i, i.exists());
+                tablet.close();
+                if (!i.delete()) {
+                    throw new HumpbackException("unable to delete file " + i.toString());
+                }
+                continue;
             }
             if (!tablet.isCarbonfrozen()) {
                 _log.error("{} mounted read-only but not carbonfrozen", i);
             }
             this.tablets.addLast(tablet);
-    	}
-    	
-    	// set next tablet id
-    	
-    	if (this.tablets.size() != 0) {
+        }
+        
+        // set next tablet id
+        
+        if (this.tablets.size() != 0) {
             this.nextTabletId = this.tablets.getFirst().getTabletId() + 1;
-    	}
+        }
         
         // done
         
-    	this.isClosed = false;
-	}
+        this.isClosed = false;
+    }
 
-	public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, byte misc, int timeout) {
-		for (;;) {
+    public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, byte misc, int timeout) {
+        for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
                 grow(this.ticket);
                 continue;
             }
-			try {
-		    	return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, misc, timeout);
-			}
-			catch (OutOfHeapMemory x) {
-                grow(this.ticket);
-			}
-		}
-	}
-	
-	public HumpbackError recoverIndexInsert(
-			long trxid, 
-			long pIndexKey, 
-			long pRowKey, 
-			long sp, 
-			byte misc, 
-			int timeout) {
-		for (;;) {
-            MemTablet current = this.tablet;
-            if (current == null) {
-                grow(this.ticket);
-                continue;
+            try {
+                return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, misc, timeout);
             }
-			try {
-		    	return current.recoverIndexInsert(pIndexKey, trxid, pRowKey, this.tablets, sp, misc, timeout);
-			}
-			catch (OutOfHeapMemory x) {
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
-	}
-
-	public HumpbackError insert(VaporizingRow row, int timeout) {
-		for (;;) {
-            MemTablet current = this.tablet;
-            if (current == null) {
-                grow(this.ticket);
-                continue;
             }
-			try {
-		    	return current.insert(row, this.tablets, timeout);
-			}
-			catch (OutOfHeapMemory x) {
-                grow(this.ticket);
-			}
-		}
+        }
     }
     
-	public HumpbackError update(VaporizingRow row, long oldVersion, int timeout) {
-		for (;;) {
+    public HumpbackError recoverIndexInsert(
+            long trxid, 
+            long pIndexKey, 
+            long pRowKey, 
+            long sp, 
+            byte misc, 
+            int timeout) {
+        for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
                 grow(this.ticket);
                 continue;
             }
-			try {
-		    	return current.update(row, oldVersion, this.tablets, timeout);
-			}
-			catch (OutOfHeapMemory x) {
+            try {
+                return current.recoverIndexInsert(pIndexKey, trxid, pRowKey, this.tablets, sp, misc, timeout);
+            }
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
+            }
+        }
+    }
+
+    public HumpbackError insert(VaporizingRow row, int timeout) {
+        for (;;) {
+            MemTablet current = this.tablet;
+            if (current == null) {
+                grow(this.ticket);
+                continue;
+            }
+            try {
+                return current.insert(row, this.tablets, timeout);
+            }
+            catch (OutOfHeapMemory x) {
+                grow(this.ticket);
+            }
+        }
+    }
+    
+    public HumpbackError update(VaporizingRow row, long oldVersion, int timeout) {
+        for (;;) {
+            MemTablet current = this.tablet;
+            if (current == null) {
+                grow(this.ticket);
+                continue;
+            }
+            try {
+                return current.update(row, oldVersion, this.tablets, timeout);
+            }
+            catch (OutOfHeapMemory x) {
+                grow(this.ticket);
+            }
+        }
     }
     
     public HumpbackError delete(long trxid, long pKey, int timeout) {
-		for (;;) {
-			MemTablet current = this.tablet;
-	        if (current == null) {
+        for (;;) {
+            MemTablet current = this.tablet;
+            if (current == null) {
                 grow(this.ticket);
-	            continue;
-	        }
-			try {
-		    	return current.delete(pKey, trxid, this.tablets, timeout);
-			}
-			catch (OutOfHeapMemory x) {
+                continue;
+            }
+            try {
+                return current.delete(pKey, trxid, this.tablets, timeout);
+            }
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
+            }
+        }
+    }
+    
+    public HumpbackError deleteRow(long trxid, long pRow, int timeout) {
+        for (;;) {
+            MemTablet current = this.tablet;
+            if (current == null) {
+                grow(this.ticket);
+                continue;
+            }
+            try {
+                return current.deleteRow(pRow, trxid, this.tablets, timeout);
+            }
+            catch (OutOfHeapMemory x) {
+                grow(this.ticket);
+            }
+        }
     }
     
     public HumpbackError recoverDelete(long trxid, long pKey, long sprow) {
-		for (;;) {
+        for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
                 grow(this.ticket);
                 continue;
             }
-			try {
-		    	return current.recoverDelete(pKey, trxid, this.tablets, sprow);
-			}
-			catch (OutOfHeapMemory x) {
+            try {
+                return current.recoverDelete(pKey, trxid, this.tablets, sprow);
+            }
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
+            }
+        }
     }
     
     public HumpbackError put(VaporizingRow row, int timeout) {
-		for (;;) {
+        for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
                 grow(this.ticket);
                 continue;
             }
-			try {
-				return current.put(row, this.tablets, timeout);
-			}
-			catch (OutOfHeapMemory x) {
+            try {
+                return current.put(row, this.tablets, timeout);
+            }
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
+            }
+        }
     }
     
-	public HumpbackError recoverPut(long trxid, long pKey, long spRow) {
-		for (;;) {
+    public HumpbackError recoverPut(long trxid, long pKey, long spRow) {
+        for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
                 grow(this.ticket);
                 continue;
             }
-			try {
-				return current.recoverPut(pKey, trxid, spRow, this.tablets);
-			}
-			catch (OutOfHeapMemory x) {
+            try {
+                return current.recoverPut(pKey, trxid, spRow, this.tablets);
+            }
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
-	}
-	
-	public HumpbackError lock(long trxid, long pKey, int timeout) {
-		if (this.tablet == null) {
+            }
+        }
+    }
+    
+    public HumpbackError lock(long trxid, long pKey, int timeout) {
+        if (this.tablet == null) {
             grow(this.ticket);
-		}
-		for (;;) {
-			MemTablet current = this.tablet;
-			try {
-				return current.lock(trxid, pKey, this.tablets, timeout);
-			}
-			catch (OutOfHeapMemory x) {
+        }
+        for (;;) {
+            MemTablet current = this.tablet;
+            try {
+                return current.lock(trxid, pKey, this.tablets, timeout);
+            }
+            catch (OutOfHeapMemory x) {
                 grow(this.ticket);
-			}
-		}
-	}
+            }
+        }
+    }
 
-	public void testEscape(VaporizingRow row) {
-		if (tablet != null) {
-			this.tablet.testEscape(row);
-		}
-	}
+    public void testEscape(VaporizingRow row) {
+        if (tablet != null) {
+            this.tablet.testEscape(row);
+        }
+    }
 
-	public synchronized void close() {
-		this.isClosed = true;
+    public synchronized void close() {
+        this.isClosed = true;
         ConcurrentLinkedList<MemTablet> list = new ConcurrentLinkedList<MemTablet>(this.tablets);
         this.tablets.clear();
-		for (MemTablet i:list) {
-			i.close();
-		}
-		this.tablet = null;
-	}
-	
-	public synchronized void drop() {
+        for (MemTablet i:list) {
+            i.close();
+        }
+        this.tablet = null;
+    }
+    
+    public synchronized void drop() {
         if (!this.isMutable) {
             throw new IllegalArgumentException();
         }
         this.isClosed = true;
-		for (MemTablet i:getTablets()) {
-		    this.owner.gc.free(i);
-		}
-		this.tablets.clear();
-		this.tablet = null;
-	}
+        for (MemTablet i:getTablets()) {
+            this.owner.gc.free(i);
+        }
+        this.tablets.clear();
+        this.tablet = null;
+    }
 
-	@Override
+    @Override
     protected void extend(int requestTicket, int nextTicket) {
         if (!this.isMutable) {
             throw new IllegalArgumentException();
         }
-		try {
-			int tabletId = this.nextTabletId++;
-	    	MemTablet newone;
-	    	int filesize = (this.tablet == null) ? INITIAL_FILE_SIZE : this.tabletSize;
-			newone = new MemTablet(owner, this.ns, this.tableId, tabletId, filesize);
-			newone.setMinkeTable(getStorageTable());
-			newone.setMutable(true);
-			newone.setSpaceManager(this.owner.getSpaceManager());
-			newone.setTransactionManager(this.owner.getTrxMan());
-			newone.open();
-	    	this.tablet = newone;
-	    	this.tablets.addFirst(newone);
-	    	this.ticket = nextTicket;
-		}
-		catch (IOException x) {
-			throw new HumpbackException(x);
-		}
-	}
+        try {
+            int tabletId = this.nextTabletId++;
+            MemTablet newone;
+            int filesize = (this.tablet == null) ? INITIAL_FILE_SIZE : this.tabletSize;
+            newone = new MemTablet(owner, this.ns, this.tableId, tabletId, filesize);
+            newone.setMinkeTable(getStorageTable());
+            newone.setMutable(true);
+            newone.setSpaceManager(this.owner.getSpaceManager());
+            newone.setTransactionManager(this.owner.getTrxMan());
+            newone.open();
+            this.tablet = newone;
+            this.tablets.addFirst(newone);
+            this.ticket = nextTicket;
+        }
+        catch (IOException x) {
+            throw new HumpbackException(x);
+        }
+    }
     
     public void render(long endTrxId) {
-		for (MemTablet tablet:getTabletsReadOnly()) {
-			if (!(tablet instanceof MemTablet)) {
-				continue;
-			}
-			((MemTablet)tablet).render(endTrxId);
-		}
-	}
+        for (MemTablet tablet:getTabletsReadOnly()) {
+            if (!(tablet instanceof MemTablet)) {
+                continue;
+            }
+            ((MemTablet)tablet).render(endTrxId);
+        }
+    }
 
-	/**
-	 * carbonfreeze tablets 
-	 * 
-	 * @param oldestTrxid oldest active trxid in the system
-	 * @param force forcing carbonfreeze even if the tablet is not filled up
-	 * @return number of tablets carbonfrozen
-	 * @throws IOException
-	 */
+    /**
+     * carbonfreeze tablets 
+     * 
+     * @param oldestTrxid oldest active trxid in the system
+     * @param force forcing carbonfreeze even if the tablet is not filled up
+     * @return number of tablets carbonfrozen
+     * @throws IOException
+     */
     public synchronized int carbonfreeze(long oldestTrxid, boolean force) throws IOException {
         int count = 0;
         for (MemTablet i:this.tablets) {
@@ -684,150 +703,150 @@ public final class MemTable extends ScalableData implements LogSpan {
         return count;
     }
     
-	public synchronized int carbonfreezeIfPossible(long oldestTrxid) throws IOException {
-		return carbonfreeze(oldestTrxid, false);
-	}
+    public synchronized int carbonfreezeIfPossible(long oldestTrxid) throws IOException {
+        return carbonfreeze(oldestTrxid, false);
+    }
 
-	public boolean isPureEmpty() {
-		if (this.tablets.size() > 1) {
-			return false;
-		}
-		return (this.tablet != null) ? this.tablet.isPureEmpty() : true;
-	}
+    public boolean isPureEmpty() {
+        if (this.tablets.size() > 1) {
+            return false;
+        }
+        return (this.tablet != null) ? this.tablet.isPureEmpty() : true;
+    }
 
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public ConcurrentLinkedList<MemTablet> getTablets() {
-		return (ConcurrentLinkedList)this.tablets;
-	}
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public ConcurrentLinkedList<MemTablet> getTablets() {
+        return (ConcurrentLinkedList)this.tablets;
+    }
 
-	public MemTablet getCurrentTablet() {
-		return this.tablet;
-	}
+    public MemTablet getCurrentTablet() {
+        return this.tablet;
+    }
 
-	public synchronized void compact() throws IOException {
-		if (isClosed) {
-			return;
-		}
-		
-		// find candidate
-		
-		ConcurrentLinkedList.Node<MemTablet> node = findCompactCandidate();
-		if (node == null) {
-			return;
-		}
-		
-		// double check existence of new file
-		
-		MemTablet lead = node.data;
-		int babyTabletId = lead.getTabletId()-1;
-		File babyFile = MemTablet.getFile(ns, this.tableId, babyTabletId);
-		if (babyFile.exists()) {
-			_log.error("compact failed due to existence of file {}", babyFile);
-			return;
-		}
-		
-		// start compacting
-		
-		MemTablet x = node.next.data;
-		MemTablet y = node.next.next.data;
-		long size = getSizeOfNextTwoTablets(node) * 3 / 2;
-		if (size >= Integer.MAX_VALUE) {
-			// file is too big, give up
-			return;
-		}
-		_log.debug("start merging {} and {} to {} ...", x.getTabletId(), y.getTabletId(),babyFile);
-		MemTablet baby = new MemTablet(this.owner, this.ns, this.tableId, babyTabletId, (int)size);
-		boolean success = false;
-		try {
-			((MemTablet)baby).merge(node.next.data, node.next.next.data);
-			((MemTablet)baby).carbonfreeze(this.owner.getLastClosedTransactionId(), false);
-			baby.close();
-			baby = new MemTablet(babyFile);
-			baby.setMutable(false);
-			baby.setSpaceManager(this.owner.getSpaceManager());
-			_log.debug(
-					"merging {} with size {} and {} with size {} to {} with size {} is finished", 
-					x.getTabletId(), 
-					x.getFile().length(),
-					y.getTabletId(),
-					y.getFile().length(),
-					babyFile,
-					babyFile.length());
-			success = true;
-		}
-		finally {
-			if (!success) {
-				baby.close();
-				babyFile.delete();
-			}
-		}
-		
-		// update linked list
-		
-		ConcurrentLinkedList.Node<MemTablet> babyNode = this.tablets.insert(node, baby);
-		this.retired.put(x.getTabletId(), x);
-		this.retired.put(y.getTabletId(), y);
-		this.tablets.deleteNext(babyNode);
-		this.tablets.deleteNext(babyNode);
-		this.owner.getJobManager().schedule(5, TimeUnit.MINUTES, () -> {
-			_log.debug("deleting {} due to compacting", x.getFile());
-			x.drop();
-			y.drop();
-			this.retired.remove(x.getTabletId());
-			this.retired.remove(y.getTabletId());
-		});
-	}
-		
-	private ConcurrentLinkedList.Node<MemTablet> findCompactCandidate() {
-		// find the two consecutive tablets with smallest size
-		
-		long minSize = Integer.MAX_VALUE;
-		ConcurrentLinkedList.Node<MemTablet> tabletWithMinSize = null;
-		for (ConcurrentLinkedList.Node<MemTablet> i=this.tablets.getFirstNode(); i!=null; i=i.next) {
-			if (!isNextTabletIdAvailable(i)) {
-				continue;
-			}
-			long size = getSizeOfNextTwoTablets(i);
-			if (size < minSize) {
-				minSize = size;
-				tabletWithMinSize = i;
-			}
-		}
-		return tabletWithMinSize;
-	}
+    public synchronized void compact() throws IOException {
+        if (isClosed) {
+            return;
+        }
+        
+        // find candidate
+        
+        ConcurrentLinkedList.Node<MemTablet> node = findCompactCandidate();
+        if (node == null) {
+            return;
+        }
+        
+        // double check existence of new file
+        
+        MemTablet lead = node.data;
+        int babyTabletId = lead.getTabletId()-1;
+        File babyFile = MemTablet.getFile(ns, this.tableId, babyTabletId);
+        if (babyFile.exists()) {
+            _log.error("compact failed due to existence of file {}", babyFile);
+            return;
+        }
+        
+        // start compacting
+        
+        MemTablet x = node.next.data;
+        MemTablet y = node.next.next.data;
+        long size = getSizeOfNextTwoTablets(node) * 3 / 2;
+        if (size >= Integer.MAX_VALUE) {
+            // file is too big, give up
+            return;
+        }
+        _log.debug("start merging {} and {} to {} ...", x.getTabletId(), y.getTabletId(),babyFile);
+        MemTablet baby = new MemTablet(this.owner, this.ns, this.tableId, babyTabletId, (int)size);
+        boolean success = false;
+        try {
+            ((MemTablet)baby).merge(node.next.data, node.next.next.data);
+            ((MemTablet)baby).carbonfreeze(this.owner.getLastClosedTransactionId(), false);
+            baby.close();
+            baby = new MemTablet(babyFile);
+            baby.setMutable(false);
+            baby.setSpaceManager(this.owner.getSpaceManager());
+            _log.debug(
+                    "merging {} with size {} and {} with size {} to {} with size {} is finished", 
+                    x.getTabletId(), 
+                    x.getFile().length(),
+                    y.getTabletId(),
+                    y.getFile().length(),
+                    babyFile,
+                    babyFile.length());
+            success = true;
+        }
+        finally {
+            if (!success) {
+                baby.close();
+                babyFile.delete();
+            }
+        }
+        
+        // update linked list
+        
+        ConcurrentLinkedList.Node<MemTablet> babyNode = this.tablets.insert(node, baby);
+        this.retired.put(x.getTabletId(), x);
+        this.retired.put(y.getTabletId(), y);
+        this.tablets.deleteNext(babyNode);
+        this.tablets.deleteNext(babyNode);
+        this.owner.getJobManager().schedule(5, TimeUnit.MINUTES, () -> {
+            _log.debug("deleting {} due to compacting", x.getFile());
+            x.drop();
+            y.drop();
+            this.retired.remove(x.getTabletId());
+            this.retired.remove(y.getTabletId());
+        });
+    }
+        
+    private ConcurrentLinkedList.Node<MemTablet> findCompactCandidate() {
+        // find the two consecutive tablets with smallest size
+        
+        long minSize = Integer.MAX_VALUE;
+        ConcurrentLinkedList.Node<MemTablet> tabletWithMinSize = null;
+        for (ConcurrentLinkedList.Node<MemTablet> i=this.tablets.getFirstNode(); i!=null; i=i.next) {
+            if (!isNextTabletIdAvailable(i)) {
+                continue;
+            }
+            long size = getSizeOfNextTwoTablets(i);
+            if (size < minSize) {
+                minSize = size;
+                tabletWithMinSize = i;
+            }
+        }
+        return tabletWithMinSize;
+    }
 
-	private long getSizeOfNextTwoTablets(Node<MemTablet> node) {
-		if (node.next == null) {
-			return Long.MAX_VALUE; 
-		}
-		if (node.next.next == null) {
-			return Long.MAX_VALUE;
-		}
-		return node.next.data.getFile().length() + node.next.next.data.getFile().length();
-	}
+    private long getSizeOfNextTwoTablets(Node<MemTablet> node) {
+        if (node.next == null) {
+            return Long.MAX_VALUE; 
+        }
+        if (node.next.next == null) {
+            return Long.MAX_VALUE;
+        }
+        return node.next.data.getFile().length() + node.next.next.data.getFile().length();
+    }
 
-	private boolean isNextTabletIdAvailable(Node<MemTablet> node) {
-		if (node.next == null) {
-			return false;
-		}
-		int mergedTabletId = node.data.getTabletId() - 1;
-		MemTablet nextTablet = node.next.data;
-		if (nextTablet.getTabletId() >= mergedTabletId) {
-			// there is no space between current node and next node
-			return false;
-		}
-		if (this.retired.containsKey(mergedTabletId)) {
-			// candidate id is taken by a retired tablet
-			return false;
-		}
-		return true;
-	}
+    private boolean isNextTabletIdAvailable(Node<MemTablet> node) {
+        if (node.next == null) {
+            return false;
+        }
+        int mergedTabletId = node.data.getTabletId() - 1;
+        MemTablet nextTablet = node.next.data;
+        if (nextTablet.getTabletId() >= mergedTabletId) {
+            // there is no space between current node and next node
+            return false;
+        }
+        if (this.retired.containsKey(mergedTabletId)) {
+            // candidate id is taken by a retired tablet
+            return false;
+        }
+        return true;
+    }
 
-	/**
-	 * free tabltes whose sp is before specified sp
-	 * 
-	 * @param sp
-	 */
+    /**
+     * free tabltes whose sp is before specified sp
+     * 
+     * @param sp
+     */
     public void free(long sp) {
         List<MemTablet> junk = new ArrayList<>(); 
         for (MemTablet i:this.getTablets()) {
@@ -899,4 +918,5 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
         mtable.traceIo(pKey, lines);
     }
+
 }

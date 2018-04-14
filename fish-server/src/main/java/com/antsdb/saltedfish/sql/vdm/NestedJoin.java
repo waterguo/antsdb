@@ -174,14 +174,16 @@ public class NestedJoin extends CursorMaker {
 
     @Override
     public String toString() {
-    	String join = (this.condition != null) ? this.condition.toString() : "";
-        return "Nested Join (" + join + ")";
+        String join = (this.condition != null) ? this.condition.toString() : "";
+        return String.format("Nested Join (%d - %d) ON (%s)",
+                             this.left.makerId,
+                             this.right.makerId,
+                             join);
     }
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, toString());
-        rec.setMakerId(makerId);
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
         records.add(rec);
         this.left.explain(level+1, records);
         this.right.explain(level+1, records);

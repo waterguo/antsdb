@@ -43,7 +43,7 @@ public class Script extends Instruction {
             _log.trace("run {}-{}: {}", ctx.getSession().getId(), hashCode(), params.toString());
             start = System.currentTimeMillis();
         }
-        if (params.size() < this.nParameters) {
+        if ((params != null) && (params.size() < this.nParameters)) {
             throw new OrcaException("insufficient parameters specified for prepared statement");
         }
         Object result;
@@ -52,6 +52,9 @@ public class Script extends Instruction {
         }
         else {
             result = run_(ctx, params);
+        }
+        if (result instanceof ExprCursor) {
+            ((ExprCursor)result).setSource(this);
         }
         if (_log.isTraceEnabled()) {
             long end = System.currentTimeMillis();
@@ -88,11 +91,11 @@ public class Script extends Instruction {
             ctx.session.resetTrxTs();
             Object result;
             if (this.root != null) {
-            	result = this.root.run(ctx, params, 0);
+                result = this.root.run(ctx, params, 0);
             }
             else {
-            	// sql has ddl. run in interpretation mode
-            	result = ctx.getSession().getParserFactory().run(ctx, params, this.sql);
+                // sql has ddl. run in interpretation mode
+                result = ctx.getSession().getParserFactory().run(ctx, params, this.sql);
             }
             return result;
         }
@@ -156,6 +159,9 @@ public class Script extends Instruction {
         }
         else if (step instanceof StatementWrapper) {
             return worthCache(((StatementWrapper)step).stmt);
+        }
+        else if (step instanceof Explain) {
+            return false;
         }
         else if (step instanceof Flow) {
             Flow flow = (Flow)step;

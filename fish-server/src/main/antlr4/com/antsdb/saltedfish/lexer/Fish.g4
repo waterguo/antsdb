@@ -15,6 +15,7 @@ stmt
   | start_synchronizer_stmt
   | stop_replicator_stmt
   | stop_synchronizer_stmt
+  | reset_metrics_stmt
   ; 
 
 carbonfreeze_stmt: K_CARBONFREEZE;
@@ -43,6 +44,8 @@ stop_synchronizer_stmt : K_STOP K_SYNCHRONIZER;
      
 sync_stmt: K_SYNCHRONIZE;
 
+reset_metrics_stmt: K_RESET K_METRICS;
+
 number_value:NUMERIC_LITERAL;
 
 K_ALL: A L L;
@@ -53,7 +56,9 @@ K_EVICT : E V I C T;
 K_TABLE : T A B L E;
 K_PAGE : P A G E;
 K_PING : P I N G;
+K_RESET : R E S E T;
 K_START : S T A R T;
+K_METRICS : M E T R I C S;
 K_STOP : S T O P;
 K_SYNCHRONIZE : S Y N C H R O N I Z E;
 K_GC : G C;

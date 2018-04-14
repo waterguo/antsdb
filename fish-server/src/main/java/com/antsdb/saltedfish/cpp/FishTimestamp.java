@@ -20,10 +20,6 @@ public class FishTimestamp {
 	
 	public final static Timestamp get(Heap heap, long address) {
 		long lvalue = Unsafe.getLong(address+1);
-		if (lvalue == Long.MIN_VALUE) {
-		    // this is 0000-00-00 00:00:00 in mysql
-		    return null;
-		}
 		Timestamp value = new Timestamp(lvalue);
 		return value;
 	}
@@ -55,7 +51,7 @@ public class FishTimestamp {
 		Unsafe.putLong(address+1, value);
 	}
 
-	static int compare(long xAddr, long yAddr) {
+	public static int compare(long xAddr, long yAddr) {
 		long x = Unsafe.getLong(xAddr + 1);
 		long y = Unsafe.getLong(yAddr + 1);
 		return Long.compare(x, y);

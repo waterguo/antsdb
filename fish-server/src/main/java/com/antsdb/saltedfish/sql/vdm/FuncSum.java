@@ -27,7 +27,7 @@ public class FuncSum extends Function {
     int variableId;
 
     private static class Data {
-    	Object sum;
+    	    Object sum;
     }
     
     public FuncSum(int variableId, Operator expr) {
@@ -63,10 +63,10 @@ public class FuncSum extends Function {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	Data data = (Data)ctx.getVariable(this.variableId);
-    	if (data == null) {
-    		data = init(ctx);
-    	}
+        	Data data = (Data)ctx.getVariable(this.variableId);
+        	if (data == null) {
+        		data = init(ctx);
+        	}
         if (Record.isGroupEnd(pRecord)) {
             if (data.sum instanceof Float) {
                 data.sum = Float.valueOf(0);
@@ -84,6 +84,7 @@ public class FuncSum extends Function {
             return FishObject.allocSet(heap, data.sum);
         }
         long addrValue = this.expr.eval(ctx, heap, params, pRecord);
+        addrValue = AutoCaster.toNumber(heap, addrValue);
         Object value = FishObject.get(heap, addrValue);
         if (addrValue == 0) {
             // do nothing
@@ -109,19 +110,19 @@ public class FuncSum extends Function {
         }
         else if (data.sum instanceof BigDecimal) {
             if (value instanceof Integer) {
-            	data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Integer)value));
+            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Integer)value));
             }
             else if (value instanceof Long) {
-            	data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Long)value));
+            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Long)value));
             }
             else if (value instanceof BigInteger) {
-            	data.sum = ((BigDecimal)data.sum).add(new BigDecimal((BigInteger)value));
+            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((BigInteger)value));
             }
             else if (value instanceof BigDecimal) {
-            	data.sum = ((BigDecimal)data.sum).add((BigDecimal)value);
+            	    data.sum = ((BigDecimal)data.sum).add((BigDecimal)value);
             }
             else if (value instanceof String) {
-            	data.sum = ((BigDecimal)data.sum).add(new BigDecimal((String)value));
+            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((String)value));
             }
             else {
                 throw new CodingError();

@@ -31,7 +31,6 @@ public class TableMeta extends MetaObject {
     List<ColumnMeta> columns = Collections.emptyList();
     List<IndexMeta> indexes = new ArrayList<IndexMeta>();
     List<ForeignKeyMeta> fks = new ArrayList<>();
-    int maxColumnId = 0;
     KeyMaker keyMaker;
 
     public TableMeta(Orca orca, int id) {
@@ -111,11 +110,7 @@ public class TableMeta extends MetaObject {
     }
     
     public void setColumns(List<ColumnMeta> columns) {
-    	this.maxColumnId = 0;
-    	for (ColumnMeta i:columns) {
-    		this.maxColumnId = Math.max(this.maxColumnId, i.getColumnId());
-    	}
-    	this.columns = Collections.unmodifiableList(columns);
+        this.columns = Collections.unmodifiableList(columns);
     }
     
     public ColumnMeta getColumn(String columnName) {
@@ -183,48 +178,52 @@ public class TableMeta extends MetaObject {
     }
     
     public ColumnMeta findAutoIncrementColumn() {
-    	for (ColumnMeta i:this.columns) {
-    		if (i.isAutoIncrement()) {
-    			return i;
-    		}
-    	}
-    	return null;
+        for (ColumnMeta i:this.columns) {
+            if (i.isAutoIncrement()) {
+                return i;
+            }
+        }
+        return null;
     }
 
-	public int getMaxColumnId() {
-		return maxColumnId;
-	}
+    public int getMaxColumnId() {
+        int result = 0;
+        for (ColumnMeta i:columns) {
+            result = Math.max(result, i.getColumnId());
+        }
+        return result;
+    }
     
     public ObjectName getAutoIncrementSequenceName() {
-		ObjectName name = new ObjectName(getNamespace(), getTableName() + "_auto_increment");
-    	return name;
+        ObjectName name = new ObjectName(getNamespace(), getTableName() + "_auto_increment");
+        return name;
     }
 
-	public IndexMeta findIndex(String indexName) {
-		for (IndexMeta i:this.indexes) {
-			if (i.getName().equalsIgnoreCase(indexName)) {
-				return i;
-			}
-		}
-		return null;
-	}
-	
-	public KeyMaker getKeyMaker() {
-		return this.keyMaker;
-	}
-	
-	/**
-	 * get the external name. external table are the name used in external storage such as HBase
-	 * 
-	 * @return
-	 */
-	public String getExternalName() {
+    public IndexMeta findIndex(String indexName) {
+        for (IndexMeta i:this.indexes) {
+            if (i.getName().equalsIgnoreCase(indexName)) {
+                return i;
+            }
+        }
+        return null;
+    }
+    
+    public KeyMaker getKeyMaker() {
+        return this.keyMaker;
+    }
+    
+    /**
+     * get the external name. external table are the name used in external storage such as HBase
+     * 
+     * @return
+     */
+    public String getExternalName() {
         return (String)row.get(ColumnId.systable_ext_name.getId());
-	}
-	
-	public void setExternalName(String value) {
-		row.set(ColumnId.systable_ext_name.getId(), value);
-	}
+    }
+    
+    public void setExternalName(String value) {
+        row.set(ColumnId.systable_ext_name.getId(), value);
+    }
 
     public SlowRow getRow() {
         return this.row;
@@ -233,7 +232,6 @@ public class TableMeta extends MetaObject {
     @Override
     public TableMeta clone() {
         TableMeta result = new TableMeta(this.row.clone());
-        result.maxColumnId = this.maxColumnId;
         if (this.pk != null) {
             result.pk = this.pk.clone();
         }

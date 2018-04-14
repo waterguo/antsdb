@@ -25,8 +25,9 @@ class ColumnFilter {
     PlannerField field;
     FilterOp op;
     Operator operand;
-	boolean isConstant;
-	Operator source;
+    boolean isConstant;
+    Operator source;
+    int version;
 
     public ColumnFilter(PlannerField field, FilterOp op, Operator operand, Operator source) {
         super();
@@ -36,21 +37,27 @@ class ColumnFilter {
         this.source = source;
     }
 
-	public boolean isRangeScan() {
-		switch (this.op) {
-		case LESS:
-		case LESSEQUAL:
-		case LARGER:
-		case LARGEREQUAL:
-			return true;
-		case LIKE: {
-			if (operand instanceof StringLiteral) {
-				String value = ((StringLiteral)operand).getValue();
-				return !value.startsWith("%");
-			}
-		}
-		default:
-		}
-		return false;
-	}
+    public boolean isRangeScan() {
+        switch (this.op) {
+            case LESS:
+            case LESSEQUAL:
+            case LARGER:
+            case LARGEREQUAL:
+                return true;
+            case LIKE: {
+                if (operand instanceof StringLiteral) {
+                    String value = ((StringLiteral) operand).getValue();
+                    return !value.startsWith("%");
+                }
+            }
+            default:
+        }
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        return this.source.toString();
+    }
+    
 }

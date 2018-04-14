@@ -14,9 +14,11 @@
 package com.antsdb.saltedfish.sql.planner;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 import org.apache.commons.lang.NotImplementedException;
@@ -34,9 +36,9 @@ import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Aggregator;
-import com.antsdb.saltedfish.sql.vdm.BinaryOperator;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
+import com.antsdb.saltedfish.sql.vdm.CursorPrimaryKeySeek;
 import com.antsdb.saltedfish.sql.vdm.DumbDistinctFilter;
 import com.antsdb.saltedfish.sql.vdm.DumbGrouper;
 import com.antsdb.saltedfish.sql.vdm.DumbSorter;
@@ -44,6 +46,12 @@ import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.FullTextIndexMergeScan;
+import com.antsdb.saltedfish.sql.vdm.FuncAvg;
+import com.antsdb.saltedfish.sql.vdm.FuncCount;
+import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
+import com.antsdb.saltedfish.sql.vdm.FuncMax;
+import com.antsdb.saltedfish.sql.vdm.FuncMin;
+import com.antsdb.saltedfish.sql.vdm.FuncSum;
 import com.antsdb.saltedfish.sql.vdm.GroupByPostProcesser;
 import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.MasterRecordCursorMaker;
@@ -63,6 +71,7 @@ import com.antsdb.saltedfish.sql.vdm.OpOr;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.RangeScannable;
 import com.antsdb.saltedfish.sql.vdm.RecordLocker;
+import com.antsdb.saltedfish.sql.vdm.RowKeyValue;
 import com.antsdb.saltedfish.sql.vdm.TableRangeScan;
 import com.antsdb.saltedfish.sql.vdm.TableScan;
 import com.antsdb.saltedfish.sql.vdm.ThroughGrouper;
@@ -98,6 +107,7 @@ public class Planner {
     private Node last;
     private Node current;
     private boolean noCache = false;
+    private Analyzer analyzer = new Analyzer();
 
     static {
         KEY.setColumnId(-1);
@@ -242,6 +252,10 @@ public class Planner {
     }
 
     public CursorMaker run() {
+        if ((this.groupBy == null) && scanAggregationFunctions(getOutputFields())) {
+            this.groupBy = Collections.emptyList();
+        }
+        
         analyze();
         Link path = build();
 
@@ -274,7 +288,7 @@ public class Planner {
         CursorMaker grouper = buildGroupBy(maker, path);
         boolean hasGrouper = grouper != maker;
         maker = grouper;
-
+        
         // aggregation
 
         if (this.fields.size() > 0) {
@@ -549,15 +563,6 @@ public class Planner {
             return null;
         }
 
-        // table level filter. only for those not used in seek/scan and the
-        // right operand is constant
-
-        buildNodeFilters(link);
-
-        // join conditions
-
-        buildNodeJoinConditions(previous, link);
-
         // if not eof go deeper
 
         link.previous = previous;
@@ -565,9 +570,9 @@ public class Planner {
         return (result != null) ? result : link;
     }
 
-    private void buildNodeJoinConditions(Link previous, Link link) {
+    private void buildNodeJoinConditions(Link previous, Link link, List<ColumnFilter> filters) {
         if (previous != null) {
-            for (ColumnFilter i : link.to.getFilters()) {
+            for (ColumnFilter i : filters) {
                 if (i.isConstant) {
                     continue;
                 }
@@ -581,6 +586,16 @@ public class Planner {
         }
     }
 
+    private Operator buildOr(Operator x, Operator y) {
+        if (x == null) {
+            return y;
+        }
+        else if (y == null) {
+            return x;
+        }
+        return new OpOr(x, y);
+    }
+    
     private Operator buildAnd(Operator x, Operator y) {
         if (x == null) {
             return y;
@@ -591,44 +606,17 @@ public class Planner {
         return new OpAnd(x, y);
     }
 
-    private void buildNodeFilters(Link link) {
-        // normal node
-
-        if (!link.to.isUnion()) {
-            List<ColumnFilter> filters = new ArrayList<>();
-            for (ColumnFilter i : link.to.getFilters()) {
-                if (i.isConstant && !link.consumed.contains(i)) {
-                    filters.add(i);
-                }
-            }
-            if (!filters.isEmpty()) {
-                createFilter(link, filters);
-            }
-            return;
-        }
-
-        // union node
-
-        Operator where = null;
-        for (Node i : link.to.unions) {
-            Operator where_i = i.where;
-            for (ColumnFilter j : i.getFilters()) {
-                if (link.isUnion) {
-                    if (link.consumed.contains(j)) {
-                        continue;
-                    }
-                }
-                Operator op = createOperator(link.to, j);
-                where_i = new OpAnd(where_i, op);
-            }
-            if (where == null) {
-                where = where_i;
-            }
-            else {
-                where = new OpOr(where, where_i);
+    private Operator buildNodeFilters(Link link, List<ColumnFilter> filters) {
+        List<ColumnFilter> result = new ArrayList<>();
+        for (ColumnFilter i : filters) {
+            if (i.isConstant && !link.consumed.contains(i)) {
+                result.add(i);
             }
         }
-        link.maker = new Filter(link.maker, where, ctx.getNextMakerId());
+        if (!result.isEmpty()) {
+            return createFilterExpression(link, result);
+        }
+        return null;
     }
 
     private Operator createOperator(Node node, ColumnFilter filter) {
@@ -674,7 +662,7 @@ public class Planner {
         return op;
     }
 
-    private void createFilter(Link link, List<ColumnFilter> filters) {
+    private Operator createFilterExpression(Link link, List<ColumnFilter> filters) {
         // combine all filters into a AND
 
         Operator filter = null;
@@ -687,35 +675,113 @@ public class Planner {
                 filter = new OpAnd(filter, op);
             }
         }
-
-        link.maker = new Filter(link.maker, filter, ctx.getNextMakerId());
+        return filter;
     }
 
-    Link build(Link previous, Node node) {
-        // not a union node
-
-        if (!node.isUnion()) {
-            return build_(previous, node);
+    Link buildTableScan(Link previous, Node node) {
+        Link result = build_(previous, node, Collections.emptyList());
+        Operator filter = null;
+        for (List<ColumnFilter> i:node.union) {
+            filter = buildOr(filter, buildNodeFilters(result, i));
+            buildNodeJoinConditions(previous, result, i);
         }
-
+        if (filter != null) {
+            result.maker = new Filter(result.maker, filter, ctx.getNextMakerId());
+        }
+        return result;
+    }
+    
+    Link build(Link previous, Node node) {
+        Link result = null;
+        
+        // no columns filters found, just build the full table scan
+        
+        if (node.union.size() <= 0) {
+            return build_(previous, node, Collections.emptyList());
+        }
+        
         // union node, only proceed is it produced two non table scan
 
-        Link linkLeft = build_(previous, node.unions.get(0));
-        Link linkRight = build_(previous, node.unions.get(1));
-        if (!(linkLeft.maker instanceof TableScan) && !(linkRight.maker instanceof TableScan)) {
-            Link linkUnion = new Link(node);
-            linkUnion.isUnion = true;
-            linkUnion.maker = new Union(linkLeft.maker, linkRight.maker, true, ctx.getNextMakerId());
-            return linkUnion;
+        List<Link> union = new ArrayList<>();
+        
+        for (List<ColumnFilter> i:node.union) {
+            Link ii = build_(previous, node, i);
+            
+            // table level filter. only for those not used in seek/scan and the
+            // right operand is constant
+
+            Operator filter = buildNodeFilters(ii, i);
+            if (filter != null) {
+                ii.maker = new Filter(ii.maker, filter, ctx.getNextMakerId());
+            }
+
+            // join conditions
+
+            buildNodeJoinConditions(previous, ii, i);
+            
+            // build  union
+            
+            union.add(ii);
         }
 
-        // do the normal table scan
-
-        Link link = build_(previous, node);
-        return link;
+        // find the better plan between full table scan and union
+        
+        Link tablescan = buildTableScan(previous, node);
+        if (tablescan.getScore() <= getScore(union)) {
+            result = tablescan;
+        }
+        else {
+            result = buildUnion(union);
+            buildNatralOrder(previous, result);
+        }
+            
+        return result;
     }
 
-    Link build_(Link previous, Node node) {
+    private void buildNatralOrder(Link previous, Link result) {
+        // if this is the driving table, we need to apply the row key order
+        if (previous != null) {
+            return;
+        }
+        if (this.orderBy != null) {
+            return;
+        }
+        if (!(result.maker instanceof Union) && !(result.maker instanceof CursorPrimaryKeySeek)) {
+            return;
+        }
+        result.maker = new DumbSorter(result.maker, new RowKeyValue(), true, ctx.getNextMakerId());
+    }
+
+    private float getScore(List<Link> union) {
+        float result = 0;
+        for (Link i:union) {
+            result += i.getScore();
+        }
+        return result;
+    }
+
+    Link buildUnion(List<Link> union) {
+        Link result = null;
+        if (union.size() == 1) {
+            result = union.get(0);
+        }
+        else {
+            for (Link i:union) {
+                if (result == null) {
+                    result = i;
+                }
+                else {
+                    Link merge = new Link(i.to);
+                    merge.isUnion = true;
+                    merge.maker = new Union(result.maker, i.maker, false, ctx.getNextMakerId());
+                    result = merge;
+                }
+            }
+        }
+        return result;
+    }
+    
+    Link build_(Link previous, Node node, List<ColumnFilter> filters) {
         Link link = null;
 
         // node is a record from outer query
@@ -728,7 +794,7 @@ public class Planner {
         // try all keys/indexes
 
         if (link == null) {
-            link = tryKeys(previous, node);
+            link = tryKeys(previous, node, filters);
         }
 
         // fall back to full table scan
@@ -768,14 +834,14 @@ public class Planner {
         return link;
     }
 
-    private Link tryKeys(Link previous, Node node) {
+    private Link tryKeys(Link previous, Node node, List<ColumnFilter> filters) {
         if (node.table == null) {
             return null;
         }
 
         // no filters, can't do table range scan
 
-        if (!hasFilters(node)) {
+        if (filters.size() <= 0) {
             return null;
         }
 
@@ -784,12 +850,12 @@ public class Planner {
         Link best = null;
         PrimaryKeyMeta pk = node.table.getPrimaryKey();
         if (pk != null) {
-            best = tryKey(previous, node, pk, true, false);
+            best = tryKey(previous, node, filters, pk, true, false);
         }
 
         // compare all indexes for the best match
         for (IndexMeta index : node.table.getIndexes()) {
-            Link link = tryKey(previous, node, index, index.isUnique(), index.isFullText());
+            Link link = tryKey(previous, node, filters, index, index.isUnique(), index.isFullText());
             if (link == null) {
                 continue;
             }
@@ -810,10 +876,15 @@ public class Planner {
         return best;
     }
 
-    private Link tryKey(Link previous, Node node, RuleMeta<?> key, boolean isUnique, boolean isFullText) {
+    private Link tryKey(Link previous, 
+                        Node node, 
+                        List<ColumnFilter> filters, 
+                        RuleMeta<?> key, 
+                        boolean isUnique, 
+                        boolean isFullText) {
         // no filters, can't do table range scan
 
-        if (!hasFilters(node)) {
+        if (filters.size() <= 0) {
             return null;
         }
 
@@ -829,7 +900,7 @@ public class Planner {
         for (int i = 0; i < columns.size(); i++) {
             ColumnMeta column = columns.get(i);
             boolean found = false;
-            for (ColumnFilter filter : node.getFilters()) {
+            for (ColumnFilter filter : filters) {
                 // is full text
 
                 if (filter.op == FilterOp.MATCH) {
@@ -896,21 +967,6 @@ public class Planner {
         return scan;
     }
 
-    @SuppressWarnings("unused")
-    private boolean checkColumnReference(Node node, Link previous) {
-        for (ColumnFilter filter : node.getFilters()) {
-            if (!checkColumnReference(previous, node, filter.operand)) {
-                return false;
-            }
-        }
-        if (node.joinCondition != null) {
-            if (!checkColumnReference(previous, node, (BinaryOperator) node.joinCondition)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     /** is the expression calculable with given path */
     private boolean checkColumnReference(Link previous, Node node, Operator expr) {
         if (expr instanceof OpInSelect) {
@@ -942,7 +998,7 @@ public class Planner {
         // analyze conditions
 
         if (this.where != null) {
-            if (Analyzer.analyze(this, this.where, null)) {
+            if (this.analyzer.analyzeWhere(this, this.where)) {
                 this.where = null;
             }
         }
@@ -951,10 +1007,10 @@ public class Planner {
 
         for (Node i : this.nodes.values()) {
             if (i.isOuter) {
-                Analyzer.analyze(this, i.joinCondition, i);
+                this.analyzer.analyzeJoin(this, i.joinCondition, i);
             }
             else if (i.joinCondition != null) {
-                if (Analyzer.analyze(this, i.joinCondition, null)) {
+                if (this.analyzer.analyzeJoin(this, i.joinCondition, null)) {
                     i.joinCondition = null;
                 }
                 else if (!isLocal(i, i.joinCondition)) {
@@ -986,15 +1042,6 @@ public class Planner {
      */
     public CursorMeta getRawMeta() {
         return this.rawMeta;
-    }
-
-    private boolean hasFilters(Node node) {
-        if (node.getFilters().size() > 0) {
-            return true;
-        }
-        else {
-            return false;
-        }
     }
 
     public boolean isEmpty() {
@@ -1080,5 +1127,35 @@ public class Planner {
     
     public void setNoCache(boolean value) {
         this.noCache = value;
+    }
+    
+    private static boolean scanAggregationFunctions(List<OutputField> list) {
+        AtomicBoolean result = new AtomicBoolean(false);
+        for (OutputField i:list) {
+            i.getExpr().visit(it -> {
+                if (it instanceof FuncCount) {
+                    result.set(true);
+                }
+                else if (it instanceof FuncMax) {
+                    result.set(true);
+                }
+                else if (it instanceof FuncMin) {
+                    result.set(true);
+                }
+                else if (it instanceof FuncSum) {
+                    result.set(true);
+                }
+                else if (it instanceof FuncAvg) {
+                    result.set(true);
+                }
+                else if (it instanceof FuncCount) {
+                    result.set(true);
+                }
+                else if (it instanceof FuncGroupConcat) {
+                    result.set(true);
+                }
+            });
+        }
+        return result.get();
     }
 }

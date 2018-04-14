@@ -33,30 +33,30 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author wgu0
  */
 public class MemoryMappedFile implements Closeable {
-	static Logger _log = UberUtil.getThisLogger();
-	
-	File file;
-	int size;
-	long addr;
-	MappedByteBuffer buf;
-	FileChannel channel;
+    static Logger _log = UberUtil.getThisLogger();
+    
+    File file;
+    int size;
+    long addr;
+    MappedByteBuffer buf;
+    FileChannel channel;
     RandomAccessFile raf;
-	
-	/**
-	 * 
-	 * @param file
-	 * @param mode "rw" for read and write. "r" for read only
-	 * @throws IOException
-	 */
-	public MemoryMappedFile(File file, String mode) throws IOException {
-		this(file, file.length(), mode);
-	}
-	
-	public MemoryMappedFile(File file, long size, String mode) throws IOException {
-	    this(file, mode, 0, size);
-	}
-	
-	public MemoryMappedFile(File file, String mode, long offset, long size) throws IOException {
+    
+    /**
+     * 
+     * @param file
+     * @param mode "rw" for read and write. "r" for read only
+     * @throws IOException
+     */
+    public MemoryMappedFile(File file, String mode) throws IOException {
+        this(file, file.length(), mode);
+    }
+    
+    public MemoryMappedFile(File file, long size, String mode) throws IOException {
+        this(file, mode, 0, size);
+    }
+    
+    public MemoryMappedFile(File file, String mode, long offset, long size) throws IOException {
         if (size >= Integer.MAX_VALUE) {
             throw new IllegalArgumentException("jvm doesn't support mapped file more than 2g");
         }
@@ -86,6 +86,9 @@ public class MemoryMappedFile implements Closeable {
         this.buf = channel.map(mapmode, offset, size);
         this.buf.order(ByteOrder.nativeOrder());
         this.addr = UberUtil.getAddress(buf);
+        if (this.addr == 0) {
+            throw new IllegalArgumentException();
+        }
         _log.debug(String.format("mounted %s %s %s at 0x%016x with length 0x%08x",
                 exist ? "exist" : "new",
                 file.toString(), 
@@ -96,7 +99,7 @@ public class MemoryMappedFile implements Closeable {
 
     public void close() {
         unmap();
-		try {
+        try {
             this.channel.close();
             this.raf.close();
         }
@@ -105,30 +108,30 @@ public class MemoryMappedFile implements Closeable {
         }
         this.channel = null;
         this.raf = null;
-	}
-	
-	public long getAddress() {
-		return this.addr;
-	}
-	
-	public int getSize() {
-		return this.size;
-	}
+    }
+    
+    public long getAddress() {
+        return this.addr;
+    }
+    
+    public int getSize() {
+        return this.size;
+    }
 
-	public void force() {
-		this.buf.force();
-	}
+    public void force() {
+        this.buf.force();
+    }
 
-	private void unmap() {
+    private void unmap() {
         _log.debug("{} @ {} is unmounted", file.toString(), UberFormatter.hex(addr));
-		Unsafe.unmap(this.buf);
-		this.buf = null;
-		this.addr = 0;
-	}
-	
-	public boolean isReadOnly() {
-		return this.buf.isReadOnly();
-	}
+        Unsafe.unmap(this.buf);
+        this.buf = null;
+        this.addr = 0;
+    }
+    
+    public boolean isReadOnly() {
+        return this.buf.isReadOnly();
+    }
 
     @Override
     public String toString() {
@@ -144,5 +147,5 @@ public class MemoryMappedFile implements Closeable {
             buff.force();
         }
     }
-	
+    
 }

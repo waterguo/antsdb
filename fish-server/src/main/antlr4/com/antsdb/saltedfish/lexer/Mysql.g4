@@ -45,6 +45,7 @@ sql_stmt
  | drop_user_stmt
  | explain_stmt
  | insert_stmt
+ | kill_stmt
  | load_data_infile_stmt
  | lock_table_stmt
  | rollback_stmt
@@ -360,6 +361,8 @@ drop_index_stmt: K_DROP K_INDEX index_name K_ON table_name_ ;
 
 explain_stmt: K_EXPLAIN K_PROFILE? sql_stmt;
  
+kill_stmt: K_KILL (K_CONNECTION | K_QUERY) number_value; 
+
 load_data_infile_stmt: K_LOAD K_DATA K_INFILE file_name K_INTO K_TABLE table_name_;
 
 file_name: STRING_LITERAL;
@@ -371,7 +374,9 @@ lock_table_item
  ;
  
 insert_stmt
- : (K_INSERT | K_REPLACE) HINT? K_IGNORE? K_INTO table_name_ (insert_stmt_values | insert_stmt_select) 
+ : (K_INSERT | K_REPLACE) HINT? K_IGNORE? K_INTO table_name_ 
+   (insert_stmt_values | insert_stmt_select)
+   insert_duplicate_clause? 
  ;
  
 insert_stmt_values
@@ -385,7 +390,11 @@ insert_stmt_values_columns
 insert_stmt_values_row
  : '(' expr ( ',' expr )* ')'
  ;
-  
+ 
+insert_duplicate_clause
+ : K_ON K_DUPLICATE K_KEY K_UPDATE update_stmt_set ( ',' update_stmt_set)*
+ ;
+   
 insert_stmt_select
  : select_stmt
  ;
@@ -432,7 +441,7 @@ compound_operator
  ;
  
 select_or_values
- : K_SELECT HINT? K_SQL_NO_CACHE? 'SQL_CACHE'? ( K_DISTINCT | K_ALL )? select_columns 
+ : K_SELECT HINT? K_SQL_NO_CACHE? 'SQL_CACHE'? K_STRAIGHT_JOIN? ( K_DISTINCT | K_ALL )? select_columns 
    from_clause ? 
    where_clause ? 
    group_by_clause ?
@@ -489,8 +498,18 @@ column_alias
  ;
  
 from_item
- : ( from_table | from_subquery) ( K_AS? table_alias )?
+ : ( from_table index_hint_list? | from_subquery) ( K_AS? table_alias )?
  ;
+
+index_hint_list: index_hint+;
+
+index_hint
+ : K_USE (K_INDEX | K_KEY) '(' index_list ')'
+ | K_IGNORE (K_INDEX | K_KEY) '(' index_list ')'
+ | K_FORCE (K_INDEX | K_KEY) '(' index_list ')'
+ ;
+
+index_list: index_name ( ',' index_name)*;
 
 from_table
  : table_name_
@@ -692,12 +711,13 @@ expr
  | expr expr_in_values
  | expr expr_in_table 
  | expr_simple K_NOT? K_BETWEEN expr_simple K_AND expr_simple
+ | expr_not
  | expr K_AND expr
  | expr K_REGEXP pattern
  | expr K_OR expr
  | expr ( K_ISNULL | K_NOTNULL | K_NOT K_NULL )
  | expr K_IS K_NOT? expr
- | K_CASE expr? ( K_WHEN expr K_THEN expr )+ ( K_ELSE expr )? K_END
+ | expr_case
  | K_DISTINCT expr
  | expr_cast
  ;
@@ -711,7 +731,15 @@ expr_simple
  | expr_function
  | expr_select 
  ;
- 
+
+expr_not : (K_NOT | '!') expr;
+
+expr_case : K_CASE expr? expr_case_when+ expr_case_else? K_END;
+
+expr_case_when : K_WHEN expr K_THEN expr;
+
+expr_case_else : K_ELSE expr;
+
 like_expr
  : literal_value | bind_parameter
  ;
@@ -824,7 +852,7 @@ name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
- | K_IDENTIFIED | K_PERMANENT | K_OPTION
+ | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION
  ;
  
 identifier
@@ -890,7 +918,6 @@ unary_operator
  : '-'
  | '+'
  | '~'
- | K_NOT
  | K_BINARY
  ;
 
@@ -954,6 +981,7 @@ K_COLLATION : C O L L A T I O N;
 K_COMMENT : C O M M E N T;
 K_COMMIT : C O M M I T;
 K_CONFLICT : C O N F L I C T;
+K_CONNECTION : C O N N E C T I O N;
 K_CONSTRAINT : C O N S T R A I N T;
 K_CREATE : C R E A T E;
 K_CROSS : C R O S S;
@@ -972,6 +1000,7 @@ K_DETACH : D E T A C H;
 K_DISABLE : D I S A B L E;
 K_DISTINCT : D I S T I N C T;
 K_DROP : D R O P;
+K_DUPLICATE : D U P L I C A T E;
 K_EACH : E A C H;
 K_ELSE : E L S E;
 K_ENABLE : E N A B L E;
@@ -987,6 +1016,7 @@ K_FAIL : F A I L;
 K_FALSE : F A L S E;
 K_FIELDS : F I E L D S;
 K_FOR : F O R;
+K_FORCE : F O R C E;
 K_FOREIGN : F O R E I G N;
 K_FROM : F R O M;
 K_FULL : F U L L;
@@ -1016,6 +1046,7 @@ K_ISNULL : I S N U L L;
 K_JOIN : J O I N;
 K_KEY : K E Y;
 K_KEYS : K E Y S;
+K_KILL : K I L L;
 K_LEFT : L E F T;
 K_LIKE : L I K E;
 K_LIMIT : L I M I T;

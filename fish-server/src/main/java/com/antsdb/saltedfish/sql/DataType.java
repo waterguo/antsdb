@@ -43,29 +43,29 @@ public class DataType {
     }
     
     @Override
-	public boolean equals(Object obj) {
-        	if (!(obj instanceof DataType)) {
-        		return false;
-        	}
-        	DataType that =(DataType)obj;
-        	if (this.fishType != that.fishType) {
-        		return false;
-        	}
-        	if (this.length != that.length) {
-        		return false;
-        	}
-        	if (this.scale != that.scale) {
-        		return false;
-        	}
-        	return true;
-	}
+    public boolean equals(Object obj) {
+            if (!(obj instanceof DataType)) {
+                return false;
+            }
+            DataType that =(DataType)obj;
+            if (this.fishType != that.fishType) {
+                return false;
+            }
+            if (this.length != that.length) {
+                return false;
+            }
+            if (this.scale != that.scale) {
+                return false;
+            }
+            return true;
+    }
 
     public int getLength() {
         return length;
     }
 
-	public void setLength(int value) {
-    	    this.length = value;
+    public void setLength(int value) {
+            this.length = value;
     }
     
     public int getScale() {
@@ -73,7 +73,7 @@ public class DataType {
     }
 
     public int getSqlType() {
-    	    return this.sqlType;
+            return this.sqlType;
     }
 
     public Class<?> getJavaType() {
@@ -86,8 +86,8 @@ public class DataType {
     }
 
     public static DataType varchar(int length) {
-    	    return new TypeString("_varchar", length, Types.VARCHAR);
-	}
+            return new TypeString("_varchar", length, Types.VARCHAR);
+    }
 
     static DataType _number = new TypeDecimal("_decimal", 38, 10);
     public static DataType number() {
@@ -99,29 +99,29 @@ public class DataType {
         return _float;
     }
     
-    static DataType _double = new TypeFloat("_double");
+    static DataType _double = new TypeDouble("_double");
     public static DataType doubleType() {
         return _double;
     }
     
     static DataType _integer = new TypeInteger(
-    		"_integer", 
-    		Types.INTEGER, 
-    		Integer.class, 
-    		Value.TYPE_NUMBER, 
-    		Long.MIN_VALUE, 
-    		Long.MAX_VALUE);
+            "_integer", 
+            Types.INTEGER, 
+            Integer.class, 
+            Value.TYPE_NUMBER, 
+            Long.MIN_VALUE, 
+            Long.MAX_VALUE);
     public static DataType integer() {
         return _integer;
     }
 
     static DataType _long = new TypeInteger(
-    		"_long", 
-    		Types.BIGINT, 
-    		Long.class, 
-    		Value.TYPE_NUMBER, 
-    		Long.MIN_VALUE, 
-    		Long.MAX_VALUE);
+            "_long", 
+            Types.BIGINT, 
+            Long.class, 
+            Value.TYPE_NUMBER, 
+            Long.MIN_VALUE, 
+            Long.MAX_VALUE);
     public static DataType longtype() {
         return _long;
     }
@@ -132,14 +132,14 @@ public class DataType {
     }
 
     static DataType _date = new TypeDate("_date");
-	public static DataType date() {
-		return _date;
-	}
-	
+    public static DataType date() {
+        return _date;
+    }
+    
     static DataType _time = new TypeTime("_time");
-	public static DataType time() {
-		return _time;
-	}
+    public static DataType time() {
+        return _time;
+    }
 
     static DataType _timestamp = new TypeTimestamp("_timestamp", 0);
     public static DataType timestamp() {
@@ -149,7 +149,7 @@ public class DataType {
     static DataType _clob = new TypeClob("_clob", Types.CLOB, Long.MAX_VALUE);
     public static DataType clob() { 
         return _clob; 
-	}
+    }
 
     static DataType _blob = new TypeBlob("_blob", Types.BLOB, Long.MAX_VALUE);
     public static DataType blob() {
@@ -177,19 +177,19 @@ public class DataType {
     
     @Override
     public String toString() {
-    	    String text;
-    	    if (this.getJavaType() == String.class) {
-    	        text = this.name + '(' + length + ')';
-    	    }
-    	    else if (this.getJavaType() == byte[].class) {
+            String text;
+            if (this.getJavaType() == String.class) {
+                text = this.name + '(' + length + ')';
+            }
+            else if (this.getJavaType() == byte[].class) {
             text = this.name + '(' + length + ')';
         }
-    	    else if (this.getJavaType() == BigDecimal.class) {
-    	        text = this.name + '(' + length + ',' + scale + ')';
-    	    } 
-    	    else {
-    	        text = this.name;
-    	    }
+            else if (this.getJavaType() == BigDecimal.class) {
+                text = this.name + '(' + length + ',' + scale + ')';
+            } 
+            else {
+                text = this.name;
+            }
         return text;
     }
 
@@ -251,11 +251,11 @@ public class DataType {
     }
 
     public byte getFishType() {
-    	return fishType;
+        return fishType;
     }
 
-	public String getName() {
-		return this.name;
-	}
+    public String getName() {
+        return this.name;
+    }
 
 }

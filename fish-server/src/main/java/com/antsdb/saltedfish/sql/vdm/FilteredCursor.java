@@ -25,15 +25,15 @@ public class FilteredCursor extends CursorWithHeap {
     Parameters params;
     boolean allFiltered = true;
     boolean outer;
-	private AtomicLong counter;
+    private AtomicLong counter;
     
     public FilteredCursor(
-    		VdmContext ctx, 
-    		Parameters params, 
-    		Cursor upstream, 
-    		Operator expr, 
-    		boolean outer, 
-    		AtomicLong counter) {
+            VdmContext ctx, 
+            Parameters params, 
+            Cursor upstream, 
+            Operator expr, 
+            boolean outer, 
+            AtomicLong counter) {
         super(upstream.getMetadata());
         this.upstream = upstream;
         this.filter = expr;
@@ -57,7 +57,7 @@ public class FilteredCursor extends CursorWithHeap {
             Heap heap = newHeap();
             long pBool = this.filter.eval(ctx, heap, params, pRecord);
             if (pBool == 0) {
-            	continue;
+            	    continue;
             }
             boolean b = FishBool.get(null, pBool);
             if (b) {

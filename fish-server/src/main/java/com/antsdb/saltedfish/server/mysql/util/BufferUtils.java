@@ -171,7 +171,7 @@ public final class BufferUtils {
 
     public static void writeTimestamp(ByteBuf buf, Timestamp date) {
         buf.writeByte(11);
-        if (date == null) {
+        if (date.getTime() == Long.MIN_VALUE) {
             // 0 datetime in mysql
             BufferUtils.writeUB2(buf, 0);
             buf.writeByte(0);
@@ -196,7 +196,7 @@ public final class BufferUtils {
 
     public static void writeDate(ByteBuf buf, java.util.Date date) {
         buf.writeByte(7);
-        if (date == null) {
+        if (date.getTime() == Long.MIN_VALUE) {
             // 0 date in mysql
             BufferUtils.writeUB2(buf, 0);
             buf.writeByte(0);

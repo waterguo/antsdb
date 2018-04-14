@@ -16,24 +16,15 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class Explain extends CursorMaker {
+public class Explain extends ViewMaker {
     Instruction root;
-    CursorMeta meta = new CursorMeta();
     
     public Explain(Instruction root) {
-        super();
+        super(CursorUtil.toMeta(ExplainRecord.class));
         this.root = root;
-        this.meta.addColumn(new FieldMeta("level", DataType.integer()));
-        this.meta.addColumn(new FieldMeta("plan", DataType.varchar()));
-    }
-
-    @Override
-    public CursorMeta getCursorMeta() {
-        return this.meta;
     }
 
     @Override

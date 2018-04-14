@@ -22,15 +22,15 @@ import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 public abstract class SqlParserFactory {
     public abstract Script parse(Session session, CharStream cs);
-	public abstract Object run(VdmContext ctx, Parameters params, CharStream cs);
-	
+    public abstract Object run(VdmContext ctx, Parameters params, CharStream cs);
+    
     public Script parse(Session session, String text) {
         CharStream cs = new ANTLRInputStream(text);
         return parse(session, cs);
     }
     
-	public Object run(VdmContext ctx, Parameters params, String sql) {
+    public Object run(VdmContext ctx, Parameters params, String sql) {
         CharStream cs = new ANTLRInputStream(sql);
         return run(ctx, params, cs);
-	}
+    }
 }

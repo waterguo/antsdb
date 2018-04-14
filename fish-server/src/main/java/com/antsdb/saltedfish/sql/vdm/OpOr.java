@@ -31,7 +31,7 @@ public class OpOr extends BinaryOperator {
         long valLeft = this.left.eval(ctx, heap, params, pRecord);
         boolean bLeft = (valLeft != 0) ? FishBool.get(heap, valLeft) : false;
         if (bLeft) {
-        	return FishBool.allocSet(heap, true);
+        	    return FishBool.allocSet(heap, true);
         }
         long valRight = this.right.eval(ctx, heap, params, pRecord);
         boolean bRight = (valRight != 0) ? FishBool.get(heap, valRight) : false;

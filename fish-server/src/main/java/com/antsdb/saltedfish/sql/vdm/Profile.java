@@ -52,10 +52,10 @@ public class Profile extends CursorMaker {
         this.root.explain(1, explainations);
         for (ExplainRecord i:explainations) {
         	ProfileRecord rec = new ProfileRecord();
-        	rec.setLevel(i.getLevel())
-        	   .setPlan(i.getPlan())
-        	   .setMakerId(i.getMakerId());
-        	AtomicLong stats = ctx.getCursorStats(i.getMakerId());
+        	rec.setLevel(i.level)
+        	   .setPlan(i.plan)
+        	   .setMakerId(i.id);
+        	AtomicLong stats = ctx.getCursorStats(i.id);
         	rec.setStats(Long.toString(stats.get()));
         	records.add(rec);
         }

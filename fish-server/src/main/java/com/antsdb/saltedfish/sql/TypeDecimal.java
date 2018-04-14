@@ -25,8 +25,8 @@ import com.antsdb.saltedfish.cpp.Value;
  */
 public class TypeDecimal extends DataType {
 
-	public TypeDecimal(String name, int length, int scale) {
-		super(name, length, scale, Types.DECIMAL, BigDecimal.class, Value.TYPE_NUMBER);
-	}
+    public TypeDecimal(String name, int length, int scale) {
+        super(name, length, scale, Types.DECIMAL, BigDecimal.class, Value.TYPE_NUMBER);
+    }
 
 }

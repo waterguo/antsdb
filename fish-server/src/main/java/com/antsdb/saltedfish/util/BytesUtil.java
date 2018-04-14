@@ -27,80 +27,96 @@ public class BytesUtil {
         return s.getBytes(UTF8);
     }
     
+    public static String toHex(byte value) {
+        StringBuilder buf = new StringBuilder();
+        dump(buf, value);
+        return buf.toString();
+    }
+
+    public static String toHex(char value) {
+        StringBuilder buf = new StringBuilder();
+        dump(buf, (byte)(value >>> 8));
+        dump(buf, (byte)(value & 0xff));
+        return buf.toString();
+    }
+
     public static String toHex(int value) {
-    	StringBuilder buf = new StringBuilder();
-    	dump(buf, value);
-    	return buf.toString();
+        	StringBuilder buf = new StringBuilder();
+        dump(buf, (byte)(value >>> 24));
+        dump(buf, (byte)(value >>> 16 & 0xff));
+        dump(buf, (byte)(value >>> 8 & 0xff));
+        dump(buf, (byte)(value & 0xff));
+        	return buf.toString();
     }
     
     public static String toHex8(byte[] bytes) {
-    	if (bytes == null) {
-    		return "";
-    	}
-    	StringBuilder buf = new StringBuilder();
-    	for (int i=0; i<bytes.length; i++) {
-    		if ((i > 0) && (i % 8 == 0)) {
-    			buf.append('-');
-    		}
-    		dump(buf, bytes[i]);
-    	}
-    	return buf.toString();
+        	if (bytes == null) {
+        		return "";
+        	}
+        	StringBuilder buf = new StringBuilder();
+        	for (int i=0; i<bytes.length; i++) {
+        		if ((i > 0) && (i % 8 == 0)) {
+        			buf.append('-');
+        		}
+        		dump(buf, bytes[i]);
+        	}
+        	return buf.toString();
     }
     
     public static String toHex(byte[] bytes) {
-    	if (bytes == null) {
-    		return "";
-    	}
-    	StringBuilder buf = new StringBuilder();
-    	for (int i=0; i<bytes.length; i++) {
-    		if ((i > 0) && (i % 16 == 0)) {
-    			buf.append('\n');
-    		}
-    		dump(buf, bytes[i]);
-    		buf.append(' ');
-    	}
-    	return buf.toString();
+        	if (bytes == null) {
+        		return "";
+        	}
+        	StringBuilder buf = new StringBuilder();
+        	for (int i=0; i<bytes.length; i++) {
+        		if ((i > 0) && (i % 16 == 0)) {
+        			buf.append('\n');
+        		}
+        		dump(buf, bytes[i]);
+        		buf.append(' ');
+        	}
+        	return buf.toString();
     }
 
     public static String toCompactHex(byte[] bytes) {
-    	if (bytes == null) {
-    		return "";
-    	}
-    	StringBuilder buf = new StringBuilder();
-    	for (int i=0; i<bytes.length; i++) {
-    		dump(buf, bytes[i]);
-    	}
-    	return buf.toString();
+        	if (bytes == null) {
+        		return "";
+        	}
+        	StringBuilder buf = new StringBuilder();
+        	for (int i=0; i<bytes.length; i++) {
+        		dump(buf, bytes[i]);
+        	}
+        	return buf.toString();
     }
     
     public static String toCompactHex(long p, int len) {
-    	if (p == 0) {
-    		return "";
-    	}
-    	StringBuilder buf = new StringBuilder();
-    	for (int i=0; i<len; i++) {
-    		buf.append(toHex(Unsafe.getByte(p + i)));
-    	}
-    	return buf.toString();
+        	if (p == 0) {
+        		return "";
+        	}
+        	StringBuilder buf = new StringBuilder();
+        	for (int i=0; i<len; i++) {
+        		buf.append(toHex(Unsafe.getByte(p + i)));
+        	}
+        	return buf.toString();
     }
     
     public static String toHex8(long p, int len) {
-    	byte[] bytes = new byte[len];
-    	for (int i=0; i<len; i++) {
-    		bytes[i] = Unsafe.getByte(p + i);
-    	}
-    	return toHex8(bytes);
+        	byte[] bytes = new byte[len];
+        	for (int i=0; i<len; i++) {
+        		bytes[i] = Unsafe.getByte(p + i);
+        	}
+        	return toHex8(bytes);
     }
     
     public static String toHex(long p, int len) {
-    	byte[] bytes = new byte[len];
-    	for (int i=0; i<len; i++) {
-    		bytes[i] = Unsafe.getByte(p + i);
-    	}
-    	return toHex(bytes);
+        	byte[] bytes = new byte[len];
+        	for (int i=0; i<len; i++) {
+        		bytes[i] = Unsafe.getByte(p + i);
+        	}
+        	return toHex(bytes);
     }
     
-	private static void dump(StringBuilder buf, int value) {
+	private static void dump(StringBuilder buf, byte value) {
 		for (int j = 0; j < 2; j++) {
 			int idx = (value >> _shifts[j]) & 15;
 			buf.append(_hexcodes[idx]);

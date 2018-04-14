@@ -26,7 +26,7 @@ public class TableScan extends CursorMaker implements Ordered {
     TableMeta table;
     
     public TableScan(TableMeta table, int makerId) {
-    	    this.table = table;
+        this.table = table;
         this.upstream = new HumpbackTableScan(table, makerId);
     }
 
@@ -47,7 +47,7 @@ public class TableScan extends CursorMaker implements Ordered {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-    	    this.upstream.explain(level, records);
+            this.upstream.explain(level, records);
     }
 
     @Override

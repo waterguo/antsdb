@@ -38,7 +38,7 @@ public class ShowProcesslist extends ViewMaker {
         public String Command;
         public Integer Time;
         public String State;
-        public byte[] Info;
+        public String Info;
         public Double Progress;
     }
 
@@ -64,6 +64,7 @@ public class ShowProcesslist extends ViewMaker {
         result.User = session.getUser();
         result.Host = session.remote;
         result.db = session.getCurrentNamespace();
+        result.Info = session.getSql();
         return result;
     }
 }

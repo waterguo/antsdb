@@ -46,8 +46,8 @@ public abstract class Record {
     public abstract int size();
 
     static {
-    	Unsafe.putByte(GROUP_END, TYPE_RECORD);
-    	Unsafe.putShort(GROUP_END + OFFSET_SIZE, (short)0);
+        Unsafe.putByte(GROUP_END, TYPE_RECORD);
+        Unsafe.putShort(GROUP_END + OFFSET_SIZE, (short)0);
     }
     
     public Object getString(int i) {
@@ -57,6 +57,7 @@ public abstract class Record {
     public boolean isEmpty() {
         return getKey() == null;
     }
+    
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();

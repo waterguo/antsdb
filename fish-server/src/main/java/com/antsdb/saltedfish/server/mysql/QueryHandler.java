@@ -15,7 +15,8 @@ package com.antsdb.saltedfish.server.mysql;
 
 import io.netty.channel.ChannelHandlerContext;
 
-import org.antlr.v4.runtime.CharStream;
+import java.nio.CharBuffer;
+
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.server.mysql.packet.QueryPacket;
@@ -35,14 +36,14 @@ public class QueryHandler {
     }
 
     public void query(ChannelHandlerContext ctx, QueryPacket packet) throws Exception {
-        CharStream sql= packet.getSql();
-        Object result = null;
+        CharBuffer sql= packet.getSql();
         if (sql == null) {
             serverHandler.writeErrMessage(ctx, MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Empty query.");
         } 
         else {
-            result = serverHandler.session.run(sql);
-        	Helper.writeResonpse(ctx, serverHandler, result, true);
+            serverHandler.session.run(sql, null, (result)-> {
+                Helper.writeResonpse(ctx, serverHandler, result, true);
+            });
         }
     }
 }

@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.sql.mysql;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.math3.util.Pair;
+
 import com.antsdb.saltedfish.lexer.MysqlParser.Update_stmtContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Update_stmt_setContext;
 import com.antsdb.saltedfish.sql.Generator;
@@ -39,12 +41,8 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
 
         // table cursor
         
-        Planner planner = new Planner(ctx);
         TableMeta table = Checks.tableExist(ctx.getSession(), tableName);
-        if (table == null) {
-            throw new OrcaException("table not found: " + tableName);
-        }
-        planner.addTable(null, table, true, false);
+        Planner planner = GeneratorUtil.getSingleTablePlanner(ctx, table);
         
         // apply where clause
         
@@ -56,9 +54,28 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
         // compile expressions
         
         CursorMaker maker = planner.run();
+        Pair<List<ColumnMeta>, List<Operator>> sets = gen(ctx, planner, table, rule.update_stmt_set());
+        
+        // auto casting according to column data type
+        
+        Utils.applyCasting(sets.getKey(), sets.getValue());
+        
+        // done
+        if (rule.limit_clause() != null) {
+        	    maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+        }
+        
+        return GeneratorUtil.genUpdate(ctx, table, maker, sets.getKey(), sets.getValue());
+    }
+
+    static Pair<List<ColumnMeta>, List<Operator>> gen(
+            GeneratorContext ctx, 
+            Planner planner, 
+            TableMeta table,  
+            List<Update_stmt_setContext> rules) {
         List<ColumnMeta> columns = new ArrayList<ColumnMeta>();
         List<Operator> exprs = new ArrayList<Operator>();
-        for (Update_stmt_setContext i:rule.update_stmt_set()) {
+        for (Update_stmt_setContext i:rules) {
             String columnName = Utils.getIdentifier(i.column_name().identifier());
             ColumnMeta column = table.getColumn(columnName);
             if (column == null) {
@@ -68,17 +85,6 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
             columns.add(column);
             exprs.add(op);
         }
-        
-        // auto casting according to column data type
-        
-        Utils.applyCasting(columns, exprs);
-        
-        // done
-        if (rule.limit_clause() != null) {
-        	maker = CursorMaker.createLimiter(maker, rule.limit_clause());
-        }
-        
-        return GeneratorUtil.genUpdate(ctx, table, maker, columns, exprs);
+        return new Pair<>(columns, exprs);
     }
-
 }

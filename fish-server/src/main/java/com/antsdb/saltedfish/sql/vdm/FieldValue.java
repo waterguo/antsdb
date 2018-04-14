@@ -33,8 +33,8 @@ public class FieldValue extends Operator {
     
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	long pValue = Record.get(pRecord, this.field.getIndex());
-    	return pValue;
+        long pValue = Record.get(pRecord, this.field.getIndex());
+    	    return pValue;
     }
 
     @Override

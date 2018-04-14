@@ -18,8 +18,8 @@ package com.antsdb.saltedfish.sql.vdm;
  * @author wgu0
  */
 public interface RangeScannable extends Ordered {
-	public void setFrom(Vector from);
-	public Vector getFrom();
-	public void setTo(Vector to);
-	public Vector getTo();
+    public void setFrom(Vector from);
+    public Vector getFrom();
+    public void setTo(Vector to);
+    public Vector getTo();
 }

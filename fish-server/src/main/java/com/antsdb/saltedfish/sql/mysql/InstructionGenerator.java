@@ -29,8 +29,6 @@ import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.Statement;
 import com.antsdb.saltedfish.sql.vdm.StatementWrapper;
 
-import static com.antsdb.saltedfish.lexer.MysqlParser.*;
-
 public class InstructionGenerator {
     static Map<Class<?>, Generator<ParseTree>> _generatorByName = new ConcurrentHashMap<>();
     
@@ -39,23 +37,6 @@ public class InstructionGenerator {
         if (node instanceof TerminalNode) {
             if (node.getText().equals("?")) {
                 ctx.addParameter((TerminalNode)node);
-            }
-        }
-        if (node instanceof Function_nameContext) {
-            if (node.getText().equalsIgnoreCase("sum")) {
-                ctx.setHasAggregateFunctions(true);
-            }
-            else if (node.getText().equalsIgnoreCase("count")) {
-                ctx.setHasAggregateFunctions(true);
-            }
-            else if (node.getText().equalsIgnoreCase("GROUP_CONCAT")) {
-            	ctx.setHasAggregateFunctions(true);
-            }
-            else if (node.getText().equalsIgnoreCase("max")) {
-                ctx.setHasAggregateFunctions(true);
-            }
-            else if (node.getText().equalsIgnoreCase("min")) {
-                ctx.setHasAggregateFunctions(true);
             }
         }
         for (int j=0; j<node.getChildCount(); j++) {
@@ -68,9 +49,9 @@ public class InstructionGenerator {
         if (!ctx.isCompileDdl() && (generator instanceof DdlGenerator<?>)) {
             // run it if it is ddl statement otherwise following statements may fail to parse because of missing
             // objects
-        	CompileDdlException x = new CompileDdlException();
-        	x.nParameters = ctx.getParameterCount();
-        	throw x;
+            CompileDdlException x = new CompileDdlException();
+            x.nParameters = ctx.getParameterCount();
+            throw x;
         }
         Instruction code = generator.gen(ctx, rule);
         if (code instanceof Statement) {

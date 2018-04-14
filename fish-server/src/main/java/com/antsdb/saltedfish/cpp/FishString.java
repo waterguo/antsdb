@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
+import java.util.function.IntSupplier;
+
 /**
  * 
  * umbrella class for all string like data
@@ -59,44 +61,49 @@ public final class FishString {
 		return compare(xAddr, yAddr) == 0;
 	}
 
-	final static int compare(long xAddr, long yAddr) {
-		int xFormat = Value.getFormat(null, xAddr);
-		int yFormat = Value.getFormat(null, yAddr);
-		if (xFormat == Value.FORMAT_UNICODE16) {
-			if (yFormat == Value.FORMAT_UNICODE16) {
-				return Unicode16.compare(xAddr, yAddr);
-			}
-			else {
-				return compare_16_8(xAddr, yAddr);
-			}
-		}
-		else if (xFormat == Value.FORMAT_UTF8) {
-			if (yFormat == Value.FORMAT_UNICODE16) {
-				return -compare_16_8(yAddr, xAddr);
-			}
-			else {
-				return FishUtf8.compare(xAddr, yAddr); 
-			}
-		}
-		else {
-			throw new IllegalArgumentException();
-		}
+	public static final IntSupplier scan(long addr) {
+        int format = Value.getFormat(null, addr);
+        if (format == Value.FORMAT_UNICODE16) {
+            return new Unicode16(addr).scan();
+        }
+        else if (format == Value.FORMAT_UTF8) {
+            return new FishUtf8(addr).scan();
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
 	}
-
-	private static int compare_16_8(long pX, long pY) {
-		FishUtf8.Scanner scanner = FishUtf8.scan(pY);
-		int lengthX = Unicode16.getLength(Value.FORMAT_UNICODE16, pX);
-		int idx = 0;
-		for (;;) {
-			int x = (idx < lengthX) ? Unicode16.getCharAt(Value.FORMAT_UNICODE16, lengthX, pX, idx++) : -1;
-			int y = scanner.getNext();
-			int result = x - y;
-			if (result != 0) {
-				return result;
-			}
-			break;
-		}
-		return 0;
+	
+	public final static int compare(long xAddr, long yAddr) {
+	    IntSupplier scanx = scan(xAddr);
+	    IntSupplier scany = scan(yAddr);
+	    for (;;) {
+	        int chx = scanx.getAsInt();
+	        int chy = scany.getAsInt();
+	        if ((chx == -1) && (chy == -1)) {
+	            break;
+	        }
+	        int result = chx - chy;
+	        if (result != 0) {
+	            return result;
+	        }
+	    }
+	    return 0;
+	}
+	
+	public final static int getEsitimatedLength(long addr) {
+	    int result;
+        int format = Value.getFormat(null, addr);
+        if (format == Value.FORMAT_UNICODE16) {
+            result = new Unicode16(addr).getLength();
+        }
+        else if (format == Value.FORMAT_UTF8) {
+            result = new FishUtf8(addr).getSize();
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
+        return result;
 	}
 
 	public final static long concat(Heap heap, long addrX, long addrY) {
@@ -106,15 +113,25 @@ public final class FishString {
 		if (addrY == 0) {
 			return addrX;
 		}
-		byte formatX = Value.getFormat(heap, addrX);
-		byte formatY = Value.getFormat(heap, addrY);
-		if (formatX == Value.FORMAT_UTF8) {
-			addrX = FishUtf8.toUnicode16(heap, addrX);
+		int length = getEsitimatedLength(addrX) + getEsitimatedLength(addrY);
+		Unicode16 result = new Unicode16(Unicode16.allocSet(heap, length));
+		int i=0;
+		for (IntSupplier scan=scan(addrX);;) {
+		    int ch = scan.getAsInt();
+		    if (ch < 0) {
+		        break;
+		    }
+		    result.put(i++, (char)ch);
 		}
-		if (formatY == Value.FORMAT_UTF8) {
-			addrY = FishUtf8.toUnicode16(heap, addrY);
-		}
-		return Unicode16.concat(heap, formatX, addrX, formatY, addrY);
+        for (IntSupplier scan=scan(addrY);;) {
+            int ch = scan.getAsInt();
+            if (ch < 0) {
+                break;
+            }
+            result.put(i++, (char)ch);
+        }
+        result.resize(i);
+        return result.getAddress();
 	}
 
 	public static int getLength(long pValue) {

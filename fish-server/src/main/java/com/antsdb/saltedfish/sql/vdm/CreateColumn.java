@@ -23,9 +23,9 @@ public class CreateColumn extends Statement implements ColumnAttributes {
     public DataType type;
     public boolean nullable;
     public String defaultValue;
-	public boolean autoIncrement = false;
+    public boolean autoIncrement = false;
     public String enumValues;
-	private String after;
+    private String after;
     
     @Override
     public Object run(VdmContext ctx, Parameters params) {
@@ -50,86 +50,86 @@ public class CreateColumn extends Statement implements ColumnAttributes {
         // after. if there is after, sequence number of the new column is between the after and after after column
         
         if (this.after != null) {
-        	ColumnMeta afterColumn = Checks.columnExist(table, this.after);
-        	int idxAfterAfter = table.getColumns().indexOf(afterColumn) + 1;
-        	float seqAfterAfter =  afterColumn.getSequence() + 0.5f;
-        	if (idxAfterAfter < table.getColumns().size()) {
-        		seqAfterAfter = table.getColumns().get(idxAfterAfter).getSequence();
-        	}
-        	columnMeta.setSequence((afterColumn.getSequence() + seqAfterAfter) / 2);
+            ColumnMeta afterColumn = Checks.columnExist(table, this.after);
+            int idxAfterAfter = table.getColumns().indexOf(afterColumn) + 1;
+            float seqAfterAfter =  afterColumn.getSequence() + 0.5f;
+            if (idxAfterAfter < table.getColumns().size()) {
+                seqAfterAfter = table.getColumns().get(idxAfterAfter).getSequence();
+            }
+            columnMeta.setSequence((afterColumn.getSequence() + seqAfterAfter) / 2);
         }
         
         // done
-        ctx.getOrca().getMetaService().addColumn(trx, columnMeta);
+        ctx.getOrca().getMetaService().addColumn(trx, table, columnMeta);
         
         return null;
     }
 
-	@Override
-	public String getColumnName() {
-		return this.columnName;
-	}
+    @Override
+    public String getColumnName() {
+        return this.columnName;
+    }
 
-	@Override
-	public ColumnAttributes setColumnName(String name) {
-		this.columnName = name;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setColumnName(String name) {
+        this.columnName = name;
+        return this;
+    }
 
-	@Override
-	public DataType getType() {
-		return this.type;
-	}
+    @Override
+    public DataType getType() {
+        return this.type;
+    }
 
-	@Override
-	public ColumnAttributes setType(DataType type) {
-		this.type = type;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setType(DataType type) {
+        this.type = type;
+        return this;
+    }
 
-	@Override
-	public boolean isNullable() {
-		return this.nullable;
-	}
+    @Override
+    public boolean isNullable() {
+        return this.nullable;
+    }
 
-	@Override
-	public ColumnAttributes setNullable(boolean b) {
-		this.nullable = b;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setNullable(boolean b) {
+        this.nullable = b;
+        return this;
+    }
 
-	@Override
-	public String getDefaultValue() {
-		return this.defaultValue;
-	}
+    @Override
+    public String getDefaultValue() {
+        return this.defaultValue;
+    }
 
-	@Override
-	public ColumnAttributes setDefaultValue(String value) {
-		this.defaultValue = value;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setDefaultValue(String value) {
+        this.defaultValue = value;
+        return this;
+    }
 
-	@Override
-	public boolean isAutoIncrement() {
-		return this.isAutoIncrement();
-	}
+    @Override
+    public boolean isAutoIncrement() {
+        return this.isAutoIncrement();
+    }
 
-	@Override
-	public ColumnAttributes setAutoIncrement(boolean value) {
-		this.autoIncrement = value;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setAutoIncrement(boolean value) {
+        this.autoIncrement = value;
+        return this;
+    }
 
-	public String getEnumValues() {
-		return enumValues;
-	}
+    public String getEnumValues() {
+        return enumValues;
+    }
 
-	public void setEnumValues(String enumValues) {
-		this.enumValues = enumValues;
-	}
+    public void setEnumValues(String enumValues) {
+        this.enumValues = enumValues;
+    }
 
-	public void setAfter(String after) {
-		this.after = after;
-	}
+    public void setAfter(String after) {
+        this.after = after;
+    }
 
 }

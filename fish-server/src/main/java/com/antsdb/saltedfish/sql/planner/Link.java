@@ -19,6 +19,7 @@ import java.util.List;
 import com.antsdb.saltedfish.sql.vdm.CursorIndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorPrimaryKeySeek;
+import com.antsdb.saltedfish.sql.vdm.DumbSorter;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.FullTextIndexMergeScan;
@@ -26,9 +27,11 @@ import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.IndexSeek;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.RangeScannable;
+import com.antsdb.saltedfish.sql.vdm.RecordLocker;
 import com.antsdb.saltedfish.sql.vdm.TableRangeScan;
 import com.antsdb.saltedfish.sql.vdm.TableScan;
 import com.antsdb.saltedfish.sql.vdm.TableSeek;
+import com.antsdb.saltedfish.sql.vdm.UncertainScan;
 import com.antsdb.saltedfish.sql.vdm.Union;
 import com.antsdb.saltedfish.util.CodingError;
 
@@ -43,7 +46,7 @@ class Link {
     Link previous;
     List<ColumnFilter> consumed = new ArrayList<>();
     Operator join;
-	boolean isUnion = false;
+    boolean isUnion = false;
     
     Link(Node to) {
         this.to = to;
@@ -80,37 +83,37 @@ class Link {
     }
     
     int getLevels() {
-    	if (this.previous != null) {
-    		return this.previous.getLevels() + 1;
-    	}
-    	return 1;
+        if (this.previous != null) {
+            return this.previous.getLevels() + 1;
+        }
+        return 1;
     }
 
     float getScore() {
-    	if (this.to.table == null) {
-    		// not a table. source is a cursor/subquery
-    		return 10;
-    	}
-    	return getScore(this.maker);
+        if (this.to.table == null) {
+            // not a table. source is a cursor/subquery
+            return 10;
+        }
+        return getScore(this.maker);
     }
 
     private float getScore(CursorMaker maker) {
-    	float score = 10000;
+    	    float score = 10000;
         if (maker instanceof TableSeek) {
             score = 1;
         }
         else if (maker instanceof CursorPrimaryKeySeek) {
-        	score = 1.05f;
+        	    score = 1.05f;
         }
         else if (maker instanceof IndexSeek) {
-        	score = 1.1f;
+        	    score = 1.1f;
         }
         else if (maker instanceof TableRangeScan) {
-        	int factor = getMatchedColumns((RangeScannable)maker);
+        	    int factor = getMatchedColumns((RangeScannable)maker);
             score = 10 - factor * 0.1f;
         }
         else if (maker instanceof IndexRangeScan) {
-        	int factor = getMatchedColumns((RangeScannable)maker);
+        	    int factor = getMatchedColumns((RangeScannable)maker);
             score = 10 - factor * 0.1f;
         }
         else if (maker instanceof CursorIndexRangeScan) {
@@ -119,37 +122,46 @@ class Link {
         else if (maker instanceof TableScan) {
             score = 100;
         }
+        else if (maker instanceof UncertainScan) {
+            score = 10;
+        }
         else if (maker instanceof Filter) {
-        	return getScore(((Filter)maker).getUpstream());
+        	    return getScore(((Filter)maker).getUpstream());
         }
         else if (maker instanceof Union) {
-        	return getScore(((Union)maker).getLeft()) + getScore(((Union)maker).getRight());
+            return getScore(((Union)maker).getLeft()) + getScore(((Union)maker).getRight());
         }
         else if (maker instanceof FullTextIndexMergeScan) {
             score = 1.1f;
         }
-        else {
-        	throw new CodingError();
+        else if (maker instanceof DumbSorter) {
+            return getScore(((DumbSorter)maker).getUpstream());
         }
-    	return score;
+        else if (maker instanceof RecordLocker) {
+            return getScore(((RecordLocker) maker).getUpstream());
+        }
+        else {
+        	    throw new CodingError();
+        }
+    	    return score;
     }
 
-	private int getMatchedColumns(RangeScannable maker) {
-		List<Operator> values = null;
-		if (maker.getFrom() != null) {
-			if (maker.getFrom().getValues() != null) {
-				values = maker.getFrom().getValues();
-			}
-		}
-		if (values == null) {
-			if (maker.getTo() != null) {
-				if (maker.getTo().getValues() != null) {
-					values = maker.getTo().getValues();
-				}
-			}
-		}
-		return values != null ? values.size() : 0;
-	}
+    private int getMatchedColumns(RangeScannable maker) {
+        List<Operator> values = null;
+        if (maker.getFrom() != null) {
+            if (maker.getFrom().getValues() != null) {
+                values = maker.getFrom().getValues();
+            }
+        }
+        if (values == null) {
+            if (maker.getTo() != null) {
+                if (maker.getTo().getValues() != null) {
+                    values = maker.getTo().getValues();
+                }
+            }
+        }
+        return values != null ? values.size() : 0;
+    }
 
     public boolean isUnique(List<PlannerField> key) {
         if (key == null) {

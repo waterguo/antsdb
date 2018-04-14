@@ -29,16 +29,16 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author *-xguo0<@
  */
 public class MinkeFile implements Closeable {
-	static final int HEADER_SIZE = 1024;
-	static final int SIGNATURE = 0x73746e61;
-	static final int OFFSET_SIG = 0;
+    static final int HEADER_SIZE = 0x100;
+    static final int SIGNATURE = 0x73746e61;
+    static final int OFFSET_SIG = 0;
     static final int OFFSET_LOG_FILE_SIZE = 0x10;
     static final int OFFSET_LOG_PAGE_SIZE = 0x14;
-	
-	static final Logger _log = UberUtil.getThisLogger();
-	
-	File file;
-	private MemoryMappedFile mmf;
+    
+    static final Logger _log = UberUtil.getThisLogger();
+    
+    File file;
+    private MemoryMappedFile mmf;
     private int pageSize;
     private int fileSize;
     private int nPages;
@@ -46,7 +46,7 @@ public class MinkeFile implements Closeable {
     private MinkePage[] pages;
     private int fileId;
     private boolean isMutable;
-	
+    
     public MinkeFile(int fileId, File file, int fileSize, int pageSize, boolean isMutable) {
         this.file = file;
         this.fileId = fileId;
@@ -59,7 +59,7 @@ public class MinkeFile implements Closeable {
 
 
     public void open() throws IOException {
-        if (this.file.exists()) {
+        if (this.file.exists() && (this.file.length() != 0)) {
             this.mmf = new MemoryMappedFile(file, this.isMutable ? "rw" : "r");
         }
         else {

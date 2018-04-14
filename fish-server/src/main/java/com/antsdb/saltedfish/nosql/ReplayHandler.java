@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.nosql;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
@@ -29,36 +30,39 @@ import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
  * @author wgu0
  */
 public interface ReplayHandler {
-	default public void all(LogEntry entry) throws Exception {
-	}
-	
-	default public void insert(InsertEntry entry) throws Exception {
+    default public void all(LogEntry entry) throws Exception {
     }
     
-	default public void update(UpdateEntry entry) throws Exception {
+    default public void insert(InsertEntry entry) throws Exception {
     }
     
-	default public void put(PutEntry entry) throws Exception {
-	}
-	
-	default public void index(Gobbler.IndexEntry entry) throws Exception {
-	}
-	
-	default public void delete(Gobbler.DeleteEntry entry) throws Exception {
-	}
-	
-	default public void commit(CommitEntry entry) throws Exception {
-	}
-	
-	default public void rollback(RollbackEntry entry) throws Exception {
-	}
-	
-	default public void message(MessageEntry entry) throws Exception {
-	}
+    default public void update(UpdateEntry entry) throws Exception {
+    }
+    
+    default public void put(PutEntry entry) throws Exception {
+    }
+    
+    default public void index(Gobbler.IndexEntry entry) throws Exception {
+    }
+    
+    default public void delete(Gobbler.DeleteEntry entry) throws Exception {
+    }
+    
+    default public void commit(CommitEntry entry) throws Exception {
+    }
+    
+    default public void rollback(RollbackEntry entry) throws Exception {
+    }
+    
+    default public void message(MessageEntry entry) throws Exception {
+    }
 
-	default public void transactionWindow(TransactionWindowEntry entry) throws Exception {
-	}
+    default public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+    }
 
-	default public void timestamp(TimestampEntry entry) {
+    default public void timestamp(TimestampEntry entry) {
+    }
+
+    default public void deleteRow(DeleteRowEntry entry) throws Exception {
     }
 }

@@ -25,65 +25,65 @@ import com.antsdb.saltedfish.nosql.SpaceManager;
  * @author wgu0
  */
 class IndexCursor extends CursorWithHeap {
-	GTable gtable;
+    GTable gtable;
     RowIterator iter;
     int[] mapping;
-	private boolean isClosed = false;
-	Transaction trx;
-	private AtomicLong counter;
+    private boolean isClosed = false;
+    Transaction trx;
+    private AtomicLong counter;
 
-	public IndexCursor(
-			SpaceManager memman, 
-			CursorMeta meta, 
-			RowIterator iter, 
-			int[] mapping, 
-			GTable gtable, 
-			Transaction trx, 
-			AtomicLong counter) {
-		super(meta);
-		this.gtable = gtable;
-		this.trx = trx;
-		this.iter = iter;
-		this.mapping = mapping;
-		this.trx = trx;
-		this.counter = counter;
-	}
-	
+    public IndexCursor(
+            SpaceManager memman, 
+            CursorMeta meta, 
+            RowIterator iter, 
+            int[] mapping, 
+            GTable gtable, 
+            Transaction trx, 
+            AtomicLong counter) {
+        super(meta);
+        this.gtable = gtable;
+        this.trx = trx;
+        this.iter = iter;
+        this.mapping = mapping;
+        this.trx = trx;
+        this.counter = counter;
+    }
+    
     @Override
     public long next() {
-    	if (isClosed) {
-    		return 0;
-    	}
-    	for (;;) {
-        	boolean hasNext = iter.next();
-        	if (!hasNext) {
-        		return 0;
-        	}
-        	long pRecord = newRecord();
+        if (isClosed) {
+            return 0;
+        }
+        for (;;) {
+            boolean hasNext = iter.next();
+            if (!hasNext) {
+                return 0;
+            }
+            long pRecord = newRecord();
             long pRowKey = iter.getRowKeyPointer();
             if (pRowKey == 0) {
                 return 0;
             }
             Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
             if (row == null) {
-            	// at rare occasions, row cannot be found. we just ignore it. it could happen for example full text 
-            	// index. indexing rows are not deleted completely due to analyzer change
-            	continue;
+                // at rare occasions, row cannot be found. we just ignore it. it could happen for example full text 
+                // index. indexing rows are not deleted completely due to analyzer change
+                continue;
             }
             Record.setKey(pRecord, row.getKeyAddress());
             for (int i=0; i<this.meta.getColumnCount(); i++) {
-            	long pValue = row.getFieldAddress(this.mapping[i]);
-            	Record.set(pRecord, i, pValue);
+                long pValue = row.getFieldAddress(this.mapping[i]);
+                Record.set(pRecord, i, pValue);
             }
             this.counter.incrementAndGet();
             return pRecord;
-    	}
+        }
     }
 
     @Override
     public void close() {
-    	super.close();
-    	this.isClosed  = true;
+        super.close();
+        this.isClosed  = true;
     }
 }
 

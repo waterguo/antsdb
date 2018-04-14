@@ -15,7 +15,6 @@ package com.antsdb.saltedfish.server.mysql.packet;
 
 import java.nio.CharBuffer;
 
-import org.antlr.v4.runtime.CharStream;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.server.mysql.MysqlServerHandler;
@@ -35,7 +34,7 @@ public class QueryPacket extends RecievePacket {
 
     @Override
     public void read(MysqlServerHandler handler, ByteBuf in) {
-    	in.markReaderIndex();
+    	    in.markReaderIndex();
         sql = BufferUtils.readString(in);
         in.resetReaderIndex();
         this.buf = BufferUtils.readStringCrazy(handler.getDecoder(), in);
@@ -44,11 +43,11 @@ public class QueryPacket extends RecievePacket {
         }
     }
 
-	public CharStream getSql() {
+	public CharBuffer getSql() {
 		/** original ANTLR way
 		return new ANTLRInputStream(sql);
 		 */
-		return new MysqlCharStream(this.buf);
+		return this.buf;
 	}
 
 }

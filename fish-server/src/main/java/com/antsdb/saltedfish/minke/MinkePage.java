@@ -48,19 +48,19 @@ import static com.antsdb.saltedfish.minke.BoundaryMark.*;
  * @author *-xguo0<@
  */
 public final class MinkePage implements Comparable<MinkePage> {
-	final static int SIG = 0x73746e61;
-	final static int HEADER_SIZE = 0x100;
-	final static int OFFSET_SIG = 0;
-	final static int OFFSET_USAGE = 4;
-	final static int OFFSET_PARENT = 8;
-	final static int OFFSET_RANGE_LIST = 0xc;
-	final static Logger _log = UberUtil.getThisLogger();
-	
-	private int size;
-	long addr;
-	private BluntHeap heap;
-	int id;
-	MinkeFile mfile;
+    final static int SIG = 0x73746e61;
+    final static int HEADER_SIZE = 0x20;
+    final static int OFFSET_SIG = 0;
+    final static int OFFSET_USAGE = 4;
+    final static int OFFSET_PARENT = 8;
+    final static int OFFSET_RANGE_LIST = 0xc;
+    final static Logger _log = UberUtil.getThisLogger();
+    
+    private int size;
+    long addr;
+    private BluntHeap heap;
+    int id;
+    MinkeFile mfile;
     FishSkipList rows;
     FishSkipList ranges;
     AtomicLong hit = new AtomicLong();
@@ -251,21 +251,21 @@ public final class MinkePage implements Comparable<MinkePage> {
         this.size = size;
         this.mfile = cacheFile;
         this.id = id;
-		if (getSignature() != SIG) {
-			heap = new BluntHeap(addr, this.size);
-			heap.alloc(HEADER_SIZE);
+        if (getSignature() != SIG) {
+            heap = new BluntHeap(addr, this.size);
+            heap.alloc(HEADER_SIZE);
             Unsafe.putInt(this.addr + OFFSET_SIG, SIG);
-			this.rows = FishSkipList.alloc(heap, new VariableLengthLongComparator());
-	        this.ranges = FishSkipList.alloc(this.heap, KeyBytes.getComparator());
-	        Unsafe.putIntVolatile(this.addr + OFFSET_RANGE_LIST, (int)(this.ranges.getAddress() - this.addr));
-		}
-		else {
+            this.rows = FishSkipList.alloc(heap, new VariableLengthLongComparator());
+            this.ranges = FishSkipList.alloc(this.heap, KeyBytes.getComparator());
+            Unsafe.putIntVolatile(this.addr + OFFSET_RANGE_LIST, (int)(this.ranges.getAddress() - this.addr));
+        }
+        else {
             this.rows = new FishSkipList(this.addr, HEADER_SIZE, new VariableLengthLongComparator());
             int offset = Unsafe.getIntVolatile(this.addr + OFFSET_RANGE_LIST);
             this.ranges = new FishSkipList(this.addr, offset, KeyBytes.getComparator());
-		}
-	}
-	
+        }
+    }
+    
     /** 
      * reset the page so it can be reused
      */
@@ -294,9 +294,9 @@ public final class MinkePage implements Comparable<MinkePage> {
     }
     
     int getSignature() {
-		return Unsafe.getInt(this.addr + OFFSET_SIG);
-	}
-	
+        return Unsafe.getInt(this.addr + OFFSET_SIG);
+    }
+    
     void put(VaporizingRow row) {
         this.gate.incrementAndGet();
         try {
@@ -345,30 +345,30 @@ public final class MinkePage implements Comparable<MinkePage> {
         }
     }
 
-	long put(Row row) {
+    long put(Row row) {
         this.gate.incrementAndGet();
         try {
-    		long pKey = row.getKeyAddress();
+            long pKey = row.getKeyAddress();
             ensureMutable(pKey);
             int oNewRow = row.clone(heap);
-    		for (;;) {
-    			long pHead = this.rows.put(pKey);
-    			int oHeadValue = Unsafe.getIntVolatile(pHead);
-    			if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oNewRow)) {
-    				break;
-    			}
-    		}
-    		trackWrite();
-    		return heap.getAddress(oNewRow);
+            for (;;) {
+                long pHead = this.rows.put(pKey);
+                int oHeadValue = Unsafe.getIntVolatile(pHead);
+                if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oNewRow)) {
+                    break;
+                }
+            }
+            trackWrite();
+            return heap.getAddress(oNewRow);
         }
         finally {
             this.gate.decrementAndGet();
         }
-	}
+    }
 
     void delete(long pKey) {
         delete_(pKey, 0);
-	}
+    }
 
     void putDeleteMark(long pKey) {
         delete_(pKey, Row.DELETE_MARK);

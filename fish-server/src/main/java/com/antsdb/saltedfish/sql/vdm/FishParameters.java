@@ -20,21 +20,35 @@ import com.antsdb.saltedfish.nosql.VaporizingRow;
  * @author wgu0
  */
 public class FishParameters extends Parameters {
-	
-	private VaporizingRow row;
 
-	public FishParameters(VaporizingRow row) {
-		this.row = row;
-	}
+    private VaporizingRow row;
 
-	public long getAddress(int idx) {
-		long pValue = row.getFieldAddress(idx);
-		return pValue;
-	}
+    public FishParameters(VaporizingRow row) {
+        this.row = row;
+    }
 
-	@Override
-	public int size() {
-		return this.row.getSize();
-	}
+    public long getAddress(int idx) {
+        long pValue = row.getFieldAddress(idx);
+        return pValue;
+    }
+
+    public Parameters toParameters() {
+        if (this.row == null) {
+            return null;
+        }
+        Object[] result = new Object[this.row.getMaxColumnId()+1];
+        for (int i=0; i<result.length; i++) {
+            result[i] = row.get(i);
+        }
+        return new Parameters(result);
+    }
+    
+    @Override
+    public int size() {
+        if (this.row == null) {
+            return 0;
+        }
+        return (this.row == null) ? 0 : this.row.getMaxColumnId() + 1;
+    }
 
 }

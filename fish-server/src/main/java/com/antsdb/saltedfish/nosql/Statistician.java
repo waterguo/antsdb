@@ -20,9 +20,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
 import com.antsdb.saltedfish.util.UberTime;
 
@@ -98,6 +100,17 @@ public class Statistician extends ReplicationHandler implements Replicable {
     }
     
     @Override
+    public void deleteRow(DeleteRowEntry entry) throws Exception {
+        int tableId = entry.getTableId();
+        if (tableId == Humpback.SYSSTATS_TABLE_ID) {
+            return;
+        }
+        TableStats table = getTableStats(tableId);
+        table.inspectDelete(entry.sp);
+        this.sp = entry.sp;
+    }
+
+    @Override
     public long getReplicateLogPointer() {
         return this.sp;
     }
@@ -167,5 +180,10 @@ public class Statistician extends ReplicationHandler implements Replicable {
     @Override
     public void deletes(int tableId, List<Long> deletes) {
         throw new NotImplementedException();
+    }
+    
+    @Override
+    public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+        this.sp = entry.getSpacePointer();
     }
 }

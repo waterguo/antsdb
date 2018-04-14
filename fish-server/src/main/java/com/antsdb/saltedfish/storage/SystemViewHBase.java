@@ -28,32 +28,31 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * @author wgu0
  */
 public class SystemViewHBase extends ViewMaker {
-	Orca orca;
-	
+    Orca orca;
+    
     public static class Item {
         public long TRX_COUNT;
         public long ROW_COUNT;
         public long INSERTUPDATE_COUNT;
         public long DELETE_COUNT;
         public long INDEX_COUNT;
-        public long START_TRX_ID;
         public long SP;
     }
 
-	public SystemViewHBase(Orca orca) {
-	    super(CursorUtil.toMeta(Item.class));
-		this.orca = orca;
-	}
+    public SystemViewHBase(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
+        this.orca = orca;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-	    HBaseReplicationHandler handler = getHandler();
-	    if (handler == null) {
-	        return new EmptyCursor(this.meta);
-	    }
-		HBaseStorageService service = getService();
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        HBaseReplicationHandler handler = getHandler();
+        if (handler == null) {
+            return new EmptyCursor(this.meta);
+        }
+        HBaseStorageService service = getService();
         ArrayList<Item> list = new ArrayList<>();
-		if (handler != null) {
+        if (handler != null) {
             Item item = new Item();
             list.add(item);
             item.TRX_COUNT = handler.trxCount;
@@ -62,22 +61,21 @@ public class SystemViewHBase extends ViewMaker {
             item.DELETE_COUNT = handler.deleteRowCount;
             item.INDEX_COUNT = handler.indexRowCount;
             item.SP = service.getCurrentSP();
-            item.START_TRX_ID = service.getStartTrxId();
-		}
+        }
         Cursor c = CursorUtil.toCursor(meta, list);
         return c;
-	}
+    }
 
-	HBaseStorageService getService() {
-		HBaseStorageService hbase = this.orca.getHBaseStorageService();
-		return hbase;
-	}
-	
-	HBaseReplicationHandler getHandler() {
-	    if (getService() == null) {
-	        return null;
-	    }
-	    HBaseReplicationHandler result = (HBaseReplicationHandler)getService().getReplayHandler();
-		return result;
-	}
+    HBaseStorageService getService() {
+        HBaseStorageService hbase = this.orca.getHBaseStorageService();
+        return hbase;
+    }
+    
+    HBaseReplicationHandler getHandler() {
+        if (getService() == null) {
+            return null;
+        }
+        HBaseReplicationHandler result = (HBaseReplicationHandler)getService().getReplayHandler();
+        return result;
+    }
 }

@@ -149,7 +149,8 @@ class MysqlString {
 
 	private static boolean readLiteral(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
 		while (buf.remaining() > 0) {
-			char ch = (char)decoder.get(buf);
+		    // mysql uses binary string
+			char ch = (char)(buf.get() & 0xff);
 			cbuf.put(ch);
 			if (ch == '\\') {
 				readByte(decoder, buf, cbuf);

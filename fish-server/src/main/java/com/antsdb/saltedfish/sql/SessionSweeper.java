@@ -24,28 +24,28 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author wgu0
  */
 public class SessionSweeper implements Runnable {
-	static Logger _log = UberUtil.getThisLogger();
+    static Logger _log = UberUtil.getThisLogger();
 
-	Orca orca;
-	
-	SessionSweeper(Orca orca) {
-		this.orca = orca;
-	}
-	
-	@Override
-	public synchronized void run() {
-		try {
-			long lastClosed = this.orca.getLastClosedTransactionId();
-			Humpback humpback = this.orca.getHumpback();
-			if (lastClosed < humpback.getLastClosedTransactionId()) {
+    Orca orca;
+    
+    SessionSweeper(Orca orca) {
+        this.orca = orca;
+    }
+    
+    @Override
+    public synchronized void run() {
+        try {
+            long lastClosed = this.orca.getLastClosedTransactionId();
+            Humpback humpback = this.orca.getHumpback();
+            if (lastClosed < humpback.getLastClosedTransactionId()) {
                 humpback.setLastClosedTransactionId(lastClosed);
-				humpback.getGobbler().logTransactionWindow(lastClosed);
-	            _log.trace("session sweeper found last trx: {}", lastClosed);
-			}
-		}
-		catch (Exception x) {
-			_log.error("unexpected exception", x);
-		}
-	}
+                humpback.getGobbler().logTransactionWindow(lastClosed);
+                _log.trace("session sweeper found last trx: {}", lastClosed);
+            }
+        }
+        catch (Exception x) {
+            _log.error("unexpected exception", x);
+        }
+    }
 
 }

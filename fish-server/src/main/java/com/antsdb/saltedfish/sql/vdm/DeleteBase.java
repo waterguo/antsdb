@@ -31,31 +31,29 @@ abstract class DeleteBase extends Statement {
     IndexEntryHandlers indexHandlers;
     TableMeta table;
     
-	public DeleteBase(Orca orca, TableMeta table, GTable gtable) {
-		super();
-		this.table = table;
-		this.gtable = gtable;
+    public DeleteBase(Orca orca, TableMeta table, GTable gtable) {
+        super();
+        this.table = table;
+        this.gtable = gtable;
         this.indexHandlers = new IndexEntryHandlers(orca, table);
-	}
+    }
 
-	protected boolean deleteSingleRow(VdmContext ctx, Parameters params, long pKey) {
-    	    Transaction trx = ctx.getTransaction();
-    	    int timeout = ctx.getSession().getConfig().getLockTimeout();
+    protected boolean deleteSingleRow(VdmContext ctx, Parameters params, long pKey) {
+            Transaction trx = ctx.getTransaction();
+            int timeout = ctx.getSession().getConfig().getLockTimeout();
         try (Heap heap = new BluntHeap()) {
-        	heap.reset(0);
-        	Row row = null;
-        	if (!this.indexHandlers.isEmpty()) {
-        		row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
-        	}
-        	HumpbackError error = this.gtable.delete(trx.getGuaranteedTrxId(), pKey, timeout);
+            heap.reset(0);
+            Row row = null;
+            row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
+            HumpbackError error = this.gtable.deleteRow(trx.getGuaranteedTrxId(), row.getAddress(), timeout);
             if (error == HumpbackError.SUCCESS) {
-            	this.indexHandlers.delete(heap, trx, row, timeout);
-            	return true;
+                this.indexHandlers.delete(heap, trx, row, timeout);
+                return true;
             }
             else {
-            	throw new OrcaException(error);
+                throw new OrcaException(error);
             }
         }
-	}
+    }
 
 }

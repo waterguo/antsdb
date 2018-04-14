@@ -25,9 +25,11 @@ public class FuncTrim extends Function {
 
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        String str = (String)Util.eval(ctx, this.parameters.get(0), params, pRecord);
+	    Operator expr = this.parameters.get(0);
+	    long pValue = expr.eval(ctx, heap, params, pRecord);
+        String str = AutoCaster.getString(heap, pValue);
         if (str == null) {
-        	return 0;
+        	    return 0;
         }
         str = str.trim();
         long addr = FishObject.allocSet(heap, str);

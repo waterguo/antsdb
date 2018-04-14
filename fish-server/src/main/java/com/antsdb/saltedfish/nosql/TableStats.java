@@ -85,7 +85,9 @@ public class TableStats {
         setMinRowSize(rowSize);
         setMaxRowSize(rowSize);
         setAverageRowSize((averageRowSize * count + rowSize) / (count + 1));
-        count++;
+        if (count != -1) {
+            count++;
+        }
         this.sp = sp;
         this.isDirty = true;
     }
@@ -110,7 +112,9 @@ public class TableStats {
     }
     
     void inspectDelete(long sp) {
-        count--;
+        if (count != -1) {
+            count--;
+        }
         this.sp = sp;
         this.isDirty = true;
     }

@@ -18,6 +18,7 @@ import java.util.Properties;
 import com.antsdb.saltedfish.minke.MinkeCache;
 import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
+import com.antsdb.saltedfish.sql.vdm.EmptyCursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.sql.vdm.ViewMaker;
@@ -45,7 +46,7 @@ public class SystemViewCacheInfo extends ViewMaker {
             return c;
         }
         else {
-            return null;
+            return new EmptyCursor(meta);
         }
     }
 

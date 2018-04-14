@@ -17,6 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
 
+import com.antsdb.saltedfish.charset.Codecs;
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.charset.Utf8;
 
 /**
@@ -25,27 +27,43 @@ import com.antsdb.saltedfish.charset.Utf8;
  */
 public final class FishUtf8 {
 	public final static int HEADER_SIZE = 4;
+	private static Decoder _utf8 = Codecs.UTF8;
 
+	private long addr;
+	private int size;
+	
 	public final static class Scanner implements IntSupplier {
 		long p;
 		long pEnd;
+		
+		Scanner(long addr, int size) {
+		    this.p = addr;
+		    this.pEnd = addr + size;
+		}
 		
 		@Override
 		public int getAsInt() {
 			if (p >= pEnd) {
 				return -1;
 			}
-			int ch = Unsafe.getByte(p) & 0xff;
-			this.p++;
-			return ch;
-		}
-		
-		public int getNext() {
-			int ch = Utf8.get(this);
-			return ch;
+			int result = _utf8.get(()-> {return Unsafe.getByte(p++) & 0xff;});
+			return result;
 		}
 	}
 	
+    public FishUtf8(long addr) {
+        int format = Unsafe.getByte(addr);
+        if (format != Value.FORMAT_UTF8) {
+            throw new IllegalArgumentException();
+        }
+        this.addr = addr;
+        this.size = Unsafe.getInt3(addr+1);
+    }
+    
+    public IntSupplier scan() {
+        return new Scanner(addr + HEADER_SIZE, this.size);
+    }
+    
 	public final static long alloc(Heap heap, int size) {
 		if (size > 0xffffff) {
 			throw new IllegalArgumentException();
@@ -124,7 +142,7 @@ public final class FishUtf8 {
 		AtomicInteger idx = new AtomicInteger();
 		int size = Unsafe.getInt3(pValue + 1);
 		long pData = pValue + 4;
-		String s = Utf8.decode(() -> {
+		String s = _utf8.toString(() -> {
 			int pos = idx.getAndIncrement();
 			if (pos >= size) {
 				return -1;
@@ -135,20 +153,12 @@ public final class FishUtf8 {
 		return s;
 	}
 
-	public static Scanner scan(long pValue) {
-		Scanner scanner = new Scanner();
-		int size = Unsafe.getInt3(pValue + 1);
-		scanner.p = pValue + 4;
-		scanner.pEnd = scanner.p + size;
-		return scanner;
-	}
-
 	public static int compare(long pX, long pY) {
-		FishUtf8.Scanner scannerX = FishUtf8.scan(pX);
-		FishUtf8.Scanner scannerY = FishUtf8.scan(pY);
+		IntSupplier scannerX = new FishUtf8(pX).scan();
+		IntSupplier scannerY = new FishUtf8(pY).scan();
 		for (;;) {
-			int x = scannerX.getNext();
-			int y = scannerY.getNext();
+			int x = scannerX.getAsInt();
+			int y = scannerY.getAsInt();
 			int result = x - y;
 			if (result != 0) {
 				return result;
@@ -160,15 +170,12 @@ public final class FishUtf8 {
 		return 0;
 	}
 
-	public static long toUnicode16(Heap heap, long pValue) {
-		int size = getSize(Value.FORMAT_UTF8, pValue);
-		long pResult = Unicode16.allocSet(heap, size);
-		Scanner scanner = new Scanner();
-		scanner.p = pValue + 4;
-		scanner.pEnd = scanner.p + size - 4;
+	public long toUnicode16(Heap heap) {
+        long pResult = Unicode16.allocSet(heap, this.size);
+        IntSupplier scan = scan();
 		int ch;
 		int length = 0;
-		while ((ch=scanner.getNext()) >= 0) {
+		while ((ch=scan.getAsInt()) >= 0) {
 			Unsafe.putShort(pResult + 4 + length * 2, (short)ch);
 			length++;
 		}
@@ -204,24 +211,28 @@ public final class FishUtf8 {
 
 	public static String getString(long pValue) {
 		StringBuilder buf = new StringBuilder();
-		int size = getSize(Value.FORMAT_UTF8, pValue);
-		Scanner scanner = new Scanner();
-		scanner.p = pValue + 4;
-		scanner.pEnd = scanner.p + size - 4;
+		IntSupplier scan = new FishUtf8(pValue).scan();
 		int ch;
-		while ((ch=scanner.getNext()) >= 0) {
+		while ((ch=scan.getAsInt()) >= 0) {
 			buf.append((char)ch);
 		}
 		return buf.toString();
 	}
 
-	public static int getLength(int format, long pValue) {
-		Scanner scanner = scan(pValue);
+    public static int getLength(int format, long pValue) {
+        return new FishUtf8(pValue).getLength();
+    }
+    
+	public int getLength() {
+		IntSupplier scanner = scan();
 		int length = 0;
-		while (scanner.getNext() >= 0) {
+		while (scanner.getAsInt() >= 0) {
 			length++;
 		}
 		return length;
 	}
 
+	public int getSize() {
+	    return this.size;
+	}
 }

@@ -42,24 +42,24 @@ public class PlannerField extends FieldMeta {
 
     @Override
     public String getSourceName() {
-    	if (this.column != null) {
-    		return this.column.getColumnName();
-    	}
-    	if (this.field != null) {
-    		return this.field.getSourceName();
-    	}
+        if (this.column != null) {
+            return this.column.getColumnName();
+        }
+        if (this.field != null) {
+            return this.field.getSourceName();
+        }
         return null;
     }
     
     @Override
     public String getName() {
-    	String result = null;
-    	if (this.column != null) {
-    		result = this.column.getColumnName();
-    	}
-    	else if (this.field != null) {
-    		result = this.field.getName();
-    	}
+        String result = null;
+        if (this.column != null) {
+            result = this.column.getColumnName();
+        }
+        else if (this.field != null) {
+            result = this.field.getName();
+        }
         return result;
     }
 
@@ -75,13 +75,13 @@ public class PlannerField extends FieldMeta {
 
     @Override
     public DataType getType() {
-    	DataType result = null;
-    	if (this.column != null) {
-    		result = this.column.getDataType();
-    	}
-    	else if (this.field != null) {
-    		result = this.field.getType();
-    	}
+        DataType result = null;
+        if (this.column != null) {
+            result = this.column.getDataType();
+        }
+        else if (this.field != null) {
+            result = this.field.getType();
+        }
         return result;
     }
 
@@ -90,21 +90,21 @@ public class PlannerField extends FieldMeta {
         return this.owner.toString() + "." + getName();
     }
 
-	public final int getIndex() {
-		return this.index;
-	}
+    public final int getIndex() {
+        return this.index;
+    }
  
-	public void setIndex(int value) {
-	    this.index = value;
-	}
-	
-	@Override
-	public PlannerField clone() {
-	    PlannerField clone = new PlannerField();
+    public void setIndex(int value) {
+        this.index = value;
+    }
+    
+    @Override
+    public PlannerField clone() {
+        PlannerField clone = new PlannerField();
         clone.owner = this.owner;
-	    clone.column = this.column;
-	    clone.field = this.field;
-	    clone.index = this.index;
-	    return clone;
-	}
+        clone.column = this.column;
+        clone.field = this.field;
+        clone.index = this.index;
+        return clone;
+    }
 }

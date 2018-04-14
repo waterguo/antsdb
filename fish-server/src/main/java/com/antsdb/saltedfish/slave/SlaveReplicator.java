@@ -1,0 +1,246 @@
+/*-------------------------------------------------------------------------------------------------
+ _______ __   _ _______ _______ ______  ______
+ |_____| | \  |    |    |______ |     \ |_____]
+ |     | |  \_|    |    ______| |_____/ |_____]
+
+ Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
+
+ This program is free software: you can redistribute it and/or modify it under the terms of the
+ GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+
+ You should have received a copy of the GNU Affero General Public License along with this program.
+ If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+-------------------------------------------------------------------------------------------------*/
+package com.antsdb.saltedfish.slave;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.commons.lang.NotImplementedException;
+import org.slf4j.Logger;
+
+import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.util.UberUtil;
+import com.antsdb.saltedfish.nosql.HColumnRow;
+import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.Replicable;
+import com.antsdb.saltedfish.nosql.ReplicationHandler;
+import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.nosql.TableType;
+
+/**
+ * replicates antsdb to a mysql slave
+ * 
+ * @author *-xguo0<@
+ */
+public class SlaveReplicator extends ReplicationHandler implements Replicable {
+    private static Logger _log = UberUtil.getThisLogger();
+    
+    private Connection conn;
+    private long sp;
+    private Humpback humpback;
+    private Map<Integer, CudHandler> handlers = new HashMap<>();
+    private String url;
+
+    public SlaveReplicator(Humpback humpback) throws Exception {
+        this.humpback = humpback;
+        open();
+    }
+
+    private void open() throws Exception {
+        connect();
+        Map<String, Object> row = DbUtils.firstRow(this.conn, "SHOW TABLES FROM antsdb LIKE 'antsdb_slave'");
+        if (row == null) {
+            throw new SQLException("antsdb_slave is not found in slave database");
+        }
+        Properties props = DbUtils.properties(this.conn, "SELECT * FROM antsdb.antsdb_slave");
+        long defaultsp = this.humpback.getGobbler().getLatestSp();
+        this.sp = Long.parseLong(props.getProperty("sp", String.valueOf(defaultsp)));
+        _log.info("slave replication starts from {}", this.sp);
+    }
+    
+    private void connect() throws Exception {
+        this.conn = getConnection();
+    }
+    
+    Connection getConnection() throws Exception {
+        Class.forName("com.mysql.jdbc.Driver");
+        this.url = this.humpback.getConfig().getSlaveUrl();
+        String user = this.humpback.getConfig().getSlaveUser();
+        String password = this.humpback.getConfig().getSlavePassword();
+        Connection result = DriverManager.getConnection(url, user, password);
+        return result;
+    }
+    
+    @Override
+    public long getReplicateLogPointer() {
+        return this.sp;
+    }
+
+    @Override
+    public ReplicationHandler getReplayHandler() {
+        return this;
+    }
+
+    @Override
+    public void putRows(int tableId, List<Long> rows) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public void putIndexLines(int tableId, List<Long> indexLines) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public void deletes(int tableId, List<Long> deletes) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public void flush() throws Exception {
+        String sql = "REPLACE antsdb.antsdb_slave VALUES ('sp', ?)";
+        DbUtils.executeUpdate(this.conn, sql, this.sp);
+    }
+    
+    @Override
+    public void insert(InsertEntry entry) throws Exception {
+        int tableId = entry.getTableId();
+        if (isSystemTable(tableId)) {
+            this.handlers.clear();
+            return;
+        }
+        long pRow = entry.getRowPointer();
+        Row row = Row.fromMemoryPointer(pRow, 0);
+        getHandler(tableId).insert(row);
+        this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void update(UpdateEntry entry) throws Exception {
+        int tableId = entry.getTableId();
+        if (isSystemTable(tableId)) {
+            this.handlers.clear();
+            this.sp = entry.getSpacePointer();
+            return;
+        }
+        long pRow = entry.getRowPointer();
+        Row row = Row.fromMemoryPointer(pRow, 0);
+        getHandler(tableId).update(row);
+        this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void put(PutEntry entry) throws Exception {
+        int tableId = entry.getTableId();
+        if (isSystemTable(tableId)) {
+            this.handlers.clear();
+            this.sp = entry.getSpacePointer();
+            return;
+        }
+        long pRow = entry.getRowPointer();
+        Row row = Row.fromMemoryPointer(pRow, 0);
+        getHandler(tableId).update(row);
+        this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void delete(DeleteEntry entry) throws Exception {
+        int tableId = entry.getTableId();
+        if (isSystemTable(tableId)) {
+            this.handlers.clear();
+            this.sp = entry.getSpacePointer();
+            return;
+        }
+        if (isIndex(tableId)) {
+            return;
+        }
+        throw new IllegalArgumentException("user table must use deleteRow(): " + entry.getTableId());
+    }
+
+    @Override
+    public void deleteRow(DeleteRowEntry entry) throws Exception {
+        int tableId = entry.getTableId();
+        if (isSystemTable(tableId)) {
+            this.handlers.clear();
+            this.sp = entry.getSpacePointer();
+            return;
+        }
+        long pRow = entry.getRowPointer();
+        Row row = Row.fromMemoryPointer(pRow, 0);
+        getHandler(tableId).delete(row);
+        this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void commit(CommitEntry entry) throws Exception {
+        this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void message(MessageEntry entry) throws Exception {
+        String msg = entry.getMessage();
+        if (msg.startsWith("!!")) {
+            String sql = msg.substring(2);
+            int indexOfSemicolon = sql.indexOf(';');
+            if (indexOfSemicolon > 0) {
+                DbUtils.execute(this.conn, sql.substring(0, indexOfSemicolon));
+            }
+            DbUtils.execute(this.conn, sql.substring(indexOfSemicolon + 1));
+        }
+        this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+        this.sp = entry.getSpacePointer();
+    }
+    
+    private boolean isSystemTable(int tableId) {
+        return tableId < 0x100;
+    }
+    
+    private boolean isIndex(int tableId) {
+        SysMetaRow info = this.humpback.getTableInfo(tableId);
+        return info.getType() == TableType.INDEX;
+    }
+    
+    private CudHandler getHandler(int tableId) throws Exception {
+        if (this.conn == null) {
+            this.conn = getConnection();
+            _log.info("connection to {} is resumed", this.url);
+        }
+        if (!DbUtils.ping(this.conn)) {
+            _log.info("connection to {} is lost", this.url);
+            this.conn = null;
+            connect();
+        }
+        CudHandler result = this.handlers.get(tableId);
+        if (result == null) {
+            result = createHandler(tableId);
+            this.handlers.put(tableId, result);
+        }
+        return result;
+    }
+
+    private CudHandler createHandler(int tableId) throws SQLException {
+        SysMetaRow table = this.humpback.getTableInfo(tableId);
+        List<HColumnRow> columns = this.humpback.getColumns(tableId);
+        CudHandler result = new CudHandler();
+        result.prepare(this.conn, table, columns);
+        return result;
+    }
+}

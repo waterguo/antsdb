@@ -40,17 +40,17 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
     }
 
     public static CursorMaker gen(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
-    	CursorMaker maker;
-    	
-    	// this is a temporary solution until there is a better planner
-    	if (rule.select_or_values().size() == 1) {
-    		maker = genWithoutUnion(ctx, rule, parent);
-    	}
-    	else {
-    		maker = genWithUnion(ctx, rule, parent);
-    	}
+        CursorMaker maker;
+
+        // this is a temporary solution until there is a better planner
+        if (rule.select_or_values().size() == 1) {
+            maker = genWithoutUnion(ctx, rule, parent);
+        }
+        else {
+            maker = genWithUnion(ctx, rule, parent);
+        }
         if (rule.limit_clause() != null) {
-        	maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+            maker = CursorMaker.createLimiter(maker, rule.limit_clause());
         }
         return maker;
     }

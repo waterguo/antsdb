@@ -34,12 +34,15 @@ import com.antsdb.saltedfish.lexer.MysqlParser;
 import com.antsdb.saltedfish.lexer.MysqlParser.Bind_parameterContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Column_name_Context;
 import com.antsdb.saltedfish.lexer.MysqlParser.ExprContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_caseContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_case_whenContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_castContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_existContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_functionContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_selectContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_valuesContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_matchContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_notContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_parenthesisContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_selectContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_simpleContext;
@@ -61,7 +64,6 @@ import com.antsdb.saltedfish.sql.vdm.BytesValue;
 import com.antsdb.saltedfish.sql.vdm.CurrentTime;
 import com.antsdb.saltedfish.sql.vdm.CurrentTimestamp;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.DumbDistinctFilter;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.FuncAbs;
 import com.antsdb.saltedfish.sql.vdm.FuncAvg;
@@ -116,6 +118,7 @@ import com.antsdb.saltedfish.sql.vdm.OpAnd;
 import com.antsdb.saltedfish.sql.vdm.OpBetween;
 import com.antsdb.saltedfish.sql.vdm.OpBinary;
 import com.antsdb.saltedfish.sql.vdm.OpBitwiseAnd;
+import com.antsdb.saltedfish.sql.vdm.OpCase;
 import com.antsdb.saltedfish.sql.vdm.OpConcat;
 import com.antsdb.saltedfish.sql.vdm.OpDivide;
 import com.antsdb.saltedfish.sql.vdm.OpEqual;
@@ -140,11 +143,12 @@ import com.antsdb.saltedfish.sql.vdm.OpSequenceValue;
 import com.antsdb.saltedfish.sql.vdm.OpSingleValueQuery;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.RowidValue;
-import com.antsdb.saltedfish.sql.vdm.StringLiteral;
 import com.antsdb.saltedfish.sql.vdm.SysDate;
 import com.antsdb.saltedfish.sql.vdm.SystemVariableValue;
+import com.antsdb.saltedfish.sql.vdm.BinaryString;
 import com.antsdb.saltedfish.sql.vdm.UserVariableValue;
 import com.antsdb.saltedfish.util.BytesUtil;
+import com.antsdb.saltedfish.util.Pair;
 
 public class ExprGenerator {
     static Map<String, Class<? extends Function>> _functionByName = new HashMap<>();
@@ -226,7 +230,10 @@ public class ExprGenerator {
     }
     
     static Operator gen_(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) throws OrcaException {
-        if (rule.getChildCount() == 1) {
+        if (rule.expr_not() != null) {
+            return gen_not(ctx, cursorMeta, rule.expr_not());
+        }
+        else if (rule.getChildCount() == 1) {
             return gen_sinlge_node(ctx, cursorMeta, rule);
         }
         else if (rule.expr_in_values() != null) {
@@ -390,6 +397,11 @@ public class ExprGenerator {
         }
     }
 
+    private static Operator gen_not(GeneratorContext ctx, Planner planner, Expr_notContext rule) {
+        Operator expr = gen(ctx, planner, rule.expr());
+        return new OpNot(expr);
+    }
+
     private static Operator gen(GeneratorContext ctx, Planner cursorMeta, Like_exprContext rule) {
         if (rule.bind_parameter() != null) {
             return genBindParameter(ctx, rule.bind_parameter());
@@ -408,10 +420,7 @@ public class ExprGenerator {
             Unary_operatorContext rule,
             Operator right) {
         TerminalNode token = (TerminalNode) rule.getChild(0);
-        if (token.getSymbol().getType() == MysqlParser.K_NOT) {
-            return new OpNot(right);
-        }
-        else if (token.getSymbol().getType() == MysqlParser.MINUS) {
+        if (token.getSymbol().getType() == MysqlParser.MINUS) {
             return new OpNegate(right);
         }
         else if (token.getSymbol().getType() == MysqlParser.K_BINARY) {
@@ -451,7 +460,6 @@ public class ExprGenerator {
          * cursorMeta);
          */
         CursorMaker select = (CursorMaker) new Select_stmtGenerator().gen(ctx, rule.select_stmt());
-        select = new DumbDistinctFilter(select);
         Operator in = new OpInSelect(left, select);
         if (rule.K_NOT() != null) {
             in = new OpNot(in);
@@ -515,6 +523,9 @@ public class ExprGenerator {
         }
         else if (rule.expr_match() != null) {
             return gen_match(ctx, cursorMeta, rule.expr_match());
+        }
+        else if (rule.expr_case() != null) {
+            return gen_case(ctx, cursorMeta, rule.expr_case());
         }
         else {
             throw new NotImplementedException();
@@ -702,7 +713,7 @@ public class ExprGenerator {
 
     public static Operator genLiteralValue(GeneratorContext ctx, Planner planner, Literal_valueContext rule) {
         if (rule.literal_value_binary() != null) {
-            return new BytesValue(getBytes(rule.literal_value_binary()));
+            return new BinaryString(getBytes(rule.literal_value_binary()), true);
         }
         else if (rule.literal_interval() != null) {
             return parseInterval(ctx, planner, rule.literal_interval());
@@ -720,8 +731,8 @@ public class ExprGenerator {
         }
         case MysqlParser.STRING_LITERAL:
         case MysqlParser.DOUBLE_QUOTED_LITERAL:
-            String value = Utils.getQuotedLiteralValue(rule);
-            return new StringLiteral(value);
+            /* mysql strings are all binary */
+            return new BinaryString(getBytes(token), false);
         case MysqlParser.K_NULL:
             return new NullValue();
         case MysqlParser.K_CURRENT_DATE:
@@ -794,7 +805,11 @@ public class ExprGenerator {
     }
 
     private static byte[] getBytes(Literal_value_binaryContext rule) {
-        Token token = rule.STRING_LITERAL().getSymbol();
+        return getBytes(rule.STRING_LITERAL());
+    }
+    
+    private static byte[] getBytes(TerminalNode rule) {
+        Token token = rule.getSymbol();
         byte[] bytes = new byte[token.getStopIndex() - token.getStartIndex() - 1];
         CharStream cs = token.getInputStream();
         int pos = cs.index();
@@ -845,4 +860,21 @@ public class ExprGenerator {
         MysqlParser.ExprContext rule = parser.expr();
         return gen(ctx, cursorMeta, rule);
     }
+    
+    private static Operator gen_case(GeneratorContext ctx, Planner planner, Expr_caseContext rule) {
+        List<Pair<Operator,Operator>> whens = new ArrayList<>();
+        Operator alse = null;
+        Operator value = gen(ctx, planner, rule.expr());
+        for (Expr_case_whenContext i:rule.expr_case_when()) {
+            Pair<Operator,Operator> pair = new Pair<>();
+            pair.x = gen(ctx, planner, i.expr(0));
+            pair.y = gen(ctx, planner, i.expr(1));
+            whens.add(pair);
+        }
+        if (rule.expr_case_else() != null) {
+            alse = gen(ctx, planner, rule.expr_case_else().expr());
+        }
+        return new OpCase(value, whens, alse);
+    }
+
 }

@@ -31,7 +31,7 @@ public class OpAnd extends BinaryOperator {
         long valLeft = this.left.eval(ctx, heap, params, pRecord);
         boolean bLeft = (valLeft != 0) ? FishBool.get(heap, valLeft) : false;
         if (!bLeft) {
-        	return FishBool.allocSet(heap, false);
+            return FishBool.allocSet(heap, false);
         }
         long valRight = this.right.eval(ctx, heap, params, pRecord);
         boolean bRight = (valRight != 0) ? FishBool.get(heap, valRight) : false;
@@ -48,8 +48,8 @@ public class OpAnd extends BinaryOperator {
         return Arrays.asList(new Operator[]{left, right});
     }
 
-	@Override
-	public String toString() {
-		return this.left.toString() + " AND " + this.right.toString();
-	}
+    @Override
+    public String toString() {
+        return this.left.toString() + " AND " + this.right.toString();
+    }
 }

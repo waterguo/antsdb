@@ -35,38 +35,37 @@ public abstract class CursorMaker extends Instruction {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(level, toString());
-        rec.setMakerId(makerId);
+        ExplainRecord rec = new ExplainRecord(getMakerid(),  level, toString());
         records.add(rec);
     }
     
     @Override
-	public String toString() {
-		return getClass().getSimpleName();
-	}
-
-	public int getMakerid() {
-    	return this.makerId;
+    public String toString() {
+        return getClass().getSimpleName();
     }
-    
+
+    public int getMakerid() {
+        return this.makerId;
+    }
+
     public void setMakerId(int value) {
-    	this.makerId = value;
+        this.makerId = value;
     }
     
     public static CursorMaker createLimiter(CursorMaker maker, Limit_clauseContext rule) {
-    	int offset = 0;
-    	int count = Integer.parseInt(rule.number_value(0).getText());
-		if (rule.K_OFFSET() != null) {
-    		offset = Integer.parseInt(rule.number_value(1).getText());
-		}
-		else {
-	    	if (rule.number_value(1) != null) {
-	    		offset = count;
-	    		count = Integer.parseInt(rule.number_value(1).getText());
-	    	}
-		}
-		maker = new Limiter(maker, offset, count);
-		return maker;
-	}
+        int offset = 0;
+        int count = Integer.parseInt(rule.number_value(0).getText());
+        if (rule.K_OFFSET() != null) {
+            offset = Integer.parseInt(rule.number_value(1).getText());
+        }
+        else {
+            if (rule.number_value(1) != null) {
+                offset = count;
+                count = Integer.parseInt(rule.number_value(1).getText());
+            }
+        }
+        maker = new Limiter(maker, offset, count);
+        return maker;
+    }
 
 }

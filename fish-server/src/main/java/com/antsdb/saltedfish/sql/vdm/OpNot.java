@@ -35,9 +35,9 @@ public class OpNot extends UnaryOperator {
         return DataType.bool();
     }
 
-	@Override
-	public String toString() {
-		return "NOT " + this.upstream.toString();
-	}
+    @Override
+    public String toString() {
+        return "NOT " + this.upstream.toString();
+    }
     
 }

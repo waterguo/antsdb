@@ -350,7 +350,7 @@ public class FishNumber extends Value {
 		return compare(addr1, addr2) == 0;
 	}
 
-	final static int compare(long addr1, long addr2) {
+	public final static int compare(long addr1, long addr2) {
 		byte type1 = Unsafe.getByte(addr1);
 		byte type2 = Unsafe.getByte(addr2);
 		if (type1 >= type2) {

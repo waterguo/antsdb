@@ -19,10 +19,11 @@ import java.util.function.Consumer;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.OrcaException;
 
 public class BindParameter extends Operator {
+
     int pos;
-    
     
     public BindParameter(int pos) {
         super();
@@ -31,13 +32,16 @@ public class BindParameter extends Operator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	long pValue = 0;
-    	if (params instanceof FishParameters) {
-    		pValue = ((FishParameters)params).getAddress(this.pos);
-    	}
-    	else {
-    		pValue = FishObject.allocSet(heap, params.get(this.pos));
-    	}
+        long pValue = 0;
+        if (this.pos >= params.size()) {
+            throw new OrcaException("parameter {} is missing", this.pos) ;
+        }
+        if (params instanceof FishParameters) {
+            pValue = ((FishParameters) params).getAddress(this.pos);
+        }
+        else {
+            pValue = FishObject.allocSet(heap, params.get(this.pos));
+        }
         return pValue;
     }
 
@@ -54,5 +58,10 @@ public class BindParameter extends Operator {
     @Override
     public void visit(Consumer<Operator> visitor) {
         visitor.accept(this);
+    }
+    
+    @Override
+    public String toString() {
+        return "?" + this.pos;
     }
 }

@@ -36,22 +36,17 @@ public class InsertSingleRow extends Statement {
     TableMeta table;
     GTable gtable;
     List<ColumnMeta> fields;
-    List<List<Operator>> rows;
+    List<Operator> values;
     IndexEntryHandlers indexHandlers;
     boolean ignoreError = false;
     int tableId;
     boolean isReplace = false;
     
-    public InsertSingleRow(
-    	Orca orca,
-        TableMeta table,
-        GTable gtable,
-        List<ColumnMeta> fields,
-        List<List<Operator>> values) {
+    public InsertSingleRow(Orca orca, TableMeta table, GTable gtable, List<ColumnMeta> fields, List<Operator> values) {
         this.table = table;
         this.gtable = gtable;
         this.fields = fields;
-        this.rows = values;
+        this.values = values;
         this.indexHandlers = new IndexEntryHandlers(orca, table);
         this.tableId = table.getId();
     }
@@ -73,35 +68,31 @@ public class InsertSingleRow extends Statement {
 	public Object run_(VdmContext ctx, Parameters params) {
         int count = 0;
         try (Heap heap = new FlexibleHeap()) {
-	        for (List<Operator> values:this.rows) {
-	        	heap.reset(0);
-	            if (this.ignoreError) {
-	            	try {
-	                    insertRow(ctx, heap, params, values);
-	                    count++;
-	                    return count;
-	            	}
-	                catch (Exception x) {
-	                    _log.debug("error from insert is ignored", x);
-	                    return false;
-	                }
-	            }
-	            else {
-	                insertRow(ctx, heap, params, values);
-	                count++;
-	            }
-	        }
+            heap.reset(0);
+            if (this.ignoreError) {
+            	    try {
+                    insertRow(ctx, heap, params, this.values);
+                    count++;
+                    return count;
+            	    }
+                catch (Exception x) {
+                    _log.debug("error from insert is ignored", x);
+                    return false;
+                }
+            }
+            else {
+                insertRow(ctx, heap, params, this.values);
+                count++;
+            }
         }
         return count;
     }
 
-    void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
-    	int timeout = ctx.getSession().getConfig().getLockTimeout();
-    	
-    	// collect values 
-    	
-    	VaporizingRow row = new VaporizingRow(heap, this.table.getMaxColumnId());
-    	row.set(0, ctx.getOrca().getNextRowid());
+	VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params) {
+        // collect values 
+        
+        VaporizingRow row = new VaporizingRow(heap, this.table.getMaxColumnId());
+        row.set(0, ctx.getOrca().getNextRowid());
         for (int i=0; i<fields.size(); i++) {
             ColumnMeta column = this.fields.get(i);
             Operator expr = values.get(i);
@@ -113,19 +104,25 @@ public class InsertSingleRow extends Statement {
         
         long pKey = this.table.getKeyMaker().make(heap, row);
         row.setKey(pKey);
+        return row;
+	}
+	
+    void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
+    	    int timeout = ctx.getSession().getConfig().getLockTimeout();
+    	    VaporizingRow row = genRow(ctx, heap, params);
         
         // do it
         
         Transaction trx = ctx.getTransaction();
-    	row.setVersion(trx.getGuaranteedTrxId());
+    	    row.setVersion(trx.getGuaranteedTrxId());
         for (;;) {
 	        HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
 	        if (error == HumpbackError.SUCCESS) {
-	        	this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
-	        	break;
+	        	    this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
+	        	    break;
 	        }
 	        else {
-	        	throw new OrcaException(error);
+	        	    throw new OrcaException(error);
 	        }
         }
     }

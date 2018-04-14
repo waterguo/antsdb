@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
+import com.antsdb.saltedfish.sql.FinalCursor;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
@@ -27,7 +28,7 @@ import io.netty.channel.ChannelHandlerContext;
 class Helper {
 	static void writeCursor(ByteBuf bufferArray, MysqlServerHandler serverHandler, Cursor result, boolean text) {
         try (Cursor cursor = (Cursor) result) {
-        	int nColumns = getColumnCount(cursor.getMetadata());
+        	    int nColumns = getColumnCount(cursor.getMetadata());
             PacketEncoder.writePacket(
                     bufferArray, 
                     serverHandler.getNextPacketSequence(), 
@@ -38,7 +39,7 @@ class Helper {
             // write parameter field packet
     
             for (int i=0; i<nColumns; i++) {
-            	FieldMeta column = cursor.getMetadata().getColumn(i);
+                FieldMeta column = cursor.getMetadata().getColumn(i);
                 PacketEncoder.writePacket(
                         bufferArray, 
                         serverHandler.getNextPacketSequence(), 
@@ -61,19 +62,19 @@ class Helper {
                             bufferArray, 
                             serverHandler.getNextPacketSequence(), 
                             () -> serverHandler.packetEncoder.writeRowTextBody(
-                            		bufferArray, 
-                            		pRecord, 
-                            		nColumns));
+                                bufferArray, 
+                                pRecord, 
+                                nColumns));
                 }
                 else {
                     PacketEncoder.writePacket(
                             bufferArray, 
                             serverHandler.getNextPacketSequence(), 
                             () -> serverHandler.packetEncoder.writeRowBinaryBody(
-                            		bufferArray, 
-                            		pRecord, 
-                            		cursor.getMetadata(), 
-                            		nColumns));
+                                bufferArray, 
+                                pRecord, 
+                                cursor.getMetadata(), 
+                                nColumns));
                 }
             }
     
@@ -83,7 +84,7 @@ class Helper {
                     serverHandler.getNextPacketSequence(), 
                     () -> serverHandler.packetEncoder.writeEOFBody(bufferArray, serverHandler.getSession()));
         }
-	}
+    }
 
     private static int getColumnCount(CursorMeta metadata) {
     	// skip system columns , the ones starts with "*"
@@ -112,7 +113,9 @@ class Helper {
                     		handler.session));
         }
         else if (result instanceof Cursor) {
-        	Helper.writeCursor(bufferArray, handler, (Cursor) result, text);
+            handler.session.fetch((FinalCursor)result, () -> {
+                Helper.writeCursor(bufferArray, handler, (Cursor)result, text);
+            });
         }
         else if (result instanceof Integer) {
             Integer count = (Integer) result;

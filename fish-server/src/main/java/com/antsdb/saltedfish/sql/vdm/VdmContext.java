@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.SpaceManager;
@@ -32,6 +33,7 @@ public class VdmContext {
     Object[] variables;
     private Transaction trx;
     List<AtomicLong> cursorStats;
+    private VdmComparator comp;
 
     public VdmContext(Session session, int nVariables) {
         super();
@@ -101,5 +103,12 @@ public class VdmContext {
 			this.cursorStats.add(new AtomicLong());
 		}
 		return this.cursorStats.get(makerId);
+	}
+	
+	public Integer compare(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
+	    if (this.comp == null) {
+	        this.comp = new VdmComparator(this);
+	    }
+	    return this.comp.comp(heap, params, pRecord, x, y); 
 	}
 }

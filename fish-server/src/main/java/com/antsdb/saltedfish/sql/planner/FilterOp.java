@@ -18,14 +18,16 @@ package com.antsdb.saltedfish.sql.planner;
  * @author wgu0
  */
 public enum FilterOp {
-	EQUAL,
-	EQUALNULL,
-	INSELECT,
-	INVALUES,
-	LARGER,
-	LARGEREQUAL,
-	LESS,
-	LESSEQUAL,
-	LIKE,
-	MATCH,
+    EQUAL,
+    EQUALNULL,
+    INSELECT,
+    INVALUES,
+    LARGER,
+    LARGEREQUAL,
+    LESS,
+    LESSEQUAL,
+    LIKE,
+    MATCH,
+    /* anything that cannot be processed */ 
+    UNKNOWN,
 }

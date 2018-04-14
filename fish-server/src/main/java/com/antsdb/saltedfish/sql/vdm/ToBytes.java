@@ -33,6 +33,9 @@ public class ToBytes extends UnaryOperator {
 
 	@Override
 	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+	    if (upstream instanceof BinaryString) {
+	        return ((BinaryString)this.upstream).getBytes(heap);
+	    }
 		long pValue = upstream.eval(ctx, heap, params, pRecord);
 		if (pValue == 0) {
 			return 0;

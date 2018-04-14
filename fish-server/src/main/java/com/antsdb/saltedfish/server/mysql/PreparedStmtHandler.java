@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.server.mysql;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 
+import java.nio.CharBuffer;
 import java.sql.SQLException;
 
 import org.slf4j.Logger;
@@ -50,7 +51,7 @@ public class PreparedStmtHandler {
      * @throws SQLException 
      */
     public void prepare(ChannelHandlerContext ctx,StmtPreparePacket packet) throws SQLException {
-    	PreparedStatement script = buildPstmt(packet.sql);
+    	    PreparedStatement script = buildPstmt(packet.sql);
         MysqlPreparedStatement pstmt = new MysqlPreparedStatement(this.serverHandler.fish.getOrca(), script);
         this.serverHandler.getPrepared().put(pstmt.getId(), pstmt);
         responsePrepare(ctx, pstmt);
@@ -61,9 +62,9 @@ public class PreparedStmtHandler {
         MysqlPreparedStatement pstmt = this.serverHandler.getPrepared().get((int)pstmtId);
         if (pstmt == null) {
             serverHandler.writeErrMessage(
-            		ctx, 
-            		MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, 
-            		"Unknown pstmtId when executing.");
+                    ctx, 
+                    MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, 
+                    "Unknown pstmtId when executing.");
             return;
         }
         boolean success = false;
@@ -71,14 +72,14 @@ public class PreparedStmtHandler {
             // Using column definition to parse detail info in packet
             // packet.readFull(pstmt);
             // packet.values hold BindValue, should we use it or conver it to Parameter?
-            Object result = pstmt.run(this.serverHandler.session);
-            
-        	Helper.writeResonpse(ctx, serverHandler, result, false);
-        	success = true;
+            pstmt.run(this.serverHandler.session, (result)-> {
+                Helper.writeResonpse(ctx, serverHandler, result, false);
+            });
+                success = true;
         }
         finally {
             if (!success) {
-                _log.error("statement parameters:\n{}", pstmt.getParameters().toString());
+                _log.error("statement parameters:\n{}", pstmt.getParameters());
             }
             pstmt.clear();
         }
@@ -90,10 +91,10 @@ public class PreparedStmtHandler {
      * @return
      * @throws SQLException
      */
-    public PreparedStatement buildPstmt(String sql) throws SQLException{
+    public PreparedStatement buildPstmt(CharBuffer sql) throws SQLException{
         // TODO parse sql and get col and param meta, should Script be used?s
         //      how to map it to pstmt;
-    	PreparedStatement script = serverHandler.session.prepare(sql);
+        PreparedStatement script = serverHandler.session.prepare(sql);
         return script;
     }
 

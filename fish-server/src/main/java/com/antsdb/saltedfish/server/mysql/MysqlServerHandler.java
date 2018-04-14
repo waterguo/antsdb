@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.server.mysql;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.security.KeyStore;
 import java.sql.SQLException;
@@ -26,6 +27,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.charset.Decoder;
@@ -82,7 +84,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     QueryHandler queryHandler;
     PacketEncoder packetEncoder;
     Map<Integer, MysqlPreparedStatement> prepared = new HashMap<>();
-	int packetSequence;
+    int packetSequence;
     
     public SocketChannel chanel;
     
@@ -114,7 +116,9 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         }
         catch (Exception x) {
             if (_log.isDebugEnabled()) {
-                _log.debug("error detail: \n{}", msg, x);
+                String s = msg.toString();
+                s = StringUtils.left(s, 8192);
+                _log.debug("error detail: \n{}", s, x);
             }
             String error = x.getMessage()==null? x.toString() : x.getMessage();
             writeErrMessage(ctx, MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, error);
@@ -131,12 +135,12 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     
     private void run(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof AuthPacket) {
-        	AuthPacket authmsg = (AuthPacket)msg;
-        	// if it's SSL packet, switch to ssl connection
-        	if (authmsg.isSSL)
-        		switchToSSL();
-        	else
-        		auth(ctx, (AuthPacket)msg);
+            AuthPacket authmsg = (AuthPacket)msg;
+            // if it's SSL packet, switch to ssl connection
+            if (authmsg.isSSL)
+                switchToSSL();
+            else
+                auth(ctx, (AuthPacket)msg);
             return;
         }
         else if (msg instanceof ShutdownPacket) {
@@ -145,10 +149,10 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
             shutdown();
         }
         if (this.session == null) {
-        	throw new OrcaException("session is closed");
+            throw new OrcaException("session is closed");
         }
         if (this.session.isClosed()) {
-        	throw new OrcaException("session is closed");
+            throw new OrcaException("session is closed");
         }
         try {
             this.session.notifyStartQuery();
@@ -180,7 +184,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
                 fieldList(ctx, (FieldListPacket)msg);
             }
             else if (msg instanceof SetOptionPacket) {
-            	setOption(ctx, (SetOptionPacket)msg);
+                setOption(ctx, (SetOptionPacket)msg);
             }
             else {
                 unknown(ctx);
@@ -192,8 +196,8 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         }
     }
 
-	private void shutdown() {
-	    this.fish.close();
+    private void shutdown() {
+        this.fish.close();
         System.exit(0);
     }
 
@@ -211,32 +215,32 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         // status is set to SERVER_STATUS_AUTOCOMMIT 0x0002
         int status = 0x0002;
         PacketEncoder.writePacket(buf, (byte)0, () -> PacketEncoder.writeHandshakeBody(
-        		buf, 
-        		SERVER_VERSION,  
-        		PROTOCOL_VERSION, 
-        		threadId, 
-        		getServerCapabilities(), 
-        		CHAR_SET_INDEX, 
-        		status,
-        		this.authPlugin));
+                buf, 
+                SERVER_VERSION,  
+                PROTOCOL_VERSION, 
+                threadId, 
+                getServerCapabilities(), 
+                CHAR_SET_INDEX, 
+                status,
+                this.authPlugin));
         ctx.writeAndFlush(buf);
     }
 
     @Override
-	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        	if (this.session != null) {
-        		for (MysqlPreparedStatement i:this.prepared.values()) {
-        			i.close();
-        		}
-        		this.fish.getOrca().closeSession(this.session);
-    	    }
-		super.channelInactive(ctx);
-	}
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            if (this.session != null) {
+                for (MysqlPreparedStatement i:this.prepared.values()) {
+                    i.close();
+                }
+                this.fish.getOrca().closeSession(this.session);
+            }
+        super.channelInactive(ctx);
+    }
 
-	@Override
+    @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // Close the connection when an exception is raised.
-		_log.trace("exceptionCaught", cause);
+        _log.trace("exceptionCaught", cause);
         ctx.close();
     }
 
@@ -258,21 +262,21 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         
         // Enable kerberos by default, set "kerberos.auth_disable" in conf.properties to disable it
         if (!authEnable() || !kerberosEnable() || KerberosHelper.login(request.user, request.password)) {
-	        if (authEnable() && !kerberosEnable() && !testPassword(request.password)) {
-	        	    writeErrMessage(ctx, ER_ACCESS_DENIED_ERROR, "Cleartext test failed");
-	        } 
-	        else {
-	            boolean result = this.authPlugin.authenticate(request.user, request.passwordRaw);
-	            if (result) {
-        	            // send back auth ok to client
-        	            ByteBuf buf = ctx.alloc().buffer();
-        		        buf.writeBytes(this.sslConnected? PacketEncoder.SSL_AUTH_OK_PACKET : PacketEncoder.AUTH_OK_PACKET);
-        		        ctx.writeAndFlush(buf);
-	            } 
-	            else {
-	                writeErrMessage(ctx, ER_ACCESS_DENIED_ERROR, "Access denied for invalid user or password");
-	            }
-	        }
+            if (authEnable() && !kerberosEnable() && !testPassword(request.password)) {
+                    writeErrMessage(ctx, ER_ACCESS_DENIED_ERROR, "Cleartext test failed");
+            } 
+            else {
+                boolean result = this.authPlugin.authenticate(request.user, request.passwordRaw);
+                if (result) {
+                        // send back auth ok to client
+                        ByteBuf buf = ctx.alloc().buffer();
+                        buf.writeBytes(this.sslConnected? PacketEncoder.SSL_AUTH_OK_PACKET : PacketEncoder.AUTH_OK_PACKET);
+                        ctx.writeAndFlush(buf);
+                } 
+                else {
+                    writeErrMessage(ctx, ER_ACCESS_DENIED_ERROR, "Access denied for invalid user or password");
+                }
+            }
         } 
         else {
             writeErrMessage(ctx, ER_ACCESS_DENIED_ERROR, "Access denied for invalid user or password");
@@ -280,21 +284,21 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     }
 
     private boolean testPassword(String pwd) {
-    	    String testPwd = getFish().getConfig().getTestPassword();
-    	    return testPwd==null?  true: testPwd.equals(pwd);
+            String testPwd = getFish().getConfig().getTestPassword();
+            return testPwd==null?  true: testPwd.equals(pwd);
     }
 
     public boolean authEnable() {
-    	    return getFish().getConfig().getAuthEnable().equalsIgnoreCase("Y");
+            return getFish().getConfig().getAuthEnable().equalsIgnoreCase("Y");
     }
 
     public boolean kerberosEnable() {
-    	    return getFish().getConfig().getKerberosEnable().equalsIgnoreCase("Y");
+            return getFish().getConfig().getKerberosEnable().equalsIgnoreCase("Y");
     }
 
     private void init(ChannelHandlerContext ctx, InitPacket request) {
-    	    VdmContext vdm = new VdmContext(session, 0);
-    	    new Use(request.database).run(vdm, null);
+            VdmContext vdm = new VdmContext(session, 0);
+            new Use(request.database).run(vdm, null);
         ByteBuf bufferArray = ctx.alloc().buffer();
         bufferArray.writeBytes(PacketEncoder.OK_PACKET);
         ctx.writeAndFlush(bufferArray);
@@ -306,17 +310,15 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
 
     private void stmtPrepare(ChannelHandlerContext ctx, StmtPreparePacket pstmtPacket) throws SQLException {
         if (preparedStmtHandler != null) {
-            String sql = pstmtPacket.sql;
+            CharBuffer sql = pstmtPacket.sql;
             if (sql == null || sql.length() == 0) {
                 writeErrMessage(ctx,MysqlErrorCode.ER_NOT_ALLOWED_COMMAND, "Empty SQL");
                 return;
             }
-
             preparedStmtHandler.prepare(ctx, pstmtPacket);
         } 
         else {
-            writeErrMessage(ctx,MysqlErrorCode.ER_UNKNOWN_COM_ERROR,
-                    "Prepare unsupported!");
+            writeErrMessage(ctx,MysqlErrorCode.ER_UNKNOWN_COM_ERROR, "Prepare unsupported!");
         }
     }
 
@@ -362,7 +364,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     }
 
     private void close(ChannelHandlerContext ctx) {
-    	    ctx.close();
+            ctx.close();
     }
 
     private void ping(ChannelHandlerContext ctx) {
@@ -378,9 +380,9 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
     public ChannelFuture writeErrMessage(ChannelHandlerContext ctx, int errno, String msg) {
         ByteBuf buf = ctx.alloc().buffer();
         PacketEncoder.writePacket(buf, (byte)1, () -> packetEncoder.writeErrorBody(
-        		buf, 
-        		errno, 
-        		Charset.defaultCharset().encode(msg)));
+                buf, 
+                errno, 
+                Charset.defaultCharset().encode(msg)));
         return ctx.writeAndFlush(buf);
     }
 
@@ -397,7 +399,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         flag |= CLIENT_PLUGIN_AUTH;
         flag |= CLIENT_SECURE_CONNECTION;
         if (enableSSL()) {
-        	    flag |= CLIENT_SSL;
+                flag |= CLIENT_SSL;
         }
         return flag;
     }
@@ -406,66 +408,66 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         return this.prepared;
     }
 
-	public Session getSession() {
-		return this.session;
-	}
+    public Session getSession() {
+        return this.session;
+    }
 
-	public Decoder getDecoder() {
-	    Decoder result = null;
+    public Decoder getDecoder() {
+        Decoder result = null;
         result = this.session.getConfig().getRequestDecoder();
-		return result;
-	}
+        return result;
+    }
 
-	public SaltedFish getFish() {
-		return this.fish;
-	}
+    public SaltedFish getFish() {
+        return this.fish;
+    }
 
-	byte getNextPacketSequence() {
-		return (byte)++this.packetSequence;
-	}
-	
-	private boolean enableSSL() {
-    	    String keyFile = getFish().getConfig().getSSLKeyFile();
-    	    String password = getFish().getConfig().getSSLPassword();
-    	    if (keyFile!=null || password!=null) {
-    	        return true;
-    	    }
-    	    return false;
-	}
-	
-	public void switchToSSL() {
-        	if (enableSSL()) {
-            	String keyFile = getFish().getConfig().getSSLKeyFile();
-            	String password = getFish().getConfig().getSSLPassword();
-            	try (FileInputStream keyIn = new FileInputStream(keyFile)) {
-            		SSLContext serverContext;
-                	KeyStore ks = KeyStore.getInstance("JKS");
-                	
-    	        	    byte[] sslKeyVal = IOUtils.toByteArray(keyIn);
-                	
-    	        	    char[] pass = password.toCharArray();
-    	            ks.load(new ByteArrayInputStream(sslKeyVal),pass);
-    	
-    	            // Set up key manager factory to use our key store
-    	            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-    	            kmf.init(ks, pass);
-    	
-    	            // Initialize the SSLContext to work with our key managers.
-    	            serverContext = SSLContext.getInstance("TLS");
-    	            serverContext.init(kmf.getKeyManagers(), null, null);
-    	            SSLEngine sslEngine = serverContext.createSSLEngine();
-    	            sslEngine.setUseClientMode(false);
-    	        	    chanel.pipeline().addFirst("ssl", new SslHandler(sslEngine));
-    	        	
-    	        	    // indicate SSL is established
-    	        	    sslConnected = true;
-            } 
-            	catch (Exception e) {
-                	throw new CodingError("Failed to switch to SSL: " + e.getMessage());
+    byte getNextPacketSequence() {
+        return (byte)++this.packetSequence;
+    }
+    
+    private boolean enableSSL() {
+            String keyFile = getFish().getConfig().getSSLKeyFile();
+            String password = getFish().getConfig().getSSLPassword();
+            if (keyFile!=null || password!=null) {
+                return true;
             }
-        	}
-        	else {
-        		throw new CodingError("ssl.key_file or ssl.password is not set in configuration and ssl is disabled.");
-        	}
-	}
+            return false;
+    }
+    
+    public void switchToSSL() {
+        if (enableSSL()) {
+            String keyFile = getFish().getConfig().getSSLKeyFile();
+            String password = getFish().getConfig().getSSLPassword();
+            try (FileInputStream keyIn = new FileInputStream(keyFile)) {
+                SSLContext serverContext;
+                KeyStore ks = KeyStore.getInstance("JKS");
+
+                byte[] sslKeyVal = IOUtils.toByteArray(keyIn);
+
+                char[] pass = password.toCharArray();
+                ks.load(new ByteArrayInputStream(sslKeyVal), pass);
+
+                // Set up key manager factory to use our key store
+                KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                kmf.init(ks, pass);
+
+                // Initialize the SSLContext to work with our key managers.
+                serverContext = SSLContext.getInstance("TLS");
+                serverContext.init(kmf.getKeyManagers(), null, null);
+                SSLEngine sslEngine = serverContext.createSSLEngine();
+                sslEngine.setUseClientMode(false);
+                chanel.pipeline().addFirst("ssl", new SslHandler(sslEngine));
+
+                // indicate SSL is established
+                sslConnected = true;
+            }
+            catch (Exception e) {
+                throw new CodingError("Failed to switch to SSL: " + e.getMessage());
+            }
+        }
+        else {
+            throw new CodingError("ssl.key_file or ssl.password is not set in configuration and ssl is disabled.");
+        }
+    }
 }

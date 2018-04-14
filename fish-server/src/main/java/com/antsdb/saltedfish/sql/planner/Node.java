@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.planner;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
@@ -32,19 +33,18 @@ import com.antsdb.saltedfish.sql.vdm.Operator;
  * @author wgu0
  */
 class Node {
+    boolean freeze = false;
     TableMeta table;
     CursorMaker maker;
-    private List<ColumnFilter> filters = new ArrayList<ColumnFilter>();
     ObjectName alias;
     List<PlannerField> fields = new ArrayList<>();
     boolean isOuter;
     boolean isParent = false;
     Operator joinCondition;
+    LinkedList<List<ColumnFilter>> union = new LinkedList<>();
     
     // below are fields related to union
     
-    List<Node> unions;
-	Node active;
 	Operator where;
     
     PlannerField findField(FieldMeta field) {
@@ -69,33 +69,6 @@ class Node {
     public String toString() {
         return this.alias.toString();
     }
-
-	public void setActive(Node child) {
-		this.active = child;
-	}
-
-	public void addFilter(ColumnFilter cf) {
-		if (this.active != null) {
-			this.active.addFilter(cf);
-		}
-		else {
-			this.filters.add(cf);
-		}
-	}
-	
-	public List<ColumnFilter> getFilters() {
-		// dont change the stupid logic below. see Analyzer.analyze()
-		if (this.isUnion()) {
-			return this.filters;
-		}
-		else {
-			return this.filters;
-		}
-	}
-
-	public boolean isUnion() {
-		return this.unions != null;
-	}
 
     public boolean isUnique(List<PlannerField> key) {
         if (this.table == null) {

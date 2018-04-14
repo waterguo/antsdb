@@ -116,6 +116,9 @@ public abstract class FishCommandLine extends CommandLineHelper {
             ns = words[0].toLowerCase();
             name = words[1].toLowerCase();
             for (SysMetaRow i:humpback.getTablesMeta()) {
+                if (i.isDeleted()) {
+                    continue;
+                }
                 if (ns != null) {
                     if (!ns.equals(i.getNamespace().toLowerCase())) {
                         continue;

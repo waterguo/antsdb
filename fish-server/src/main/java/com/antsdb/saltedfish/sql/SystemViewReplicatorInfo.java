@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.sql;
 
 import java.util.Map;
 
+import com.antsdb.saltedfish.nosql.Replicator;
+
 /**
  * 
  * @author *-xguo0<@
@@ -29,7 +31,13 @@ public class SystemViewReplicatorInfo extends PropertyBasedView {
 
     @Override
     public Map<String, Object> getProperties() {
-        return this.orca.getReplicator().getSummary();
+        Replicator replicator = this.orca.getReplicator();
+        if (replicator != null) {
+            return this.orca.getReplicator().getSummary();
+        }
+        else {
+            return null;
+        }
     }
 
 }

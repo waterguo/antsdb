@@ -182,7 +182,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                 String fieldName = getFieldName(expr, op);
                 planner.addOutputField(fieldName, op);
                 if (expr.column_alias() != null) {
-                	exprByAlias.put(fieldName.toLowerCase(), op);
+                	    exprByAlias.put(fieldName.toLowerCase(), op);
                 }
             }
             else {
@@ -192,14 +192,14 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         
         // group by, prevent empty cursor if aggregate functions are used
         
-        if (ctx.hasAggregateFunctions() || (rule.group_by_clause()!=null)) {
+        if ((rule.group_by_clause()!=null)) {
             List<Operator> groupbys = new ArrayList<Operator>();
             if (rule.group_by_clause() != null) {
                 for (ExprContext i:rule.group_by_clause().expr()) {
-                	Operator op = Utils.findInPlannerOutputFields(planner, i.getText());
-                	if (op == null) {
-                		op = ExprGenerator.gen(ctx, planner, i);
-                	}
+                    Operator op = Utils.findInPlannerOutputFields(planner, i.getText());
+                    if (op == null) {
+                        op = ExprGenerator.gen(ctx, planner, i);
+                    }
                     groupbys.add(op);
                 }
             }
@@ -209,9 +209,9 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         // having clause
         
         if (rule.having_clause() != null) {
-        	ExprContext rewritten = rewriteHaving(ctx, planner, rule.having_clause().expr());
-        	Planner newone = new Planner(ctx);
-        	newone.addCursor("", planner.run(), true, false);
+            ExprContext rewritten = rewriteHaving(ctx, planner, rule.having_clause().expr());
+            Planner newone = new Planner(ctx);
+            newone.addCursor("", planner.run(), true, false);
             Operator filter = ExprGenerator.gen(ctx, newone, rewritten);
             newone.setWhere(filter);
             planner = newone;
@@ -438,5 +438,4 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         }
         return name;
     }
-    
 }

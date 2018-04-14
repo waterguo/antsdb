@@ -32,7 +32,7 @@ public class FuncGenerateKey extends Operator {
     boolean isInclusive;
     KeyMaker keyMaker;
     boolean max;
-	private boolean isNullable;
+    private boolean isNullable;
 
     /**
      * if the key generator accepts null. when this indicator is false, generator will return NULL if one of the
@@ -40,19 +40,19 @@ public class FuncGenerateKey extends Operator {
      * @param isKeyNullable
      */
     public FuncGenerateKey(KeyMaker keyMaker, Vector v, boolean max) {
-    	this.keyMaker = keyMaker;
-    	this.exprs = v.getValues();
-    	this.isInclusive = v.isInclusive();
-    	this.isNullable = v.isNullable();
-    	this.max = max;
+        this.keyMaker = keyMaker;
+        this.exprs = v.getValues();
+        this.isInclusive = v.isInclusive();
+        this.isNullable = v.isNullable();
+        this.max = max;
     }
     
     public FuncGenerateKey(
-    		List<ColumnMeta> columns, 
-    		boolean isUnique, 
-    		List<Operator> exprs, 
-    		boolean inclusive, 
-    		boolean max) {
+            List<ColumnMeta> columns, 
+            boolean isUnique, 
+            List<Operator> exprs, 
+            boolean inclusive, 
+            boolean max) {
         super();
         this.exprs = exprs;
         this.keyMaker = new KeyMaker(columns, isUnique);
@@ -62,21 +62,21 @@ public class FuncGenerateKey extends Operator {
     
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	long pKey;
-    	if (this.max) {
-    		pKey = this.keyMaker.makeMax(ctx, heap, this.exprs, params, pRecord, this.isNullable);
-    	}
-    	else {
-    		pKey = this.keyMaker.makeMin(ctx, heap, this.exprs, params, pRecord, this.isNullable);
-    	}
-    	if (pKey == 0) {
-    		return 0;
-    	}
-    	long pBoundary = FishBoundary.alloc(heap, this.isInclusive, pKey);
-		return pBoundary;
-	}
+        long pKey;
+        if (this.max) {
+            pKey = this.keyMaker.makeMax(ctx, heap, this.exprs, params, pRecord, this.isNullable);
+        }
+        else {
+            pKey = this.keyMaker.makeMin(ctx, heap, this.exprs, params, pRecord, this.isNullable);
+        }
+        if (pKey == 0) {
+            return 0;
+        }
+        long pBoundary = FishBoundary.alloc(heap, this.isInclusive, pKey);
+        return pBoundary;
+    }
 
-	@Override
+    @Override
     public DataType getReturnType() {
         return DataType.blob();
     }

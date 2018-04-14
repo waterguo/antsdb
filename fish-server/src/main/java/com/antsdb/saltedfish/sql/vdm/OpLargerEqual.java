@@ -24,11 +24,9 @@ public class OpLargerEqual extends BinaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long addrValueFromLeft = this.left.eval(ctx, heap, params, pRecord);
-        long addrValueFromRight = this.right.eval(ctx, heap, params, pRecord);
-        int result = AutoCaster.compare(heap, addrValueFromLeft, addrValueFromRight);
-        if (result == Integer.MIN_VALUE) {
-        	return 0;
+        Integer result = ctx.compare(heap, params, pRecord, this.left, this.right);
+        if (result == null) {
+            return 0;
         }
         return FishBool.allocSet(heap, result >= 0);
     }

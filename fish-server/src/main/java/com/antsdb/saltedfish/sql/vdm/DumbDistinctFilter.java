@@ -13,8 +13,9 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.TypeSafeUtil;
@@ -31,7 +32,7 @@ public class DumbDistinctFilter extends CursorMaker {
 
     static class MyCursor extends Cursor {
         Cursor upstream;
-        List<Record> past = new ArrayList<Record>();
+        Set<Record> past = new HashSet<>();
         
         public MyCursor(Cursor upstream) {
             super(upstream.getMetadata());
@@ -50,15 +51,8 @@ public class DumbDistinctFilter extends CursorMaker {
                 
                 // dup detection
                 
-                boolean found = false;
                 Record rec = Record.toRecord(pRecord);
-                for (Record i:this.past) {
-                    if (equal(i, rec)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (found) {
+                if (this.past.contains(rec)) {
                     continue;
                 }
                 

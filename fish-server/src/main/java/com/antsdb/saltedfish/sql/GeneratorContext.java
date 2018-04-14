@@ -34,19 +34,11 @@ public class GeneratorContext {
     int nextMakerId = 1;
     
     public boolean isCompileDdl() {
-		return compileDdl;
-	}
-
-	public void setCompileDdl(boolean compileDdl) {
-		this.compileDdl = compileDdl;
-	}
-
-	public boolean hasAggregateFunctions() {
-        return hasAggregateFunctions;
+        return compileDdl;
     }
 
-    public void setHasAggregateFunctions(boolean hasAggregateFunctions) {
-        this.hasAggregateFunctions = hasAggregateFunctions;
+    public void setCompileDdl(boolean compileDdl) {
+        this.compileDdl = compileDdl;
     }
 
     public GeneratorContext(Session session) {

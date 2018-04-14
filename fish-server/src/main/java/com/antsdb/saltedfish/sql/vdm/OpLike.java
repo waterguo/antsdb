@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import com.antsdb.saltedfish.cpp.FishBool;
-import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -39,8 +38,8 @@ public class OpLike extends BinaryOperator {
         if (addrTextLeft == 0) {
             return FishBool.allocSet(heap, false);
         }
-        String textRight = (String)FishObject.get(heap, addrTextRight);
-        String textLeft = (String)FishObject.get(heap, addrTextLeft);
+        String textRight = AutoCaster.getString(heap, addrTextRight);
+        String textLeft = AutoCaster.getString(heap, addrTextLeft);
         Pattern p = compile(textRight);
         boolean result = p.matcher(textLeft).matches();
         return FishBool.allocSet(heap, result);
@@ -85,5 +84,10 @@ public class OpLike extends BinaryOperator {
         }
         Pattern p = Pattern.compile(result.toString(), Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         return p;
+    }
+
+    @Override
+    public String toString() {
+        return this.left.toString() + " LIKE " + this.right.toString();
     }
 }
