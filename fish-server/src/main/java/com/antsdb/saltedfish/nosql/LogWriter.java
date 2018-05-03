@@ -25,67 +25,71 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author wgu0
  */
 class LogWriter extends Thread {
-	static Logger _log = UberUtil.getThisLogger();
+    static Logger _log = UberUtil.getThisLogger();
+    static final long ALIGNMENT = 16 * 1024;
 
-	private SpaceManager spaceman;
-	private Gobbler gobbler;
-	private boolean isClosed = false;
-	
-	public LogWriter(SpaceManager spaceman, Gobbler gobbler) {
-		super(LogWriter.class.getSimpleName());
-		setDaemon(true);
-		this.spaceman = spaceman;
-		this.gobbler = gobbler;
-	}
-	
-	@Override
-	public void run() {
-		for (;;) {
-			if (this.isClosed) {
-				break;
-			}
-			try {
-				run_();
-			}
-			catch (Exception x) {
-				_log.error("error", x);
-			}
-		}
-		_log.info("log writer closed");
-	}
+    private SpaceManager spaceman;
+    private Gobbler gobbler;
+    private boolean isClosed = false;
+    
+    public LogWriter(SpaceManager spaceman, Gobbler gobbler) {
+        super(LogWriter.class.getSimpleName());
+        setDaemon(true);
+        this.spaceman = spaceman;
+        this.gobbler = gobbler;
+    }
+    
+    @Override
+    public void run() {
+        for (;;) {
+            if (this.isClosed) {
+                break;
+            }
+            try {
+                run_();
+            }
+            catch (Exception x) {
+                _log.error("error", x);
+            }
+        }
+        _log.info("log writer closed");
+    }
 
-	private void run_() {
-		for (;;) {
-			// is there anything to write?
-			
-			AtomicLong atomPersistence = this.gobbler.getPersistencePointer();
-			long spPersistence = atomPersistence.get();
-			long spAllocation = this.spaceman.getAllocationPointer();
-			if (spPersistence >= spAllocation) {
-				if (this.isClosed) {
-					return;
-				}
-				try {
-					Thread.sleep(1);
-				}
-				catch (InterruptedException ignored) {
-				}
-				continue;
-			}
-			
-			// mark the end point
+    private void run_() {
+        for (;;) {
+            // is there anything to write?
+            
+            AtomicLong atomPersistence = this.gobbler.getPersistencePointer();
+            long spPersistence = atomPersistence.get();
+            long spAllocation = this.spaceman.getAllocationPointer();
+            if (spPersistence >= spAllocation) {
+                if (this.isClosed) {
+                    return;
+                }
+                UberUtil.sleep(1);
+                continue;
+            }
+            
+            // mark the end point
 
-			atomPersistence.set(spAllocation);
-			
-			// going to write
-			
-			this.spaceman.force(spPersistence, spAllocation);
-		}
-	}
+            long delta = spAllocation - spPersistence;
+            if (delta >= ALIGNMENT) {
+                long aligned = spAllocation / ALIGNMENT * ALIGNMENT;
+                if (aligned > spPersistence) {
+                    spAllocation = aligned;
+                }
+            }
+            atomPersistence.set(spAllocation);
+            
+            // going to write
+            
+            this.spaceman.force(spPersistence, spAllocation);
+        }
+    }
 
-	public void close() {
-		_log.info("shutting down log writer ... ");
-		this.isClosed = true;
-	}
+    public void close() {
+        _log.info("shutting down log writer ... ");
+        this.isClosed = true;
+    }
 
 }

@@ -117,10 +117,27 @@ public final class Unsafe {
 	public final static long getLongVolatile(long addr) {
 		return unsafe.getLongVolatile(null, ix(addr));
 	}
-	
-	public final static void setMemory(long addr, long bytes, byte value) {
-		unsafe.setMemory(ix(addr), bytes, value);
-	}
+
+    public final static void setMemory(long addr, int bytes, byte value) {
+        int alignedSize = bytes / 8 * 8;
+        int i = 0;
+        if (alignedSize > 1) {
+            long lv;
+            if (value == 0) {
+                lv = 0;
+            }
+            else {
+                lv = value & 0xff;
+                lv = lv << 56 | lv << 48 | lv << 40 | lv << 32 | lv << 24 | lv << 16 | lv << 8 | lv;
+            }
+            for (;i < alignedSize; i += 8) {
+                Unsafe.putLong(i + addr, lv);
+            }
+        }
+        for (; i < bytes; i++) {
+            Unsafe.putByte(i + addr, (byte)value);
+        }
+    }
 
 	public final static void putUnsignedShort(long addr, int value) {
 		unsafe.putShort(ix(addr), (short)value);

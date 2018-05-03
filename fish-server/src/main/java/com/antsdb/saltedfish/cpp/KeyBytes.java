@@ -146,8 +146,9 @@ public final class KeyBytes {
         if (len >= Short.MAX_VALUE) {
             throw new IllegalArgumentException();
         }
-        long addr = heap.alloc(len + HEADER_SIZE);
+        long addr = heap.alloc(len + HEADER_SIZE, false);
         Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
+        Unsafe.putByte(addr+1, (byte)0);
         Unsafe.putShort(addr+2, (short)len);
         KeyBytes result = new KeyBytes();
         result.addr = addr;

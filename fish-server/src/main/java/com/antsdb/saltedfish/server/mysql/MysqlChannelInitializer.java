@@ -40,7 +40,6 @@ public class MysqlChannelInitializer extends ChannelInitializer<SocketChannel> {
             return;
         }
         MysqlServerHandler handler = new MysqlServerHandler(fish, ch);
-        PacketDecoder decoder = new PacketDecoder(handler);
-        ch.pipeline().addLast(decoder, handler);
+        ch.pipeline().addLast(new PacketDecoder(), handler);
     }
 }

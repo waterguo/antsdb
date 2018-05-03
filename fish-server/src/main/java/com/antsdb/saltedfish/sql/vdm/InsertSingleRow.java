@@ -51,30 +51,30 @@ public class InsertSingleRow extends Statement {
         this.tableId = table.getId();
     }
 
-	@Override
+    @Override
     public Object run(VdmContext ctx, Parameters params) {
-		try {
-			ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
-			return run_(ctx, params);
-		}
-		finally {
-		}
-	}
+        try {
+            ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+            return run_(ctx, params);
+        }
+        finally {
+        }
+    }
 
-	public void setReplace(boolean value) {
-	    this.isReplace = value;
-	}
-	
-	public Object run_(VdmContext ctx, Parameters params) {
+    public void setReplace(boolean value) {
+        this.isReplace = value;
+    }
+    
+    public Object run_(VdmContext ctx, Parameters params) {
         int count = 0;
         try (Heap heap = new FlexibleHeap()) {
             heap.reset(0);
             if (this.ignoreError) {
-            	    try {
+                    try {
                     insertRow(ctx, heap, params, this.values);
                     count++;
                     return count;
-            	    }
+                    }
                 catch (Exception x) {
                     _log.debug("error from insert is ignored", x);
                     return false;
@@ -88,7 +88,7 @@ public class InsertSingleRow extends Statement {
         return count;
     }
 
-	VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params) {
+    VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params) {
         // collect values 
         
         VaporizingRow row = new VaporizingRow(heap, this.table.getMaxColumnId());
@@ -105,29 +105,29 @@ public class InsertSingleRow extends Statement {
         long pKey = this.table.getKeyMaker().make(heap, row);
         row.setKey(pKey);
         return row;
-	}
-	
+    }
+    
     void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
-    	    int timeout = ctx.getSession().getConfig().getLockTimeout();
-    	    VaporizingRow row = genRow(ctx, heap, params);
+            int timeout = ctx.getSession().getConfig().getLockTimeout();
+            VaporizingRow row = genRow(ctx, heap, params);
         
         // do it
         
         Transaction trx = ctx.getTransaction();
-    	    row.setVersion(trx.getGuaranteedTrxId());
+            row.setVersion(trx.getGuaranteedTrxId());
         for (;;) {
-	        HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
-	        if (error == HumpbackError.SUCCESS) {
-	        	    this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
-	        	    break;
-	        }
-	        else {
-	        	    throw new OrcaException(error);
-	        }
+            HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
+            if (error == HumpbackError.SUCCESS) {
+                    this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
+                    break;
+            }
+            else {
+                    throw new OrcaException(error);
+            }
         }
     }
     
-	@Override
+    @Override
     List<TableMeta> getDependents() {
         List<TableMeta> list = new ArrayList<TableMeta>();
         list.add(this.table);

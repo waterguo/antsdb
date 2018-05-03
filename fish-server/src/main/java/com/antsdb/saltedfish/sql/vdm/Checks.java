@@ -69,14 +69,14 @@ public class Checks {
     }
 
     public static String namespaceExist(Orca orca, String ns) throws OrcaException {
-    	String result = orca.getExternalNamespace(ns);
+        String result = orca.getExternalNamespace(ns);
         if (result != null) {
             return result;
         }
         Humpback humpback = orca.getHumpback();
         result = humpback.getNamespace(ns);
         if (result != null) {
-        	return result;
+            return result;
         }
         else {
             throw new OrcaException("namespace doesn't exist: " + ns);

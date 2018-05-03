@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.server.mysql.util;
 import io.netty.buffer.ByteBuf;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
 
 import com.antsdb.saltedfish.cpp.FishDate;
 import com.antsdb.saltedfish.cpp.FishNumber;
@@ -27,6 +28,7 @@ import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.cpp.Int8;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * @author roger
@@ -132,6 +134,58 @@ public final class BindValueUtil {
         case Fields.FIELD_TYPE_DECIMAL:
         case Fields.FIELD_TYPE_NEW_DECIMAL:
         	pValue = FishNumber.allocSet(heap, BufferUtils.readBigDecimal(buf));
+            break;
+        default:
+            throw new IllegalArgumentException("bindValue error,unsupported type:" + type);
+        }
+        return pValue;
+    }
+    
+    public static long read(Heap heap, ByteBuffer buf, int type) {
+        long pValue = 0;
+        switch (type & 0xff) {
+        case Fields.FIELD_TYPE_TINY:
+            pValue = Int4.allocSet(heap, buf.get());
+            break;
+        case Fields.FIELD_TYPE_SHORT:
+            pValue = Int4.allocSet(heap, (short)BufferUtils.readInt(buf));
+            break;
+        case Fields.FIELD_TYPE_LONG:
+            pValue = Int4.allocSet(heap, BufferUtils.readLong(buf));
+            break;
+        case Fields.FIELD_TYPE_LONGLONG:
+            pValue = Int8.allocSet(heap, BufferUtils.readLongLong(buf));
+            break;
+        case Fields.FIELD_TYPE_FLOAT:
+            pValue = Float4.allocSet(heap, BufferUtils.readFloat(buf));
+            break;
+        case Fields.FIELD_TYPE_DOUBLE:
+            pValue = Float8.allocSet(heap, BufferUtils.readDouble(buf));
+            break;
+        case Fields.FIELD_TYPE_TIME:
+        case Fields.FIELD_TYPE_TIME2:
+            pValue = FishTime.allocSet(heap, BufferUtils.readTime(buf));
+            break;
+        case Fields.FIELD_TYPE_DATE:
+            pValue = FishDate.allocSet(heap, BufferUtils.readDate(buf));
+            break;
+        case Fields.FIELD_TYPE_DATETIME:
+        case Fields.FIELD_TYPE_TIMESTAMP:
+        case Fields.FIELD_TYPE_DATETIME2:
+        case Fields.FIELD_TYPE_TIMESTAMP2:
+            pValue = FishTimestamp.allocSet(heap, BufferUtils.readTimestamp(buf));
+            break;
+        case Fields.FIELD_TYPE_VAR_STRING:
+        case Fields.FIELD_TYPE_STRING:
+        case Fields.FIELD_TYPE_VARCHAR:
+            int len = (int)BufferUtils.readLength(buf);
+            long pData = UberUtil.getAddress(buf) + buf.position();
+            pValue = FishUtf8.allocSet(heap, pData, len);
+            buf.position(buf.position() + len);
+            break;
+        case Fields.FIELD_TYPE_DECIMAL:
+        case Fields.FIELD_TYPE_NEW_DECIMAL:
+            pValue = FishNumber.allocSet(heap, BufferUtils.readBigDecimal(buf));
             break;
         default:
             throw new IllegalArgumentException("bindValue error,unsupported type:" + type);

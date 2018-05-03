@@ -66,7 +66,7 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
 	 * @return address/pointer of the allocated address
 	 */
 	@Override
-	public final long alloc(int size) {
+	public final long alloc(int size, boolean zero) {
 		if (this.current.buffer.remaining() < (size)) {
 			int allocSize = Math.max(size, this.blockSize);
 			Node node = allocNode(allocSize);
@@ -78,7 +78,9 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
 		int pos = buf.position();
 		long address = this.current.address + pos;
 		buf.position(pos + size);
-		Unsafe.setMemory(address, size, (byte)0);
+		if (zero) {
+		    Unsafe.setMemory(address, size, (byte)0);
+		}
 		return address;
 	}
 	

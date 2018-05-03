@@ -58,7 +58,7 @@ public final class FishBoundary {
 	 * @return
 	 */
 	public static long alloc(Heap heap, boolean inclusive, long pKey) {
-		long p = heap.alloc(8 + 1 + 1);
+		long p = heap.alloc(8 + 1 + 1, false);
 		Unsafe.putByte(p, Value.FORMAT_BOUNDARY);
 		Unsafe.putByte(p+1, (byte)(inclusive ? 1 : 0));
 		Unsafe.putLong(p+2, pKey);

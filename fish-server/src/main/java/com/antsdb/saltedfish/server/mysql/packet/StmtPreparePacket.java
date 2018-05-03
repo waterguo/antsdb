@@ -33,7 +33,7 @@ public class StmtPreparePacket extends RecievePacket {
 
     @Override
     public void read(MysqlServerHandler handler, ByteBuf in) {
-        sql = BufferUtils.readStringCrazy(handler.getDecoder(), in);
+        sql = BufferUtils.readStringCrazy(null, in);
         if (_log.isTraceEnabled()) 
         	_log.trace("Prepare:"+sql);
     }

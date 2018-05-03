@@ -13,127 +13,126 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
+import java.nio.ByteBuffer;
+
 import com.antsdb.saltedfish.sql.FinalCursor;
+import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
 
 /**
  * 
  * @author wgu0
  */
 class Helper {
-	static void writeCursor(ByteBuf bufferArray, MysqlServerHandler serverHandler, Cursor result, boolean text) {
-        try (Cursor cursor = (Cursor) result) {
-        	    int nColumns = getColumnCount(cursor.getMetadata());
-            PacketEncoder.writePacket(
-                    bufferArray, 
-                    serverHandler.getNextPacketSequence(), 
-                    () -> serverHandler.packetEncoder.writeResultSetHeaderBody(
-                    		bufferArray, 
-                    		nColumns));
+    public static void writeCursorMeta(ChannelWriter out, Session session, PacketEncoder encoder, Cursor cursor) {
+        int nColumns = getColumnCount(cursor.getMetadata());
+        encoder.writePacket(
+                out,
+                (packet) -> encoder.writeResultSetHeaderBody(
+                        packet, 
+                        nColumns));
 
-            // write parameter field packet
-    
-            for (int i=0; i<nColumns; i++) {
-                FieldMeta column = cursor.getMetadata().getColumn(i);
-                PacketEncoder.writePacket(
-                        bufferArray, 
-                        serverHandler.getNextPacketSequence(), 
-                        () -> serverHandler.packetEncoder.writeColumnDefBody(bufferArray, column));
+        // write parameter field packet
+
+        for (int i=0; i<nColumns; i++) {
+            FieldMeta column = cursor.getMetadata().getColumn(i);
+            encoder.writePacket(out, (packet) -> encoder.writeColumnDefBody(packet, column));
+        }
+
+        encoder.writePacket(out, (packet) -> encoder.writeEOFBody(packet, session));
+    }
+
+    static void writeRows(ChannelWriter out, Session session, PacketEncoder encoder, Cursor cursor, boolean text) {
+        int nColumns = getColumnCount(cursor.getMetadata());
+        for (;;) {
+            long pRecord = cursor.next();
+            if (pRecord == 0) {
+                break;
             }
-    
-            PacketEncoder.writePacket(
-                    bufferArray, 
-                    serverHandler.getNextPacketSequence(), 
-                    () -> serverHandler.packetEncoder.writeEOFBody(bufferArray, serverHandler.getSession()));
-    
-            // output row
-            for (;;) {
-                long pRecord = cursor.next();
-                if (pRecord == 0) {
-                    break;
-                }
-                if (text) {
-                    PacketEncoder.writePacket(
-                            bufferArray, 
-                            serverHandler.getNextPacketSequence(), 
-                            () -> serverHandler.packetEncoder.writeRowTextBody(
-                                bufferArray, 
-                                pRecord, 
-                                nColumns));
-                }
-                else {
-                    PacketEncoder.writePacket(
-                            bufferArray, 
-                            serverHandler.getNextPacketSequence(), 
-                            () -> serverHandler.packetEncoder.writeRowBinaryBody(
-                                bufferArray, 
-                                pRecord, 
-                                cursor.getMetadata(), 
-                                nColumns));
-                }
+            if (text) {
+                encoder.writePacket(
+                        out,
+                        (packet) -> encoder.writeRowTextBody(
+                            packet, 
+                            pRecord, 
+                            nColumns));
             }
+            else {
+                encoder.writePacket(
+                        out,
+                        (packet) -> encoder.writeRowBinaryBody(
+                            packet, 
+                            pRecord, 
+                            cursor.getMetadata(), 
+                            nColumns));
+            }
+        }
+
+        // end row
+        encoder.writePacket(out, (packet) -> encoder.writeEOFBody(packet, session));
+    }
     
-            // end row
-            PacketEncoder.writePacket(
-                    bufferArray, 
-                    serverHandler.getNextPacketSequence(), 
-                    () -> serverHandler.packetEncoder.writeEOFBody(bufferArray, serverHandler.getSession()));
+    static void writeCursor(ChannelWriter out, 
+                            MysqlSession mysession, 
+                            Cursor result, 
+                            ByteBuffer meta, 
+                            boolean text) {
+        try (Cursor cursor = (Cursor) result) {
+            mysession.out.write(meta);
+            writeRows(out, mysession.session, mysession.encoder, cursor, text);
+        }
+    }
+    
+    static void writeCursor(ChannelWriter out, Session session, PacketEncoder encoder, Cursor result, boolean text) {
+        try (Cursor cursor = (Cursor) result) {
+            writeCursorMeta(out, session, encoder, cursor);
+            writeRows(out, session, encoder, cursor, text);
         }
     }
 
     private static int getColumnCount(CursorMeta metadata) {
-    	// skip system columns , the ones starts with "*"
-    	int j = 0;
-    	for (FieldMeta i: metadata.getColumns()) {
-    		if (i.getName().startsWith("*")) {
-    			break;
-    		}
-    		j++;
-    	}
-		return j;
-	}
+        // skip system columns , the ones starts with "*"
+        int j = 0;
+        for (FieldMeta i: metadata.getColumns()) {
+            if (i.getName().startsWith("*")) {
+                break;
+            }
+            j++;
+        }
+        return j;
+    }
 
-	static void writeResonpse(ChannelHandlerContext ctx, MysqlServerHandler handler, Object result, boolean text) {
-        ByteBuf bufferArray = ctx.alloc().buffer();
-        
+    static void writeResonpse(ChannelWriter out, MysqlSession mysession, Object result, boolean text) {
         if (result==null){
-            PacketEncoder.writePacket(
-                    bufferArray, 
-                    (byte)1, 
-                    () -> handler.packetEncoder.writeOKBody(
-                    		bufferArray, 
-                    		0, 
-                    		handler.session.getLastInsertId(),
-                    		null,
-                    		handler.session));
+            mysession.encoder.writePacket(
+                    out,
+                    (packet) -> mysession.encoder.writeOKBody(
+                            packet, 
+                            0, 
+                            mysession.session.getLastInsertId(),
+                            null,
+                            mysession.session));
         }
         else if (result instanceof Cursor) {
-            handler.session.fetch((FinalCursor)result, () -> {
-                Helper.writeCursor(bufferArray, handler, (Cursor)result, text);
+            mysession.session.fetch((FinalCursor)result, () -> {
+                Helper.writeCursor(out, mysession.session, mysession.encoder, (Cursor)result, text);
             });
         }
         else if (result instanceof Integer) {
             Integer count = (Integer) result;
-            PacketEncoder.writePacket(
-                    bufferArray, 
-                    handler.getNextPacketSequence(), 
-                    () -> handler.packetEncoder.writeOKBody(
-                    		bufferArray, 
-                    		count, 
-                    		handler.session.getLastInsertId(),
-                    		null,
-                    		handler.session));
+            mysession.encoder.writePacket(
+                    out,
+                    (packet) -> mysession.encoder.writeOKBody(
+                            packet, 
+                            count, 
+                            mysession.session.getLastInsertId(),
+                            null,
+                            mysession.session));
         }
         else {
-            bufferArray.writeBytes(PacketEncoder.OK_PACKET);
+            mysession.out.write(PacketEncoder.OK_PACKET);
         }
-        // write preparedOk packet
-        ctx.writeAndFlush(bufferArray);
-	}
-
+    }
 }

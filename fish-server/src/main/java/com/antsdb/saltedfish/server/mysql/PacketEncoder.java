@@ -13,8 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
-import io.netty.buffer.ByteBuf;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -41,7 +39,6 @@ import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.cpp.Int8;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.server.mysql.packet.MySQLPacket;
-import com.antsdb.saltedfish.server.mysql.util.BufferUtils;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.AuthPlugin;
 import com.antsdb.saltedfish.sql.DataType;
@@ -49,7 +46,7 @@ import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Record;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
-import com.antsdb.saltedfish.util.Callback;
+import com.antsdb.saltedfish.util.PacketCallback;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -68,36 +65,37 @@ public final class PacketEncoder {
     static final FastDateFormat TIMESTAMP19_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss");
     static final FastDateFormat TIMESTAMP29_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS000000");
     
-	private int csidx;
-    private MysqlServerHandler handler;
-
-	PacketEncoder(MysqlServerHandler handler) {
-	    this.handler = handler;
-	}
-	
+    private int csidx;
+    private PacketWriter packet = new PacketWriter();
+    int packetSequence = -1;
+    private MysqlSession mysession;
+    
+    public PacketEncoder(MysqlSession mysession) {
+        this.mysession = mysession;
+    }
+    
     /**
      * Add header to finish the full packet
      * @param out
      * @param packetSeq
      * @param writeBodyFunc        write packet body function
      */
-    public static void writePacket(ByteBuf out, byte packetSeq, Callback writeBodyFunc) {
-        int start = out.writerIndex();
-        out.writeZero(4);
-        writeBodyFunc.callback();
-        int end = out.writerIndex();
-        out.writeByte(0);
-        out.writerIndex(start);
+    public void writePacket(ChannelWriter out, PacketCallback writeBodyFunc) {
+        this.packet.clear();
+        int start = this.packet.position();
+        this.packet.writeLong(0);
+        writeBodyFunc.callback(this.packet);
+        int end = this.packet.position();
+        this.packet.writeByte((byte)0);
+        this.packet.position(start);
         int length = end - start - MySQLPacket.packetHeaderSize;
-        BufferUtils.writeLongInt(out, length);
-        out.writeByte(packetSeq);
-        out.writerIndex(end);
+        this.packet.writeLongInt(length);
+        this.packet.writeByte((byte)++this.packetSequence);
+        this.packet.position(end);
+        this.packet.flush(out);
         if (_log.isTraceEnabled()) {
-            int readerIndex = out.readerIndex();
-            out.readerIndex(start);
             byte[] bytes = new byte[end-start];
-            out.readBytes(bytes);
-            out.readerIndex(readerIndex);
+            packet.readBytes(start, bytes);
             String dump = '\n' + UberUtil.hexDump(bytes);
             _log.trace(dump);
         }
@@ -134,16 +132,16 @@ public final class PacketEncoder {
      * @param columnsNumber
      * @param parametersNumber
      */
-    public void writePreparedOKBody(ByteBuf buffer, long statementId, int columnsNumber, int parametersNumber) {
+    public void writePreparedOKBody(PacketWriter buffer, long statementId, int columnsNumber, int parametersNumber) {
         // flag = 0
-        buffer.writeByte(0);
-        BufferUtils.writeUB4(buffer, statementId);
-        BufferUtils.writeUB2(buffer, columnsNumber);
-        BufferUtils.writeUB2(buffer, parametersNumber);
+        buffer.writeByte((byte)0);
+        buffer.writeUB4(statementId);
+        buffer.writeUB2(columnsNumber);
+        buffer.writeUB2(parametersNumber);
         // filler = 0
-        buffer.writeByte(0);
+        buffer.writeByte((byte)0);
         // warningCount = 0;
-        BufferUtils.writeUB2(buffer, 0);
+        buffer.writeUB2(0);
     }
 
     /**
@@ -171,146 +169,146 @@ public final class PacketEncoder {
      * @param buffer
      * @param meta
      */
-    public void writeColumnDefBody(ByteBuf buffer, FieldMeta meta) {
+    public void writeColumnDefBody(PacketWriter buffer, FieldMeta meta) {
         // catalog
-        BufferUtils.writeLenString(buffer, "def", getEncoder());
+        buffer.writeLenString("def", getEncoder());
         // db, schema
         if (meta.getSourceTable() != null) {
-            BufferUtils.writeLenString(buffer, meta.getSourceTable().getNamespace(), getEncoder());
+            buffer.writeLenString(meta.getSourceTable().getNamespace(), getEncoder());
         }
         else {
-            BufferUtils.writeLenString(buffer, "", getEncoder());
+            buffer.writeLenString("", getEncoder());
         }
         // table
-        BufferUtils.writeLenString(buffer, meta.getTableAlias(), getEncoder());
+        buffer.writeLenString(meta.getTableAlias(), getEncoder());
         // orgTable
         if (meta.getSourceTable() != null) {
-            BufferUtils.writeLenString(buffer, meta.getSourceTable().getTableName(), getEncoder());
+            buffer.writeLenString(meta.getSourceTable().getTableName(), getEncoder());
         }
         else {
-            BufferUtils.writeLenString(buffer, "", getEncoder());
+            buffer.writeLenString("", getEncoder());
         }
         // col name
-        BufferUtils.writeLenString(buffer, meta.getName(), getEncoder());
+        buffer.writeLenString(meta.getName(), getEncoder());
         // col original name
-        BufferUtils.writeLenString(buffer, meta.getSourceName(), getEncoder());
+        buffer.writeLenString(meta.getSourceName(), getEncoder());
         // next length
         buffer.writeByte((byte) 0x0C);
         if (meta.getType() == null) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, 0);
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(0);
             buffer.writeByte((byte) (FIELD_TYPE_NULL & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == Boolean.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TINY & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
         }
         else if (meta.getType().getSqlType() == Types.TINYINT) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TINY & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == String.class) {
             // char set utf8_general_ci  : 0x21
-            BufferUtils.writeInt(buffer, this.csidx);
+            buffer.writeInt(this.csidx);
             // length
-            BufferUtils.writeUB4(buffer, meta.getType().getLength() * 3);
+            buffer.writeUB4(meta.getType().getLength() * 3);
             // type code
             buffer.writeByte((byte) (FIELD_TYPE_VAR_STRING & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == Integer.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, 21);
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(21);
             buffer.writeByte((byte) (FIELD_TYPE_LONG & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == Long.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, 21);
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(21);
             buffer.writeByte((byte) (FIELD_TYPE_LONGLONG & 0xff));
-            buffer.writeByte(0x00); // signed.
-            buffer.writeByte(0x00);
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0); // signed.
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == BigInteger.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_LONGLONG & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == BigDecimal.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_DECIMAL & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Float.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_FLOAT & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Double.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_DOUBLE & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Timestamp.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TIMESTAMP & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Date.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_DATE & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Time.class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, meta.getType().getLength());
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TIME & 0xff));
-            buffer.writeByte(0x00);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         // BLOB return byte[] as its java type
         else if (meta.getType().getJavaType() == byte[].class) {
-            BufferUtils.writeInt(buffer, 0x3f);
-            BufferUtils.writeUB4(buffer, 2147483647);
+            buffer.writeInt(0x3f);
+            buffer.writeUB4(2147483647);
             buffer.writeByte((byte) (FIELD_TYPE_BLOB & 0xff));
             // flag for Blob is x90 x00
-            buffer.writeByte(0x90);
-            buffer.writeByte(0x00);
+            buffer.writeByte((byte)0x90);
+            buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else {
@@ -331,7 +329,7 @@ public final class PacketEncoder {
         }
         */
         // filler
-        buffer.writeZero(2);
+        buffer.writeShort((short)0);
     }
 
     /**
@@ -358,10 +356,9 @@ public final class PacketEncoder {
      * @param buffer
      * @param fieldCount
      */
-    public void writeResultSetHeaderBody(ByteBuf buffer, int fieldCount) {
+    public void writeResultSetHeaderBody(PacketWriter buffer, int fieldCount) {
         // field count
-        BufferUtils.writeLength(buffer, fieldCount);
-
+        buffer.writeLength(fieldCount);
     }
 
     /**
@@ -388,132 +385,138 @@ public final class PacketEncoder {
      * @param buffer
      * @param fieldValues
      */
-    public void writeRowBinaryBody(ByteBuf buffer, long pRecord, CursorMeta meta, int nColumns) {
+    public void writeRowBinaryBody(PacketWriter buffer, long pRecord, CursorMeta meta, int nColumns) {
         if ((pRecord != 0) && (nColumns >0))
         {
             // start of package
-            buffer.writeByte(0);
+            buffer.writeByte((byte)0);
             
             int nullByteCnt = (nColumns+7+2)/8;
 
             byte[] nullBitmap = new byte[nullByteCnt];
-            int nullPos = buffer.writerIndex();
+            int nullPos = buffer.position();
             
             buffer.writeBytes(nullBitmap);
 
             for (int i=0; i<nColumns; i++)
             {
-                	long pValue = Record.getValueAddress(pRecord, i);
-                	if (pValue != 0) {
-                    	writeValue(buffer, meta.getColumn(i), pValue);
-                	}
-                	else {
-                    	nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
-                	}
+                    long pValue = Record.getValueAddress(pRecord, i);
+                    if (pValue != 0) {
+                        writeValue(buffer, meta.getColumn(i), pValue);
+                    }
+                    else {
+                        nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
+                    }
             }
     
-            int endPos = buffer.writerIndex();
+            int endPos = buffer.position();
             
-            buffer.writerIndex(nullPos);
+            buffer.position(nullPos);
             buffer.writeBytes(nullBitmap);
 
-            buffer.writerIndex(endPos);
+            buffer.position(endPos);
         }
     }
 
-    private void writeValue(ByteBuf buffer, FieldMeta meta, long pValue) {
+    private void writeValue(PacketWriter buffer, FieldMeta meta, long pValue) {
         if (writeValueFast(buffer, meta, pValue)) {
             return;
         }
         writeValueSlow(buffer, meta, pValue);
     }
 
-    private boolean writeValueFast(ByteBuf buffer, FieldMeta meta, long pValue) {
+    private boolean writeValueFast(PacketWriter buffer, FieldMeta meta, long pValue) {
         DataType type = meta.getType();
         byte format = Value.getFormat(null, pValue);
         if (type.getSqlType() == Types.TINYINT) {
             if (format == Value.FORMAT_INT4) {
-                buffer.writeByte(Int4.get(pValue));
+                buffer.writeByte((byte)Int4.get(pValue));
                 return true;
             }
             else if (format == Value.FORMAT_INT8) {
-                buffer.writeByte((int) Int8.get(null, pValue));
+                buffer.writeByte((byte)Int8.get(null, pValue));
                 return true;
             }
         }
         else if (type.getJavaType() == Boolean.class) {
             boolean b = FishBool.get(null, pValue);
-            buffer.writeByte(b ? 1 : 0);
+            buffer.writeByte((byte)(b ? 1 : 0));
             return true;
         }
         else if (type.getJavaType() == Integer.class) {
             if (format == Value.FORMAT_INT4) {
-                BufferUtils.writeUB4(buffer, Int4.get(pValue));
+                buffer.writeUB4(Int4.get(pValue));
                 return true;
             }
             else if (format == Value.FORMAT_INT8) {
-                BufferUtils.writeUB4(buffer, (int) Int8.get(null, pValue));
+                buffer.writeUB4((int) Int8.get(null, pValue));
                 return true;
             }
         }
         else if (type.getJavaType() == Long.class) {
             if (format == Value.FORMAT_INT4) {
-                BufferUtils.writeLongLong(buffer, Int4.get(pValue));
+                buffer.writeLongLong(Int4.get(pValue));
                 return true;
             }
             else if (format == Value.FORMAT_INT8) {
-                BufferUtils.writeLongLong(buffer, Int8.get(null, pValue));
+                buffer.writeLongLong(Int8.get(null, pValue));
                 return true;
             }
         }
         else if (type.getJavaType() == Float.class) {
             if (format == Value.FORMAT_FLOAT4) {
-                BufferUtils.writeUB4(buffer, Float.floatToIntBits(Float4.get(null, pValue)));
+                buffer.writeUB4(Float.floatToIntBits(Float4.get(null, pValue)));
                 return true;
             }
         }
         else if (type.getJavaType() == Double.class) {
             if (format == Value.FORMAT_FLOAT4) {
-                BufferUtils.writeLongLong(buffer, Double.doubleToLongBits(Float8.get(null, pValue)));
+                buffer.writeLongLong(Double.doubleToLongBits(Float8.get(null, pValue)));
+                return true;
+            }
+        }
+        else if (type.getJavaType() == String.class) {
+            if (format == Value.FORMAT_UTF8 && getEncoder() == Charsets.UTF_8) {
+                buffer.writeLenStringUtf8(pValue);
                 return true;
             }
         }
         return false;
     }
 
-    private void writeValueSlow(ByteBuf buffer, FieldMeta meta, long pValue) {
+    private void writeValueSlow(PacketWriter buffer, FieldMeta meta, long pValue) {
         Object value = FishObject.get(null, pValue);
         DataType type = meta.getType();
         if (type.getSqlType() == Types.TINYINT) {
-            buffer.writeByte((Integer)value);
+            buffer.writeByte((byte)value);
         }
         else if (type.getJavaType()==Integer.class) {
-            BufferUtils.writeUB4(buffer,(Integer)value);
+            buffer.writeUB4((Integer)value);
         }
         else if (type.getJavaType()==Long.class) {
-            BufferUtils.writeLongLong(buffer,(Long)value);
+            buffer.writeLongLong((Long)value);
         }
         else if (type.getJavaType()==Float.class) {
-            BufferUtils.writeUB4(buffer, Float.floatToIntBits((Float)value));
+            buffer.writeUB4(Float.floatToIntBits((Float)value));
         }
         else if (type.getJavaType()==Double.class) {
-            BufferUtils.writeLongLong(buffer,Double.doubleToLongBits((Double)value));
+            buffer.writeLongLong(Double.doubleToLongBits((Double)value));
         }
         else if (type.getJavaType()==Timestamp.class) {
-            BufferUtils.writeTimestamp(buffer, (Timestamp)value);
+            buffer.writeTimestamp((Timestamp)value);
         }
         else if (type.getJavaType()==Date.class) {
-            BufferUtils.writeDate(buffer, (Date)value);
+            buffer.writeDate((Date)value);
         }
         else if (type.getJavaType()==byte[].class) {
-            BufferUtils.writeWithLength(buffer, (byte[])value);
+            buffer.writeWithLength((byte[])value);
         }
         else {
-            BufferUtils.writeLenString(buffer,value.toString(), getEncoder());
+            buffer.writeLenString(value.toString(), getEncoder());
         }
-	}
+    }
 
-	/**
+    /**
      * 
      * From server to client. One packet for each row in the result set.
      * 
@@ -538,21 +541,21 @@ public final class PacketEncoder {
      * @param nColumns 
      * @param rowRec
      */
-    public void writeRowTextBody(ByteBuf buffer, long pRecord, int nColumns) {
+    public void writeRowTextBody(PacketWriter buffer, long pRecord, int nColumns) {
         for (int i = 0; i < nColumns; i++) {
             Object fv = Record.getValue(pRecord, i);
             if (fv instanceof Boolean) {
-            	// mysql has no boolean it is actually tinyint
-            	fv = ((Boolean)fv) ? 1 : 0;
+                // mysql has no boolean it is actually tinyint
+                fv = ((Boolean)fv) ? 1 : 0;
             }
             if (fv == null) {
                 // null mark is 251
                 buffer.writeByte((byte) 251);
             } 
             else if (fv instanceof Duration) {
-            	    Duration t = (Duration)fv;
-            	    String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
-            	    BufferUtils.writeLenString(buffer, text, getEncoder());
+                    Duration t = (Duration)fv;
+                    String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
+                    buffer.writeLenString(text, getEncoder());
             }
             else if (fv instanceof Timestamp) {
                 // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
@@ -560,7 +563,7 @@ public final class PacketEncoder {
                 Timestamp ts = (Timestamp)fv;
                 if (ts.getTime() == Long.MIN_VALUE) {
                     // special case for mysql '0000-00-00 00:00:00'
-                    BufferUtils.writeLenString(buffer, "0000-00-00 00:00:00", getEncoder());
+                    buffer.writeLenString("0000-00-00 00:00:00", getEncoder());
                 }
                 else {
                     String text;
@@ -570,15 +573,15 @@ public final class PacketEncoder {
                     else {
                         text = TIMESTAMP29_FORMAT.format(ts);
                     }
-                    BufferUtils.writeLenString(buffer, text, getEncoder());
+                    buffer.writeLenString(text, getEncoder());
                 }
             }
             else if (fv instanceof byte[]){
-                BufferUtils.writeWithLength(buffer, (byte[])fv);
+                buffer.writeWithLength((byte[])fv);
             }
             else if ((fv instanceof Date) && (((Date)fv).getTime() == Long.MIN_VALUE)) {
                 // special case for mysql '0000-00-00' 
-                BufferUtils.writeLenString(buffer, "0000-00-00", getEncoder());
+                buffer.writeLenString("0000-00-00", getEncoder());
             }
             else 
             {
@@ -588,7 +591,7 @@ public final class PacketEncoder {
                     buffer.writeByte((byte) 0);
                 } 
                 else {
-                    BufferUtils.writeLenString(buffer, val, getEncoder());
+                    buffer.writeLenString(val, getEncoder());
                 }
             }
         }
@@ -624,46 +627,47 @@ public final class PacketEncoder {
      * @param charSet
      * @param status
      */
-    public static void writeHandshakeBody(ByteBuf buffer, 
-    		                              String serverVersion, 
-    		                              byte protocolVersion, 
-    		                              long threadId, 
-    		                              int capability, 
-    		                              byte charSet, 
-    		                              int status,
-    		                              AuthPlugin plugin) {
+    public static void writeHandshakeBody(PacketWriter buffer, 
+                                          String serverVersion, 
+                                          byte protocolVersion, 
+                                          long threadId, 
+                                          int capability, 
+                                          byte charSet, 
+                                          int status,
+                                          AuthPlugin plugin) {
         byte[] seed = plugin.getSeed();
         buffer.writeByte(protocolVersion);
-        BufferUtils.writeString(buffer, serverVersion);
-        BufferUtils.writeUB4(buffer, threadId);
+        buffer.writeString(serverVersion);
+        buffer.writeUB4(threadId);
         // seed part 1, first 8 bytes
         for (int i=0; i<8; i++) {
             buffer.writeByte(seed[i]);
         }
-        buffer.writeByte(0);
+        buffer.writeByte((byte)0);
         // lower 16 bits of sever capacity
-        BufferUtils.writeInt(buffer, capability);
+        buffer.writeInt(capability);
         // serverCharsetIndex
         buffer.writeByte(charSet);
         // server status 
-        BufferUtils.writeInt(buffer, status);
+        buffer.writeInt(status);
         // upper 16 bits of server capacity
-        BufferUtils.writeInt(buffer, capability >>> 16);
+        buffer.writeInt(capability >>> 16);
         // plugin data length
         if ((capability & MysqlServerHandler.CLIENT_PLUGIN_AUTH) != 0) {
-        	    buffer.writeByte(0x15);
+            buffer.writeByte((byte)0x15);
         }
         else {
-        	    buffer.writeByte(0);
+            buffer.writeByte((byte)0);
         }
         // fill the rest 10 bytes with 0
-        buffer.writeZero(10);
+        buffer.writeLongLong(0);
+        buffer.writeShort((short)10);
         if ((capability & MysqlServerHandler.CLIENT_PLUGIN_AUTH) != 0) {
             for (int i=8; i<seed.length; i++) {
                 buffer.writeByte(seed[i]);
             }
-            buffer.writeByte(0);
-        	    BufferUtils.writeString(buffer, plugin.getName());
+            buffer.writeByte((byte)0);
+            buffer.writeString(plugin.getName());
         }
     }
 
@@ -686,30 +690,30 @@ public final class PacketEncoder {
      * 
      * @param buffer
      */
-    public void writeOKBody(ByteBuf buffer, long affectedRows, long insertId, String message, Session session) {
+    public void writeOKBody(PacketWriter buffer, long affectedRows, long insertId, String message, Session session) {
         // filed count
-        buffer.writeByte(0x00);
+        buffer.writeByte((byte)0);
         // affected rows
-        BufferUtils.writeLength(buffer, affectedRows);
+        buffer.writeLength(affectedRows);
         // inserId
-        BufferUtils.writeLength(buffer, insertId);
+        buffer.writeLength(insertId);
         // server status
         int status = 0;
         if (session.isAutoCommit()) {
-        	status |= SERVER_STATUS_AUTOCOMMIT;
+            status |= SERVER_STATUS_AUTOCOMMIT;
         }
         Transaction trx = session.getTransaction();
         if (trx != null) {
-        	if (trx.getTrxId() < 0) {
-        		status |= SERVER_STATUS_IN_TRANS;
-        	}
+            if (trx.getTrxId() < 0) {
+                status |= SERVER_STATUS_IN_TRANS;
+            }
         }
-        BufferUtils.writeUB2(buffer, status);
+        buffer.writeUB2(status);
         // warning count = 0
-        BufferUtils.writeUB2(buffer, 0);
+        buffer.writeUB2(0);
         // message
         if (message != null) {
-            BufferUtils.writeLenString(buffer, message, Charsets.UTF_8);
+            buffer.writeLenString(message, Charsets.UTF_8);
         }
     }
 
@@ -733,11 +737,11 @@ public final class PacketEncoder {
      * @param errno
      * @param message
      */
-    public void writeErrorBody(ByteBuf buffer, int errno, ByteBuffer message) {
+    public void writeErrorBody(PacketWriter buffer, int errno, ByteBuffer message) {
         // field count
         buffer.writeByte((byte) 0xff);
         // error number
-        BufferUtils.writeUB2(buffer, errno);
+        buffer.writeUB2(errno);
         // sql state mark
         buffer.writeByte((byte) '#');
         // sql state
@@ -767,23 +771,23 @@ public final class PacketEncoder {
      * @param out
      * @param session 
      */
-    public void writeEOFBody(ByteBuf out, Session session) {
+    public void writeEOFBody(PacketWriter out, Session session) {
         // field count
         out.writeByte((byte) 0xfe);
         // warning count = 0
-        BufferUtils.writeUB2(out, 0);
+        out.writeUB2(0);
         // status = 2
         int status = 0x20;
         if (session.isAutoCommit()) {
-        	status |= SERVER_STATUS_AUTOCOMMIT;
+            status |= SERVER_STATUS_AUTOCOMMIT;
         }
         Transaction trx = session.getTransaction();
         if (trx != null) {
-        	if (trx.getTrxId() < 0) {
-        		status |= SERVER_STATUS_IN_TRANS;
-        	}
+            if (trx.getTrxId() < 0) {
+                status |= SERVER_STATUS_IN_TRANS;
+            }
         }
-        BufferUtils.writeUB2(out, status);
+        out.writeUB2(status);
     }
 
     /**
@@ -793,38 +797,38 @@ public final class PacketEncoder {
      * <pre>
      * Bytes                        Name
      * -----                        ----
-     *	1              [15] COM_REGISTER_SLAVE
-     *	4              server-id
-     *	1              slaves hostname length
-     *	string[$len]   slaves hostname
-     *	1              slaves user len
-     *	string[$len]   slaves user
-     *	1              slaves password len
-     *	string[$len]   slaves password
-     *	2              slaves mysql-port
-     *	4              replication rank
-     *	4              master-id
+     *    1              [15] COM_REGISTER_SLAVE
+     *    4              server-id
+     *    1              slaves hostname length
+     *    string[$len]   slaves hostname
+     *    1              slaves user len
+     *    string[$len]   slaves user
+     *    1              slaves password len
+     *    string[$len]   slaves password
+     *    2              slaves mysql-port
+     *    4              replication rank
+     *    4              master-id
      * 
      * @see https://dev.mysql.com/doc/internals/en/com-register-slave.html
      * </pre>
      * 
      */
-    public void writeRegisterSlave(ByteBuf buffer, int serverId) {
+    public void writeRegisterSlave(PacketWriter buffer, int serverId) {
         // code for COM_REGISTER_SLAVE is 0x15 
-    	buffer.writeByte(0x15);
-        BufferUtils.writeUB4(buffer, serverId);
+        buffer.writeByte((byte)0x15);
+        buffer.writeUB4(serverId);
         // usually empty
-        BufferUtils.writeLenString(buffer, "", Charsets.UTF_8);
+        buffer.writeLenString("", Charsets.UTF_8);
         // usually empty
-        BufferUtils.writeLenString(buffer, "", Charsets.UTF_8);
+        buffer.writeLenString("", Charsets.UTF_8);
         // usually empty
-        BufferUtils.writeLenString(buffer, "", Charsets.UTF_8);
+        buffer.writeLenString("", Charsets.UTF_8);
         // usually empty
-        BufferUtils.writeUB2(buffer, 0);
+        buffer.writeUB2(0);
         // replication rank to be ignored
         buffer.writeBytes(new byte[4]);
         // master id, usually 0
-        BufferUtils.writeUB4(buffer, 0);
+        buffer.writeUB4(0);
     }
 
 
@@ -835,30 +839,29 @@ public final class PacketEncoder {
      * <pre>
      * Bytes                        Name
      * -----                        ----
-     *	1              [12] COM_BINLOG_DUMP
-     *	4              binlog-pos
-     *	2              flags
-     *	4              server-id
-     *	string[EOF]    binlog-filename
+     *    1              [12] COM_BINLOG_DUMP
+     *    4              binlog-pos
+     *    2              flags
+     *    4              server-id
+     *    string[EOF]    binlog-filename
      * 
      * @see https://dev.mysql.com/doc/internals/en/com-binlog-dump.html
      * </pre>
      * 
      */
-    public void writeBinlogDump(ByteBuf buffer, 
-    		                              long binlogPos, 
-    		                              int serverId,
-    		                              String binlogName
-    		                              ) {
+    public void writeBinlogDump(PacketWriter buffer, 
+                                long binlogPos, 
+                                int serverId,
+                                String binlogName) {
         // code for COM_BINLOG_DUMP is 0x12 
-    	buffer.writeByte(0x12);
-        BufferUtils.writeUB4(buffer, binlogPos);
+        buffer.writeByte((byte)0x12);
+        buffer.writeUB4(binlogPos);
         // flag, 0 means don't send EOF if no more bing log
-        BufferUtils.writeUB2(buffer, 0);
+        buffer.writeUB2(0);
         // server id of this slave
-        BufferUtils.writeUB4(buffer, serverId);
+        buffer.writeUB4(serverId);
         // binlog file name
-        BufferUtils.writeString(buffer, binlogName);
+        buffer.writeString(binlogName);
     }
 
     /**
@@ -868,38 +871,37 @@ public final class PacketEncoder {
      * <pre>
      * Bytes                        Name
      * -----                        ----
-     *	2              capability flags, CLIENT_PROTOCOL_41 never set
-     *	3              max-packet size
-     *	string[NUL]    username
-     *	string[NUL]    auth-response
-     *	string[NUL]    database
+     *    2              capability flags, CLIENT_PROTOCOL_41 never set
+     *    3              max-packet size
+     *    string[NUL]    username
+     *    string[NUL]    auth-response
+     *    string[NUL]    database
      * 
      * @see https://dev.mysql.com/doc/internals/en/com-binlog-dump.html
      * </pre>
      * 
      */
-    public void writeHandshakeResponse(ByteBuf buf, 
-    										int capability, 
-    										String user,
-    										String password
-    		                              ) {
-    	// capability flags
-    	BufferUtils.writeInt(buf, 42117);
-    	// max-packet size, 0?
-    	BufferUtils.writeLongInt(buf, 0);
-    	BufferUtils.writeString(buf, user);
-    	BufferUtils.writeString(buf, password);
-    	// default dbname
-    	BufferUtils.writeString(buf, "");
+    public void writeHandshakeResponse(PacketWriter buf, 
+                                       int capability, 
+                                       String user,
+                                       String password) {
+        // capability flags
+        buf.writeInt(42117);
+        // max-packet size, 0?
+        buf.writeLongInt(0);
+        buf.writeString(user);
+        buf.writeString(password);
+        // default dbname
+        buf.writeString("");
     }
     
     private Charset getEncoder() {
         Charset result = null;
-        if (this.handler.session != null) {
-            result = this.handler.session.getConfig().getResultEncoder(); 
+        if (this.mysession.session != null) {
+            result = this.mysession.session.getConfig().getResultEncoder(); 
         }
         if (result == null) {
-            result = this.handler.fish.getOrca().getDefaultSession().getConfig().getResultEncoder();
+            result = this.mysession.fish.getOrca().getDefaultSession().getConfig().getResultEncoder();
         }
         return result;
     }

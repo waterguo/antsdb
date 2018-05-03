@@ -13,7 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
 
@@ -101,7 +100,7 @@ public final class FishUtf8 {
 			return 0;
 		}
 		int size = string.length() * 3;
-		long pResult = heap.alloc(HEADER_SIZE + size);;
+		long pResult = heap.alloc(HEADER_SIZE + size, false);;
 		AtomicLong pData = new AtomicLong(pResult + HEADER_SIZE);
 		Unsafe.putByte(pResult, Value.FORMAT_UTF8);
 		Utf8.encode(string, n -> {
@@ -138,20 +137,11 @@ public final class FishUtf8 {
 		return size;
 	}
 	
-	public static String get(long pValue) {
-		AtomicInteger idx = new AtomicInteger();
-		int size = Unsafe.getInt3(pValue + 1);
-		long pData = pValue + 4;
-		String s = _utf8.toString(() -> {
-			int pos = idx.getAndIncrement();
-			if (pos >= size) {
-				return -1;
-			}
-			int ch = Unsafe.getByte(pData + pos);
-			return ch;
-		});
-		return s;
-	}
+    public static String get(long pValue) {
+        final int size = Unsafe.getInt3(pValue + 1);
+        String result = Utf8.decode(pValue + 4, size);
+        return result;
+    }
 
 	public static int compare(long pX, long pY) {
 		IntSupplier scannerX = new FishUtf8(pX).scan();

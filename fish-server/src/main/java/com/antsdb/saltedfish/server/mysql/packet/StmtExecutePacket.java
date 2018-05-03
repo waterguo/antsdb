@@ -36,8 +36,8 @@ public class StmtExecutePacket extends RecievePacket {
 
     @Override
     public void read(MysqlServerHandler handler, ByteBuf in) {
-        	this.content = in.readSlice(this.packetLength);
-        	content.retain();
+        this.content = in.readSlice(this.packetLength);
+        content.retain();
     }
     
     public void read_(MysqlServerHandler handler) {

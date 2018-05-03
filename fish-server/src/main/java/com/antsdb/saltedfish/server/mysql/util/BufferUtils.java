@@ -29,6 +29,9 @@ import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.charset.Decoder;
+import com.antsdb.saltedfish.cpp.FishUtf8;
+import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.server.mysql.BufferWriter;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -51,6 +54,14 @@ public final class BufferUtils {
         return n;
     }
 
+    public static int readLongInt(ByteBuffer buf) {
+        byte b0 = buf.get();
+        byte b1 = buf.get();
+        byte b2 = buf.get();
+        int n = (b0 & 0xff) | ((b1 & 0xff) << 8) | ((b2 & 0xff) << 16);
+        return n;
+    }
+
     public static String readString(ByteBuf buf) {
         String s;
         int bytes = buf.bytesBefore((byte)0);
@@ -67,11 +78,42 @@ public final class BufferUtils {
         return s;
     }
 
+    public static String readString(ByteBuffer buf) {
+        String result;
+        int bytes = -1;
+        for (int i=buf.position(); i<=buf.limit(); i++) {
+            if (buf.get(i) == 0) {
+                bytes = i - buf.position();
+                break;
+            }
+        }
+        if (bytes == -1) {
+            // string might not be terminated by 0
+            result = Charset.defaultCharset().decode(buf).toString();
+        }
+        else {
+            int keep = buf.limit();
+            buf.limit(buf.position() + bytes);
+            result = Charset.defaultCharset().decode(buf).toString();
+            buf.limit(keep);
+            buf.get();
+        }
+        return result;
+    }
+
     public static int readLong(ByteBuf in) {
         int l = (int) (in.readByte() & 0xff);
         l |= (int) (in.readByte() & 0xff) << 8;
         l |= (int) (in.readByte() & 0xff) << 16;
         l |= (int) (in.readByte() & 0xff) << 24;
+        return l;
+    }
+
+    public static int readLong(ByteBuffer in) {
+        int l = (int) (in.get() & 0xff);
+        l |= (int) (in.get() & 0xff) << 8;
+        l |= (int) (in.get() & 0xff) << 16;
+        l |= (int) (in.get() & 0xff) << 24;
         return l;
     }
 
@@ -87,13 +129,35 @@ public final class BufferUtils {
         return l;
     }
 
+    public static long readLongLong(ByteBuffer in) {
+        long l = (long) (in.get() & 0xff);
+        l |= (long) (in.get() & 0xff) << 8;
+        l |= (long) (in.get() & 0xff) << 16;
+        l |= (long) (in.get() & 0xff) << 24;
+        l |= (long) (in.get() & 0xff) << 32;
+        l |= (long) (in.get() & 0xff) << 40;
+        l |= (long) (in.get() & 0xff) << 48;
+        l |= (long) (in.get() & 0xff) << 56;
+        return l;
+    }
+
     public static double readDouble(ByteBuf in) {
+        return Double.longBitsToDouble(readLongLong(in));
+    }
+
+    public static double readDouble(ByteBuffer in) {
         return Double.longBitsToDouble(readLongLong(in));
     }
 
     public static int readInt(ByteBuf in) {
         byte b0 = in.readByte();
         byte b1 = in.readByte();
+        return (b0 & 0xff) | ((b1 & 0xff) << 8);
+    }
+
+    public static int readInt(ByteBuffer in) {
+        byte b0 = in.get();
+        byte b1 = in.get();
         return (b0 & 0xff) | ((b1 & 0xff) << 8);
     }
 
@@ -129,7 +193,23 @@ public final class BufferUtils {
         return s;
     }
 
+    public static String readStringWithLength(ByteBuffer in) {
+        int length = (int) readLength(in);
+        if (length <= 0) {
+            return "";
+        }
+        byte[] result = new byte[length];
+        in.get(result);
+        String s = new String(result, 0, length);
+        return s;
+    }
+
     public static BigDecimal readBigDecimal(ByteBuf in)  {
+        String src = readStringWithLength(in);
+        return src == null ? null : new BigDecimal(src);
+    }
+
+    public static BigDecimal readBigDecimal(ByteBuffer in)  {
         String src = readStringWithLength(in);
         return src == null ? null : new BigDecimal(src);
     }
@@ -142,7 +222,21 @@ public final class BufferUtils {
         return Duration.ofSeconds(hour * 3600 + minute * 60 + second);
     }
 
+    public static Duration readTime(ByteBuffer in) {
+        in.getInt();
+        in.getShort();
+        int hour = readInt(in);
+        int minute = readInt(in);
+        int second = readInt(in);
+        return Duration.ofSeconds(hour * 3600 + minute * 60 + second);
+    }
+
     public static Date readDate(ByteBuf in) {
+        Timestamp ts = readTimestamp(in);
+        return new Date(ts.getTime());
+    }
+
+    public static Date readDate(ByteBuffer in) {
         Timestamp ts = readTimestamp(in);
         return new Date(ts.getTime());
     }
@@ -169,51 +263,70 @@ public final class BufferUtils {
         }
     }
 
-    public static void writeTimestamp(ByteBuf buf, Timestamp date) {
-        buf.writeByte(11);
+    public static Timestamp readTimestamp(ByteBuffer in) {
+        byte length = in.get();
+        int year = readInt(in);
+        byte month = readByte(in);
+        byte date = readByte(in);
+        int hour = readByte(in);
+        int minute = readByte(in);
+        int second = readByte(in);
+        if (length == 11) {
+            long nanos = readUB4(in) * 1000;
+            Calendar cal = getLocalCalendar();
+            cal.set(year, --month, date, hour, minute, second);
+            Timestamp time = new Timestamp(cal.getTimeInMillis());
+            time.setNanos((int) nanos);
+            return time;
+        } else {
+            Calendar cal = getLocalCalendar();
+            cal.set(year, --month, date, hour, minute, second);
+            return new Timestamp(cal.getTimeInMillis());
+        }
+    }
+
+    public static void writeTimestamp(BufferWriter buf, Timestamp date) {
+        buf.writeByte((byte)11);
         if (date.getTime() == Long.MIN_VALUE) {
             // 0 datetime in mysql
             BufferUtils.writeUB2(buf, 0);
-            buf.writeByte(0);
-            buf.writeByte(0);
-            buf.writeByte(0);
-            buf.writeByte(0);
-            buf.writeByte(0);
+            buf.writeInt(0);
+            buf.writeByte((byte)0);
             BufferUtils.writeUB4(buf, 0);
         }
         else {
             Calendar cal = Calendar.getInstance();
             cal.setTime(date);
             BufferUtils.writeUB2(buf, cal.get(Calendar.YEAR));
-            buf.writeByte(cal.get(Calendar.MONTH)+1);
-            buf.writeByte(cal.get(Calendar.DAY_OF_MONTH));
-            buf.writeByte(cal.get(Calendar.HOUR_OF_DAY));
-            buf.writeByte(cal.get(Calendar.MINUTE));
-            buf.writeByte(cal.get(Calendar.SECOND));
+            buf.writeByte((byte)(cal.get(Calendar.MONTH)+1));
+            buf.writeByte((byte)cal.get(Calendar.DAY_OF_MONTH));
+            buf.writeByte((byte)cal.get(Calendar.HOUR_OF_DAY));
+            buf.writeByte((byte)cal.get(Calendar.MINUTE));
+            buf.writeByte((byte)cal.get(Calendar.SECOND));
             BufferUtils.writeUB4(buf, cal.get(Calendar.MILLISECOND)*1000);
         }
     }
 
-    public static void writeDate(ByteBuf buf, java.util.Date date) {
-        buf.writeByte(7);
+    public static void writeDate(BufferWriter buf, java.util.Date date) {
+        buf.writeByte((byte)7);
         if (date.getTime() == Long.MIN_VALUE) {
             // 0 date in mysql
             BufferUtils.writeUB2(buf, 0);
-            buf.writeByte(0);
-            buf.writeByte(0);
-            buf.writeByte(0);
-            buf.writeByte(0);
-            buf.writeByte(0);
+            buf.writeByte((byte)0);
+            buf.writeByte((byte)0);
+            buf.writeByte((byte)0);
+            buf.writeByte((byte)0);
+            buf.writeByte((byte)0);
         }
         else {
             Calendar cal = Calendar.getInstance();
             cal.setTime(date);
             BufferUtils.writeUB2(buf, cal.get(Calendar.YEAR));
-            buf.writeByte(cal.get(Calendar.MONTH)+1);
-            buf.writeByte(cal.get(Calendar.DAY_OF_MONTH));
-            buf.writeByte(cal.get(Calendar.HOUR_OF_DAY));
-            buf.writeByte(cal.get(Calendar.MINUTE));
-            buf.writeByte(cal.get(Calendar.SECOND));
+            buf.writeByte((byte)(cal.get(Calendar.MONTH)+1));
+            buf.writeByte((byte)cal.get(Calendar.DAY_OF_MONTH));
+            buf.writeByte((byte)cal.get(Calendar.HOUR_OF_DAY));
+            buf.writeByte((byte)cal.get(Calendar.MINUTE));
+            buf.writeByte((byte)cal.get(Calendar.SECOND));
         }
     }
 
@@ -222,8 +335,17 @@ public final class BufferUtils {
         return Float.intBitsToFloat(readLong(in));
     }
 
+    public static float readFloat(ByteBuffer in) {
+        return Float.intBitsToFloat(readLong(in));
+    }
+
     public static byte readByte(ByteBuf in) {
         byte b0 = in.readByte();
+        return b0 ;
+    }
+
+    public static byte readByte(ByteBuffer in) {
+        byte b0 = in.get();
         return b0 ;
     }
 
@@ -232,6 +354,14 @@ public final class BufferUtils {
         l |= (in.readByte() & 0xff) << 8;
         l |= (in.readByte() & 0xff) << 16;
         l |= (in.readByte() & 0xff) << 24;
+        return l;
+    }
+
+    public static long readUB4(ByteBuffer in) {
+        long l = in.get() & 0xff;
+        l |= (in.get() & 0xff) << 8;
+        l |= (in.get() & 0xff) << 16;
+        l |= (in.get() & 0xff) << 24;
         return l;
     }
 
@@ -290,6 +420,20 @@ public final class BufferUtils {
 
         byte[] ab = new byte[length];
         in.readBytes(ab, 0, length);
+        return ab;
+    }
+
+    // read bytes with known length
+    public static byte[] readBytes(ByteBuffer in, int length) {
+        if(length==NULL_LENGTH) {
+            return null;
+        }
+        if (length <= 0) {
+            return EMPTY_BYTES;
+        }
+
+        byte[] ab = new byte[length];
+        in.get(ab, 0, length);
         return ab;
     }
 
@@ -356,6 +500,22 @@ public final class BufferUtils {
         }
     }
 
+    public static long readLength(ByteBuffer in) {
+        int length = in.get() & 0xff;
+        switch (length) {
+        case 251:
+            return NULL_LENGTH;
+        case 252:
+            return readInt(in);
+        case 253:
+            return readLongInt(in);
+        case 254:
+            return readLongLong(in);
+        default:
+            return length;
+        }
+    }
+
     public static final int getLength(long length) {
         if (length < 251) {
             return 1;
@@ -385,7 +545,7 @@ public final class BufferUtils {
         return getLength(src.getBytes());
     }
 
-    public static final void writeLength(ByteBuf buffer, long l) {
+    public static final void writeLength(BufferWriter buffer, long l) {
         if (l < 251) {
             buffer.writeByte((byte) l);
         } else if (l < 0x10000L) {
@@ -400,25 +560,25 @@ public final class BufferUtils {
         }
     }
 
-    public static final void writeUB2(ByteBuf buf, int i) {
+    public static final void writeUB2(BufferWriter buf, int i) {
         buf.writeByte((byte) (i & 0xff));
         buf.writeByte((byte) (i >>> 8));
     }
 
-    public static final void writeUB3(ByteBuf buf, int i) {
+    public static final void writeUB3(BufferWriter buf, int i) {
         buf.writeByte((byte) (i & 0xff));
         buf.writeByte((byte) (i >>> 8));
         buf.writeByte((byte) (i >>> 16));
     }
 
-    public static final void writeUB4(ByteBuf buf, long l) {
+    public static final void writeUB4(BufferWriter buf, long l) {
         buf.writeByte((byte) (l & 0xff));
         buf.writeByte((byte) (l >>> 8));
         buf.writeByte((byte) (l >>> 16));
         buf.writeByte((byte) (l >>> 24));
     }
 
-    public static void writeLongInt(ByteBuf buf, int length) {
+    public static void writeLongInt(BufferWriter buf, int length) {
         buf.writeByte((byte) (length & 0xff));
         buf.writeByte((byte) (length >>> 8));
         buf.writeByte((byte) (length >>> 16));
@@ -454,19 +614,19 @@ public final class BufferUtils {
         };
     }
 
-    public static void writeInt(ByteBuf buf, int i) {
+    public static void writeInt(BufferWriter buf, int i) {
         buf.writeByte((byte) (i & 0xff));
         buf.writeByte((byte) (i >>> 8));
     }
 
-    public static void writeLong(ByteBuf buf, long i) {
+    public static void writeLong(BufferWriter buf, long i) {
         buf.writeByte((byte) (i & 0xff));
         buf.writeByte((byte) (i >>> 8));
         buf.writeByte((byte) (i >>> 16));
         buf.writeByte((byte) (i >>> 24));
     }
     
-    public static void writeFieldLength(ByteBuf buf, long length) {
+    public static void writeFieldLength(BufferWriter buf, long length) {
         if (length < 251) {
             buf.writeByte((byte) length);
         } 
@@ -484,7 +644,7 @@ public final class BufferUtils {
         }
     }
 
-    public static void writeLongLong(ByteBuf buf, long i) {
+    public static void writeLongLong(BufferWriter buf, long i) {
         buf.writeByte((byte) (i & 0xff));
         buf.writeByte((byte) (i >>> 8));
         buf.writeByte((byte) (i >>> 16));
@@ -495,7 +655,18 @@ public final class BufferUtils {
         buf.writeByte((byte) (i >>> 56));
     }
 
-    public static void writeLenString(ByteBuf buf, String s, Charset encoder) {
+    public static void writeLenStringUtf8(BufferWriter buf, long pValue) {
+        if (pValue == 0) {
+            writeFieldLength(buf, 0);
+            return;
+        }
+        int len = FishUtf8.getSize(Value.FORMAT_UTF8, pValue) - FishUtf8.HEADER_SIZE;
+        writeFieldLength(buf, len);
+        long pData = pValue + FishUtf8.HEADER_SIZE;
+        buf.writeBytes(pData, len);
+    }
+
+    public static void writeLenString(BufferWriter buf, String s, Charset encoder) {
         if (s == null) {
             writeFieldLength(buf, 0);
             return;
@@ -505,15 +676,15 @@ public final class BufferUtils {
         buf.writeBytes(bb);
     }
 
-    public static void writeLenString(ByteBuf buf, long pValue) {
-    	if (pValue == 0) {
+    public static void writeLenString(BufferWriter buf, long pValue) {
+        if (pValue == 0) {
             writeFieldLength(buf, 0);
             return;
-    	}
-    	throw new NotImplementedException();
+        }
+        throw new NotImplementedException();
     }
     
-    public static final void writeWithLength(ByteBuf buffer, byte[] src, byte nullValue) {
+    public static final void writeWithLength(BufferWriter buffer, byte[] src, byte nullValue) {
         if (src == null) {
             buffer.writeByte(nullValue);
         } else {
@@ -521,23 +692,24 @@ public final class BufferUtils {
         }
     }
 
-    public static final void writeWithLength(ByteBuf buffer, byte[] src) {
-        if (src==null || src.length==0)
-        {
+    public static final void writeWithLength(BufferWriter buffer, byte[] src) {
+        if (src==null || src.length==0) {
             buffer.writeByte((byte)0);
         }
-        else
-        {
+        else {
             int length = src==null? 0: src.length;
             if (length < 251) {
                 buffer.writeByte((byte) length);
-            } else if (length < 0x10000L) {
+            } 
+            else if (length < 0x10000L) {
                 buffer.writeByte((byte) 252);
                 writeUB2(buffer, length);
-            } else if (length < 0x1000000L) {
+            } 
+            else if (length < 0x1000000L) {
                 buffer.writeByte((byte) 253);
                 writeUB3(buffer, length);
-            } else {
+            } 
+            else {
                 buffer.writeByte((byte) 254);
                 writeLong(buffer, length);
             }
@@ -546,21 +718,20 @@ public final class BufferUtils {
     }
 
     public static final void writeWithNull(ByteBuf buffer, byte[] src) {
-        if (src!=null)
-        {
+        if (src!=null) {
             buffer.writeBytes(src);
         }
         buffer.writeByte((byte) 0);
     }
 
-    private static void writeStringNoNull(ByteBuf buf, String s) {
+    private static void writeStringNoNull(BufferWriter buf, String s) {
         Charset cs = Charset.defaultCharset();
         buf.writeBytes(cs.encode(s));
     }
     
-    public static void writeString(ByteBuf buf, String s) {
+    public static void writeString(BufferWriter buf, String s) {
         writeStringNoNull(buf, s);
-        buf.writeByte(0);
+        buf.writeByte((byte)0);
     }
     
     private static final ThreadLocal<Calendar> localCalendar = new ThreadLocal<Calendar>();

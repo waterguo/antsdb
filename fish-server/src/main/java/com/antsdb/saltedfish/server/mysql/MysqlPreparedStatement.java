@@ -14,13 +14,13 @@
 package com.antsdb.saltedfish.server.mysql;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.util.function.Consumer;
 
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
-import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.PreparedStatement;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.FishParameters;
@@ -37,8 +37,9 @@ public class MysqlPreparedStatement implements Closeable {
     PreparedStatement script;
     Heap heap = new FlexibleHeap();
     VaporizingRow row;
+    ByteBuffer meta;
     
-    public MysqlPreparedStatement(Orca orca, PreparedStatement script) {
+    public MysqlPreparedStatement(PreparedStatement script) {
         super();
         this.script = script;
         if (script.getParameterCount() > 0) {

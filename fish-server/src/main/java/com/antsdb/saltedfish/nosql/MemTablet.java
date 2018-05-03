@@ -1093,9 +1093,6 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
      * @return
      */
     HumpbackError recoverPut(long pKey, long version, long sp, Collection<MemTablet> past) {
-        if (version == 0) {
-            throw new IllegalArgumentException();
-        }
         ensureMutable();
         try {
             this.gate.incrementAndGet();
@@ -1420,12 +1417,12 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
         if (mustExist) {
             if ((rowState != RowState.EXIST) && (rowState != RowState.EXIST_AND_LOCKED)) {
-                throw new HumpbackException("unable to find row {}", getKeySpec(pKey));
+                return HumpbackError.MISSING;
             }
         }
         if (mustNotExist) {
             if ((rowState != RowState.NONEXIST) && (rowState != RowState.TOMBSTONE)) {
-                throw new HumpbackException("row {} already exists", getKeySpec(pKey));
+                return HumpbackError.EXISTS;
             }
         }
         return HumpbackError.SUCCESS;

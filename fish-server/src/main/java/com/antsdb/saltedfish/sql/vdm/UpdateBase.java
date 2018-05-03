@@ -35,52 +35,52 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author wgu0
  */
 abstract class UpdateBase extends Statement {
-	static Logger _log = UberUtil.getThisLogger();
-	
+    static Logger _log = UberUtil.getThisLogger();
+    
     GTable gtable;
     List<ColumnMeta> columns;
     List<Operator> values;
-	IndexEntryHandlers indexHandlers;
-	TableMeta table;
-	boolean isPrimaryKeyAffected = false;
+    IndexEntryHandlers indexHandlers;
+    TableMeta table;
+    boolean isPrimaryKeyAffected = false;
 
     public UpdateBase(Orca orca, TableMeta table, GTable gtable, List<ColumnMeta> columns, List<Operator> values) {
-		super();
-		this.gtable = gtable;
-		this.columns = columns;
-		this.values = values;
-		this.table = table;
+        super();
+        this.gtable = gtable;
+        this.columns = columns;
+        this.values = values;
+        this.table = table;
         this.indexHandlers = new IndexEntryHandlers(orca, table);
         PrimaryKeyMeta pk = table.getPrimaryKey();
         if (pk != null) {
-	        List<ColumnMeta> pkColumns = table.getPrimaryKey().getColumns(table);
-	        for (ColumnMeta i:columns) {
-	            if (pkColumns.contains(i)) {
-    	        		    this.isPrimaryKeyAffected = true;
-    	        		    break;
-    	        	    }
-	        }
+            List<ColumnMeta> pkColumns = table.getPrimaryKey().getColumns(table);
+            for (ColumnMeta i:columns) {
+                if (pkColumns.contains(i)) {
+                            this.isPrimaryKeyAffected = true;
+                            break;
+                        }
+            }
         }
-	}
+    }
 
-	protected boolean updateSingleRow(VdmContext ctx, Heap heap, Parameters params, long pKey) {
-        	boolean success = false;
-        	Transaction trx = ctx.getTransaction();
-        	trx.getGuaranteedTrxId();
-        	int timeout = ctx.getSession().getConfig().getLockTimeout();
-        	long heapMark = heap.position();
+    protected boolean updateSingleRow(VdmContext ctx, Heap heap, Parameters params, long pKey) {
+            boolean success = false;
+            Transaction trx = ctx.getTransaction();
+            trx.getGuaranteedTrxId();
+            int timeout = ctx.getSession().getConfig().getLockTimeout();
+            long heapMark = heap.position();
         for (;;) {
-        	heap.reset(heapMark);
+            heap.reset(heapMark);
             // get the __latest__ version of the row 
 
             Row oldRow = this.gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey);
-	        if (oldRow == null) {
-	            // row could be deleted between query and here
-	            return false;
-	        }
-	        long pRecord = Record.fromRow(heap, table, oldRow);
-	        VaporizingRow newRow = VaporizingRow.from(heap, this.table.getMaxColumnId(), oldRow);
-	        
+            if (oldRow == null) {
+                // row could be deleted between query and here
+                return false;
+            }
+            long pRecord = Record.fromRow(heap, table, oldRow);
+            VaporizingRow newRow = VaporizingRow.from(heap, this.table.getMaxColumnId(), oldRow);
+            
             // update new values
             
             for (int i=0; i<this.columns.size(); i++) {
@@ -95,36 +95,41 @@ abstract class UpdateBase extends Statement {
             HumpbackError error;
             boolean primaryKeyChange = false;
             if (this.isPrimaryKeyAffected) {
-            	long pNewKey = this.table.getKeyMaker().make(heap, newRow);
-            	primaryKeyChange = !KeyMaker.equals(pKey, pNewKey);
-            	newRow.setKey(pNewKey);
+                long pNewKey = this.table.getKeyMaker().make(heap, newRow);
+                primaryKeyChange = !KeyMaker.equals(pKey, pNewKey);
+                newRow.setKey(pNewKey);
             }
             if (primaryKeyChange) {
-            	error = this.gtable.delete(trx.getTrxId(), pKey, timeout);
-            	if (error != HumpbackError.SUCCESS) {
-                	throw new OrcaException(error);
-            	}
-            	newRow.setVersion(trx.getTrxId());
-            	error = this.gtable.insert(newRow, timeout);
+                error = this.gtable.delete(trx.getTrxId(), pKey, timeout);
+                if (error != HumpbackError.SUCCESS) {
+                    throw new OrcaException(error);
+                }
+                newRow.setVersion(trx.getTrxId());
+                error = this.gtable.insert(newRow, timeout);
             }
             else {
-            	newRow.setVersion(trx.getTrxId());
+                newRow.setVersion(trx.getTrxId());
                 error = this.gtable.update(newRow, oldRow.getTrxTimestamp(), timeout);
             }
             if (error == HumpbackError.SUCCESS) {
-            	// update indexes
-            	this.indexHandlers.update(heap, trx, oldRow, newRow, primaryKeyChange, timeout);
-            	success = true;
-            	break;
+                // update indexes
+                this.indexHandlers.update(heap, trx, oldRow, newRow, primaryKeyChange, timeout);
+                success = true;
+                break;
+            }
+            else if (error == HumpbackError.MISSING) {
+                // row got deleted in a concurrency session
+                success = false;
+                break;
             }
             else if (error == HumpbackError.CONCURRENT_UPDATE) {
-            	// row is updated by another trx. retry
-            	continue;
+                // row is updated by another trx. retry
+                continue;
             }
             else {
-            	throw new OrcaException(error);
+                throw new OrcaException(error);
             }
         }
         return success;
-	}
+    }
 }

@@ -13,8 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
-import io.netty.channel.ChannelHandlerContext;
-
 import java.nio.CharBuffer;
 
 import org.slf4j.Logger;
@@ -29,20 +27,24 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class QueryHandler {
 
     static Logger _log = UberUtil.getThisLogger();
-    private MysqlServerHandler serverHandler;
+    private MysqlSession mysession;
     
-    public QueryHandler(MysqlServerHandler severHandler) {
-        this.serverHandler = severHandler;
+    public QueryHandler(MysqlSession mysession) {
+        this.mysession = mysession;
     }
 
-    public void query(ChannelHandlerContext ctx, QueryPacket packet) throws Exception {
+    public void query(QueryPacket packet) throws Exception {
         CharBuffer sql= packet.getSql();
+        query(sql);
+    }
+    
+    public void query(CharBuffer sql) throws Exception {
         if (sql == null) {
-            serverHandler.writeErrMessage(ctx, MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Empty query.");
+            throw new ErrorMessage(MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Empty query.");
         } 
         else {
-            serverHandler.session.run(sql, null, (result)-> {
-                Helper.writeResonpse(ctx, serverHandler, result, true);
+            mysession.session.run(sql, null, (result)-> {
+                Helper.writeResonpse(this.mysession.out, this.mysession, result, true);
             });
         }
     }

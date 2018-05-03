@@ -13,6 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.util;
 
+/**
+ * 
+ * @author *-xguo0<@
+ */
 public interface Callback {
     void callback();
 }

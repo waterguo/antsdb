@@ -10,11 +10,12 @@ stmt
   | ping_stmt
   | gc_stmt
   | reorganize_stmt
-  | sync_stmt
+  | shutdown_stmt
   | start_replicator_stmt
   | start_synchronizer_stmt
   | stop_replicator_stmt
   | stop_synchronizer_stmt
+  | sync_stmt
   | reset_metrics_stmt
   ; 
 
@@ -33,6 +34,8 @@ gc_stmt: K_GC;
 ping_stmt: K_PING;
 
 reorganize_stmt: K_REORGANIZE;
+
+shutdown_stmt: K_SHUTDOWN;
 
 start_replicator_stmt: K_START K_REPLICATOR;
 
@@ -59,6 +62,7 @@ K_PING : P I N G;
 K_RESET : R E S E T;
 K_START : S T A R T;
 K_METRICS : M E T R I C S;
+K_SHUTDOWN : S H U T D O W N;  
 K_STOP : S T O P;
 K_SYNCHRONIZE : S Y N C H R O N I Z E;
 K_GC : G C;

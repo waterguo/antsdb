@@ -289,11 +289,11 @@ public final class SpaceManager {
      * @param sp
      */
     public final void force(long spStart, long spEnd) {
-        for (;;) {
+        int spaceIdEnd = getSpaceId(spEnd);
+        for (;spStart<spEnd;) {
             int spaceIdStart = getSpaceId(spStart);
             Space spaceStart = this.spaces[spaceIdStart];
             long offsetStart = spStart -spaceStart.spStart;
-            int spaceIdEnd = getSpaceId(spEnd);
             long size;
             if (spaceIdEnd != spaceIdStart) {
                 size = spaceStart.spEnd - spStart;
@@ -307,9 +307,6 @@ public final class SpaceManager {
                 }
                 catch (IOException e) {
                     throw new HumpbackException("unable to persist", e);
-                }
-                if (spaceIdEnd == spaceIdStart) {
-                    break;
                 }
             }
             spStart = makeSpacePointer(spaceIdStart+1, 0);

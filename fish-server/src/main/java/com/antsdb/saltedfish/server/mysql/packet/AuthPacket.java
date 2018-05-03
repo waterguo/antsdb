@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql.packet;
 
+import java.nio.ByteBuffer;
+
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.server.mysql.MysqlServerHandler;
@@ -23,16 +25,15 @@ import com.antsdb.saltedfish.util.UberUtil;
 import io.netty.buffer.ByteBuf;
 
 public class AuthPacket extends RecievePacket {
+    static Logger _log = UberUtil.getThisLogger();
+    
     public int clientParam;
     int maxThreeBytes;
     public String user;
     public String password;
     public byte[] passwordRaw;
     public String dbname;
-    // ssl request packet if true 
-    public boolean isSSL = false;
     String plugin;
-    static Logger _log = UberUtil.getThisLogger();
     
     public AuthPacket() {
         super(-1);
@@ -40,6 +41,14 @@ public class AuthPacket extends RecievePacket {
 
     @Override
     public void read(MysqlServerHandler handler, ByteBuf in) {
+        read(in.nioBuffer());
+    }
+    
+    public boolean isSslEnabled() {
+        return (clientParam & MysqlServerHandler.CLIENT_SSL) != 0;
+    }
+    
+    public void read(ByteBuffer in) {
         if (!checkResponseVer41(in)) {
             clientParam = BufferUtils.readInt(in);
             maxThreeBytes = BufferUtils.readLongInt(in);
@@ -50,16 +59,10 @@ public class AuthPacket extends RecievePacket {
         else {
             clientParam = BufferUtils.readLong(in);
             maxThreeBytes = BufferUtils.readLong(in);
-            in.readByte(); // charset
-            in.skipBytes(23); // reserved for future
+            in.get(); // charset
+            in.position(in.position() + 23); // reserved for future
 
-            if ((clientParam & MysqlServerHandler.CLIENT_SSL) != 0 && !handler.sslConnected) {
-                // flag this packet as SSL request and handler will establish
-                // SSL connection
-                isSSL = true;
-                return;
-            }
-            else {
+            if (in.hasRemaining()) {
                 // process as handshake packet
                 try {
                     user = BufferUtils.readString(in);
@@ -88,7 +91,6 @@ public class AuthPacket extends RecievePacket {
                 plugin = BufferUtils.readString(in);
             }
         }
-        handler.isHandshaken = true;
     }
     
     /**
@@ -96,23 +98,21 @@ public class AuthPacket extends RecievePacket {
      * @param in
      * @return
      */
-    private boolean checkResponseVer41(ByteBuf in) 
-    {
-    	    boolean is41 = false;
-		in.markReaderIndex();
-		int reserved;
-		
-		reserved = BufferUtils.readInt(in);
-		
-		// check PROTOCOL_$! flag
-		if ((reserved & MysqlServerHandler.CLIENT_PROTOCOL_41) != 0)
-		{
-			is41 = true;
-		}
-		
-	    in.resetReaderIndex();
-		
-    	return is41;
+    private boolean checkResponseVer41(ByteBuffer in) {
+        boolean is41 = false;
+        int pos = in.position();
+        int reserved;
+
+        reserved = BufferUtils.readInt(in);
+
+        // check PROTOCOL_$! flag
+        if ((reserved & MysqlServerHandler.CLIENT_PROTOCOL_41) != 0) {
+            is41 = true;
+        }
+
+        in.position(pos);
+
+        return is41;
     }
 
 }

@@ -31,14 +31,14 @@ public class UpdateSingleRow extends UpdateBase {
     int tableId;
 
     public UpdateSingleRow(
-    		    Orca orca, 
+                Orca orca, 
             TableMeta table, 
             GTable gtable, 
             Operator key, 
             List<ColumnMeta> columns, 
             List<Operator> exprs) {
-    	    super(orca, table, gtable, columns, exprs);
-    	    this.tableId = table.getId();
+            super(orca, table, gtable, columns, exprs);
+            this.tableId = table.getId();
         this.keyExpr = key;
         this.mapping = new int[table.getColumns().size()];
         for (int i=0; i<table.getColumns().size(); i++) {
@@ -50,15 +50,15 @@ public class UpdateSingleRow extends UpdateBase {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-		ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
-    	    try (Heap heap = new FlexibleHeap()) {
-    	        long pBoundary = this.keyExpr.eval(ctx, heap, params, 0);
-	        if (pBoundary == 0) {
-	            return 0;
-	        }
-	        FishBoundary boundary = new FishBoundary(pBoundary);
-	        long pKey = boundary.getKeyAddress();
-	        return updateSingleRow(ctx, heap, params, pKey) ? 1 : 0;
-    	    }
+        ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+        try (Heap heap = new FlexibleHeap()) {
+            long pBoundary = this.keyExpr.eval(ctx, heap, params, 0);
+            if (pBoundary == 0) {
+                return 0;
+            }
+            FishBoundary boundary = new FishBoundary(pBoundary);
+            long pKey = boundary.getKeyAddress();
+            return updateSingleRow(ctx, heap, params, pKey) ? 1 : 0;
+        }
     }
 }

@@ -17,6 +17,8 @@ import java.nio.ByteBuffer;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 
+import com.antsdb.saltedfish.cpp.Unsafe;
+
 /**
  * Utf8 decoder
  *  
@@ -149,4 +151,75 @@ public final class Utf8 implements Decoder {
 			consumer.accept((byte) (0x80 | (ch & 0x3F)));
 		}
 	}
+
+    public static String decode(long pBytes, int size) {
+        char[] buf = new char[size];
+        int j = 0;
+        for (int i=0; i<size;) {
+            if (size - i > 8) {
+                long value = Unsafe.getLong(pBytes + i);
+                if (isAscii(value)) {
+                    buf[j++] = (char)(value & 0x7f);
+                    buf[j++] = (char)((value >> 8) & 0x7f);
+                    buf[j++] = (char)((value >> 16) & 0x7f);
+                    buf[j++] = (char)((value >> 24) & 0x7f);
+                    buf[j++] = (char)((value >> 32) & 0x7f);
+                    buf[j++] = (char)((value >> 40) & 0x7f);
+                    buf[j++] = (char)((value >> 48) & 0x7f);
+                    buf[j++] = (char)((value >> 56) & 0x7f);
+                    i += 8;
+                    continue;
+                }
+            }
+            int ch = Unsafe.getByte(pBytes + i);
+            if ((ch & 0x80) == 0) {
+                buf[j++] = (char)ch;
+                i += 1;
+                continue;
+            }
+            else if ((ch & 0xe0) == 0xc0) {
+                // 2 bytes utf
+                int next = Unsafe.getByte(pBytes + i + 1);
+                ch = (ch & 0x1f) << 6;
+                ch = ch | (next & 0x3f);
+                buf[j++] = (char)ch;
+                i += 2;
+                continue;
+            }
+            else if ((ch & 0xf0) == 0xe0) {
+                // 3 bytes utf
+                int next = Unsafe.getByte(pBytes + i + 1);
+                int nextnext = Unsafe.getByte(pBytes + i + 2);
+                ch = (ch & 0xf) << 12;
+                ch = ch | ((next & 0x3f) << 6);
+                ch = ch | (nextnext & 0x3f);
+                buf[j++] = (char)ch;
+                i += 3;
+                continue;
+            }
+            else if ((ch & 0xf8) == 0xf0) {
+                // 4 bytes utf
+                int next = Unsafe.getByte(pBytes + i + 1);
+                int nextnext = Unsafe.getByte(pBytes + i + 2);
+                int nextnextnext = Unsafe.getByte(pBytes + i + 3);
+                ch = (ch & 0x7) << 18;
+                ch = ch | ((next & 0x3f) << 12);
+                ch = ch | ((nextnext & 0x3f) << 6);
+                ch = ch | (nextnextnext & 0x3f);
+                buf[j++] = (char)ch;
+                i += 4;
+                continue;
+            }
+            else {
+                buf[j++] = (char)ch;
+                i += 1;
+                continue;
+            }
+        }
+        return String.valueOf(buf, 0, j);
+    }
+    
+    private static boolean isAscii(long value) {
+        return (value & 0x8080808080808080l) == 0;
+    }
 }

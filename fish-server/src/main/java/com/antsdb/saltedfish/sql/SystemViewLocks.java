@@ -33,6 +33,7 @@ public class SystemViewLocks extends ViewMaker {
     public static class Item {
     	public int SESSION;
     	public String LOCK_TYPE;
+    	public Integer OBJECT_ID;
     	public String OBJECT;
     }
     
@@ -49,6 +50,9 @@ public class SystemViewLocks extends ViewMaker {
 	            if (lock.getLevel() == LockLevel.EXCLUSIVE_BY_OTHER) {
 	                continue;
 	            }
+                if (lock.getLevel() == LockLevel.NONE) {
+                    continue;
+                }
 	            list.add(add(ctx, lock));
 	        }
 	    }
@@ -64,6 +68,7 @@ public class SystemViewLocks extends ViewMaker {
 		Item item = new Item();
 		item.SESSION = lock.owner;
 		item.LOCK_TYPE = LockLevel.toString(lock.level.get());
+		item.OBJECT_ID = tableInfo.getTableId();
 		item.OBJECT = tableInfo.getNamespace() + "." + tableInfo.getTableName();
 		return item;
 	}

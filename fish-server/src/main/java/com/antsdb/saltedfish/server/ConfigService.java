@@ -49,14 +49,12 @@ public class ConfigService {
     	return props.getProperty("fish.auth_plugin");
     }
     
-    public String getKerberosEnable() {
-        String enable = props.getProperty("kerberos.enable");
-        return enable==null? "N" : enable;
+    public boolean isKerberosEnable() {
+        return getBoolean("kerberos.enable", false);
     }
     
-    public String getAuthEnable() {
-        String enable = props.getProperty("auth.enable");
-        return enable==null? "N" : enable;
+    public boolean isAuthEnable() {
+        return getBoolean("auth.enable", false);
     }
     
     public String getSSLKeyFile() {
@@ -81,8 +79,35 @@ public class ConfigService {
             return Integer.valueOf(props.getProperty("netty.worker.pool.size"));
         }
         catch (Exception x) {
-        	// 0 means taking netty default
+            // 0 means taking netty default
             return 0;
         }
     }
+
+    public int getBossGroupSize() {
+        try {
+            return Integer.valueOf(props.getProperty("netty.bossgroup.pool.size"));
+        }
+        catch (Exception x) {
+            // 0 means taking netty default
+            return 0;
+        }
+    }
+    
+    private boolean getBoolean(String key, boolean defaultValue) {
+        boolean value = defaultValue;
+        String s = this.props.getProperty(key);
+        if (s != null && s.trim() != "") {
+            value = Boolean.parseBoolean(s);
+        }
+        return value;
+    }
+
+    public String getTcpServerProvider() {
+        String result = this.props.getProperty("antsdb.tcp-server.provider");
+        if (result != null) return result;
+        result = System.getProperty("antsdb.default-tcp");
+        return result==null ? "nio" : result;
+    }
+
 }

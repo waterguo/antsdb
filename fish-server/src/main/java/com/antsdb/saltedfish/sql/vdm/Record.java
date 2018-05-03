@@ -86,15 +86,15 @@ public abstract class Record {
     }
 
     public final static long alloc(Heap heap, int nFields) {
-    	if (nFields >= Short.MAX_VALUE) {
-    		throw new IllegalArgumentException();
-    	}
-    	int bytes = OFFSET_FIELDS + nFields * 8;
-    	long p = heap.alloc(bytes);
-    	Unsafe.putByte(p, TYPE_RECORD);
-    	Unsafe.putShort(p + OFFSET_SIZE, (short)nFields);
-    	reset(p);
-    	return p;
+        if (nFields >= Short.MAX_VALUE) {
+            throw new IllegalArgumentException();
+        }
+        int bytes = OFFSET_FIELDS + nFields * 8;
+        long p = heap.alloc(bytes);
+        Unsafe.putByte(p, TYPE_RECORD);
+        Unsafe.putShort(p + OFFSET_SIZE, (short) nFields);
+        reset(p);
+        return p;
     }
     
     public final static long clone(Heap heap, long pRecord) {

@@ -17,7 +17,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.Properties;
 
-import com.antsdb.saltedfish.util.SizeConstants;
+import com.antsdb.saltedfish.util.Size;
 
 /**
  * 
@@ -117,19 +117,19 @@ public class ConfigService {
     }
 
     public int getMinkePageSize() {
-        return getInt("minke.page-size", 16 * MB);
+        return (int)Size.parse(this.props.getProperty("minke.page-size"), "16m");
     }
 
     public int getMinkeFileSize() {
-        return getInt("minke.file-size", 1 * GB);
+        return (int)Size.parse(this.props.getProperty("minke.file-size"), "1g");
     }
 
     public long getMinkeSize() {
-        return getLong("minke.size", Long.MAX_VALUE);
+        return Size.parse(this.props.getProperty("minke.size"), String.valueOf(Long.MAX_VALUE));
     }
 
     public long getCacheSize() {
-        return getLong("cache.size", 10l * GB);
+        return Size.parse(this.props.getProperty("cache.size"), "10g");
     }
 
     private long getLong(String key, long defaultValue) {
@@ -178,8 +178,7 @@ public class ConfigService {
     }
 
     public int getTabletSize() {
-        int result = getInt("humpback.tablet.file.size", (int) SizeConstants.mb(64));
-        return result;
+        return (int)Size.parse(this.props.getProperty("humpback.tablet.file.size"), "64m");
     }
 
     public String getStorageEngineName() {
@@ -223,7 +222,7 @@ public class ConfigService {
             return new LogRetentionByTime(time);
         }
         else if ("size".equals(value)) {
-            long bytes = getLong("humpback.log-retention.size", SizeConstants.mb(256));
+            long bytes = Size.parse(this.props.getProperty("humpback.log-retention.size"), "256m");
             return new LogRetentionBySize(bytes);
         }
         else if (value.isEmpty()) {

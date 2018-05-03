@@ -23,14 +23,6 @@ import java.util.regex.Pattern;
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 
-import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
-
-import com.antsdb.saltedfish.server.mysql.MysqlChannelInitializer;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -39,12 +31,10 @@ public class SaltedFish {
     static SaltedFish _singleton;
     
     Orca orca;
-    ConfigService configService;
+    ConfigService config;
     File home;
-    ChannelFuture f;
-    EventLoopGroup bossGroup;
-    NioEventLoopGroup workerGroup;
     boolean isClosed;
+    TcpServer server;
 
     public SaltedFish(File home) {
         _singleton = this;
@@ -54,11 +44,13 @@ public class SaltedFish {
 
     public void start() throws Exception {
         try {
-            this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
+            _log.info("java.home: {}", System.getProperty("java.home"));
+            this.config = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
             startLogging();
-            // MUST start netty before starting database. use the port to lock out database instance. otherwise, the
+            // MUST start listener before starting database. use the port to lock out database instance. otherwise, the
             // 2nd database will corrupt the database files.
-            startNetty();
+            this.server = getTcpServer(); 
+            server.start(getConfig().getPort());
             startDatabase();
             startWeb();
         }
@@ -68,6 +60,19 @@ public class SaltedFish {
         }
     }
     
+    private TcpServer getTcpServer() {
+        String provider = this.config.getTcpServerProvider();
+        
+        if ("netty".equals(provider)) {
+            return new NettyServer(this, 
+                                   this.config.getBossGroupSize(), 
+                                   this.config.getNettyWorkerThreadPoolSize());
+        }
+        else {
+            return new SimpleSocketServer(this); 
+        }
+    }
+
     private void startWeb() {
         SaltedFishWeb web = new SaltedFishWeb(this.orca);
         web.start();
@@ -76,27 +81,27 @@ public class SaltedFish {
     public void startOrcaOnly() throws Exception {
         startLogging();
         
-        this.configService = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
+        this.config = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
         
         // disable hbase service by removing hbase conf
-        Properties props = this.configService.getProperties();
+        Properties props = this.config.getProperties();
         props.remove("hbase_conf");
         
         startDatabase();
     }
 
     void startLogging() {
-    	    Pattern ptn = Pattern.compile("log4j\\.appender\\..+\\.file");
+        Pattern ptn = Pattern.compile("log4j\\.appender\\..+\\.file");
         Properties props = getLoggingConf();
         for (Map.Entry<Object, Object> i:props.entrySet()) {
-        	String key = (String)i.getKey();
-        	if (!ptn.matcher(key).matches()) {
-        		continue;
-        	}
-        	String value = (String)i.getValue();
-        	File file = new File(this.home, value);
-        	i.setValue(file.getAbsolutePath());
-        	    System.out.println("log file: " + file.getAbsolutePath());
+            String key = (String)i.getKey();
+            if (!ptn.matcher(key).matches()) {
+                continue;
+            }
+            String value = (String)i.getValue();
+            File file = new File(this.home, value);
+            i.setValue(file.getAbsolutePath());
+                System.out.println("log file: " + file.getAbsolutePath());
         }
         PropertyConfigurator.configure(props);
     }
@@ -118,7 +123,7 @@ public class SaltedFish {
         try (InputStream in=getClass().getResourceAsStream("/log4j.properties")) {
             System.out.println("using log configuration: " + getClass().getResource("/log4j.properties"));
             props.load(in);
-        	    return props;
+                return props;
         }
         catch (Exception ignored) {}
         return props;
@@ -126,55 +131,25 @@ public class SaltedFish {
     
     public void run() throws Exception {
         start();
-        f.channel().closeFuture();
     }
     
     void startDatabase() throws Exception {        
-    	    Orca orca = new Orca(this.home, this.configService.getProperties());
-    	    this.orca = orca;
+        Orca orca = new Orca(this.home, this.config.getProperties());
+        this.orca = orca;
     }
     
-    /**
-     * starting netty
-     * 
-     * @param port
-     * @throws InterruptedException 
-     */
-    void startNetty() throws Exception {
-        bossGroup = new NioEventLoopGroup();
-        workerGroup = new NioEventLoopGroup(this.configService.getNettyWorkerThreadPoolSize());
-        _log.info("java.home: {}", System.getProperty("java.home"));
-        _log.info("netty worker pool size: {}", workerGroup.executorCount());
-
-        ServerBootstrap b = new ServerBootstrap();
-        b.group(bossGroup, workerGroup)
-         .channel(NioServerSocketChannel.class)
-         .childHandler(new MysqlChannelInitializer(this))
-         .option(ChannelOption.SO_BACKLOG, 128)
-         .childOption(ChannelOption.SO_KEEPALIVE, true);
-
-        // Bind and start to accept incoming connections.
-
-        _log.info("starting netty on port: " + this.configService.getPort());
-        this.f = b.bind(this.configService.getPort()).sync();
-    }
-
     public void shutdown() {
+        try {
+            this.server.shutdown();
+        }
+        catch (Exception x) {
+            _log.warn("unable to shutdown tcp server", x);
+        }
         try {
             this.orca.shutdown();
         }
         catch (Exception x) {
             _log.error("unable to shutdown orca gracefully", x);
-        }
-        
-        // Wait until the server socket is closed.
-        // In this example, this does not happen, but you can do that to gracefully
-        // shut down your server.
-        if (workerGroup != null) {
-        	workerGroup.shutdownGracefully();
-        }
-        if (bossGroup != null) {
-        	bossGroup.shutdownGracefully();
         }
     }
     
@@ -186,21 +161,21 @@ public class SaltedFish {
         return _singleton;
     }
 
-	public ConfigService getConfig() {
-		return configService;
-	}
+    public ConfigService getConfig() {
+        return config;
+    }
 
-	public File getConfigFolder(File home) {
-		File conf = new File(home, "conf");
-		return (conf.exists()) ? conf : home;
-	}
-	
-	public void close() {
-	    this.isClosed = true;
-	    this.orca.shutdown();
-	}
-	
-	public boolean isClosed() {
-	    return this.isClosed;
-	}
+    public File getConfigFolder(File home) {
+        File conf = new File(home, "conf");
+        return (conf.exists()) ? conf : home;
+    }
+    
+    public void close() {
+        this.isClosed = true;
+        this.orca.shutdown();
+    }
+    
+    public boolean isClosed() {
+        return this.isClosed;
+    }
 }

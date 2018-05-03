@@ -14,10 +14,13 @@
 package com.antsdb.saltedfish.cpp;
 
 public abstract class Heap implements AutoCloseable {
-	public abstract long alloc(int size);
+    public abstract long alloc(int size, boolean zero);
 	public abstract void reset(long pos);
 	public abstract long position();
 	public abstract void free();
 	public abstract void close();
 	
+    public long alloc(int size) {
+        return alloc(size, true);
+    }
 }

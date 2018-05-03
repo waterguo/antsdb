@@ -19,10 +19,14 @@ package com.antsdb.saltedfish.nosql;
  * @author wgu0
  */
 public enum HumpbackError {
-	/** mission accomplished go ahead */
-	SUCCESS,
-	/** the record is locked by another pending trx */
-	LOCK_COMPETITION,
-	/** the record is updated/deleted by a concurrent trx */
-	CONCURRENT_UPDATE,
+    /** mission accomplished go ahead */
+    SUCCESS,
+    /** the record is locked by another pending trx */
+    LOCK_COMPETITION,
+    /** the record is updated/deleted by a concurrent trx */
+    CONCURRENT_UPDATE,
+    /** the record is missing for update/delete/lock operation */
+    MISSING,
+    /** the record already exists for insert operation */
+    EXISTS,
 }

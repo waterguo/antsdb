@@ -50,6 +50,10 @@ abstract class DeleteBase extends Statement {
                 this.indexHandlers.delete(heap, trx, row, timeout);
                 return true;
             }
+            else if (error == HumpbackError.MISSING) {
+                // row got deleted in a concurrency session
+                return false;
+            }
             else {
                 throw new OrcaException(error);
             }
