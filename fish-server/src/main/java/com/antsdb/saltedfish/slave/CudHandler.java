@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.slave;
 
@@ -21,12 +21,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.util.UberFormatter;
 
 /**
  * 
@@ -191,6 +193,9 @@ class CudHandler {
         }
         if (result instanceof Timestamp && ((Timestamp)result).getTime() == Long.MIN_VALUE) {
             result = "0000-00-00 00:00:00";
+        }
+        if (result instanceof Duration) {
+            result = UberFormatter.duration((Duration)result);
         }
         return result;
     }

@@ -6,17 +6,18 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-
 package com.antsdb.mysql.network;
 
 import java.nio.CharBuffer;
 
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.server.mysql.util.MysqlString;
 
 /**
  * 
@@ -97,10 +98,13 @@ public class PacketUtil {
      * @param maxLength
      * @return
      */
-    public static String readString(long addr, int maxLength) {
+    public static String readString(long addr, int maxLength, Decoder decoder) {
         StringBuilder buf = new StringBuilder();
-        for (int i=0; i<maxLength; i++) {
-            int ch = Unsafe.getByte(addr + i);
+        long pEnd = addr + maxLength;
+        for (long p=addr; p<pEnd;) {
+            int ch = decoder.getChar(p);
+            p += ch >> 16;
+            ch = ch & 0xffff;
             if (ch == 0) {
                 break;
             }
@@ -109,70 +113,14 @@ public class PacketUtil {
         return buf.toString();
     }
 
-    public static CharBuffer readStringAsCharBufWithMysqlExtension(long addr, int maxLength) {
+    public static CharBuffer readStringAsCharBufWithMysqlExtension(long addr, int maxLength, Decoder decoder) {
         if (maxLength == 0) {
             return null;
         }
-        CharBuffer result = CharBuffer.allocate(maxLength);
-        long pEnd = addr + maxLength;
-        for (long p=addr; p<pEnd;) {
-            long pNext = readMysqlExtension(result, p, pEnd);
-            if (pNext != p) {
-                p = pNext;
-                continue;
-            }
-            int ch = Unsafe.getByte(p++);
-            result.put((char)ch);
-        }
+        CharBuffer result = MysqlString.decode(decoder, addr, maxLength);
         return result;
     }
     
-    private static long readMysqlExtension(CharBuffer buf, long p, long pEnd) {
-        // read the mysql extension prefix
-        
-        long pNext = skip(p, pEnd, "/*!");
-        if (pNext == p) {
-            return p;
-        }
-        p = pNext;
-        
-        // skip the version 
-        
-        p = skipUntil(p, pEnd, ' ');
-        
-        // read the real stuff
-        
-        while (p < pEnd) {
-            pNext = skip(p, pEnd, "*/");
-            if (p != pNext) {
-                p = pNext;
-                break;
-            }
-            char ch = (char)Unsafe.getByte(p++);
-            buf.put(ch);
-        }
-        return p;
-    }
-
-    private static long skipUntil(long p, long pEnd, char ch) {
-        while (p < pEnd && Unsafe.getByte(p) != ch) {
-            p++;
-        }
-        return p;
-    }
-
-    private static long skip(long p, long pEnd, String string) {
-        if (pEnd - p < string.length()) {
-            return p;
-        }
-        for (int i=0; i<string.length(); i++) {
-            if (string.charAt(i) != Unsafe.getByte(p + i)) {
-                return p;
-            }
-        }
-        return p + string.length();
-    }
-
     public static CharBuffer readStringAsCharBuf(long addr, int maxLength) {
         if (maxLength == 0) {
             return null;

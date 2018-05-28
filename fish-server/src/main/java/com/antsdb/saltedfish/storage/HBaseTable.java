@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FileOffset;
+import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.IndexLine;
@@ -61,7 +62,7 @@ class HBaseTable implements StorageTable {
         private ResultScanner rs;
         private long pRow;
         private int rowScanned;
-        private BluntHeap heap;
+        private Heap heap;
         private boolean eof = false;
         private TableMeta meta;
         private int tableId;
@@ -73,7 +74,7 @@ class HBaseTable implements StorageTable {
         public MyScanResult(TableMeta meta, ResultScanner rs, int tableId, TableType type) {
             this.rs = rs;
             this.meta = meta;
-            this.heap = new BluntHeap();
+            this.heap = new FlexibleHeap();
             this.tableId = tableId;
             this.type = type;
         }

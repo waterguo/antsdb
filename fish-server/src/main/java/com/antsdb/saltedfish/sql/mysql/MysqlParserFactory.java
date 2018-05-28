@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
@@ -17,6 +17,7 @@ import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.lang.StringUtils;
@@ -112,6 +113,7 @@ public class MysqlParserFactory extends SqlParserFactory {
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         tokens.setTokenSource(lexer);
         MysqlParser parser = new MysqlParser(tokens);
+        parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
         parser.setErrorHandler(new BailErrorStrategy());
         boolean success = false;
         try {

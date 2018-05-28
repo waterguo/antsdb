@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
@@ -53,6 +53,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Session_variable_referenceContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Unary_operatorContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.ValueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Variable_referenceContext;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.GeneratorContext;
@@ -84,6 +85,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncEmptyClob;
 import com.antsdb.saltedfish.sql.vdm.FuncField;
 import com.antsdb.saltedfish.sql.vdm.FuncFindInSet;
 import com.antsdb.saltedfish.sql.vdm.FuncFromUnixTime;
+import com.antsdb.saltedfish.sql.vdm.FuncGetLock;
 import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
 import com.antsdb.saltedfish.sql.vdm.FuncHex;
 import com.antsdb.saltedfish.sql.vdm.FuncIf;
@@ -96,6 +98,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncMin;
 import com.antsdb.saltedfish.sql.vdm.FuncMonth;
 import com.antsdb.saltedfish.sql.vdm.FuncNow;
 import com.antsdb.saltedfish.sql.vdm.FuncRand;
+import com.antsdb.saltedfish.sql.vdm.FuncReleaseLock;
 import com.antsdb.saltedfish.sql.vdm.FuncRound;
 import com.antsdb.saltedfish.sql.vdm.FuncSubstringIndex;
 import com.antsdb.saltedfish.sql.vdm.FuncSum;
@@ -169,6 +172,7 @@ public class ExprGenerator {
         _functionByName.put("field", FuncField.class);
         _functionByName.put("find_in_set", FuncFindInSet.class);
         _functionByName.put("from_unixtime", FuncFromUnixTime.class);
+        _functionByName.put("get_lock", FuncGetLock.class);
         _functionByName.put("hex", FuncHex.class);
         _functionByName.put("if", FuncIf.class);
         _functionByName.put("length", FuncLength.class);
@@ -178,6 +182,7 @@ public class ExprGenerator {
         _functionByName.put("month", FuncMonth.class);
         _functionByName.put("now", FuncNow.class);
         _functionByName.put("rand", FuncRand.class);
+        _functionByName.put("release_lock", FuncReleaseLock.class);
         _functionByName.put("round", FuncRound.class);
         _functionByName.put("subdate", FuncDateSub.class);
         _functionByName.put("substring_index", FuncSubstringIndex.class);
@@ -229,9 +234,34 @@ public class ExprGenerator {
         return result;
     }
     
+    public static Operator gen(GeneratorContext ctx, Planner planner, ValueContext rule) {
+        ParseTree child = rule.getChild(0);
+        if (child instanceof Literal_valueContext) {
+            return genLiteralValue(ctx, planner, (Literal_valueContext) child);
+        }
+        else if (child instanceof Bind_parameterContext) {
+            return genBindParameter(ctx, (Bind_parameterContext) child);
+        }
+        else if (child instanceof Column_name_Context) {
+            return genColumnValue(ctx, planner, (Column_name_Context) child);
+        }
+        else if (child instanceof Variable_referenceContext) {
+            return genUserVariableRef(ctx, planner, (Variable_referenceContext) child);
+        }
+        else if (child instanceof Session_variable_referenceContext) {
+            return genSystemVariableRef(ctx, planner, (Session_variable_referenceContext) child);
+        }
+        else {
+            throw new NotImplementedException();
+        }
+    }
+    
     static Operator gen_(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) throws OrcaException {
         if (rule.expr_not() != null) {
             return gen_not(ctx, cursorMeta, rule.expr_not());
+        }
+        else if (rule.value() != null) {
+            return gen(ctx, cursorMeta, rule.value());
         }
         else if (rule.getChildCount() == 1) {
             return gen_sinlge_node(ctx, cursorMeta, rule);
@@ -247,6 +277,22 @@ public class ExprGenerator {
         else if (rule.unary_operator() != null) {
             Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(1));
             return gen_unary(ctx, cursorMeta, rule.unary_operator(), right);
+        }
+        else if (rule.K_LIKE() != null) {
+            Like_exprContext like = rule.like_expr();
+            Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+            Operator right = null;
+            if (like.literal_value() != null) {
+                right = genLiteralValue(ctx, cursorMeta, rule.like_expr().literal_value());
+            }
+            else {
+                right = genBindParameter(ctx, like.bind_parameter());
+            }
+            Operator result = new OpLike(left, right);
+            if (rule.K_NOT() != null) {
+                result = new OpNot(result);
+            }
+            return result;
         }
         else if (rule.K_REGEXP() != null) {
             // REGEXP operator
@@ -337,11 +383,6 @@ public class ExprGenerator {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpBitwiseAnd(left, right);
-            }
-            else if ("like".equalsIgnoreCase(op)) {
-                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
-                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
-                return new OpLike(left, right);
             }
             else if ("or".equalsIgnoreCase(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
@@ -491,16 +532,7 @@ public class ExprGenerator {
 
     public static Operator gen_sinlge_node(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) {
         ParseTree child = rule.getChild(0);
-        if (child instanceof Literal_valueContext) {
-            return genLiteralValue(ctx, cursorMeta, (Literal_valueContext) child);
-        }
-        else if (child instanceof Bind_parameterContext) {
-            return genBindParameter(ctx, (Bind_parameterContext) child);
-        }
-        else if (child instanceof Column_name_Context) {
-            return genColumnValue(ctx, cursorMeta, (Column_name_Context) child);
-        }
-        else if (child instanceof Expr_functionContext) {
+        if (child instanceof Expr_functionContext) {
             return genFunction(ctx, cursorMeta, (Expr_functionContext) child);
         }
         else if (child instanceof Expr_parenthesisContext) {
@@ -509,12 +541,9 @@ public class ExprGenerator {
         else if (child instanceof Expr_selectContext) {
             return genSingleValueQuery(ctx, cursorMeta, (Expr_selectContext) child);
         }
-        else if (child instanceof Variable_referenceContext) {
-            return genUserVariableRef(ctx, cursorMeta, (Variable_referenceContext) child);
-        }
-        else if (child instanceof Session_variable_referenceContext) {
-            return genSystemVariableRef(ctx, cursorMeta, (Session_variable_referenceContext) child);
-        }
+        else if (child instanceof Column_name_Context) {
+            return genColumnValue(ctx, cursorMeta, (Column_name_Context) child);
+        }        
         else if (rule.expr_exist() != null) {
             return gen_exists(ctx, cursorMeta, rule.expr_exist());
         }
@@ -545,7 +574,7 @@ public class ExprGenerator {
         if (columns.size() <= 0) {
             throw new OrcaException("column reference is missing");
         }
-        Operator against = gen(ctx, planner, rule.expr());
+        Operator against = gen(ctx, planner, rule.value());
         return new OpMatch(columns, against, isBooleanMode);
     }
 
@@ -673,7 +702,7 @@ public class ExprGenerator {
             // why there is no cursor metadata
             throw new OrcaException("missing query");
         }
-        ObjectName tableName = TableName.parse(ctx, rule.table_name_());
+        ObjectName tableName = TableName.parse(ctx, rule.identifier());
         String table = (tableName != null) ? tableName.getTableName() : null;
         String column = Utils.getIdentifier(rule.column_name().identifier());
 
@@ -707,7 +736,7 @@ public class ExprGenerator {
     }
 
     private static Operator genSequenceValue(GeneratorContext ctx, Column_name_Context rule) {
-        ObjectName name = (rule.table_name_() != null) ? TableName.parse(ctx, rule.table_name_()) : null;
+        ObjectName name = TableName.parse(ctx, rule.identifier());
         return new OpSequenceValue(name);
     }
 

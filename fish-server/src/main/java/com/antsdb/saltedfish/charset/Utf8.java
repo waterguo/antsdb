@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.charset;
 
@@ -26,79 +26,80 @@ import com.antsdb.saltedfish.cpp.Unsafe;
  */
 public final class Utf8 implements Decoder {
 
-	@Override
-	public int get(ByteBuffer buf) {
-		int ch = buf.get() & 0xff;
-		if ((ch & 0x7f) == 0) {
-		}
-		else if ((ch & 0xe0) == 0xc0) {
-			// 2 bytes utf
-			if (buf.remaining() >= 1) {
-				ch = (ch & 0x1f) << 6;
-				ch = ch | (buf.get() & 0x3f);
-			}
-		}
-		else if ((ch & 0xf0) == 0xe0) {
-			// 3 bytes utf
-			if (buf.remaining() >= 2) {
-				ch = (ch & 0xf) << 12;
-				ch = ch | ((buf.get() & 0x3f) << 6);
-				ch = ch | (buf.get() & 0x3f);
-			}
-		}
-		else if ((ch & 0xf8) == 0xf0) {
-			// 4 bytes utf
-			if (buf.remaining() >= 3) {
-				ch = (ch & 0x7) << 18;
-				ch = ch | ((buf.get() & 0x3f) << 12);
-				ch = ch | ((buf.get() & 0x3f) << 6);
-				ch = ch | (buf.get() & 0x3f);
-			}
-		}
-		return ch;
-	}
+    @Override
+    public int get(ByteBuffer buf) {
+        int ch = buf.get() & 0xff;
+        if ((ch & 0x7f) == 0) {
+        }
+        else if ((ch & 0xe0) == 0xc0) {
+            // 2 bytes utf
+            if (buf.remaining() >= 1) {
+                ch = (ch & 0x1f) << 6;
+                ch = ch | (buf.get() & 0x3f);
+            }
+        }
+        else if ((ch & 0xf0) == 0xe0) {
+            // 3 bytes utf
+            if (buf.remaining() >= 2) {
+                ch = (ch & 0xf) << 12;
+                ch = ch | ((buf.get() & 0x3f) << 6);
+                ch = ch | (buf.get() & 0x3f);
+            }
+        }
+        else if ((ch & 0xf8) == 0xf0) {
+            // 4 bytes utf
+            if (buf.remaining() >= 3) {
+                ch = (ch & 0x7) << 18;
+                ch = ch | ((buf.get() & 0x3f) << 12);
+                ch = ch | ((buf.get() & 0x3f) << 6);
+                ch = ch | (buf.get() & 0x3f);
+            }
+        }
+        return ch;
+    }
 
-	public int get(IntSupplier supplier) {
-		int ch = supplier.getAsInt();
-		if (ch == -1) {
-			return -1;
-		}
-		ch = ch & 0xff;
-		if ((ch & 0x80) == 0) {
-			return ch;
-		}
-		else if ((ch & 0xe0) == 0xc0) {
-			// 2 bytes utf
-			int next = supplier.getAsInt();
-			ch = (ch & 0x1f) << 6;
-			ch = ch | (next & 0x3f);
-			return ch;
-		}
-		else if ((ch & 0xf0) == 0xe0) {
-			// 3 bytes utf
-			int next = supplier.getAsInt();
-			int nextnext = supplier.getAsInt();
-			ch = (ch & 0xf) << 12;
-			ch = ch | ((next & 0x3f) << 6);
-			ch = ch | (nextnext & 0x3f);
-			return ch;
-		}
-		else if ((ch & 0xf8) == 0xf0) {
-			// 4 bytes utf
-			int next = supplier.getAsInt();
-			int nextnext = supplier.getAsInt();
-			int nextnextnext = supplier.getAsInt();
-			ch = (ch & 0x7) << 18;
-			ch = ch | ((next & 0x3f) << 12);
-			ch = ch | ((nextnext & 0x3f) << 6);
-			ch = ch | (nextnextnext & 0x3f);
-		}
-		else if (ch == -1) {
-			return -1;
-		}
-		throw new IllegalArgumentException();
-	}
-	
+    public int get(IntSupplier supplier) {
+        int ch = supplier.getAsInt();
+        if (ch == -1) {
+            return -1;
+        }
+        ch = ch & 0xff;
+        if ((ch & 0x80) == 0) {
+            return ch;
+        }
+        else if ((ch & 0xe0) == 0xc0) {
+            // 2 bytes utf
+            int next = supplier.getAsInt();
+            ch = (ch & 0x1f) << 6;
+            ch = ch | (next & 0x3f);
+            return ch;
+        }
+        else if ((ch & 0xf0) == 0xe0) {
+            // 3 bytes utf
+            int next = supplier.getAsInt();
+            int nextnext = supplier.getAsInt();
+            ch = (ch & 0xf) << 12;
+            ch = ch | ((next & 0x3f) << 6);
+            ch = ch | (nextnext & 0x3f);
+            return ch;
+        }
+        else if ((ch & 0xf8) == 0xf0) {
+            // 4 bytes utf
+            int next = supplier.getAsInt();
+            int nextnext = supplier.getAsInt();
+            int nextnextnext = supplier.getAsInt();
+            ch = (ch & 0x7) << 18;
+            ch = ch | ((next & 0x3f) << 12);
+            ch = ch | ((nextnext & 0x3f) << 6);
+            ch = ch | (nextnextnext & 0x3f);
+            return ch;
+        }
+        else if (ch == -1) {
+            return -1;
+        }
+        throw new IllegalArgumentException();
+    }
+    
     public IntSupplier mapDecode(IntSupplier supplier) {
         IntSupplier result = new IntSupplier() {
             @Override
@@ -110,14 +111,14 @@ public final class Utf8 implements Decoder {
         return result;
     }
     
-	public String decode(IntSupplier supplier) {
-		StringBuilder buf = new StringBuilder();
-		IntSupplier output = mapDecode(supplier);
-		for (int ch = output.getAsInt(); ch != -1; ch=output.getAsInt()) {
-	           buf.append((char)ch); 
-		}
-		return buf.toString();
-	}
+    public String decode(IntSupplier supplier) {
+        StringBuilder buf = new StringBuilder();
+        IntSupplier output = mapDecode(supplier);
+        for (int ch = output.getAsInt(); ch != -1; ch=output.getAsInt()) {
+               buf.append((char)ch); 
+        }
+        return buf.toString();
+    }
 
     public static void encode(IntSupplier supplier, IntConsumer consumer) {
         for (int ch=supplier.getAsInt(); ch!=-1; ch=supplier.getAsInt()) {
@@ -125,32 +126,32 @@ public final class Utf8 implements Decoder {
         }
     }
     
-	public static void encode(String s, IntConsumer consumer) {
-		for (int i=0; i<s.length(); i++) {
-			encode(s.charAt(i), consumer);
-		}
-	}
-	
-	/**
-	 * @see org.apache.hadoop.io.UTF8
-	 * @param ch
-	 * @param consumer
-	 */
-	public static void encode(int ch, IntConsumer consumer) {
-		if (ch <= 0x7F) {
-			consumer.accept(ch);
-			return;
-		}
-		else if (ch <= 0x07FF) {
-			consumer.accept((byte) (0xC0 | ((ch >> 6) & 0x1F)));
-			consumer.accept((byte) (0x80 | ch & 0x3F));
-		}
-		else {
-			consumer.accept((byte) (0xE0 | ((ch >> 12) & 0X0F)));
-			consumer.accept((byte) (0x80 | ((ch >> 6) & 0x3F)));
-			consumer.accept((byte) (0x80 | (ch & 0x3F)));
-		}
-	}
+    public static void encode(String s, IntConsumer consumer) {
+        for (int i=0; i<s.length(); i++) {
+            encode(s.charAt(i), consumer);
+        }
+    }
+    
+    /**
+     * @see org.apache.hadoop.io.UTF8
+     * @param ch
+     * @param consumer
+     */
+    public static void encode(int ch, IntConsumer consumer) {
+        if (ch <= 0x7F) {
+            consumer.accept(ch);
+            return;
+        }
+        else if (ch <= 0x07FF) {
+            consumer.accept((byte) (0xC0 | ((ch >> 6) & 0x1F)));
+            consumer.accept((byte) (0x80 | ch & 0x3F));
+        }
+        else {
+            consumer.accept((byte) (0xE0 | ((ch >> 12) & 0X0F)));
+            consumer.accept((byte) (0x80 | ((ch >> 6) & 0x3F)));
+            consumer.accept((byte) (0x80 | (ch & 0x3F)));
+        }
+    }
 
     public static String decode(long pBytes, int size) {
         char[] buf = new char[size];
@@ -222,4 +223,44 @@ public final class Utf8 implements Decoder {
     private static boolean isAscii(long value) {
         return (value & 0x8080808080808080l) == 0;
     }
+    
+    @Override
+    public int getChar(long addr) {
+        int ch = Unsafe.getByte(addr) & 0xff;
+        if ((ch & 0x80) == 0) {
+            ch = ch | 0x10000;
+        }
+        else if ((ch & 0xe0) == 0xc0) {
+            // 2 bytes utf
+            int next = Unsafe.getByte(addr + 1);
+            ch = (ch & 0x1f) << 6;
+            ch = ch | (next & 0x3f);
+            ch = ch | 0x20000;
+        }
+        else if ((ch & 0xf0) == 0xe0) {
+            // 3 bytes utf
+            int next = Unsafe.getByte(addr + 1);
+            int nextnext = Unsafe.getByte(addr + 2);
+            ch = (ch & 0xf) << 12;
+            ch = ch | ((next & 0x3f) << 6);
+            ch = ch | (nextnext & 0x3f);
+            ch = ch | 0x30000;
+        }
+        else if ((ch & 0xf8) == 0xf0) {
+            // 4 bytes utf
+            int next = Unsafe.getByte(addr + 1);
+            int nextnext = Unsafe.getByte(addr + 2);
+            int nextnextnext = Unsafe.getByte(addr + 3);
+            ch = (ch & 0x7) << 18;
+            ch = ch | ((next & 0x3f) << 12);
+            ch = ch | ((nextnext & 0x3f) << 6);
+            ch = ch | (nextnextnext & 0x3f);
+            ch = ch | 0x40000;
+        }
+        else {
+            ch = ch | 0x10000;
+        }
+        return ch;
+    }
+
 }

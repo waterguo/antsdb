@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql;
 
@@ -93,30 +93,33 @@ public class Session {
     public Object run(CharBuffer cbuf, Parameters params, Consumer<Object> callback) throws SQLException {
         long startTime = UberTime.getTime();
         try {
-            	if (this.isClosed) {
-            		throw new OrcaException("session is closed");
-            	}
+            if (this.isClosed) {
+                throw new OrcaException("session is closed");
+            }
             this.sql = cbuf;
             this.thread = Thread.currentThread();
-            	
-            	// import 
-            	
-            	if ((this.asyncExecutor != null) && isInsert(cbuf)) {
-            	    if (getTransaction().getTrxId() == 0) {
-            	        this.trx.getGuaranteedTrxId();
-            	    }
-            	    return asyncInsert(cbuf);
-            	}
-        	
-            // main stuff
-            
-            startTrx();
-            Script script = parse(cbuf);
-            VdmContext ctx = new VdmContext(this, script.getVariableCount());
-            Object result = script.run(ctx, params, 0);
-            if (result instanceof Cursor) {
-                result = new FinalCursor(script, params, (Cursor)result);
+                
+            Object result = null;
+            if ((this.asyncExecutor != null) && isInsert(cbuf)) {
+                // import 
+                if (getTransaction().getTrxId() == 0) {
+                    this.trx.getGuaranteedTrxId();
+                }
+                result = asyncInsert(cbuf);
             }
+            else {
+                // main stuff
+                startTrx();
+                Script script = parse(cbuf);
+                VdmContext ctx = new VdmContext(this, script.getVariableCount());
+                result = script.run(ctx, params, 0);
+                if (result instanceof Cursor) {
+                    result = new FinalCursor(script, params, (Cursor)result);
+                }
+            }
+            
+            // write result back
+            
             if (callback != null) {
                 callback.accept(result);
             }
@@ -168,7 +171,7 @@ public class Session {
     private boolean beginWith(CharBuffer cs, String s) {
         int idx = cs.position();
         for (int i=0; i<s.length(); i++) {
-            if (cs.get(idx + i + 1) != s.charAt(i)) {
+            if (cs.get(idx + i) != s.charAt(i)) {
                 return false;
             }
         }
@@ -176,11 +179,11 @@ public class Session {
     }
 
     public Script parse(CharBuffer cbuf) {
-            if (this.isClosed) {
-                throw new OrcaException("session is closed");
-            }
-        
-    	    CharStream cs = new CharBufferStream(cbuf);
+        if (this.isClosed) {
+            throw new OrcaException("session is closed");
+        }
+    
+        CharStream cs = new CharBufferStream(cbuf);
         startTrx();
         
         // check the global statement cache
@@ -190,31 +193,31 @@ public class Session {
         // parse it for real if it is not cached
         
         if (script == null) {
-                try {
-                    if (cs.LA(1) == '.') {
-                        cs.consume();
-                        script = this.fishParser.parse(this, cs);
-                    }
-                    else {
+            try {
+                if (cs.LA(1) == '.') {
+                    cs.consume();
+                    script = this.fishParser.parse(this, cs);
+                }
+                else {
                     script = this.fac.parse(this, cs);
-                    }
                 }
-                catch (ParseCancellationException x) {
-                    if (x.getCause() instanceof InputMismatchException) {
-                        InputMismatchException xx = (InputMismatchException)x.getCause();
-                        String offend = xx.getOffendingToken().getText();
-                        throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
-                    }
-                    if (x.getCause() instanceof NoViableAltException) {
-                        NoViableAltException xx = (NoViableAltException)x.getCause();
-                        String offend = xx.getOffendingToken().getText();
-                        throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
-                    }
-                    throw new OrcaException("Invalid SQL", x);
+            }
+            catch (ParseCancellationException x) {
+                if (x.getCause() instanceof InputMismatchException) {
+                    InputMismatchException xx = (InputMismatchException)x.getCause();
+                    String offend = xx.getOffendingToken().getText();
+                    throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
                 }
-                catch (CompileDdlException x) {
-                    script = new Script(null, x.nParameters, 100, cs.toString());
+                if (x.getCause() instanceof NoViableAltException) {
+                    NoViableAltException xx = (NoViableAltException)x.getCause();
+                    String offend = xx.getOffendingToken().getText();
+                    throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
                 }
+                throw new OrcaException("Invalid SQL", x);
+            }
+            catch (CompileDdlException x) {
+                script = new Script(null, x.nParameters, 100, cs.toString());
+            }
             if (_log.isTraceEnabled()) {
                 _log.trace("{}-{}: {}", getId(), script.hashCode(), cs.toString());
             }

@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
@@ -29,11 +29,11 @@ public class Update extends UpdateBase {
     int tableId;
     
     public Update(Orca orca, 
-    		      TableMeta table, 
-    		      GTable gtable, 
-    		      CursorMaker maker, 
-    		      List<ColumnMeta> columns, 
-    		      List<Operator> exprs) {
+                  TableMeta table, 
+                  GTable gtable, 
+                  CursorMaker maker, 
+                  List<ColumnMeta> columns, 
+                  List<Operator> exprs) {
         super(orca, table, gtable, columns, exprs);
         this.maker = maker;
         this.tableId = table.getId();
@@ -41,30 +41,30 @@ public class Update extends UpdateBase {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-		ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+        ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
         try (Cursor c = this.maker.make(ctx, params, 0)) {
-        	try (Heap heap = new FlexibleHeap()) {
-		        int count = 0;
-		        for (;;) {
-		            long pRecord = c.next();
-		            if (pRecord == 0) {
-		                break;
-		            }
-		            long pKey = Record.getKey(pRecord);
-		            if (pKey == 0) {
-		            	throw new IllegalArgumentException();
-		            }
-		            heap.reset(0);
-		            if (updateSingleRow(ctx, heap, params, pKey)) {
-		            	count++;
-		            }
-		        }
-		        return count;
-        	}
+            try (Heap heap = new FlexibleHeap()) {
+                int count = 0;
+                for (;;) {
+                    long pRecord = c.next();
+                    if (pRecord == 0) {
+                        break;
+                    }
+                    long pKey = Record.getKey(pRecord);
+                    if (pKey == 0) {
+                        throw new IllegalArgumentException();
+                    }
+                    heap.reset(0);
+                    if (updateSingleRow(ctx, heap, params, pKey)) {
+                        count++;
+                    }
+                }
+                return count;
+            }
         }
     }
 
-	@Override
+    @Override
     public List<TableMeta> getDependents() {
         List<TableMeta> list = new ArrayList<TableMeta>();
         list.add(this.table);

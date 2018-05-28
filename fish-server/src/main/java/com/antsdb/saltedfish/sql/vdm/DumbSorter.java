@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
@@ -63,13 +63,11 @@ public class DumbSorter extends CursorMaker {
     
     private static class MyCursor extends Cursor {
         private List<Item> items;
-        private Cursor upstream;
         int i = 0;
 
-        public MyCursor(Cursor upstream, CursorMeta meta, List<Item> items) {
+        public MyCursor(CursorMeta meta, List<Item> items) {
             super(meta);
             this.items = items;
-            this.upstream = upstream;
         }
 
         @Override
@@ -84,7 +82,6 @@ public class DumbSorter extends CursorMaker {
 
         @Override
         public void close() {
-            this.upstream.close();
         }
     }
     
@@ -109,24 +106,26 @@ public class DumbSorter extends CursorMaker {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
          AtomicLong counter = ctx.getCursorStats(makerId);
          Heap heap = new FlexibleHeap();
-         Cursor c = this.upstream.make(ctx, params, pMaster);
-         c = new RecordBuffer(c);
-         try {
-             List<Item> items = new ArrayList<>();
-             for (long pRecord = c.next(); pRecord != 0; pRecord = c.next()) {
-                  Item item = new Item();
-                  item.pRecord = pRecord;
-                  heap.reset(0);
-                  item.key = getSortKey(ctx, heap, params, pRecord);
-                  items.add(item);
+         try (Cursor cc = this.upstream.make(ctx, params, pMaster)) {
+             try (Cursor rb = new RecordBuffer(cc)) {
+                 try {
+                     List<Item> items = new ArrayList<>();
+                     for (long pRecord = rb.next(); pRecord != 0; pRecord = rb.next()) {
+                          Item item = new Item();
+                          item.pRecord = pRecord;
+                          heap.reset(0);
+                          item.key = getSortKey(ctx, heap, params, pRecord);
+                          items.add(item);
+                     }
+                     counter.addAndGet(items.size());
+                     Collections.sort(items, new MyComparator());
+                     Cursor result = new MyCursor(getCursorMeta(), items);
+                     return result;
+                 }
+                 finally {
+                     heap.free();
+                 }
              }
-             counter.addAndGet(items.size());
-             Collections.sort(items, new MyComparator());
-             Cursor result = new MyCursor(c, getCursorMeta(), items);
-             return result;
-         }
-         finally {
-             heap.free();
          }
     }
 

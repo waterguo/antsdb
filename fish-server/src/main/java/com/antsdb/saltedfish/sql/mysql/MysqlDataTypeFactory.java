@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
@@ -37,14 +37,14 @@ import com.antsdb.saltedfish.sql.TypeTimestamp;
  * @author wgu0
  */
 public class MysqlDataTypeFactory extends DataTypeFactory {
-	
-	@Override
-	public DataType newDataType(String name, int length, int scale) {
-		DataType type = super.newDataType(name, length, scale);
-		return  (type == null) ?  newDataType_(name, length, scale) : type;
-	}
+    
+    @Override
+    public DataType newDataType(String name, int length, int scale) {
+        DataType type = super.newDataType(name, length, scale);
+        return  (type == null) ?  newDataType_(name, length, scale) : type;
+    }
 
-	public static DataType newDataType_(String name, int length, int scale) {
+    public static DataType newDataType_(String name, int length, int scale) {
         name = name.toLowerCase();
         DataType type = null;
         if ("char".equals(name)) {
@@ -99,79 +99,79 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             type = new TypeBlob("longblob", Types.BLOB, 0xffffffffl);
         }
         else if ("binary".equals(name)) {
-        	    type = new TypeBlob("binary", Types.BLOB, 0xffffffffl);
+            type = new TypeBlob("binary", Types.BINARY, 0xffffffffl);
         }
         else if ("varbinary".equals(name)) {
-        	    type = new TypeBlob("binary", Types.BLOB, 0xffffffffl);
+            type = new TypeBlob("varbinary", Types.VARBINARY, 0xffffffffl);
         }
         else if ("bool".equals(name) || "boolean".equals(name)) {
             type = new TypeInteger(
-            		"tinyint", 
-            		Types.TINYINT, 
-            		Integer.class, 
-            		Value.TYPE_NUMBER, 
-            		127, 
-            		-128);
+                    "tinyint", 
+                    Types.TINYINT, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    127, 
+                    -128);
             type.setLength(1);
         }
         else if ("tinyint".equals(name)) {
             type = new TypeInteger(
-            		"tinyint", 
-            		Types.TINYINT, 
-            		Integer.class, 
-            		Value.TYPE_NUMBER, 
-            		127, 
-            		-128);
+                    "tinyint", 
+                    Types.TINYINT, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    127, 
+                    -128);
             type.setLength(length);
         }
         else if ("smallint".equals(name)) {
             type = new TypeInteger(
-            		"smallint", 
-            		Types.SMALLINT, 
-            		Integer.class, 
-            		Value.TYPE_NUMBER, 
-            		32767, 
-            		-32768); 
+                    "smallint", 
+                    Types.SMALLINT, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    32767, 
+                    -32768); 
         }
         else if ("mediumint".equals(name)) {
             type = new TypeInteger(
-            		"mediumint", 
-            		Types.INTEGER, 
-            		Integer.class, 
-            		Value.TYPE_NUMBER, 
-            		8388607, 
-            		-8388608); 
+                    "mediumint", 
+                    Types.INTEGER, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    8388607, 
+                    -8388608); 
         }
         else if ("int".equals(name) || "integer".equals(name)) {
             type = new TypeInteger(
-            		"int", 
-            		Types.INTEGER, 
-            		Integer.class, 
-            		Value.TYPE_NUMBER, 
-            		Integer.MAX_VALUE, 
-            		Integer.MIN_VALUE + 1); 
+                    "int", 
+                    Types.INTEGER, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    Integer.MAX_VALUE, 
+                    Integer.MIN_VALUE + 1); 
             type.setLength(length);
         }
         else if ("bigint".equals(name)) {
             type = new TypeInteger(
-            		"bigint", 
-            		Types.BIGINT, 
-            		Long.class, 
-            		Value.TYPE_NUMBER, 
-            		Long.MAX_VALUE, 
-            		Long.MIN_VALUE + 1); 
+                    "bigint", 
+                    Types.BIGINT, 
+                    Long.class, 
+                    Value.TYPE_NUMBER, 
+                    Long.MAX_VALUE, 
+                    Long.MIN_VALUE + 1); 
         }
         else if ("date".equals(name)) {
-        	    type = new TypeDate("date");
+                type = new TypeDate("date");
         }
         else if ("enum".equals(name)) {
             type = new TypeInteger(
-            		"enum", 
-            		Types.INTEGER, 
-            		Integer.class, 
-            		Value.TYPE_NUMBER, 
-            		65535,
-            		0); 
+                    "enum", 
+                    Types.INTEGER, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    65535,
+                    0); 
         }
         else {
             throw new OrcaException(902, "invalid data type: " + name);

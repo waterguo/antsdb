@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
@@ -31,26 +31,29 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class CheckPoint implements AutoCloseable {
     static Logger _log = UberUtil.getThisLogger();
     
-	/* humpback data starts from 0 */
+    /* humpback data starts from 0 */
 
-	/** byte, tracks server crash */
-	static final int OFFSET_IS_OPEN = 4;
-	
-	/** 8 bytes. unique identifier */
-	static final int OFFSET_SERVER_ID = 8;
-	
-	/* orca setting */
-	
-	/** orca data starts from 80 */
-	static final int OFFSET_ROWID = 0x80;
-	
-	/* slave settings */
-	
-	/** slave log file */
-	static final int OFFSET_SLAVE_LOG_FILE = 0x100;
-	/** slave log position */
-	static final int OFFSET_SLAVE_LOG_POS = 0x120;
-	
+    /** byte, tracks server crash */
+    static final int OFFSET_IS_OPEN = 4;
+    
+    /** 8 bytes. unique identifier */
+    static final int OFFSET_SERVER_ID = 8;
+    
+    /** 8 bytes, statistician log pointer */
+    static final int OFFSET_STATS_LP = 0x10;
+    
+    /* orca setting */
+    
+    /** orca data starts from 80 */
+    static final int OFFSET_ROWID = 0x80;
+    
+    /* slave settings */
+    
+    /** slave log file */
+    static final int OFFSET_SLAVE_LOG_FILE = 0x100;
+    /** slave log position */
+    static final int OFFSET_SLAVE_LOG_POS = 0x120;
+    
     File file;
     FileChannel ch;
     MappedByteBuffer buf;
@@ -118,13 +121,13 @@ public class CheckPoint implements AutoCloseable {
     @Override
     public void close() {
         try {
-        	if (this.buf != null) {
-        		Unsafe.unmap(buf);
-        	}
-        	if (this.ch != null) {
+            if (this.buf != null) {
+                Unsafe.unmap(buf);
+            }
+            if (this.ch != null) {
                 this.ch.close();
             }
-    	}
+        }
         catch (Exception x) {
             _log.error("unable to close checkpoint file", x);
         }
@@ -141,22 +144,22 @@ public class CheckPoint implements AutoCloseable {
     }
     
     public long getRowid() {
-    	    long rowid = Unsafe.getLong(this.addr + OFFSET_ROWID);
-    	    return rowid;
+        long rowid = Unsafe.getLong(this.addr + OFFSET_ROWID);
+        return rowid;
     }
     
     public long getAndIncrementRowid() {
-    	    long rowid = Unsafe.getAndAddLong(this.addr + OFFSET_ROWID, 1);
-    	    return rowid;
+        long rowid = Unsafe.getAndAddLong(this.addr + OFFSET_ROWID, 1);
+        return rowid;
     }
     
     public void setRowid(long value) {
-    	    Unsafe.putLong(this.addr + OFFSET_ROWID, value);
+            Unsafe.putLong(this.addr + OFFSET_ROWID, value);
     }
     
     public long getServerId() {
-    	    long id = Unsafe.getLong(this.addr + OFFSET_SERVER_ID);
-    	    return id;
+            long id = Unsafe.getLong(this.addr + OFFSET_SERVER_ID);
+            return id;
     }
 
     public void setServerId(long value) {
@@ -164,34 +167,43 @@ public class CheckPoint implements AutoCloseable {
     }
     
     public void setSlaveLogFile(String file) {
-    	if (file.length() >= 0x20) {
-    		throw new IllegalArgumentException();
-    	}
-    	Unsafe.setMemory(this.addr + OFFSET_SLAVE_LOG_FILE, 0x20, (byte)0);
-    	for (int i=0; i<file.length(); i++) {
-    		int ch = file.charAt(i);
-    		Unsafe.putByte(this.addr + OFFSET_SLAVE_LOG_FILE + i, (byte)ch);
-    	}
+        if (file.length() >= 0x20) {
+            throw new IllegalArgumentException();
+        }
+        Unsafe.setMemory(this.addr + OFFSET_SLAVE_LOG_FILE, 0x20, (byte)0);
+        for (int i=0; i<file.length(); i++) {
+            int ch = file.charAt(i);
+            Unsafe.putByte(this.addr + OFFSET_SLAVE_LOG_FILE + i, (byte)ch);
+        }
     }
     
     public void setSlaveLogPosition(long pos) {
-    	Unsafe.putLong(this.addr + OFFSET_SLAVE_LOG_POS, pos);
+        Unsafe.putLong(this.addr + OFFSET_SLAVE_LOG_POS, pos);
     }
     
     public String getSlaveLogFile() {
-    	StringBuilder buf = new StringBuilder();
-    	for (int i=0; i<0x20; i++) {
-    		int ch = Unsafe.getByte(this.addr + OFFSET_SLAVE_LOG_FILE + i);
-    		if (ch == 0) {
-    			break;
-    		}
-    		buf.append((char)ch);
-    	}
-    	return buf.toString();
+        StringBuilder buf = new StringBuilder();
+        for (int i=0; i<0x20; i++) {
+            int ch = Unsafe.getByte(this.addr + OFFSET_SLAVE_LOG_FILE + i);
+            if (ch == 0) {
+                break;
+            }
+            buf.append((char)ch);
+        }
+        return buf.toString();
     }
     
     public long getSlaveLogPosition() {
-    	long value = Unsafe.getLong(this.addr + OFFSET_SLAVE_LOG_POS);
-    	return value;
+        long value = Unsafe.getLong(this.addr + OFFSET_SLAVE_LOG_POS);
+        return value;
+    }
+
+    public void setStatisticanLogPointer(long lp) {
+        Unsafe.putLong(this.addr + OFFSET_STATS_LP, lp);
+    }
+
+    public long getStatisticanLogPointer() {
+        long result = Unsafe.getLong(this.addr + OFFSET_STATS_LP);
+        return result;
     }
 }

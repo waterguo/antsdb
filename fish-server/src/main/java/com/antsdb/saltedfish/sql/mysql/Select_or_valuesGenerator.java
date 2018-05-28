@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
@@ -345,7 +345,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
 			Planner planner, 
 			FieldValue op, 
 			Column_name_Context rule) {
-        ObjectName tableName = TableName.parse(ctx, rule.table_name_());
+        ObjectName tableName = TableName.parse(ctx, rule.identifier());
         String table = (tableName != null) ? tableName.getTableName() : null;
         String column = Utils.getIdentifier(rule.column_name().identifier());
         PlannerField field = planner.findField(it -> {

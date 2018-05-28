@@ -6,15 +6,16 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.mysql.network;
 
 import java.nio.ByteBuffer;
 
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.server.mysql.packet.PacketType;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -32,7 +33,8 @@ public class PacketHandshake extends Packet {
 
 	public PacketHandshake(long addr, int length) {
         super(addr, length, PacketType.FISH_HANDSHAKE);
-		this.addrConnectionId = this.addr + 4 + 1 + PacketUtil.readString(this.addr+4+1, this.length).length() + 1;
+        String str = PacketUtil.readString(this.addr+4+1, this.length, Decoder.UTF8);
+		this.addrConnectionId = this.addr + 4 + 1 + str.length() + 1;
 	}
 	
 	public byte getProtocolVersion() {
@@ -40,7 +42,7 @@ public class PacketHandshake extends Packet {
 	}
 	
 	public String getServerVersion() {
-		return PacketUtil.readString(this.addr+4+1, this.length);
+		return PacketUtil.readString(this.addr+4+1, this.length, Decoder.UTF8);
 	}
 	
 	public int getConnectionId() {

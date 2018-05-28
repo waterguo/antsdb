@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server;
 
@@ -103,7 +103,8 @@ public class HttpHandler extends ChannelInboundHandlerAdapter  {
         writeTable(buf, "System Information", "antsdb.system_info");
         writeTable(buf, "Cache Information", "antsdb.cache_info");
         writeTable(buf, "Minke Information", "antsdb.minke_info");
-        writeTable(buf, "Replicator Information", "antsdb.replicator_info");
+        writeTable(buf, "HBase Replicator Information", "antsdb.replicator_info");
+        writeTable(buf, "Slave Replicator Information", "antsdb.slave_info");
         writeTable(buf, "Synchronizer Information", "antsdb.synchronizer_info");
         writeTable(buf, "HBase Information", "antsdb.hbase");
         buf.append("</body></html>");

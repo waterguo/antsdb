@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql.util;
 
@@ -17,40 +17,107 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 
 import com.antsdb.saltedfish.charset.Decoder;
+import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * crazy logic to decode mysql query. unbelievable that i need to implement utf8 by myself 
  *  
  * @author wgu0
  */
-class MysqlString {
-    static CharBuffer decode(Decoder decoder, ByteBuffer buf) {
+public final class MysqlString {
+    final static class Buffer {
+        long addr;
+        int length;
+        int pos = 0;
+        Decoder decoder;
+        
+        Buffer(Decoder decoder, ByteBuffer buf) {
+            if (!buf.isDirect()) {
+                throw new IllegalArgumentException();
+            }
+            this.length = buf.remaining();
+            this.addr = UberUtil.getAddress(buf) + buf.position();
+            this.decoder = decoder;
+        }
+        
+        Buffer(Decoder decoder, long addr, int length) {
+            this.addr = addr;
+            this.length = length;
+            this.decoder = decoder;
+        }
+
+        public int remaining() {
+            return this.length - this.pos;
+        }
+
+        public char getChar() {
+            if (this.pos >= this.length) {
+                throw new IllegalArgumentException();
+            }
+            int ch = this.decoder.getChar(this.addr + this.pos);
+            this.pos += ch >> 16;
+            return (char)ch;
+        }
+
+        public byte getByte() {
+            if (this.pos >= this.length) {
+                throw new IllegalArgumentException();
+            }
+            byte result = Unsafe.getByte(this.addr + this.pos);
+            this.pos++;
+            return result;
+        }
+        
+        public int position() {
+            return this.pos;
+        }
+        
+        public void position(int pos) {
+            this.pos = pos;
+        }
+
+        public boolean hasRemaining() {
+            return remaining() > 0;
+        }
+
+    }
+    
+    public static CharBuffer decode(Decoder decoder, ByteBuffer buf) {
+        return decode(new Buffer(decoder, buf));
+    }
+    
+    public static CharBuffer decode(Decoder decoder, long addr, int length) {
+        return decode(new Buffer(decoder, addr, length));
+    }
+    
+    static CharBuffer decode(Buffer buf) {
         CharBuffer cbuf = CharBuffer.allocate(buf.remaining());
         while (buf.remaining() > 0) {
-            if (readMysqlExtension(decoder, buf, cbuf)) {
+            if (readMysqlExtension(buf, cbuf)) {
                 continue;
             }
-            char ch = (char)decoder.get(buf);
+            char ch = (char)buf.getChar();
             cbuf.put(ch);
             if (ch == '\\') {
-                readByte(decoder, buf, cbuf);
+                readByte(buf, cbuf);
             }
             else if (ch == '\'') {
-                buf.mark();
+                int pos = buf.position();
                 cbuf.mark();
-                if (readLiteral(decoder, buf, cbuf)) {
+                if (readLiteral(buf, cbuf)) {
                     continue;
                 }
-                buf.reset();
+                buf.position(pos);
                 cbuf.reset();
             }
             else if (ch == '_') {
-                buf.mark();
+                int pos = buf.position();
                 cbuf.mark();
-                if (readBinary(decoder, buf, cbuf)) {
+                if (readBinary(buf, cbuf)) {
                     continue;
                 }
-                buf.reset();
+                buf.position(pos);
                 cbuf.reset();
             }
         }
@@ -62,31 +129,31 @@ class MysqlString {
      * 
      * mysql extensions starts with "/*!", end with * /
      */
-    private static boolean readMysqlExtension(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
+    private static boolean readMysqlExtension(Buffer buf, CharBuffer cbuf) {
         // check leading mark
         
-        if (!skipToken(decoder, buf, "/*!")) {
+        if (!skipToken(buf, "/*!")) {
             return false;
         }
-        skipUntil(decoder, buf, ' ');
+        skipUntil(buf, ' ');
         
         // read stuff
         
         while (buf.hasRemaining()) {
-            if (skipToken(decoder, buf, "*/")) {
+            if (skipToken(buf, "*/")) {
                 break;
             }
-            char ch = (char)decoder.get(buf);
+            char ch = (char)buf.getChar();
             cbuf.put(ch);
         }
         return true;
     }
     
-    private static boolean skipToken(Decoder decoder, ByteBuffer buf, String token) {
+    private static boolean skipToken(Buffer buf, String token) {
         int mark = buf.position();
         int i=0; 
         while (buf.hasRemaining() && (i < token.length())) {
-            int ch = decoder.get(buf);
+            int ch = buf.getChar();
             if (ch != token.charAt(i)) {
                 break;
             }
@@ -101,10 +168,10 @@ class MysqlString {
         }
     }
     
-    private static void skipUntil(Decoder decoder, ByteBuffer buf, char end) {
+    private static void skipUntil(Buffer buf, char end) {
         while (buf.hasRemaining()) {
             int mark = buf.position();
-            int ch = decoder.get(buf);
+            int ch = buf.getChar();
             if (ch == end) {
                 buf.position(mark);
                 return;
@@ -112,33 +179,33 @@ class MysqlString {
         }
     }
     
-    private static boolean readBinary(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
-        if (!readByteIf(decoder, 'b', 'B', buf, cbuf)) {
+    private static boolean readBinary(Buffer buf, CharBuffer cbuf) {
+        if (!readByteIf('b', 'B', buf, cbuf)) {
             return false;
         }
-        if (!readByteIf(decoder, 'i', 'I', buf, cbuf)) {
+        if (!readByteIf('i', 'I', buf, cbuf)) {
             return false;
         }
-        if (!readByteIf(decoder, 'n', 'N', buf, cbuf)) {
+        if (!readByteIf('n', 'N', buf, cbuf)) {
             return false;
         }
-        if (!readByteIf(decoder, 'a', 'A', buf, cbuf)) {
+        if (!readByteIf('a', 'A', buf, cbuf)) {
             return false;
         }
-        if (!readByteIf(decoder, 'r', 'R', buf, cbuf)) {
+        if (!readByteIf('r', 'R', buf, cbuf)) {
             return false;
         }
-        if (!readByteIf(decoder, 'y', 'Y', buf, cbuf)) {
+        if (!readByteIf('y', 'Y', buf, cbuf)) {
             return false;
         }
-        if (!readByteIf(decoder, '\'', '\'', buf, cbuf)) {
+        if (!readByteIf('\'', '\'', buf, cbuf)) {
             return false;
         }
         while (buf.remaining() > 0) {
-            char ch = (char)(buf.get() & 0xff);
+            char ch = (char)(buf.getByte() & 0xff);
             cbuf.put(ch);
             if (ch == '\\') {
-                readByte(decoder, buf, cbuf);
+                readByte(buf, cbuf);
             }
             else if (ch == '\'') {
                 break;
@@ -147,13 +214,13 @@ class MysqlString {
         return true;
     }
 
-    private static boolean readLiteral(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
+    private static boolean readLiteral(Buffer buf, CharBuffer cbuf) {
         while (buf.remaining() > 0) {
             // mysql uses binary string
-            char ch = (char)(buf.get() & 0xff);
+            char ch = (char)(buf.getByte() & 0xff);
             cbuf.put(ch);
             if (ch == '\\') {
-                readByte(decoder, buf, cbuf);
+                readByte(buf, cbuf);
             }
             else if (ch == '\'') {
                 break;
@@ -162,16 +229,16 @@ class MysqlString {
         return true;
     }
 
-    private static void readByte(Decoder decoder, ByteBuffer buf, CharBuffer cbuf) {
+    private static void readByte(Buffer buf, CharBuffer cbuf) {
         if (buf.remaining() > 0) {
-            char ch = (char)(buf.get() & 0xff);
+            char ch = (char)(buf.getByte() & 0xff);
             cbuf.put(ch);
         }
     }
 
-    private static boolean readByteIf(Decoder decoder, char ch1, char ch2, ByteBuffer buf, CharBuffer cbuf) {
+    private static boolean readByteIf(char ch1, char ch2, Buffer buf, CharBuffer cbuf) {
         if (buf.remaining() > 0) {
-            char ch = (char)decoder.get(buf);
+            char ch = (char)buf.getChar();
             if ((ch == ch1) || (ch == ch2)) {
                 cbuf.put(ch);
                 return true;

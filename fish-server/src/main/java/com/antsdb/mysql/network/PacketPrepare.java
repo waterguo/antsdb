@@ -6,15 +6,16 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.mysql.network;
 
 import java.nio.CharBuffer;
 
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.server.mysql.packet.PacketType;
 
 /**
@@ -27,19 +28,19 @@ public class PacketPrepare extends Packet {
         super(addr, length, PacketType.COM_STMT_PREPARE);
     }
     
-    public String getQuery() {
-        return getQueryAsCharBuf().toString();
+    public String getQuery(Decoder decoder) {
+        return getQueryAsCharBuf(decoder).toString();
     }
     
-    public CharBuffer getQueryAsCharBuf() {
-        CharBuffer result = PacketUtil.readStringAsCharBufWithMysqlExtension(addr + 5, this.length - 1);
+    public CharBuffer getQueryAsCharBuf(Decoder decoder) {
+        CharBuffer result = PacketUtil.readStringAsCharBufWithMysqlExtension(addr + 5, this.length - 1, decoder);
         result.flip();
         return result;
     }
     
     @Override
     public String diffDump(int level) {
-        return getQuery();
+        return getQuery(Decoder.UTF8);
     }
 
 }

@@ -6,15 +6,16 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.mysql.network;
 
 import java.nio.ByteBuffer;
 
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.server.mysql.packet.PacketType;
 
@@ -70,7 +71,7 @@ public class PacketAuth41 extends Packet {
 	}
 
 	public String getUser() {
-		return PacketUtil.readString(this.addr+36, this.length);
+		return PacketUtil.readString(this.addr+36, this.length, Decoder.UTF8);
 	}
 
 	private int getDatabaseBytes() {
@@ -84,7 +85,7 @@ public class PacketAuth41 extends Packet {
 		if ((getCapabilities() & CLIENT_CONNECT_WITH_DB) == 0) {
 			return null;
 		}
-		return PacketUtil.readString(this.addrDatabase, this.length);
+		return PacketUtil.readString(this.addrDatabase, this.length, Decoder.UTF8);
 	}
 	
 	private int getPasswordBytes() {

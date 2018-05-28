@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
@@ -70,11 +70,11 @@ public class InsertSingleRow extends Statement {
         try (Heap heap = new FlexibleHeap()) {
             heap.reset(0);
             if (this.ignoreError) {
-                    try {
+                try {
                     insertRow(ctx, heap, params, this.values);
                     count++;
                     return count;
-                    }
+                }
                 catch (Exception x) {
                     _log.debug("error from insert is ignored", x);
                     return false;
@@ -108,21 +108,21 @@ public class InsertSingleRow extends Statement {
     }
     
     void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
-            int timeout = ctx.getSession().getConfig().getLockTimeout();
-            VaporizingRow row = genRow(ctx, heap, params);
+        int timeout = ctx.getSession().getConfig().getLockTimeout();
+        VaporizingRow row = genRow(ctx, heap, params);
         
         // do it
         
         Transaction trx = ctx.getTransaction();
-            row.setVersion(trx.getGuaranteedTrxId());
+        row.setVersion(trx.getGuaranteedTrxId());
         for (;;) {
             HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
             if (error == HumpbackError.SUCCESS) {
-                    this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
-                    break;
+                this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
+                break;
             }
             else {
-                    throw new OrcaException(error);
+                throw new OrcaException(error);
             }
         }
     }

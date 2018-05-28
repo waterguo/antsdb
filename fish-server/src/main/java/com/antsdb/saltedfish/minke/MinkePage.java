@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.minke;
 
@@ -122,6 +122,26 @@ public final class MinkePage implements Comparable<MinkePage> {
             result.startMark = ((flag & MASK_INCLUDE_START) != 0) ? BoundaryMark.NONE : BoundaryMark.PLUS;
             result.endMark = ((flag & MASK_INCLUDE_END) != 0) ? BoundaryMark.NONE : BoundaryMark.MINUS;
             return result;
+        }
+    }
+    
+    class RangeScanner {
+        SkipListScanner upstream;
+        
+        RangeScanner(SkipListScanner upsream) {
+            this.upstream = upsream;
+        }
+
+        Range next() {
+            if (this.upstream == null) {
+                return null;
+            }
+            if (!this.upstream.next()) {
+                return null;
+            }
+            long pRange = this.upstream.getValuePointer();
+            Range range = toRange(pRange);
+            return range;
         }
     }
     
@@ -241,6 +261,10 @@ public final class MinkePage implements Comparable<MinkePage> {
         MinkePage getPage() {
             return this.mpage;
         }
+        
+        long getData() {
+            return this.pRow;
+        }
     }
     
     MinkePage(MinkeFile cacheFile, long addr, int size, int id) {
@@ -297,7 +321,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         return Unsafe.getInt(this.addr + OFFSET_SIG);
     }
     
-    void put(VaporizingRow row) {
+    long put(VaporizingRow row) {
         this.gate.incrementAndGet();
         try {
             long pKey = row.getKeyAddress();
@@ -312,6 +336,7 @@ public final class MinkePage implements Comparable<MinkePage> {
                 }
             }
             trackWrite();
+            return pRow;
         }
         finally {
             this.gate.decrementAndGet();
@@ -679,7 +704,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         return result;
     }
 
-    public synchronized void putRange(Range value) {
+    public synchronized long putRange(Range value) {
         if (!value.isValid() || value.isEmpty()) {
             throw new IllegalArgumentException();
         }
@@ -696,9 +721,10 @@ public final class MinkePage implements Comparable<MinkePage> {
             Range start = findStartRange(this.ranges, value);
             Range end = findEndRange(this.ranges, value);
             Range merged = merge(start, end, value);
-            putRange(this.ranges, merged);
+            long result = putRange(this.ranges, merged);
             deleteObsoleteRanges(this.ranges, merged);
             trackWrite();
+            return result;
         }
         finally {
             this.gate.decrementAndGet();
@@ -780,10 +806,11 @@ public final class MinkePage implements Comparable<MinkePage> {
         return result;
     }
 
-    private void putRange(FishSkipList slist, Range range) {
+    private long putRange(FishSkipList slist, Range range) {
         long pRange = RangeData.alloc(heap, range);
         long pValue = slist.put(range.pKeyStart);
         Unsafe.putIntVolatile(pValue, (int)(pRange - this.addr));
+        return pRange;
     }
 
     public void freeze() {
@@ -841,20 +868,23 @@ public final class MinkePage implements Comparable<MinkePage> {
             }
         }
     }
+
+    RangeScanner getAllRanges() {
+        if (this.ranges == null) {
+            return new RangeScanner(null);
+        }
+        return new RangeScanner(this.ranges.scan(KeyBytes.getMinKey(), true, KeyBytes.getMaxKey(), true));
+    }
     
     void copyRanges(MinkePage that) {
-        if (this.ranges == null) {
-            return;
-        }
-        SkipListScanner scanner = this.ranges.scan(KeyBytes.getMinKey(), true, KeyBytes.getMaxKey(), true);
+        RangeScanner scanner = getAllRanges();
         if (scanner == null) {
             return;
         }
-        while (scanner.next()) {
-            long pRange = scanner.getValuePointer();
-            Range range = toRange(pRange);
+        for (;;) {
+            Range range = scanner.next();
             if (range == null) {
-                continue;
+                break;
             }
             that.putRange(range);
         }
@@ -976,6 +1006,30 @@ public final class MinkePage implements Comparable<MinkePage> {
         return result;
     }
     
+    long put(TableType type, long pKey, long pRow, long version) {
+        if (pRow == 0) {
+            delete(pKey);
+            return 0;
+        }
+        else if (pRow == Row.DELETE_MARK) {
+            putDeleteMark(pKey);
+            return 0;
+        }
+        if (type == TableType.DATA) {
+            Row row = Row.fromMemoryPointer(pRow, version);
+            if (row != null) {
+                return put(row);
+            }
+            else {
+                throw new IllegalArgumentException();
+            }
+        }
+        else {
+            KeyBytes key = new KeyBytes(pRow);
+            return putIndex(pKey, pRow, key.getSuffixByte());
+        }
+    }
+    
     void put(TableType type, ScanResult source) {
         long pRow = source.getRowPointer();
         long pKey = source.getKeyPointer();
@@ -1077,5 +1131,9 @@ public final class MinkePage implements Comparable<MinkePage> {
         long offset = pageOffset + oRow;
         lines.add(new FileOffset(this.mfile.file, offset, "row"));
         return true;
+    }
+
+    public boolean isFrozen() {
+        return getState() != PageState.ACTIVE;
     }
 }

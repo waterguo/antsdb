@@ -6,20 +6,22 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Duration;
 
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.util.UberFormatter;
 
 public class FuncCast extends UnaryOperator {
     DataType type;
@@ -62,6 +64,9 @@ public class FuncCast extends UnaryOperator {
                 if (((Timestamp)value).getTime() == Long.MIN_VALUE) {
                     value = "0000-00-00 00:00:00";
                 }
+            }
+            else if (value instanceof Duration) {
+                value = UberFormatter.duration((Duration)value);
             }
             return FishObject.allocSet(heap, value.toString());
         }

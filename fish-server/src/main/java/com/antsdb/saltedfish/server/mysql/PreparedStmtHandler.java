@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
@@ -21,6 +21,7 @@ import java.util.BitSet;
 import org.slf4j.Logger;
 
 import com.antsdb.mysql.network.PacketPrepare;
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.server.mysql.packet.StmtClosePacket;
 import com.antsdb.saltedfish.server.mysql.packet.StmtPreparePacket;
@@ -61,8 +62,8 @@ public class PreparedStmtHandler {
         responsePrepare(pstmt);
     }
 
-    public void prepare(PacketPrepare packet) throws SQLException {
-        PreparedStatement script = buildPstmt(packet.getQueryAsCharBuf());
+    public void prepare(PacketPrepare packet, Decoder decoder) throws SQLException {
+        PreparedStatement script = buildPstmt(packet.getQueryAsCharBuf(decoder));
         MysqlPreparedStatement pstmt = new MysqlPreparedStatement(script);
         this.mysession.getPrepared().put(pstmt.getId(), pstmt);
         responsePrepare(pstmt);
@@ -72,7 +73,10 @@ public class PreparedStmtHandler {
     private void setParameters(MysqlPreparedStatement pstmt, ByteBuffer in) {
         byte flags = BufferUtils.readByte(in);
         long iterationCount = BufferUtils.readUB4(in);
-
+        if (pstmt.getParameterCount() == 0) {
+            return;
+        }
+        
         // read null bitmap
 
         int nullCount = (pstmt.getParameterCount() + 7) / 8;
@@ -138,12 +142,11 @@ public class PreparedStmtHandler {
                                                this.mysession.encoder, 
                                                (Cursor)result);
                         pstmt.meta = (ByteBuffer)buf.getWrapped();
+                        pstmt.packetSequence = this.mysession.encoder.packetSequence;
                     }
                     pstmt.meta.flip();
+                    this.mysession.encoder.packetSequence = pstmt.packetSequence;
                     Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
-                    /*
-                    Helper.writeCursor(mysession.session, this.mysession.encoder, c, false);
-                    */
                 }
                 else {
                     Helper.writeResonpse(mysession.out, mysession, result, false);

@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
@@ -73,7 +73,6 @@ public class HBaseStorageService implements StorageEngine, Replicable {
     Humpback humpback = null;                    // humpback for handler to use
     MetadataService metaService = null;            // MetadataService to get Table Meta from ANTSDB
     CheckPoint cp;
- 
     int bufferSize = 2000;                        // size of sync buffer 
     int maxColumnPerPut = 2500;                    // maximum column included in one put(rows)
     
@@ -737,5 +736,10 @@ public class HBaseStorageService implements StorageEngine, Replicable {
     
     String getSystemNamespace() {
         return this.sysns;
+    }
+
+    @Override
+    public long getCommittedLogPointer() {
+        return this.cp.getCurrentSp();
     }
 }

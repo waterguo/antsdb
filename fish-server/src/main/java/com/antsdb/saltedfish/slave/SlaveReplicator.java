@@ -6,12 +6,15 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.slave;
+
+import static com.antsdb.saltedfish.util.UberFormatter.capacity;
+import static com.antsdb.saltedfish.util.UberFormatter.time;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -30,14 +33,19 @@ import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.util.Speedometer;
+import com.antsdb.saltedfish.util.UberFormatter;
+import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.ReplicationHandler;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.nosql.TableType;
 
@@ -54,6 +62,14 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     private Humpback humpback;
     private Map<Integer, CudHandler> handlers = new HashMap<>();
     private String url;
+    private long ninserts;
+    private long nupdates;
+    private long ndeletes;
+    private Speedometer speedometer = new Speedometer();
+
+    private long latency;
+
+    private long commitedLp;
 
     public SlaveReplicator(Humpback humpback) throws Exception {
         this.humpback = humpback;
@@ -69,6 +85,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         Properties props = DbUtils.properties(this.conn, "SELECT * FROM antsdb.antsdb_slave");
         long defaultsp = this.humpback.getGobbler().getLatestSp();
         this.sp = Long.parseLong(props.getProperty("sp", String.valueOf(defaultsp)));
+        this.commitedLp = this.sp;
         _log.info("slave replication starts from {}", this.sp);
     }
     
@@ -114,6 +131,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     public void flush() throws Exception {
         String sql = "REPLACE antsdb.antsdb_slave VALUES ('sp', ?)";
         DbUtils.executeUpdate(this.conn, sql, this.sp);
+        this.commitedLp = this.sp;
     }
     
     @Override
@@ -126,6 +144,8 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
         getHandler(tableId).insert(row);
+        this.ninserts++;
+        this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.sp = entry.getSpacePointer();
     }
 
@@ -140,6 +160,8 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
         getHandler(tableId).update(row);
+        this.nupdates++;
+        this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.sp = entry.getSpacePointer();
     }
 
@@ -182,12 +204,19 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
         getHandler(tableId).delete(row);
+        this.ndeletes++;
+        this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.sp = entry.getSpacePointer();
     }
 
     @Override
     public void commit(CommitEntry entry) throws Exception {
         this.sp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void timestamp(TimestampEntry entry) {
+        this.latency = UberTime.getTime() - entry.getTimestamp();
     }
 
     @Override
@@ -243,4 +272,30 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         result.prepare(this.conn, table, columns);
         return result;
     }
+
+    public Map<String, Object> getSummary() {
+        Map<String, Object> props = new HashMap<>();
+        props.put("total inserts", this.ninserts);
+        props.put("total updates", this.nupdates);
+        props.put("total deletes", this.ndeletes);
+        props.put("ops/second", this.speedometer.getSpeed());
+        props.put("latency", time(this.latency));
+        props.put("log pointer", UberFormatter.hex(this.sp));
+        props.put("pending data", capacity(getPendingBytes()));
+        return props;
+    }
+    
+    private long getPendingBytes() {
+        SpaceManager sm = this.humpback.getSpaceManager();
+        long latest = sm.getAllocationPointer();
+        long current = this.sp;
+        long size = sm.minus(latest, current);
+        return size;
+    }
+
+    @Override
+    public long getCommittedLogPointer() {
+        return this.commitedLp;
+    }
+    
 }

@@ -203,7 +203,7 @@ commit_stmt
  ;
  
 create_database_stmt
- : K_CREATE K_DATABASE (K_IF K_NOT K_EXISTS)? identifier (K_CHARACTER K_SET any_name)?  
+ : K_CREATE K_DATABASE (K_IF K_NOT K_EXISTS)? identifier (K_DEFAULT? K_CHARACTER K_SET any_name)?  
  ;
  
 create_index_stmt:
@@ -431,6 +431,7 @@ rollback_stmt
  
 select_stmt
  : select_or_values ( compound_operator select_or_values )* order_by_clause? limit_clause? ( K_FOR K_UPDATE )?
+   K_LOCK? K_IN? K_SHARE? K_MODE?
  ;
 
 compound_operator
@@ -686,14 +687,16 @@ with_clause
  : K_WITH K_RECURSIVE? table_name K_AS '(' select_stmt ')' ( ',' table_name K_AS '(' select_stmt ')' )*
  ;
 
-expr
+value
  : literal_value
  | bind_parameter
  | column_name_
- | K_ROWNUM
  | variable_reference
  | session_variable_reference
- | column_reference
+ ;
+
+expr
+ : value
  | unary_operator expr
  | expr_match
  | expr_exist 
@@ -705,7 +708,7 @@ expr
  | expr ( '+' | '-' ) expr
  | expr ( '<<' | '>>' | '&' | '|' ) expr
  | expr ( '<' | '<=' | '>' | '>=' ) expr
- | expr ( '=' | '==' | '!=' | '<>' | K_IS K_NOT | K_IS | K_LIKE | K_GLOB | K_MATCH ) expr
+ | expr ( '=' | '==' | '!=' | '<>' | K_IS K_NOT | K_IS | K_GLOB | K_MATCH ) expr
  | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) like_expr ( K_ESCAPE expr )?
  | expr expr_in_select
  | expr expr_in_values
@@ -749,7 +752,7 @@ pattern
  ;
  
 column_name_
- : (table_name_ '.')? column_name
+ : (identifier '.')* column_name
  ;
  
 bind_parameter
@@ -777,7 +780,7 @@ expr_function_star_parameter
  ; 
   
 expr_match
- : K_MATCH '(' column_name_ ( ',' column_name_)* ')' K_AGAINST '(' expr (K_IN K_BOOLEAN K_MODE)? ')'
+ : K_MATCH '(' column_name_ ( ',' column_name_)* ')' K_AGAINST '(' value (K_IN K_BOOLEAN K_MODE)? ')'
  ;
  
 expr_parenthesis
@@ -807,8 +810,6 @@ expr_in_table
 variable_reference: USER_VARIABLE;
 
 session_variable_reference: SESSION_VARIABLE;
-
-column_reference: ( ( any_name '.' )? any_name '.' )? any_name;
 
 database_name
  : any_name
@@ -852,7 +853,7 @@ name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
- | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION
+ | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
  ;
  
 identifier
@@ -861,17 +862,6 @@ identifier
 
 signed_number
  : ( '+' | '-' )? NUMERIC_LITERAL
- ;
-
-value:
-   number_value
- | string_value
- | blob_value
- | hex_value
- | null_value
- | current_time_value
- | current_date_value
- | current_timestamp_value
  ;
 
 number_value:NUMERIC_LITERAL;
@@ -1097,6 +1087,7 @@ K_SEPARATOR : S E P A R A T O R;
 K_SEQUENCE: S E Q U E N C E;
 K_SESSION: S E S S I O N;
 K_SET : S E T;
+K_SHARE : S H A R E;
 K_SHOW : S H O W;
 K_SIGNED : S I G N E D;
 K_SQL_NO_CACHE : S Q L '_' N O '_' C A C H E;

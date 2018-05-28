@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
@@ -35,6 +35,7 @@ import com.antsdb.mysql.network.PacketQuery;
 import com.antsdb.mysql.network.PacketQuit;
 import com.antsdb.mysql.network.PacketSetOption;
 import com.antsdb.mysql.network.PacketStmtClose;
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.server.SaltedFish;
 import com.antsdb.saltedfish.server.mysql.packet.AuthPacket;
@@ -126,7 +127,12 @@ public final class MysqlSession {
         }
         catch (Exception x) {
             _log.debug("error", x);
-            writeErrMessage(ERR_FOUND_EXCEPION, x.getMessage());
+            if (x.getMessage() != null) {
+                writeErrMessage(ERR_FOUND_EXCEPION, x.getMessage());
+            }
+            else {
+                writeErrMessage(ERR_FOUND_EXCEPION, x.toString());
+            }
         }
         finally {
             this.out.flush();
@@ -161,7 +167,7 @@ public final class MysqlSession {
                     return 1;
                 }
                 else if (packet instanceof PacketQuery) {
-                    query((PacketQuery)packet);
+                    query((PacketQuery)packet, getDecoder());
                     return 1;
                 }
                 else if (packet instanceof PacketQuit) {
@@ -279,12 +285,12 @@ public final class MysqlSession {
     private void prepare(PacketPrepare packet) throws SQLException {
         boolean success = false;
         try {
-            this.preparedStmtHandler.prepare(packet);
+            this.preparedStmtHandler.prepare(packet, getDecoder());
             success = true;
         }
         finally {
             if (!success && _log.isDebugEnabled()) {
-                _log.debug("borken sql:", StringUtils.left(packet.getQuery(), 1024));
+                _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 1024));
             }
         }
     }
@@ -293,15 +299,15 @@ public final class MysqlSession {
         this.session.close();
     }
 
-    private void query(PacketQuery packet) throws Exception {
+    private void query(PacketQuery packet, Decoder decoder) throws Exception {
         boolean success = false;
         try {
-            queryHandler.query(packet.getQueryAsCharBuf());
+            queryHandler.query(packet.getQueryAsCharBuf(decoder));
             success = true;
         }
         finally {
             if (!success && _log.isDebugEnabled()) {
-                _log.debug("borken sql:", StringUtils.left(packet.getQuery(), 1024));
+                _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 1024));
             }
         }
     }
@@ -398,4 +404,12 @@ public final class MysqlSession {
         }
     }
 
+    private Decoder getDecoder() {
+        if (this.session == null) {
+            return Decoder.UTF8;
+        }
+        else {
+            return this.session.getConfig().getRequestDecoder();
+        }
+    }
 }

@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
@@ -49,66 +49,66 @@ import com.google.common.base.Charsets;
  * @author wgu0
  */
 public class AutoCaster {
-	static Pattern _ptnDate = Pattern.compile("(\\d+)-(\\d+)-(\\d+)");
-	static Pattern _ptnTimestamp = Pattern.compile(
-			"(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+)(\\.\\d+)?");
-	static Pattern _ptnTimeDHMS = Pattern.compile(
-			"(\\d+) (\\d+):(\\d+):(\\d+)");
-	static Pattern _ptnTimeHMS = Pattern.compile(
-			"(\\d{2}+)(\\d{2}+)(\\d{2}+)");
-	static Pattern _ptnTimeHMSC = Pattern.compile(
-			"(\\d+):(\\d+):(\\d+)(\\.(\\d+))?");
+    static Pattern _ptnDate = Pattern.compile("(\\d+)-(\\d+)-(\\d+)");
+    static Pattern _ptnTimestamp = Pattern.compile(
+            "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+)(\\.\\d+)?");
+    static Pattern _ptnTimeDHMS = Pattern.compile(
+            "(\\d+) (\\d+):(\\d+):(\\d+)");
+    static Pattern _ptnTimeHMS = Pattern.compile(
+            "(\\d{2}+)(\\d{2}+)(\\d{2}+)");
+    static Pattern _ptnTimeHMSC = Pattern.compile(
+            "-?(\\d+):(\\d+):(\\d+)(\\.(\\d+))?");
 
-	/**
-	 * WARNING: Integer.MIN_VALUE means NULL
-	 * 
-	 * @param heap
-	 * @param addrx
-	 * @param addry
-	 * @return
-	 */
-	public static int compare(Heap heap, long addrx, long addry) {
-		if ((addrx == 0) || (addry == 0)) {
-			return Integer.MIN_VALUE;
-		}
-		int typex = Value.getType(heap, addrx);
-		int typey = Value.getType(heap, addry);
-		if (typex != typey) {
-			int type = max(typex, typey);
-			addrx = cast(heap, type, typex, addrx);
-			addry = cast(heap, type, typey, addry);
-		}
-		if ((addrx == 0) || (addry == 0)) {
-			return Integer.MIN_VALUE;
-		}
-		return FishObject.compare(heap, addrx, addry);
-	}
-	
-	public static boolean equals(Heap heap, long addrx, long addry) {
-		int compare = compare(heap, addrx, addry);
-		return  compare == 0;
-	}
-	
-	public static long plus(Heap heap, long addrx, long addry) {
-	    long result = upcast(heap, addrx, addry, (px, py) -> {
-	        return FishObject.plus(heap, px, py);
-	    });
-	    return result;
-	}
-	
-	public static long minus(Heap heap, long addrx, long addry) {
-		if ((addrx == 0) || (addry == 0)) {
-			return 0;
-		}
-		int typex = Value.getType(heap, addrx);
-		int typey = Value.getType(heap, addry);
-		if (typex != typey) {
-			int type = max(typex, typey);
-			addrx = cast(heap, type, typex, addrx);
-			addry = cast(heap, type, typey, addry);
-		}
-		return FishObject.minus(heap, addrx, addry);
-	}
+    /**
+     * WARNING: Integer.MIN_VALUE means NULL
+     * 
+     * @param heap
+     * @param addrx
+     * @param addry
+     * @return
+     */
+    public static int compare(Heap heap, long addrx, long addry) {
+        if ((addrx == 0) || (addry == 0)) {
+            return Integer.MIN_VALUE;
+        }
+        int typex = Value.getType(heap, addrx);
+        int typey = Value.getType(heap, addry);
+        if (typex != typey) {
+            int type = max(typex, typey);
+            addrx = cast(heap, type, typex, addrx);
+            addry = cast(heap, type, typey, addry);
+        }
+        if ((addrx == 0) || (addry == 0)) {
+            return Integer.MIN_VALUE;
+        }
+        return FishObject.compare(heap, addrx, addry);
+    }
+    
+    public static boolean equals(Heap heap, long addrx, long addry) {
+        int compare = compare(heap, addrx, addry);
+        return  compare == 0;
+    }
+    
+    public static long plus(Heap heap, long addrx, long addry) {
+        long result = upcast(heap, addrx, addry, (px, py) -> {
+            return FishObject.plus(heap, px, py);
+        });
+        return result;
+    }
+    
+    public static long minus(Heap heap, long addrx, long addry) {
+        if ((addrx == 0) || (addry == 0)) {
+            return 0;
+        }
+        int typex = Value.getType(heap, addrx);
+        int typey = Value.getType(heap, addry);
+        if (typex != typey) {
+            int type = max(typex, typey);
+            addrx = cast(heap, type, typex, addrx);
+            addry = cast(heap, type, typey, addry);
+        }
+        return FishObject.minus(heap, addrx, addry);
+    }
 
     private final static int max(int typex, int typey) {
         int type;
@@ -130,61 +130,61 @@ public class AutoCaster {
         return type;
     }
 
-	public final static long cast(Heap heap, int typeNew, int typeOld, long addr) {
-		if (typeNew == typeOld) {
-			return addr;
-		}
-		if (typeNew == Value.TYPE_NUMBER) {
-			return toNumber(heap, typeOld, addr);
-		}
-		else if (typeNew == Value.TYPE_TIMESTAMP) {
-			return toTimestamp(heap, addr);
-		}
-		else if (typeNew == Value.TYPE_DATE) {
-			return toDate(heap, addr);
-		}
-		else if (typeNew == Value.TYPE_BYTES) {
-			return FishObject.toBytes(heap, addr);
-		}
+    public final static long cast(Heap heap, int typeNew, int typeOld, long addr) {
+        if (typeNew == typeOld) {
+            return addr;
+        }
+        if (typeNew == Value.TYPE_NUMBER) {
+            return toNumber(heap, typeOld, addr);
+        }
+        else if (typeNew == Value.TYPE_TIMESTAMP) {
+            return toTimestamp(heap, addr);
+        }
+        else if (typeNew == Value.TYPE_DATE) {
+            return toDate(heap, addr);
+        }
+        else if (typeNew == Value.TYPE_BYTES) {
+            return FishObject.toBytes(heap, addr);
+        }
         else if (typeNew == Value.TYPE_STRING) {
             return toString(heap, addr);
         }
-		else {
-			throw new IllegalArgumentException();
-		}
-	}
+        else {
+            throw new IllegalArgumentException();
+        }
+    }
 
     @SuppressWarnings("deprecation")
     private static long toNumber(Heap heap, int currentType, long pValue) {
-		switch (currentType) {
-		case Value.TYPE_NUMBER:
-		    return pValue;
-		case Value.TYPE_BOOL:
-			boolean b = FishBool.get(heap, pValue);
-			int value = b ? 1 : 0;
-			return Int4.allocSet(heap, value);
-		case Value.TYPE_BYTES:
-		    return toNumber(heap, Value.TYPE_STRING, toString(heap, pValue));
-		case Value.TYPE_STRING: {
-		    return parseNumber(heap, pValue);
-		}
-		case Value.FORMAT_TIMESTAMP: {
-		    Timestamp val = FishTimestamp.get(heap, pValue);
-		    if (val == null) {
-		        return 0;
-		    }
-		    if (val.getTime() == Long.MIN_VALUE) {
-		        // mysql 0000-00-00 00:00:00
-		        return 0;
-		    }
-		    long result = val.getYear() + 1900;
-		    result = result * 100 + val.getMonth() + 1;
-		    result = result * 100 + val.getDate();
-		    result = result * 100 + val.getHours();
-		    result = result * 100 + val.getMinutes();
-		    result = result * 100 + val.getSeconds();
-		    return Int8.allocSet(heap, result);
-		}
+        switch (currentType) {
+        case Value.TYPE_NUMBER:
+            return pValue;
+        case Value.TYPE_BOOL:
+            boolean b = FishBool.get(heap, pValue);
+            int value = b ? 1 : 0;
+            return Int4.allocSet(heap, value);
+        case Value.TYPE_BYTES:
+            return toNumber(heap, Value.TYPE_STRING, toString(heap, pValue));
+        case Value.TYPE_STRING: {
+            return parseNumber(heap, pValue);
+        }
+        case Value.FORMAT_TIMESTAMP: {
+            Timestamp val = FishTimestamp.get(heap, pValue);
+            if (val == null) {
+                return 0;
+            }
+            if (val.getTime() == Long.MIN_VALUE) {
+                // mysql 0000-00-00 00:00:00
+                return 0;
+            }
+            long result = val.getYear() + 1900;
+            result = result * 100 + val.getMonth() + 1;
+            result = result * 100 + val.getDate();
+            result = result * 100 + val.getHours();
+            result = result * 100 + val.getMinutes();
+            result = result * 100 + val.getSeconds();
+            return Int8.allocSet(heap, result);
+        }
         case Value.FORMAT_DATE: {
             long val = FishDate.getEpochMillisecond(heap, pValue);
             if (val == Long.MIN_VALUE) {
@@ -256,16 +256,16 @@ public class AutoCaster {
         default:
             throw new IllegalArgumentException();
         }
-	}
-	
-	public static long toNumber(Heap heap, long pValue) {
-		if (pValue == 0) {
-			return 0;
-		}
-		int type = Value.getType(heap, pValue);
-		long p = cast(heap, Value.TYPE_NUMBER, type, pValue);
-		return p;
-	}
+    }
+    
+    public static long toNumber(Heap heap, long pValue) {
+        if (pValue == 0) {
+            return 0;
+        }
+        int type = Value.getType(heap, pValue);
+        long p = cast(heap, Value.TYPE_NUMBER, type, pValue);
+        return p;
+    }
 
     public static int getInt(long pValue) {
         byte format = Value.getFormat(null, pValue);
@@ -328,54 +328,54 @@ public class AutoCaster {
             Timestamp value = FishTimestamp.get(heap, pValue);
             result = new Date(value.getYear(), value.getMonth(), value.getDate());
         }
-		else if (type == Value.TYPE_STRING) {
-			String text = (String)FishObject.get(heap, pValue);
-			result = parseDate(text);
-			if (result == null) {
-            	    throw new OrcaException("invalid date value: " + text);
-			}
-		}
+        else if (type == Value.TYPE_STRING) {
+            String text = (String)FishObject.get(heap, pValue);
+            result = parseDate(text);
+            if (result == null) {
+                    throw new OrcaException("invalid date value: " + text);
+            }
+        }
         else if (type == Value.TYPE_BYTES) {
             pValue = toString(heap, pValue);
             return toDate(heap, pValue);
         }
-		else {
-			throw new IllegalArgumentException();
-		}
-		return FishObject.allocSet(heap, result);
-	}
+        else {
+            throw new IllegalArgumentException();
+        }
+        return FishObject.allocSet(heap, result);
+    }
 
-	public static long toTimestamp(Heap heap, long pValue) {
-		if (pValue == 0) {
-			return 0;
-		}
-		int type = Value.getType(heap, pValue);
-		Timestamp result;
-		if (type == Value.TYPE_TIMESTAMP) {
-			return pValue;
-		}
-		else if (type == Value.TYPE_DATE) {
-		    long epoch = FishDate.getEpochMillisecond(heap, pValue);
-		    return FishTimestamp.allocSet(heap, epoch);
-		}
-		else if (type == Value.TYPE_STRING) {
-			String text = (String)FishObject.get(heap, pValue);
-			result = parseTimestamp(text);
-			if (result == null) {
-				Date dt = parseDate(text);
-				if (dt != null) {
-					result = new Timestamp(dt.getTime());
-				}
-				else {
-	            	throw new OrcaException("invalid date value: " + text);
-				}
-			}
-		}
-		else if (type == Value.FORMAT_BYTES) {
-		    return toTimestamp(heap, toString(heap, pValue));
-		}
-		else if (type == Value.TYPE_NUMBER) {
-		    long epoch = FishNumber.longValue(pValue);
+    public static long toTimestamp(Heap heap, long pValue) {
+        if (pValue == 0) {
+            return 0;
+        }
+        int type = Value.getType(heap, pValue);
+        Timestamp result;
+        if (type == Value.TYPE_TIMESTAMP) {
+            return pValue;
+        }
+        else if (type == Value.TYPE_DATE) {
+            long epoch = FishDate.getEpochMillisecond(heap, pValue);
+            return FishTimestamp.allocSet(heap, epoch);
+        }
+        else if (type == Value.TYPE_STRING) {
+            String text = (String)FishObject.get(heap, pValue);
+            result = parseTimestamp(text);
+            if (result == null) {
+                Date dt = parseDate(text);
+                if (dt != null) {
+                    result = new Timestamp(dt.getTime());
+                }
+                else {
+                    throw new OrcaException("invalid date value: " + text);
+                }
+            }
+        }
+        else if (type == Value.FORMAT_BYTES) {
+            return toTimestamp(heap, toString(heap, pValue));
+        }
+        else if (type == Value.TYPE_NUMBER) {
+            long epoch = FishNumber.longValue(pValue);
             return FishTimestamp.allocSet(heap, epoch);
         }
         else {
@@ -471,30 +471,30 @@ public class AutoCaster {
         }
     }
 
-	public static long toTime(Heap heap, long pValue) {
-		if (pValue == 0) {
-			return 0;
-		}
-		int type = Value.getType(heap, pValue);
-		if (type == Value.TYPE_TIME) {
-			return pValue;
-		}
-		if (type == Value.TYPE_NUMBER) {
-			long time = FishNumber.longValue(pValue);
-			return FishTime.allocSet(heap, time);
-		}
-		else if (type == Value.TYPE_STRING) {
-			String text = (String)FishObject.get(heap, pValue);
-			long time = parseTime(text);
-			return FishTime.allocSet(heap, time);
-		}
+    public static long toTime(Heap heap, long pValue) {
+        if (pValue == 0) {
+            return 0;
+        }
+        int type = Value.getType(heap, pValue);
+        if (type == Value.TYPE_TIME) {
+            return pValue;
+        }
+        if (type == Value.TYPE_NUMBER) {
+            long time = FishNumber.longValue(pValue);
+            return FishTime.allocSet(heap, time);
+        }
+        else if (type == Value.TYPE_STRING) {
+            String text = (String)FishObject.get(heap, pValue);
+            long time = parseTime(text);
+            return FishTime.allocSet(heap, time);
+        }
         else if (type == Value.FORMAT_BYTES) {
             return toTime(heap, toString(heap, pValue));
         }
-		else {
-			throw new IllegalArgumentException();
-		}
-	}
+        else {
+            throw new IllegalArgumentException();
+        }
+    }
 
     private static long parseTime(String text) {
         Matcher m = _ptnTimeHMSC.matcher(text);
@@ -503,14 +503,22 @@ public class AutoCaster {
             long mm = Integer.parseInt(m.group(2));
             long ss = Integer.parseInt(m.group(3));
             long sss = (m.group(5) == null) ? 0 : Integer.parseInt(m.group(5));
-            return hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000 + sss;
+            long result = hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000 + sss; 
+            if (text.startsWith("-")) {
+                result = -result;
+            }
+            return result;
         }
         m = _ptnTimeHMS.matcher(text);
         if (m.matches()) {
             long hh = Integer.parseInt(m.group(1));
             long mm = Integer.parseInt(m.group(2));
             long ss = Integer.parseInt(m.group(3));
-            return hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
+            long result = hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
+            if (text.startsWith("-")) {
+                result = -result;
+            }
+            return result;
         }
         m = _ptnTimeDHMS.matcher(text);
         if (m.matches()) {
@@ -518,7 +526,11 @@ public class AutoCaster {
             long hh = Integer.parseInt(m.group(2));
             long mm = Integer.parseInt(m.group(3));
             long ss = Integer.parseInt(m.group(4));
-            return dd * 24 * 3600 * 1000 + hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
+            long result = dd * 24 * 3600 * 1000 + hh * 3600 * 1000 + mm * 60 * 1000 + ss * 1000;
+            if (text.startsWith("-")) {
+                result = -result;
+            }
+            return result;
         }
         throw new IllegalArgumentException();
     }

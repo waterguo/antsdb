@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.planner;
 
@@ -23,6 +23,7 @@ import com.antsdb.saltedfish.sql.vdm.BooleanValue;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.NullValue;
 import com.antsdb.saltedfish.sql.vdm.OpAnd;
+import com.antsdb.saltedfish.sql.vdm.OpBetween;
 import com.antsdb.saltedfish.sql.vdm.OpEqual;
 import com.antsdb.saltedfish.sql.vdm.OpEqualNull;
 import com.antsdb.saltedfish.sql.vdm.OpInSelect;
@@ -76,6 +77,20 @@ class Analyzer {
         }
         else if (expr instanceof BinaryOperator) {
             return analyze_binary(mode, set, planner, (BinaryOperator) expr, scope);
+        }
+        else if (expr instanceof OpBetween) {
+            OpBetween between = (OpBetween)expr;
+            Operator upstream = between.getLeftOperator();
+            if (upstream instanceof FieldValue) {
+                FieldValue field = (FieldValue) upstream;
+                if (!analyze_binary(mode, set, planner, FilterOp.LARGEREQUAL, field, between.getFrom(), expr, scope)) {
+                    return false;
+                }
+                if (!analyze_binary(mode, set, planner, FilterOp.LESSEQUAL, field, between.getTo(), expr, scope)) {
+                    return false;
+                }
+                return true;
+            }
         }
         else if (expr instanceof OpIsNull) {
             Operator upstream = ((OpIsNull) expr).getUpstream();

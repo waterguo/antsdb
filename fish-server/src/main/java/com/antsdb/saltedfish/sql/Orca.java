@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql;
 
@@ -65,7 +65,7 @@ import static com.antsdb.saltedfish.sql.OrcaConstant.*;
  *
  */
 public class Orca {
-    public static String _version = "5.5.0-antsdb";
+    public static String _version = "5.6.0-antsdb";
     public static final String SYSNS = Humpback.SYS_NAMESAPCE;
     
     static Logger _log = UberUtil.getThisLogger();
@@ -96,7 +96,7 @@ public class Orca {
         Map<String, String> manifest = ManifestUtil.load(Orca.class);
         String version = manifest.get("Implementation-Version");
         version = StringUtils.replace(version, ".", "");
-        _version = String.format("5.5.0-antsdb%s", version);
+        _version = String.format("5.6.0-antsdb%s", version);
     }
     
     static class DeadSession {
@@ -230,12 +230,14 @@ public class Orca {
         registerSystemView(SYSNS, "CACHE_INFO", new SystemViewCacheInfo(this));
         registerSystemView(SYSNS, "MINKE_INFO", new SystemViewMinkeInfo(this));
         registerSystemView(SYSNS, "REPLICATOR_INFO", new SystemViewReplicatorInfo(this));
+        registerSystemView(SYSNS, "SLAVE_INFO", new SystemViewSlaveInfo(this));
         registerSystemView(SYSNS, "SYNCHRONIZER_INFO", new SystemViewSynchronizerInfo(this));
         registerSystemView(SYSNS, "TABLE_STATS", new SystemViewTableStats(this));
         registerSystemView(SYSNS, "PAGES", new SystemViewPages(this));
-        registerSystemView(SYSNS, "x00000000", new SystemViewHumpbackMeta(this));
-        registerSystemView(SYSNS, "x00000001", new SystemViewHumpbackNamespace(this));
-        registerSystemView(SYSNS, "x00000002", new SystemViewTableStats(this));
+        registerSystemView(SYSNS, "x0", new SystemViewHumpbackMeta(this));
+        registerSystemView(SYSNS, "x1", new SystemViewHumpbackNamespace(this));
+        registerSystemView(SYSNS, "x2", new SystemViewTableStats(this));
+        registerSystemView(SYSNS, "x3", new SystemViewHumpbackColumns(this));
         registerSystemView(SYSNS, "SLOW_QUERIES", new SlowQueries());
     }
 

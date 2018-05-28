@@ -6,12 +6,16 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.util;
+
+import java.time.Duration;
+
+import org.apache.commons.lang.time.DurationFormatUtils;
 
 /**
  * 
@@ -67,6 +71,20 @@ public final class UberFormatter {
             value = size / (double)SizeConstants.TB;
         }
         String result = String.format("%.2f %s", value, unit);
+        return result;
+    }
+    
+    public static String duration(Duration d) {
+        String result = null;
+        if (d != null) {
+            long ms = d.toMillis();
+            if (ms >= 0) {
+                result = DurationFormatUtils.formatDuration(ms, "HH:mm:ss");
+            }
+            else {
+                result = DurationFormatUtils.formatDuration(-ms, "-HH:mm:ss");
+            }
+        }
         return result;
     }
 }

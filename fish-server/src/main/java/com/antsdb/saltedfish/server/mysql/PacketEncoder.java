@@ -6,10 +6,10 @@
  Copyright (c) 2016, antsdb.com and/or its affiliates. All rights reserved. *-xguo0<@
 
  This program is free software: you can redistribute it and/or modify it under the terms of the
- GNU Affero General Public License, version 3, as published by the Free Software Foundation.
+ GNU GNU Lesser General Public License, version 3, as published by the Free Software Foundation.
 
  You should have received a copy of the GNU Affero General Public License along with this program.
- If not, see <https://www.gnu.org/licenses/agpl-3.0.txt>
+ If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
@@ -25,7 +25,6 @@ import java.time.Duration;
 
 import org.apache.commons.codec.Charsets;
 import org.apache.commons.lang.NotImplementedException;
-import org.apache.commons.lang.time.DurationFormatUtils;
 import org.apache.commons.lang.time.FastDateFormat;
 import org.slf4j.Logger;
 
@@ -47,6 +46,7 @@ import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Record;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.util.PacketCallback;
+import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -303,13 +303,39 @@ public final class PacketEncoder {
         }
         // BLOB return byte[] as its java type
         else if (meta.getType().getJavaType() == byte[].class) {
-            buffer.writeInt(0x3f);
-            buffer.writeUB4(2147483647);
-            buffer.writeByte((byte) (FIELD_TYPE_BLOB & 0xff));
-            // flag for Blob is x90 x00
-            buffer.writeByte((byte)0x90);
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)meta.getType().getScale());
+            if (meta.getType().getSqlType() == Types.BINARY) {
+                // char set binary
+                buffer.writeInt(0x3f);
+                // length
+                buffer.writeUB4(meta.getType().getLength() * 3);
+                // type
+                buffer.writeByte((byte)FIELD_TYPE_STRING);
+                // flags
+                buffer.writeInt(0x80);
+                // decimals
+                buffer.writeByte((byte)0);
+            }
+            else if (meta.getType().getSqlType() == Types.VARBINARY) {
+                // char set binary
+                buffer.writeInt(0x3f);
+                // length
+                buffer.writeUB4(meta.getType().getLength() * 3);
+                // type
+                buffer.writeByte((byte)FIELD_TYPE_VAR_STRING);
+                // flags
+                buffer.writeInt(0x80);
+                // decimals
+                buffer.writeByte((byte)0);
+            }
+            else {
+                buffer.writeInt(0x3f);
+                buffer.writeUB4(2147483647);
+                buffer.writeByte((byte) (FIELD_TYPE_BLOB & 0xff));
+                // flag for Blob is x90 x00
+                buffer.writeByte((byte)0x90);
+                buffer.writeByte((byte)0);
+                buffer.writeByte((byte)meta.getType().getScale());
+            }
         }
         else {
             throw new NotImplementedException("Unsupported data type:" + meta.getType().getJavaType());
@@ -400,13 +426,13 @@ public final class PacketEncoder {
 
             for (int i=0; i<nColumns; i++)
             {
-                    long pValue = Record.getValueAddress(pRecord, i);
-                    if (pValue != 0) {
-                        writeValue(buffer, meta.getColumn(i), pValue);
-                    }
-                    else {
-                        nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
-                    }
+                long pValue = Record.getValueAddress(pRecord, i);
+                if (pValue != 0) {
+                    writeValue(buffer, meta.getColumn(i), pValue);
+                }
+                else {
+                    nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
+                }
             }
     
             int endPos = buffer.position();
@@ -553,9 +579,8 @@ public final class PacketEncoder {
                 buffer.writeByte((byte) 251);
             } 
             else if (fv instanceof Duration) {
-                    Duration t = (Duration)fv;
-                    String text = DurationFormatUtils.formatDuration(t.toMillis(), "HH:mm:ss");
-                    buffer.writeLenString(text, getEncoder());
+                String text = UberFormatter.duration((Duration)fv);
+                buffer.writeLenString(text, getEncoder());
             }
             else if (fv instanceof Timestamp) {
                 // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
