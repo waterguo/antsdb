@@ -29,6 +29,12 @@ Compatibility
 -------------
 AntsDB is wire compatible with MySQL. Most MySQL applications can run directly without any changes. 
 
+Comparison to the Apache Phoenix
+--------------------------------
+Apache Phoenix is a popular SQL on HBase software. Though AntsDB and Phoenix both brings SQL to the HBase, they are targeting different use cases. Phoenix supports transaction and is a power query engine which can distribute workload on multiple nodes. AntsDB's focus is on latency and compatbility.
+- AntsDB is wire compatible with MySQL so that it makes HBase accessable through JDBC, ODBC, PHP, PERL and all other language bindings available to MySQL
+- AntsDB supports MySQL featuers and syntax thus many MySQL based applications and frameworks can run directly on HBase
+- AntsDB uses local cache to save network traffic. It can be one order of magnitude faster than Phoenix for small query and transactions.
 
 Contact Us
 ----------
