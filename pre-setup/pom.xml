@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.antsdb</groupId>
+        <artifactId>fish-root</artifactId>
+        <version>18.05.27</version>
+    </parent>
+    
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>antsdb</artifactId>
+    <version>all</version>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+      
+    <repositories>
+        <repository>
+            <id>my-repos</id>
+            <name>my repos</name>
+            <url>http://lepton.iceup.net/repos</url>
+        </repository>
+    </repositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.3</version>
+                <configuration>
+					<transformers>
+						<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+							<manifestEntries>
+								<Implementation-Version>${project.parent.version}</Implementation-Version>
+						  	</manifestEntries>
+						</transformer>
+					  </transformers>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.antsdb</groupId>
+            <artifactId>salted-fish</artifactId>
+            <version>${project.parent.version}</version>
+        </dependency>
+    </dependencies>
+</project>

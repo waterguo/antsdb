@@ -4,6 +4,17 @@
  
     <groupId>com.antsdb</groupId>
     <artifactId>fish-root</artifactId>
-    <version>1</version>
+    <version>18.05.27</version>
     <packaging>pom</packaging>
+    
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <fish-version>18.03.28</fish-version>
+    </properties>
+
+	<modules>
+        <module>fish-server</module>
+        <module>pre-setup</module>
+        <module>setup</module>
+    </modules>
 </project>

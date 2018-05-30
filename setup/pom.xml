@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<parent>
+		<groupId>com.antsdb</groupId>
+		<artifactId>fish-root</artifactId>
+		<version>18.05.27</version>
+	</parent>
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<artifactId>antsdb-dist</artifactId>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	</properties>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>appassembler-maven-plugin</artifactId>
+				<version>1.10</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>generate-daemons</goal>
+							<goal>assemble</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<assembleDirectory>${project.build.directory}/dist/jsw/antsdb</assembleDirectory>
+					<target>${project.build.directory}/dist</target>
+					<repositoryLayout>flat</repositoryLayout>
+					<preAssembleDirectory>src/layout</preAssembleDirectory>
+					<configurationDirectory>conf</configurationDirectory>
+					<repositoryName>lib</repositoryName>
+					<includeConfigurationDirectoryInClasspath>true</includeConfigurationDirectoryInClasspath>
+					<programs>
+						<program>
+							<name>hbase-util</name>
+							<mainClass>com.antsdb.saltedfish.storage.HBaseUtilMain</mainClass>
+						</program>
+						<program>
+							<name>hbase-relink</name>
+							<mainClass>com.antsdb.saltedfish.storage.OrcaRelinkMain</mainClass>
+							<commandLineArguments>
+								<commandLineArgument>--home</commandLineArgument>
+								<commandLineArgument>$BASEDIR</commandLineArgument>
+							</commandLineArguments>
+						</program>
+					</programs>
+					<daemons>
+						<daemon>
+							<id>antsdb</id>
+							<mainClass>com.antsdb.saltedfish.server.SaltedFishMain</mainClass>
+							<commandLineArguments>
+								<commandLineArgument>.</commandLineArgument>
+							</commandLineArguments>
+							<platforms>
+								<platform>jsw</platform>
+							</platforms>
+						</daemon>
+					</daemons>
+				</configuration>
+			</plugin>
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<version>2.5.3</version>
+				<configuration>
+					<finalName>antsdb-${project.version}</finalName>
+					<descriptor>src/assembly.xml</descriptor>
+				</configuration>
+				<executions>
+					<execution>
+						<id>create-archive</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.antsdb</groupId>
+			<artifactId>antsdb</artifactId>
+            <version>all</version>
+		</dependency>
+	</dependencies>
+</project>
