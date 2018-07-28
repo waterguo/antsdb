@@ -27,92 +27,93 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
  * @author wgu0
  */
 public class CursorPrimaryKeySeek extends CursorMaker {
-	TableMeta table;
+    TableMeta table;
     CursorMeta meta;
     int[] mapping;
-	private CursorMaker select;
-	private Vector prefix;
+    private CursorMaker select;
+    private Vector prefix;
 
-	class MyCursor extends CursorWithHeap {
-		Cursor select;
-		long[] values;
-		long pRow;
-		boolean isClosed = false;
-		private AtomicLong counter;
-		GTable gtable;
-		Transaction trx;
-		
-		public MyCursor(
-				SpaceManager memman, 
-				GTable gtable,
-				Transaction trx, 
-				AtomicLong counter) {
-			super(CursorPrimaryKeySeek.this);
-			this.gtable = gtable;
-			this.trx = trx;
-			this.counter = counter;
-		}
+    class MyCursor extends CursorWithHeap {
+        Cursor select;
+        long[] values;
+        long pRow;
+        boolean isClosed = false;
+        private AtomicLong counter;
+        GTable gtable;
+        Transaction trx;
+        
+        public MyCursor(
+                SpaceManager memman, 
+                GTable gtable,
+                Transaction trx, 
+                AtomicLong counter) {
+            super(CursorPrimaryKeySeek.this);
+            this.gtable = gtable;
+            this.trx = trx;
+            this.counter = counter;
+        }
 
-		@Override
-		public long next() {
-			for (;;) {
-				if (isClosed) {
-					return 0;
-				}
-				
-				// next scan
-				
-				nextRow();
-				if (this.pRow == 0) {
-					continue;
-				}
-				
-				// convert row to record
-				
-		    	long pRecord = newRecord();
-		        Row row = Row.fromMemoryPointer(pRow, 0);
-		        Record.setKey(pRecord, row.getKeyAddress());
-		        for (int i=0; i<this.meta.getColumnCount(); i++) {
-		        	long pValue = row.getFieldAddress(CursorPrimaryKeySeek.this.mapping[i]);
-		        	Record.set(pRecord, i, pValue);
-		        }
-		        this.counter.incrementAndGet();
-		        return pRecord;
-			}
-		}
+        @Override
+        public long next() {
+            for (;;) {
+                if (isClosed) {
+                    return 0;
+                }
+                
+                // next scan
+                
+                nextRow();
+                if (this.pRow == 0) {
+                    continue;
+                }
+                
+                // convert row to record
+                
+                long pRecord = newRecord();
+                Row row = Row.fromMemoryPointer(pRow, 0);
+                Record.setKey(pRecord, row.getKeyAddress());
+                for (int i=0; i<this.meta.getColumnCount(); i++) {
+                    long pValue = row.getFieldAddress(CursorPrimaryKeySeek.this.mapping[i]);
+                    Record.set(pRecord, i, pValue);
+                }
+                this.counter.incrementAndGet();
+                Record.size(pRecord);
+                return pRecord;
+            }
+        }
 
-		private void nextRow() {
-			// fetch next value from cursor
-			
-			long pRec = this.select.next();
-			if (pRec == 0) {
-				this.pRow = 0;
-				close();
-				return;
-			}
-			long pValue = Record.get(pRec, 0);
-			
-			// calculate key
-			
-			this.values[this.values.length-1] = pValue;
-			KeyMaker keymaker = CursorPrimaryKeySeek.this.table.getKeyMaker();
-			long pKey = keymaker.make(getHeap(), values);
-			
-			// scan !!
-			
-	        this.pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
-		}
+        private void nextRow() {
+            // fetch next value from cursor
+            
+            long pRec = this.select.next();
+            if (pRec == 0) {
+                this.pRow = 0;
+                close();
+                return;
+            }
+            long pValue = Record.get(pRec, 0);
+            
+            // calculate key
+            
+            this.values[this.values.length-1] = pValue;
+            KeyMaker keymaker = CursorPrimaryKeySeek.this.table.getKeyMaker();
+            long pKey = keymaker.make(getHeap(), values);
+            
+            // scan !!
+            
+            this.pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        }
 
-		@Override
-		public void close() {
-			this.isClosed = true;
-			super.close();
-			this.select.close();
-		}
-	}
-	
+        @Override
+        public void close() {
+            this.isClosed = true;
+            super.close();
+            this.select.close();
+        }
+    }
+    
     public CursorPrimaryKeySeek(TableMeta table, int makerId) {
-    	this.table = table;
+        this.table = table;
         this.meta = CursorMeta.from(table);
         this.mapping = this.meta.getHumpbackMapping();
         setMakerId(makerId);
@@ -127,26 +128,26 @@ public class CursorPrimaryKeySeek extends CursorMaker {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         Transaction trx = ctx.getTransaction();
-    	MyCursor c = new MyCursor(
-    			ctx.getSpaceManager(), 
-    			gtable, 
-    			trx, 
-    			ctx.getCursorStats(makerId));
-    	boolean success = false;
-    	try {
-        	c.select = this.select.make(ctx, params, pMaster);
-        	c.values = new long[this.prefix.getValues().size() + 1];
-        	for (int i=0; i<this.prefix.getValues().size(); i++) {
-        		c.values[i] = this.prefix.getValues().get(i).eval(ctx, c.getHeap(), params, pMaster);
-        	}
-    		success = true;
-        	return c;
-    	}
-    	finally {
-    		if (!success) {
-    			c.close();
-    		}
-    	}
+        MyCursor c = new MyCursor(
+                ctx.getSpaceManager(), 
+                gtable, 
+                trx, 
+                ctx.getCursorStats(makerId));
+        boolean success = false;
+        try {
+            c.select = this.select.make(ctx, params, pMaster);
+            c.values = new long[this.prefix.getValues().size() + 1];
+            for (int i=0; i<this.prefix.getValues().size(); i++) {
+                c.values[i] = this.prefix.getValues().get(i).eval(ctx, c.getHeap(), params, pMaster);
+            }
+            success = true;
+            return c;
+        }
+        finally {
+            if (!success) {
+                c.close();
+            }
+        }
     }
 
     @Override
@@ -161,10 +162,10 @@ public class CursorPrimaryKeySeek extends CursorMaker {
         this.select.explain(level+1, records);
     }
 
-	public void setKey(Vector v, CursorMaker select) {
-		this.prefix = v;
-		this.select = select;
-	}
+    public void setKey(Vector v, CursorMaker select) {
+        this.prefix = v;
+        this.select = select;
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {

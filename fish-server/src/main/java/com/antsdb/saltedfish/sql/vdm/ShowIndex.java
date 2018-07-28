@@ -24,42 +24,45 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 public class ShowIndex extends ViewMaker {
-	final static CursorMeta META = CursorUtil.toMeta(Item.class);
+    final static CursorMeta META = CursorUtil.toMeta(Item.class);
 
-	ObjectName tableName;
-	
-	public static class Item {
-		public String Table;
-		public int Non_unique;
-		public String Key_name;
-		public int Seq_in_index;
-		public String Column_name;
-		public String Collation;
-		public long Cardinality;
-		public Integer Sub_part;
-		public String Packed;
-		public String Null;
-		public String Index_type;
-		public String Comment;
-		public String Index_comment;
-	}
-	
-	public ShowIndex(ObjectName tableName, GeneratorContext ctx) {
-	    super(META);
-		this.tableName = tableName;
-	}
+    ObjectName tableName;
+    
+    public static class Item {
+        public String Table;
+        public int Non_unique;
+        public String Key_name;
+        public int Seq_in_index;
+        public String Column_name;
+        public String Collation;
+        public long Cardinality;
+        public Integer Sub_part;
+        public String Packed;
+        public String Null;
+        public String Index_type;
+        public String Comment;
+        public String Index_comment;
+    }
+    
+    public ShowIndex(ObjectName tableName, GeneratorContext ctx) {
+        super(META);
+        this.tableName = tableName;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
-		List<Item> list = new ArrayList<>();
-		toItems(list, table, table.getPrimaryKey());
-		for (IndexMeta index: table.getIndexes()) {
-	        toItems(list, table, index);
-		}
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
+        List<Item> list = new ArrayList<>();
+        PrimaryKeyMeta pk = table.getPrimaryKey();
+        if (pk != null) {
+            toItems(list, table, pk);
+            for (IndexMeta index: table.getIndexes()) {
+                toItems(list, table, index);
+            }
+        }
         Cursor c = CursorUtil.toCursor(META, list);
         return c;
-	}
+    }
 
     private void toItems(List<Item> items, TableMeta table, IndexMeta index) {
         int sequence = 1;

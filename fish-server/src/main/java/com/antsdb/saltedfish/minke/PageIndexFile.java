@@ -31,12 +31,13 @@ import com.antsdb.saltedfish.nosql.TableType;
  */
 class PageIndexFile {
     static final int EOF_MARK = 0x77777777;
+    static final int VERSION = 1;
     
     File file;
     
     static interface LoadCallback {
-        void table(int tableId, TableType type);
-        void page(int pageId, KeyBytes startKey, KeyBytes endKey);
+        void table(long version, int tableId, TableType type);
+        void page(long version, int pageId, long lastAccess, KeyBytes startKey, KeyBytes endKey);
     }
     
     PageIndexFile(File file) {
@@ -85,15 +86,27 @@ class PageIndexFile {
     
     long load(Minke minke, Map<Integer, MinkeTable> tableById) throws Exception {
         try (DataInputStream in = new DataInputStream(new FileInputStream(this.file))) {
-            long sp = in.readLong();
+            long sp;
+            long version = in.readLong();
+            if (version >>> 56 == 0xff) {
+                version = version & 0xffffffffl;
+                sp = in.readLong();
+            }
+            else {
+                sp = version;
+                version = 0;
+            }
             for (;;) {
+                if (in.available() <= 0) {
+                    break;
+                }
                 int tableId = in.readInt();
                 if (tableId == EOF_MARK) {
                     break;
                 }
                 TableType type = TableType.values()[in.readShort()];
                 MinkeTable mtable = new MinkeTable(minke, tableId, type);
-                mtable.read(in);
+                mtable.read(version, in);
                 tableById.put(tableId, mtable);
             }
             return sp;
@@ -102,34 +115,48 @@ class PageIndexFile {
 
     long load(LoadCallback callback) throws Exception {
         try (DataInputStream in = new DataInputStream(new FileInputStream(this.file))) {
-            long sp = in.readLong();
+            long sp;
+            long version = in.readLong();
+            if (version >>> 56 == 0xff) {
+                version = version & 0xffffffffl;
+                sp = in.readLong();
+            }
+            else {
+                sp = version;
+                version = 0;
+            }
             for (;;) {
                 int tableId = in.readInt();
                 if (tableId == EOF_MARK) {
                     break;
                 }
                 TableType type = TableType.values()[in.readShort()];
-                callback.table(tableId, type);
-                loadTable(in, callback);
+                callback.table(version, tableId, type);
+                loadTable(version, in, callback);
             }
             return sp;
         }
     }
     
-    private void loadTable(DataInputStream in, LoadCallback callback) throws IOException {
+    private void loadTable(long version, DataInputStream in, LoadCallback callback) throws IOException {
         for (;;) {
             int pageId = in.readInt();
             if (pageId == -1) {
                 return;
             }
+            long lastAccess = 0;
+            if (version >= 1) {
+                lastAccess = in.readLong(); 
+            }
             KeyBytes startKey = MinkeTable.readKeyBytes(in);
             KeyBytes endKey = MinkeTable.readKeyBytes(in);
-            callback.page(pageId, startKey, endKey);
+            callback.page(version, pageId, lastAccess, startKey, endKey);
         }
     }
 
     public void save(ConcurrentMap<Integer, MinkeTable> tableById, long sp) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(file))) {
+            out.writeLong(VERSION | (0xff << 56));
             out.writeLong(sp);
             for (Map.Entry<Integer, MinkeTable> i:tableById.entrySet()) {
                 out.writeInt(i.getKey());

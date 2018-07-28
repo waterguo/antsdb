@@ -34,58 +34,59 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author wgu0
  */
 public class IndexEntryHandler {
-	GTable gtable;
-	IndexMeta index;
-	KeyMaker keyMaker;
-	TableMeta table;
-	
-	public IndexEntryHandler(GTable gindex, TableMeta table, IndexMeta index) {
-		this.gtable = gindex;
-		this.table = table;
-		this.index = index;
-		this.keyMaker = index.getKeyMaker();
-	}
-	
-	static List<IndexEntryHandler> create(Orca orca, TableMeta table) {
-		List<IndexEntryHandler> handlers = new ArrayList<>();
-        	Humpback humpback = orca.getHumpback();
-        	for (IndexMeta i:table.getIndexes()) {
-        		IndexEntryHandler handler = new IndexEntryHandler(humpback.getTable(i.getIndexTableId()), table, i);
-        		handlers.add(handler);
-        	}
-		return handlers;
-	}
-	
-	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
-    	    long pIndexKey = keyMaker.make(heap, row);
-    	    long pRowKey = row.getKeyAddress();
-    	    insert(heap, trx, pIndexKey, pRowKey, (byte)0, timeout, isReplace);
-	}
-	
-	void insert(Heap heap, Transaction trx, long pIndexKey, long pRowKey, byte misc, int timeout, boolean isReplace) {
-    	    for (;;) {
-	    	HumpbackError error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
-	        if (error == HumpbackError.SUCCESS) {
-	        	    return;
-	        }
-	        else {
-		    	    error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
-		    	    throw new OrcaException(
-	        			"{} rowkey={} indexkey={}", 
-	        			error, 
-	        			KeyBytes.toString(pRowKey), 
-	        			KeyBytes.toString(pIndexKey));
-	        }
-    	    }
-	}
-	
-	void delete(Heap heap, Transaction trx, Row row, int timeout) {
-    	    long pIndexKey = keyMaker.make(heap, row);
-    	    delete(heap, trx, pIndexKey, timeout);
-	}
-	
-	void delete(Heap heap, Transaction trx, long pIndexKey, int timeout) {
-    	    HumpbackError error = this.gtable.delete(trx.getTrxId(), pIndexKey, timeout);
+    GTable gtable;
+    IndexMeta index;
+    KeyMaker keyMaker;
+    TableMeta table;
+    
+    public IndexEntryHandler(GTable gindex, TableMeta table, IndexMeta index) {
+        this.gtable = gindex;
+        this.table = table;
+        this.index = index;
+        this.keyMaker = index.getKeyMaker();
+    }
+    
+    static List<IndexEntryHandler> create(Orca orca, TableMeta table) {
+        List<IndexEntryHandler> handlers = new ArrayList<>();
+            Humpback humpback = orca.getHumpback();
+            for (IndexMeta i:table.getIndexes()) {
+                IndexEntryHandler handler = new IndexEntryHandler(humpback.getTable(i.getIndexTableId()), table, i);
+                handlers.add(handler);
+            }
+        return handlers;
+    }
+    
+    void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
+            long pIndexKey = keyMaker.make(heap, row);
+            long pRowKey = row.getKeyAddress();
+            insert(heap, trx, pIndexKey, pRowKey, (byte)0, timeout, isReplace);
+    }
+    
+    void insert(Heap heap, Transaction trx, long pIndexKey, long pRowKey, byte misc, int timeout, boolean isReplace) {
+            for (;;) {
+            HumpbackError error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
+            if (error == HumpbackError.SUCCESS) {
+                    return;
+            }
+            else {
+                    error = this.gtable.insertIndex(trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
+                    throw new OrcaException(
+                        "{} tableId={} rowkey={} indexkey={}", 
+                        error, 
+                        this.gtable.getId(),
+                        KeyBytes.toString(pRowKey), 
+                        KeyBytes.toString(pIndexKey));
+            }
+            }
+    }
+    
+    void delete(Heap heap, Transaction trx, Row row, int timeout) {
+            long pIndexKey = keyMaker.make(heap, row);
+            delete(heap, trx, pIndexKey, timeout);
+    }
+    
+    void delete(Heap heap, Transaction trx, long pIndexKey, int timeout) {
+            HumpbackError error = this.gtable.delete(trx.getTrxId(), pIndexKey, timeout);
         if (error != HumpbackError.SUCCESS) {
             throw new OrcaException(error);
         }

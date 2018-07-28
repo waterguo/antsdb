@@ -17,6 +17,8 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Duration;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
@@ -25,10 +27,14 @@ import com.antsdb.saltedfish.util.UberFormatter;
 
 public class FuncCast extends UnaryOperator {
     DataType type;
+    boolean zerofill;
 
     public FuncCast(DataType type, Operator expr) {
         super(expr);
         this.type = type;
+        if (expr.getReturnType() != null) {
+            this.zerofill = expr.getReturnType().isZerofill();
+        }
     }
 
     @Override
@@ -67,6 +73,9 @@ public class FuncCast extends UnaryOperator {
             }
             else if (value instanceof Duration) {
                 value = UberFormatter.duration((Duration)value);
+            }
+            if (this.zerofill) {
+                value = StringUtils.leftPad(value.toString(), this.upstream.getReturnType().getLength(), '0');
             }
             return FishObject.allocSet(heap, value.toString());
         }

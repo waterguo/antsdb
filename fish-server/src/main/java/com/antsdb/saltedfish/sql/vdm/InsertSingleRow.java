@@ -28,6 +28,7 @@ import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class InsertSingleRow extends Statement {
@@ -41,6 +42,8 @@ public class InsertSingleRow extends Statement {
     boolean ignoreError = false;
     int tableId;
     boolean isReplace = false;
+    boolean hasBlob = false;
+    GTable blobTable = null;
     
     public InsertSingleRow(Orca orca, TableMeta table, GTable gtable, List<ColumnMeta> fields, List<Operator> values) {
         this.table = table;
@@ -49,12 +52,22 @@ public class InsertSingleRow extends Statement {
         this.values = values;
         this.indexHandlers = new IndexEntryHandlers(orca, table);
         this.tableId = table.getId();
+        for (ColumnMeta i:table.getColumns()) {
+            if (i.isBlobClob()) {
+                this.blobTable = orca.getHumpback().getTable(table.getBlobTableId());
+                this.hasBlob = true;
+                break;
+            }
+        }
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         try {
-            ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+            LatencyDetector.run(_log, "lockTable", ()->{
+                ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+                return null;
+            });
             return run_(ctx, params);
         }
         finally {
@@ -88,7 +101,7 @@ public class InsertSingleRow extends Statement {
         return count;
     }
 
-    VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params) {
+    VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params, VaporizingRow blob) {
         // collect values 
         
         VaporizingRow row = new VaporizingRow(heap, this.table.getMaxColumnId());
@@ -104,25 +117,66 @@ public class InsertSingleRow extends Statement {
         
         long pKey = this.table.getKeyMaker().make(heap, row);
         row.setKey(pKey);
+        
+        // blob fields
+
+        if (blob != null) {
+            blob.setKey(pKey);
+            for (int i=0; i<fields.size(); i++) {
+                ColumnMeta column = this.fields.get(i);
+                if (column.isBlobClob()) {
+                    long pValue = row.getFieldAddress(column.getColumnId());
+                    if (pValue != 0) {
+                        BlobReference blobref = BlobReference.alloc(heap, pKey, pValue);
+                        row.setFieldAddress(column.getColumnId(), blobref.addr);
+                        blob.setFieldAddress(column.getColumnId(), pValue);
+                    }
+                }
+            }
+        }
+        
         return row;
     }
     
     void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
         int timeout = ctx.getSession().getConfig().getLockTimeout();
-        VaporizingRow row = genRow(ctx, heap, params);
+        Transaction trx = ctx.getTransaction();
+        
+        // collect values
+        
+        VaporizingRow rowBlob = null;
+        if (this.hasBlob) {
+            int maxBlobColumnId = this.table.getMaxBlobColumnId();
+            rowBlob = new VaporizingRow(heap, maxBlobColumnId);
+        }
+        VaporizingRow row = genRow(ctx, heap, params, rowBlob);
+        
+        // collect key
+        
+        long pKey = this.table.getKeyMaker().make(heap, row);
+        row.setKey(pKey);
         
         // do it
         
-        Transaction trx = ctx.getTransaction();
         row.setVersion(trx.getGuaranteedTrxId());
+        if (this.hasBlob) {
+            rowBlob.setKey(row.getKeyAddress());
+            rowBlob.setVersion(row.getVersion());
+        }
         for (;;) {
             HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
             if (error == HumpbackError.SUCCESS) {
+                if (this.hasBlob) {
+                    error = this.blobTable.insert(rowBlob, timeout);
+                    if (error != HumpbackError.SUCCESS) {
+                        throw new OrcaException(error, row.getKeySpec(this.tableId));
+                    }
+                }
                 this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
                 break;
             }
             else {
-                throw new OrcaException(error);
+                throw new OrcaException(error, row.getKeySpec(this.tableId));
             }
         }
     }

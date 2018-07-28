@@ -13,13 +13,19 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.meta;
 
+import java.util.concurrent.atomic.AtomicLong;
+
+import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.HumpbackError;
 import com.antsdb.saltedfish.nosql.SlowRow;
+import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
 public class SequenceMeta {
     SlowRow row;
-
+    AtomicLong next;
+    
     public SequenceMeta(ObjectName name, int id) {
         this.row = new SlowRow(getKey(name));
         setNamespace(name.getNamespace());
@@ -33,6 +39,7 @@ public class SequenceMeta {
     public SequenceMeta(SlowRow row) {
         super();
         this.row = row;
+        this.next = new AtomicLong(getLastNumber() + 1);
     }
 
     public byte[] getKey() {
@@ -88,9 +95,9 @@ public class SequenceMeta {
         return this;
     }
     
-    public long getIncrement() {
-    	Long value = (Long)row.get(ColumnId.syssequence_increment.getId());
-    	return (value != null) ? value : 0;
+    public int getIncrement() {
+        Long value = (Long)row.get(ColumnId.syssequence_increment.getId());
+        return (int)((value != null) ? value : 0);
     }
     
     public SequenceMeta setIncrement(long value) {
@@ -106,6 +113,48 @@ public class SequenceMeta {
     }
     
     public long getTransactionTimestamp() {
-    	return this.row.getTrxTimestamp();
+        return this.row.getTrxTimestamp();
+    }
+
+    public long next(GTable table, TrxMan trxman) {
+        return next(table, trxman, getIncrement());
+    }
+
+    public long next(GTable table, TrxMan trxman, int increment) {
+        long next = this.next.addAndGet(increment);
+        long result = next - increment;
+        if (next > getLastNumber()) {
+            alloc(table, trxman, result);
+        }
+        return result;
+    }
+    
+    private synchronized void alloc(GTable table, TrxMan trxman, long target) {
+        long last = getLastNumber();
+        if (target <= last) {
+            return;
+        }
+        setLastNumber(last + 1000);
+        long version = trxman.getNewVersion();
+        HumpbackError error = table.update(version, this.row, 0);
+        if (error != HumpbackError.SUCCESS) {
+            throw new IllegalArgumentException();
+        }
+        this.row.setTrxTimestamp(version);
+    }
+    
+    public synchronized void closeAndUpdate(GTable table, TrxMan trxman) {
+        AtomicLong temp = this.next;
+        this.next = null;
+        setLastNumber(temp.get() - 1);
+        table.update(trxman.getNewVersion(), this.row, 0);
+    }
+
+    public SlowRow getRow() {
+        return this.row;
+    }
+    
+    public ObjectName getObjectName() {
+        return new ObjectName(getNamespace(), getSequenceName());
     }
 }

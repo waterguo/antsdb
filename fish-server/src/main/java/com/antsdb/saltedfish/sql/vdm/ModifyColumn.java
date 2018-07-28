@@ -25,19 +25,19 @@ public class ModifyColumn extends Statement implements ColumnAttributes {
     DataType type;
     boolean nullable;
     String defaultValue;
-	boolean autoIncrement = false;
+    boolean autoIncrement = false;
     public String enumValues;
     
-	public ModifyColumn(ObjectName tableName, String oldName) {
-		this.tableName = tableName;
-		this.oldName = oldName;
-	}
-	
+    public ModifyColumn(ObjectName tableName, String oldName) {
+        this.tableName = tableName;
+        this.oldName = oldName;
+    }
+    
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         // create metadata
 
-    	    MetadataService meta = ctx.getOrca().getMetaService();
+        MetadataService meta = ctx.getOrca().getMetaService();
         Transaction trx = ctx.getTransaction();
         TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
         ColumnMeta column = Checks.columnExist(table, oldName);
@@ -46,78 +46,82 @@ public class ModifyColumn extends Statement implements ColumnAttributes {
         column.setType(this.type);
         column.setNullable(this.nullable);
         if (this.defaultValue != null) {
-        	    column.setDefault(this.defaultValue);
+            column.setDefault(this.defaultValue);
         }
         column.setAutoIncrement(this.autoIncrement);
         meta.modifyColumn(trx, column);
+        
+        // special table for blob data
+        
+        CreateColumn.addBlobTableIfNecessary(ctx.getHumpback(), table, column);
         
         // done
         
         return null;
     }
 
-	@Override
-	public String getColumnName() {
-		return this.columnName;
-	}
+    @Override
+    public String getColumnName() {
+        return this.columnName;
+    }
 
-	@Override
-	public ColumnAttributes setColumnName(String name) {
-		this.columnName = name;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setColumnName(String name) {
+        this.columnName = name;
+        return this;
+    }
 
-	@Override
-	public DataType getType() {
-		return this.type;
-	}
+    @Override
+    public DataType getType() {
+        return this.type;
+    }
 
-	@Override
-	public ColumnAttributes setType(DataType type) {
-		this.type = type;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setType(DataType type) {
+        this.type = type;
+        return this;
+    }
 
-	@Override
-	public boolean isNullable() {
-		return this.nullable;
-	}
+    @Override
+    public boolean isNullable() {
+        return this.nullable;
+    }
 
-	@Override
-	public ColumnAttributes setNullable(boolean b) {
-		this.nullable = b;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setNullable(boolean b) {
+        this.nullable = b;
+        return this;
+    }
 
-	@Override
-	public String getDefaultValue() {
-		return this.defaultValue;
-	}
+    @Override
+    public String getDefaultValue() {
+        return this.defaultValue;
+    }
 
-	@Override
-	public ColumnAttributes setDefaultValue(String value) {
-		this.defaultValue = value;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setDefaultValue(String value) {
+        this.defaultValue = value;
+        return this;
+    }
 
-	@Override
-	public boolean isAutoIncrement() {
-		return this.isAutoIncrement();
-	}
+    @Override
+    public boolean isAutoIncrement() {
+        return this.isAutoIncrement();
+    }
 
-	@Override
-	public ColumnAttributes setAutoIncrement(boolean value) {
-		this.autoIncrement = value;
-		return this;
-	}
+    @Override
+    public ColumnAttributes setAutoIncrement(boolean value) {
+        this.autoIncrement = value;
+        return this;
+    }
 
-	@Override
-	public String getEnumValues() {
-		return enumValues;
-	}
+    @Override
+    public String getEnumValues() {
+        return enumValues;
+    }
 
-	@Override
-	public void setEnumValues(String enumValues) {
-		this.enumValues = enumValues;
-	}
+    @Override
+    public void setEnumValues(String enumValues) {
+        this.enumValues = enumValues;
+    }
 }

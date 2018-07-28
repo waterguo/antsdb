@@ -56,7 +56,7 @@ public abstract class ChannelWriter {
             if (bytes.remaining() > this.buf.remaining()) {
                 flush();
             }
-            if (bytes.remaining() < this.buf.remaining()) {
+            if (bytes.remaining() <= this.buf.remaining()) {
                 this.buf.put(bytes);
             }
             else {
@@ -70,8 +70,8 @@ public abstract class ChannelWriter {
     
     public void flush() {
         try {
-            if (this.buf.position() > 0) {
-                this.buf.flip();
+            this.buf.flip();
+            if (this.buf.hasRemaining()) {
                 writeDirect(this.buf);
             }
             this.buf.clear();

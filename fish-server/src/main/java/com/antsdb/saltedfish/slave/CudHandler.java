@@ -25,16 +25,23 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.sql.vdm.BlobReference;
 import com.antsdb.saltedfish.util.UberFormatter;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
 class CudHandler {
+    @SuppressWarnings("unused")
+    private static Logger _log = UberUtil.getThisLogger();
+    
     List<ReplicatorColumnMeta> columns = new ArrayList<>();
     List<String> key = new ArrayList<>();
     PreparedStatement insert;
@@ -45,9 +52,21 @@ class CudHandler {
     List<ReplicatorColumnMeta> deleteParams;
     PreparedStatement replace;
     List<ReplicatorColumnMeta> replaceParams;
+    boolean isBlobTable;
+    private BlobTracker tracker;
+    private int tableId;
+    
+    CudHandler(BlobTracker tracker) {
+        this.tracker = tracker;
+    }
     
     public void prepare(Connection conn, SysMetaRow table, List<HColumnRow> hcolumns) throws SQLException {
+        this.tableId = table.getTableId();
         DatabaseMetaData meta = conn.getMetaData();
+        this.isBlobTable = table.isBlobTable();
+        if (this.isBlobTable) {
+            return;
+        }
         
         // fetch columns
         
@@ -148,20 +167,45 @@ class CudHandler {
         return buf.toString();
     }
 
-    public void insert(Row row) throws SQLException {
-        for (int i=0; i<this.replaceParams.size(); i++) {
-            Object value = getValue(row, replaceParams.get(i)); 
-            row.get(this.replaceParams.get(i).hcolumnPos);
-            this.replace.setObject(i+1, value);
+    public void insert(long trxid, Row row, boolean isBlobRow) throws SQLException {
+        if (isBlobRow) {
+            long pBaseRow = this.tracker.get(trxid);
+            if (pBaseRow == 0) {
+                return;
+            }
+            if (pBaseRow == 0) {
+                throw new IllegalArgumentException("base row not found " + trxid + " " + row.getKeySpec(this.tableId));
+            }
+            Row baseRow = Row.fromMemoryPointer(pBaseRow, trxid);
+            for (int i=0; i<this.replaceParams.size(); i++) {
+                Object value = getValue(baseRow, replaceParams.get(i), isBlobRow);
+                if (value instanceof BlobReference) {
+                    value = row.get(replaceParams.get(i).hcolumnPos);
+                }
+                this.replace.setObject(i+1, value);
+            }
+        }
+        else {
+            for (int i=0; i<this.replaceParams.size(); i++) {
+                Object value = getValue(row, replaceParams.get(i), isBlobRow);
+                if (value instanceof BlobReference) {
+                    this.tracker.add(trxid, row.getAddress());
+                    return;
+                }
+                this.replace.setObject(i+1, value);
+            }
         }
         int result = this.replace.executeUpdate();
         if (result < 1) {
             throw new IllegalArgumentException();
         }
+        if (isBlobRow) {
+            this.tracker.end(trxid);
+        }
     }
 
-    public void update(Row row) throws SQLException {
-        insert(row);
+    public void update(long trxid, Row row, boolean isBlobRow) throws SQLException {
+        insert(trxid, row, isBlobRow);
     }
     
     public void delete(Row row) throws SQLException {
@@ -175,8 +219,11 @@ class CudHandler {
         }
     }
     
-    private Object getValue(Row row, ReplicatorColumnMeta meta) {
+    private Object getValue(Row row, ReplicatorColumnMeta meta, boolean isBlobRow) {
         Object result = row.get(meta.hcolumnPos);
+        if ((result == null) && isBlobRow) {
+            return null;
+        }
         // special logic to handle mysql 0000-00-00 00:00
         if (result==null && meta.dataType==Types.TIMESTAMP && meta.nullable==DatabaseMetaData.columnNoNulls) {
             if ("0000-00-00 00:00:00".equals(meta.defaultValue)) {
@@ -200,4 +247,7 @@ class CudHandler {
         return result;
     }
 
+    boolean isBlobTable() {
+        return this.isBlobTable;
+    }
 }

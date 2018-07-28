@@ -34,48 +34,48 @@ import com.antsdb.saltedfish.sql.meta.ColumnMeta;
  * @author wgu0
  */
 public class ToEnumIndex extends UnaryOperator {
-	ColumnMeta column;
-	Map<String, Integer> indexByEnum;
-	
-	public ToEnumIndex(ColumnMeta column, Operator expr) {
-		super(expr);
-		this.column = column;
-		this.indexByEnum = column.getEnumValueMap();
-		if (this.indexByEnum == null) {
-			throw new OrcaException("enum values is not found for column {}", column.getColumnName());
-		}
-	}
+    ColumnMeta column;
+    Map<String, Integer> indexByEnum;
+    
+    public ToEnumIndex(ColumnMeta column, Operator expr) {
+        super(expr);
+        this.column = column;
+        this.indexByEnum = column.getEnumValueMap();
+        if (this.indexByEnum == null) {
+            throw new OrcaException("enum values is not found for column {}", column.getColumnName());
+        }
+    }
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pValue = this.upstream.eval(ctx, heap, params, pRecord);
         int result;
         int format = Value.getFormat(heap, pValue);
         if (pValue == 0) {
-        	return 0;
+            return 0;
         }
         else if (format == Value.FORMAT_INT4) {
-        	return pValue;
+            return pValue;
         }
         else {
-        	String value = (String)FishObject.get(heap, FishObject.toString(heap, pValue));
-        	if (StringUtils.isEmpty(value)) {
-        		result = 0;
-        	}
-        	else {
-	        	Integer index = this.indexByEnum.get(value);
-	        	if (index == null) {
-	        		throw new OrcaException("invalid enum value {}", value);
-	        	}
-	        	result = index;
-        	}
+            String value = (String)FishObject.get(heap, FishObject.toString(heap, pValue));
+            if (StringUtils.isEmpty(value)) {
+                result = 0;
+            }
+            else {
+                Integer index = this.indexByEnum.get(value);
+                if (index == null) {
+                    throw new OrcaException("invalid enum value {}", value);
+                }
+                result = index;
+            }
         }
-		return Int4.allocSet(heap, result);
-	}
+        return Int4.allocSet(heap, result);
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return DataType.integer();
-	}
+    @Override
+    public DataType getReturnType() {
+        return DataType.integer();
+    }
 
 }

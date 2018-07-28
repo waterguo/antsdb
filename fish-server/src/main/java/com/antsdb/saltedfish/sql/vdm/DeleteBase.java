@@ -30,12 +30,14 @@ abstract class DeleteBase extends Statement {
     GTable gtable;
     IndexEntryHandlers indexHandlers;
     TableMeta table;
+    private GTable blobTable;
     
     public DeleteBase(Orca orca, TableMeta table, GTable gtable) {
         super();
         this.table = table;
         this.gtable = gtable;
         this.indexHandlers = new IndexEntryHandlers(orca, table);
+        this.blobTable = orca.getHumpback().getTable(table.getBlobTableId());
     }
 
     protected boolean deleteSingleRow(VdmContext ctx, Parameters params, long pKey) {
@@ -47,6 +49,12 @@ abstract class DeleteBase extends Statement {
             row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
             HumpbackError error = this.gtable.deleteRow(trx.getGuaranteedTrxId(), row.getAddress(), timeout);
             if (error == HumpbackError.SUCCESS) {
+                if (this.blobTable != null) {
+                    error = this.blobTable.deleteRow(trx.getGuaranteedTrxId(), row.getAddress(), timeout);
+                    if ((error != HumpbackError.SUCCESS) && (error != HumpbackError.MISSING)) {
+                        throw new OrcaException(error);
+                    }
+                }
                 this.indexHandlers.delete(heap, trx, row, timeout);
                 return true;
             }

@@ -11,19 +11,36 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.sql;
+package com.antsdb.saltedfish.util;
 
-import com.antsdb.saltedfish.cpp.Value;
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
 
 /**
  * 
- * @author wgu0
+ * @author *-xguo0<@
  */
-public class TypeClob extends DataType {
-    long max;
+public final class LatencyDetector {
+    private static int _threshold;
     
-    public TypeClob(String name, int sqlType, long max) {
-        super(name, 0, 0, sqlType, String.class, Value.TYPE_CLOB);
-        this.max = max;
+    public static void set(int threshold) {
+        _threshold = threshold;
+    }
+    
+    public static <T> T run(Logger log, String info, Supplier<T> callback) {
+        if (_threshold <= 0) {
+            return callback.get();
+        }
+        else {
+            long start = UberTime.getTime();
+            T result = callback.get();
+            long end = UberTime.getTime();
+            long elapsed = end - start; 
+            if (elapsed >= _threshold) {
+                log.debug("latency-{} {}", info, elapsed);
+            }
+            return result;
+        }
     }
 }

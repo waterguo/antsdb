@@ -38,7 +38,7 @@ public class MinkeFile implements Closeable {
     static final Logger _log = UberUtil.getThisLogger();
     
     File file;
-    private MemoryMappedFile mmf;
+    MemoryMappedFile mmf;
     private int pageSize;
     private int fileSize;
     private int nPages;

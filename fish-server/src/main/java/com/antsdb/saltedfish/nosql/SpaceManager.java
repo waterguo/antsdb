@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
+
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -256,6 +257,7 @@ public final class SpaceManager {
             space.file = new File(this.home, name);
             try {
                 open(space, MapMode.READ_WRITE);
+                space.mmf.buf.load();
             }
             catch (IOException e) {
                 throw new OutofSpaceException(e);
@@ -435,5 +437,5 @@ public final class SpaceManager {
             result += i.file.length();
         }
         return result;
-    }
+    }    
 }

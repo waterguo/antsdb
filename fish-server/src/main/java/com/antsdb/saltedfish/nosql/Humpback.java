@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
+import com.antsdb.saltedfish.minke.Warmer;
 import com.antsdb.saltedfish.slave.SlaveReplicator;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
@@ -41,6 +42,7 @@ import com.antsdb.saltedfish.storage.HBaseStorageService;
 import com.antsdb.saltedfish.storage.KerberosHelper;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.FishJobManager;
+import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -261,6 +263,10 @@ public final class Humpback {
         // background jobs
 
         initJobs();
+        
+        // setting latency detection
+        
+        LatencyDetector.set(this.config.getLatencyDetectionMs());
     }
 
     private void initStorage() throws Exception {
@@ -316,7 +322,7 @@ public final class Humpback {
         // start cache evictor
         
         if (getStorageEngine() instanceof MinkeCache) {
-            this.cacheEvictor = new CacheEvictor((MinkeCache) getStorageEngine());
+            this.cacheEvictor = new CacheEvictor((MinkeCache) getStorageEngine(), config.getCacheEvictorTarget());
         }
         
         // start delayed jobs
@@ -333,6 +339,25 @@ public final class Humpback {
                 this.cacheEvictorFuture = this.jobman.scheduleWithFixedDelay(this.cacheEvictor, 10, TimeUnit.SECONDS);
             }
         });
+        
+        // start warmer
+        
+        long warmSize = this.config.getWarmerSize();
+        if (warmSize > 0) {
+            Minke minke;
+            if (this.storage instanceof Minke) {
+                minke = (Minke)this.storage;
+            }
+            else if (this.storage instanceof MinkeCache) {
+                minke = ((MinkeCache)this.storage).getMinke();
+            }
+            else {
+                throw new IllegalArgumentException();
+            }
+            Warmer warmer = new Warmer(minke, warmSize);
+            this.jobman.schedule(1, TimeUnit.SECONDS, warmer);
+        }
+        
     }
 
     private void initSysmeta(boolean isRecovering) throws IOException {
@@ -376,7 +401,7 @@ public final class Humpback {
         SysMetaRow row = new SysMetaRow(id);
         row.setNamespace(SYS_NAMESAPCE);
         row.setTableId(id);
-        row.setTableName(String.format("x%08x", id));
+        row.setTableName(String.format("x%x", id));
         row.setType(TableType.DATA);
         return row;
     }
@@ -805,16 +830,16 @@ public final class Humpback {
      *            transaction timestamp, must be unique and incremental. this
      *            value is also used to version the record
      */
-    public void commit(long trxid, long trxts) {
+    public void commit(long trxid, long trxts, int sessiondId) {
         if (this.gobbler != null) {
-            this.gobbler.logCommit(trxid, trxts);
+            this.gobbler.logCommit(trxid, trxts, sessiondId);
         }
         this.trxMan.commit(trxid, trxts);
     }
 
-    public void rollback(long trxid) {
+    public void rollback(long trxid, int sessionId) {
         if (this.gobbler != null) {
-            this.gobbler.logRollback(trxid);
+            this.gobbler.logRollback(trxid, sessionId);
         }
         this.trxMan.rollback(trxid);
     }
@@ -1150,6 +1175,26 @@ public final class Humpback {
         return this.statistician;
     }
 
+    public HColumnRow addColumn(long trxid, int tableId, String name) {
+        if (getTableInfo(tableId) == null) {
+            throw new HumpbackException("table {} not found", tableId);
+        }
+        int maxColumnPos = 0;
+        for (HColumnRow i:getColumns(tableId)) {
+            maxColumnPos = Math.max(i.getColumnPos(), maxColumnPos);
+            if (i.isDeleted()) {
+                continue;
+            }
+            if (i.getColumnName().equals(name)) {
+                throw new HumpbackException("duplicate column name {} for table {}", name, tableId);
+            }
+        }
+        HColumnRow result = new HColumnRow(tableId, maxColumnPos + 1);
+        result.setColumnName(name);
+        this.syscolumn.put(trxid, result.row, 0);
+        return result;
+    }
+    
     public void addColumn(long trxid, int tableId, int columnId, String name) {
         HColumnRow row = new HColumnRow(tableId, columnId);
         row.setColumnName(name);

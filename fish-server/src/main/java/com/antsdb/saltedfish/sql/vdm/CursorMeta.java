@@ -24,16 +24,16 @@ import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 public class CursorMeta {
-	private static ColumnMeta KEY = new ColumnMeta(null, new SlowRow(0));
-	private static ColumnMeta ROWID = new ColumnMeta(null, new SlowRow(0));
-	
-	static {
-		KEY.setColumnId(-1);
-		ROWID.setColumnId(0);
-	}
-	
+    private static ColumnMeta KEY = new ColumnMeta(null, new SlowRow(0));
+    private static ColumnMeta ROWID = new ColumnMeta(null, new SlowRow(0));
+    
+    static {
+        KEY.setColumnId(-1);
+        ROWID.setColumnId(0);
+    }
+    
     List<FieldMeta> fields = new ArrayList<FieldMeta>();
-	ObjectName source;
+    ObjectName source;
     public CursorMeta parent;
     
     public CursorMeta() {
@@ -52,22 +52,22 @@ public class CursorMeta {
     }
 
     public List<FieldMeta> getColumns() {
-    	if (this.parent == null) {
-    		return this.fields;
-    	}
+        if (this.parent == null) {
+            return this.fields;
+        }
         ArrayList<FieldMeta> list = new ArrayList<>();
         addFields(list, this);
         return list;
     }
 
     private void addFields(ArrayList<FieldMeta> list, CursorMeta meta) {
-    	if (meta.parent != null) {
-    		addFields(list, meta.parent);
-    	}
+        if (meta.parent != null) {
+            addFields(list, meta.parent);
+        }
         list.addAll(meta.fields);
-	}
+    }
 
-	public FieldMeta getColumn(int pos) {
+    public FieldMeta getColumn(int pos) {
         int start = 0;
         if (this.parent != null) {
             start = this.parent.getColumnCount();
@@ -124,13 +124,13 @@ public class CursorMeta {
     }
 
     public int findColumn(ColumnMeta column) {
-    	for (int i=0; i<this.fields.size(); i++) {
-    		FieldMeta ii = this.fields.get(i);
-    		if (ii.getColumn() == column) {
-    			return i;
-    		}
-    	}
-    	return -1;
+        for (int i=0; i<this.fields.size(); i++) {
+            FieldMeta ii = this.fields.get(i);
+            if (ii.getColumn() == column) {
+                return i;
+            }
+        }
+        return -1;
     }
     
     public int findColumn(Predicate<FieldMeta> predicate) {
@@ -148,22 +148,22 @@ public class CursorMeta {
             }
         }
         if (pos < 0) {
-        	if (this.parent != null) {
-        		pos = this.parent.findColumn(predicate);
-        	}
+            if (this.parent != null) {
+                pos = this.parent.findColumn(predicate);
+            }
         }
         return pos;
     }
 
     public List<FieldMeta> getFields() {
-		return getColumns();
-	}
+        return getColumns();
+    }
 
-	public void setFields(List<FieldMeta> fields) {
-		this.fields = fields;
-	}
+    public void setFields(List<FieldMeta> fields) {
+        this.fields = fields;
+    }
 
-	public int[] getHumpbackMapping() {
+    public int[] getHumpbackMapping() {
         int[] mapping = new int[fields.size()];
         for (int i=0; i<mapping.length; i++) {
             FieldMeta field = this.fields.get(i);
@@ -171,9 +171,9 @@ public class CursorMeta {
             mapping[i] = column.getColumnId();
         }
         return mapping;
-	}
-	
-	public static CursorMeta from(TableMeta table) {
+    }
+    
+    public static CursorMeta from(TableMeta table) {
         CursorMeta cursorMeta = new CursorMeta();
         cursorMeta.source = table.getObjectName();
         FieldMeta fieldKey = new FieldMeta();
@@ -192,5 +192,5 @@ public class CursorMeta {
             cursorMeta.fields.add(FieldMeta.valueOf(column));
         }
         return cursorMeta;
-	}
+    }
 }

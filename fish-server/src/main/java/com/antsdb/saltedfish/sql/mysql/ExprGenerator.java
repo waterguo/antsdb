@@ -281,13 +281,7 @@ public class ExprGenerator {
         else if (rule.K_LIKE() != null) {
             Like_exprContext like = rule.like_expr();
             Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
-            Operator right = null;
-            if (like.literal_value() != null) {
-                right = genLiteralValue(ctx, cursorMeta, rule.like_expr().literal_value());
-            }
-            else {
-                right = genBindParameter(ctx, like.bind_parameter());
-            }
+            Operator right = genLikeExpr(ctx, cursorMeta, like);
             Operator result = new OpLike(left, right);
             if (rule.K_NOT() != null) {
                 result = new OpNot(result);
@@ -297,7 +291,7 @@ public class ExprGenerator {
         else if (rule.K_REGEXP() != null) {
             // REGEXP operator
             Operator expr = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
-            Operator pattern = genLiteralValue(ctx, cursorMeta, rule.like_expr().literal_value());
+            Operator pattern = genLikeExpr(ctx, cursorMeta, rule.like_expr());
             int variableId = ctx.allocVariable();
             return new OpRegexp(expr, pattern, variableId);
         }
@@ -418,7 +412,7 @@ public class ExprGenerator {
                     TerminalNode node = (TerminalNode) rule.getChild(2);
                     if (node.getSymbol().getType() == MysqlParser.K_LIKE) {
                         Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
-                        Operator right = gen(ctx, cursorMeta, rule.like_expr());
+                        Operator right = genLikeExpr(ctx, cursorMeta, rule.like_expr());
                         return new OpNot(new OpLike(left, right));
                     }
                 }
@@ -443,16 +437,8 @@ public class ExprGenerator {
         return new OpNot(expr);
     }
 
-    private static Operator gen(GeneratorContext ctx, Planner cursorMeta, Like_exprContext rule) {
-        if (rule.bind_parameter() != null) {
-            return genBindParameter(ctx, rule.bind_parameter());
-        }
-        else if (rule.literal_value() != null) {
-            return genLiteralValue(ctx, cursorMeta, (Literal_valueContext) rule.literal_value());
-        }
-        else {
-            throw new IllegalArgumentException();
-        }
+    private static Operator genLikeExpr(GeneratorContext ctx, Planner cursorMeta, Like_exprContext rule) {
+        return gen(ctx, cursorMeta, rule.expr_simple());
     }
 
     private static Operator gen_unary(

@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql.planner;
 
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
+import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 
 /**
@@ -106,5 +107,9 @@ public class PlannerField extends FieldMeta {
         clone.field = this.field;
         clone.index = this.index;
         return clone;
+    }
+    
+    public TableMeta getTable() {
+        return this.owner.table;
     }
 }

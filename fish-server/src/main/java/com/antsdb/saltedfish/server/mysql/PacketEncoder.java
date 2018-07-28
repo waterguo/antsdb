@@ -25,6 +25,7 @@ import java.time.Duration;
 
 import org.apache.commons.codec.Charsets;
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.FastDateFormat;
 import org.slf4j.Logger;
 
@@ -428,7 +429,7 @@ public final class PacketEncoder {
             {
                 long pValue = Record.getValueAddress(pRecord, i);
                 if (pValue != 0) {
-                    writeValue(buffer, meta.getColumn(i), pValue);
+                    writeBinaryValue(buffer, meta.getColumn(i), pValue);
                 }
                 else {
                     nullBitmap[(i+2)/8] |= 1 << (i+2)%8;
@@ -444,14 +445,14 @@ public final class PacketEncoder {
         }
     }
 
-    private void writeValue(PacketWriter buffer, FieldMeta meta, long pValue) {
-        if (writeValueFast(buffer, meta, pValue)) {
+    private void writeBinaryValue(PacketWriter buffer, FieldMeta meta, long pValue) {
+        if (writeBinaryValueFast(buffer, meta, pValue)) {
             return;
         }
-        writeValueSlow(buffer, meta, pValue);
+        writeBinaryValueSlow(buffer, meta, pValue);
     }
 
-    private boolean writeValueFast(PacketWriter buffer, FieldMeta meta, long pValue) {
+    private boolean writeBinaryValueFast(PacketWriter buffer, FieldMeta meta, long pValue) {
         DataType type = meta.getType();
         byte format = Value.getFormat(null, pValue);
         if (type.getSqlType() == Types.TINYINT) {
@@ -510,7 +511,7 @@ public final class PacketEncoder {
         return false;
     }
 
-    private void writeValueSlow(PacketWriter buffer, FieldMeta meta, long pValue) {
+    private void writeBinaryValueSlow(PacketWriter buffer, FieldMeta meta, long pValue) {
         Object value = FishObject.get(null, pValue);
         DataType type = meta.getType();
         if (type.getSqlType() == Types.TINYINT) {
@@ -567,61 +568,78 @@ public final class PacketEncoder {
      * @param nColumns 
      * @param rowRec
      */
-    public void writeRowTextBody(PacketWriter buffer, long pRecord, int nColumns) {
+    public void writeRowTextBody(CursorMeta meta, PacketWriter buffer, long pRecord, int nColumns) {
         for (int i = 0; i < nColumns; i++) {
             Object fv = Record.getValue(pRecord, i);
-            if (fv instanceof Boolean) {
-                // mysql has no boolean it is actually tinyint
-                fv = ((Boolean)fv) ? 1 : 0;
+            writeTextValue(buffer, fv, meta.getColumn(i));
+        }
+    }
+    
+    private void writeTextValue(PacketWriter buffer, Object fv, FieldMeta column) {
+        if (fv instanceof Boolean) {
+            // mysql has no boolean it is actually tinyint
+            fv = ((Boolean)fv) ? 1 : 0;
+        }
+        if (fv == null) {
+            // null mark is 251
+            buffer.writeByte((byte) 251);
+        } 
+        else if (fv instanceof Duration) {
+            String text = UberFormatter.duration((Duration)fv);
+            buffer.writeLenString(text, getEncoder());
+        }
+        else if (fv instanceof Timestamp) {
+            // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
+            // to get a Date from a datetime column
+            Timestamp ts = (Timestamp)fv;
+            if (ts.getTime() == Long.MIN_VALUE) {
+                // special case for mysql '0000-00-00 00:00:00'
+                buffer.writeLenString("0000-00-00 00:00:00", getEncoder());
             }
-            if (fv == null) {
-                // null mark is 251
-                buffer.writeByte((byte) 251);
-            } 
-            else if (fv instanceof Duration) {
-                String text = UberFormatter.duration((Duration)fv);
+            else {
+                String text;
+                if (ts.getNanos() == 0) {
+                    text = TIMESTAMP19_FORMAT.format(ts);
+                }
+                else {
+                    text = TIMESTAMP29_FORMAT.format(ts);
+                }
                 buffer.writeLenString(text, getEncoder());
             }
-            else if (fv instanceof Timestamp) {
-                // @see ResultSetRow#getDateFast, mysql jdbc driver only take precision 19,21,29 if callers wants
-                // to get a Date from a datetime column
-                Timestamp ts = (Timestamp)fv;
-                if (ts.getTime() == Long.MIN_VALUE) {
-                    // special case for mysql '0000-00-00 00:00:00'
-                    buffer.writeLenString("0000-00-00 00:00:00", getEncoder());
-                }
-                else {
-                    String text;
-                    if (ts.getNanos() == 0) {
-                        text = TIMESTAMP19_FORMAT.format(ts);
-                    }
-                    else {
-                        text = TIMESTAMP29_FORMAT.format(ts);
-                    }
-                    buffer.writeLenString(text, getEncoder());
-                }
+        }
+        else if (fv instanceof byte[]){
+            buffer.writeWithLength((byte[])fv);
+        }
+        else if ((fv instanceof Date) && (((Date)fv).getTime() == Long.MIN_VALUE)) {
+            // special case for mysql '0000-00-00' 
+            buffer.writeLenString("0000-00-00", getEncoder());
+        }
+        else if ((fv instanceof Integer) || (fv instanceof Long)){
+            DataType type = column.getType();
+            String val = fv.toString();
+            if (type.isZerofill()) {
+                val = StringUtils.leftPad(val, type.getLength(), '0');
             }
-            else if (fv instanceof byte[]){
-                buffer.writeWithLength((byte[])fv);
+            if (val.length() == 0) {
+                // empty mark is 0
+                buffer.writeByte((byte) 0);
+            } 
+            else {
+                buffer.writeLenString(val, getEncoder());
             }
-            else if ((fv instanceof Date) && (((Date)fv).getTime() == Long.MIN_VALUE)) {
-                // special case for mysql '0000-00-00' 
-                buffer.writeLenString("0000-00-00", getEncoder());
-            }
-            else 
-            {
-                String val = fv.toString();
-                if (val.length() == 0) {
-                    // empty mark is 0
-                    buffer.writeByte((byte) 0);
-                } 
-                else {
-                    buffer.writeLenString(val, getEncoder());
-                }
+        }
+        else 
+        {
+            String val = fv.toString();
+            if (val.length() == 0) {
+                // empty mark is 0
+                buffer.writeByte((byte) 0);
+            } 
+            else {
+                buffer.writeLenString(val, getEncoder());
             }
         }
     }
-
     
     /**
      * 

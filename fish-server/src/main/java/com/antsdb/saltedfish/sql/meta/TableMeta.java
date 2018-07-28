@@ -74,6 +74,10 @@ public class TableMeta extends MetaObject {
         return (result != null) ? result : getId();
     }
     
+    public int getBlobTableId() {
+        return getHtableId() + 1;
+    }
+    
     public void setHtableId(int id) {
         row.set(ColumnId.systable_htable_id.getId(), id);
     }
@@ -246,5 +250,23 @@ public class TableMeta extends MetaObject {
             result.indexes.add(i.clone());
         }
         return result;
+    }
+
+    public int getMaxBlobColumnId() {
+        int result = 0;
+        for (ColumnMeta i:this.columns) {
+            if (i.isBlobClob()) {
+                result = Math.max(result, i.getColumnId());
+            }
+        }
+        return result;
+    }
+
+    public void setCharset(String value) {
+        row.set(ColumnId.systable_charset.getId(), value);
+    }
+    
+    public String getCharset() {
+        return (String)row.get(ColumnId.systable_charset.getId());
     }
 }

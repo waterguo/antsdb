@@ -28,6 +28,8 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 public final class Transaction {
     static Logger _log = UberUtil.getThisLogger();
+    static Transaction _seeEverything = new Transaction(0, Long.MAX_VALUE);
+    static Transaction _system = new Transaction(1, Long.MAX_VALUE);
     
     private volatile long trxid;
     long trxts;
@@ -96,9 +98,8 @@ public final class Transaction {
      * 
      * @return
      */
-    public static Transaction getSeeEverythingTrx() {
-        Transaction trx = new Transaction(0, Long.MAX_VALUE);
-        return trx;
+    public static final Transaction getSeeEverythingTrx() {
+        return _seeEverything;
     }
 
     /**
@@ -107,8 +108,7 @@ public final class Transaction {
      * @return
      */
     public static Transaction getSystemTransaction() {
-        Transaction trx = new Transaction(1, Long.MAX_VALUE);
-        return trx;
+        return _system;
     }
 
     public void setDdl(boolean b) {

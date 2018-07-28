@@ -47,7 +47,6 @@ public class TransactionReplayer implements ReplayHandler {
     public TransactionReplayer(Gobbler gobbler, ReplayHandler downstream) {
         this.gobbler = gobbler;
         this.trxman = new TrxMan(null);
-        this.trxScanner = new TransactionScanner(this.trxman);
         this.downstream = downstream;
     }
     
@@ -153,7 +152,10 @@ public class TransactionReplayer implements ReplayHandler {
             if (version == TrxMan.MARK_ROLLED_BACK) {
                 return true;
             }
-            this.trxScanner.scan(this.gobbler, lp, trxid);
+            if (this.trxScanner == null) {
+                this.trxScanner = new TransactionScanner(this.trxman, lp);
+            }
+            this.trxScanner.scan(this.gobbler, trxid);
         }
         throw new InvalidTransactionIdException(trxid);
     }

@@ -77,4 +77,8 @@ public class SysMetaRow {
         Boolean value = (Boolean)this.row.get(COLUMN_DELETE_MARK);
         return (value == null) ? false : value;
     }
+    
+    public boolean isBlobTable() {
+        return getTableName().endsWith("blob_");
+    }
 }

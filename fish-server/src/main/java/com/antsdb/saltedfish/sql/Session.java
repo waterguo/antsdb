@@ -41,6 +41,7 @@ import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.util.Callback;
+import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -110,7 +111,9 @@ public class Session {
             else {
                 // main stuff
                 startTrx();
-                Script script = parse(cbuf);
+                Script script = LatencyDetector.run(_log, "parse", ()->{
+                    return parse(cbuf);
+                });
                 VdmContext ctx = new VdmContext(this, script.getVariableCount());
                 result = script.run(ctx, params, 0);
                 if (result instanceof Cursor) {
@@ -316,11 +319,11 @@ public class Session {
                     if (success) {
                         trxts = this.orca.getTrxMan().getNewVersion();
                         _log.trace("commit trxid={} trxts={}", trxid, trxts);
-                        this.orca.getHumpback().commit(trxid, trxts);
+                        this.orca.getHumpback().commit(trxid, trxts, this.id);
                     }
                     else {
                         _log.trace("rollback trxid={} trxts={}", trxid);
-                        this.orca.getHumpback().rollback(trxid);;
+                        this.orca.getHumpback().rollback(trxid, this.id);;
                     }
                 }
                 else {
@@ -641,4 +644,7 @@ public class Session {
         }
     }
 
+    public long getQueryStartTime() {
+        return this.hsession.getOpenTime();
+    }
 }

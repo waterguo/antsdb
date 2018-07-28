@@ -39,67 +39,66 @@ import com.antsdb.saltedfish.sql.vdm.ObjectName;
  */
 public class Create_table_like_stmtGenerator extends Generator<Create_table_like_stmtContext> {
 
-	@Override
-	public Instruction gen(GeneratorContext ctx, Create_table_like_stmtContext rule) throws OrcaException {
-		ObjectName name = TableName.parse(ctx, rule.table_name_().get(1));
-		TableMeta table = Checks.tableExist(ctx.getSession(), name);
-		Flow flow = new Flow();
-		createTable(ctx, flow, rule, table);
-		return flow;
-	}
+    @Override
+    public Instruction gen(GeneratorContext ctx, Create_table_like_stmtContext rule) throws OrcaException {
+        ObjectName name = TableName.parse(ctx, rule.table_name_().get(1));
+        TableMeta table = Checks.tableExist(ctx.getSession(), name);
+        Flow flow = new Flow();
+        createTable(ctx, flow, rule, table);
+        return flow;
+    }
 
-	private void createTable(GeneratorContext ctx, Flow flow, Create_table_like_stmtContext rule, TableMeta table) {
-		ObjectName name = TableName.parse(ctx, rule.table_name_().get(0));
-		CreateTable ct = new CreateTable(name);
-		flow.add(ct);
-		createColumns(ctx, flow, table, name);
-		createPrimaryKey(ctx, flow, table, name);
-		createIndexes(ctx, flow, table, name);
+    private void createTable(GeneratorContext ctx, Flow flow, Create_table_like_stmtContext rule, TableMeta table) {
+        ObjectName name = TableName.parse(ctx, rule.table_name_().get(0));
+        CreateTable ct = new CreateTable(name);
+        flow.add(ct);
+        createColumns(ctx, flow, table, name);
+        createPrimaryKey(ctx, flow, table, name);
+        createIndexes(ctx, flow, table, name);
         flow.add(new SyncTableSequence(name, Collections.emptyMap()));
-        flow.add(new CreateDelayedForeignKey(name));
-	}
+    }
 
-	private void createColumns(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
-		for (ColumnMeta column:table.getColumns()) {
-			CreateColumn cc = new CreateColumn();
-			flow.add(cc);
-			cc.tableName = name;
-			cc.setAutoIncrement(column.isAutoIncrement());
-			cc.setColumnName(column.getColumnName());
-			cc.setDefaultValue(column.getDefault());
-			cc.setEnumValues(column.getEnumValues());
-			cc.setNullable(column.isNullable());
-			cc.setType(column.getDataType());
-		}
-	}
+    private void createColumns(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
+        for (ColumnMeta column:table.getColumns()) {
+            CreateColumn cc = new CreateColumn();
+            flow.add(cc);
+            cc.tableName = name;
+            cc.setAutoIncrement(column.isAutoIncrement());
+            cc.setColumnName(column.getColumnName());
+            cc.setDefaultValue(column.getDefault());
+            cc.setEnumValues(column.getEnumValues());
+            cc.setNullable(column.isNullable());
+            cc.setType(column.getDataType());
+        }
+    }
 
-	private void createPrimaryKey(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
-		if (table.getPrimaryKey() == null) {
-			return;
-		}
-		List<String> columns = new ArrayList<>();
-		for (ColumnMeta column:table.getPrimaryKey().getColumns(table)) {
-			columns.add(column.getColumnName());
-		}
-		CreatePrimaryKey cpk = new CreatePrimaryKey(name, columns);
-		flow.add(cpk);
-	}
+    private void createPrimaryKey(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
+        if (table.getPrimaryKey() == null) {
+            return;
+        }
+        List<String> columns = new ArrayList<>();
+        for (ColumnMeta column:table.getPrimaryKey().getColumns(table)) {
+            columns.add(column.getColumnName());
+        }
+        CreatePrimaryKey cpk = new CreatePrimaryKey(name, columns);
+        flow.add(cpk);
+    }
 
-	private void createIndexes(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
-		for (IndexMeta index:table.getIndexes()) {
-			List<String> columns = new ArrayList<>();
-			for (ColumnMeta column:index.getColumns(table)) {
-				columns.add(column.getColumnName());
-			}
-			CreateIndex ci = new CreateIndex(
-					index.getName(), 
-					index.isFullText(), 
-					index.isUnique(), 
-					false, 
-					name, 
-					columns);
-			flow.add(ci);
-		}
-	}
+    private void createIndexes(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
+        for (IndexMeta index:table.getIndexes()) {
+            List<String> columns = new ArrayList<>();
+            for (ColumnMeta column:index.getColumns(table)) {
+                columns.add(column.getColumnName());
+            }
+            CreateIndex ci = new CreateIndex(
+                    index.getName(), 
+                    index.isFullText(), 
+                    index.isUnique(), 
+                    false, 
+                    name, 
+                    columns);
+            flow.add(ci);
+        }
+    }
 
 }

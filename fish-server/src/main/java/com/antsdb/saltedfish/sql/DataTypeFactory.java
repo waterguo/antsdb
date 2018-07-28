@@ -23,18 +23,24 @@ import com.antsdb.saltedfish.cpp.Value;
  * @author wgu0
  */
 public abstract class DataTypeFactory {
-	public DataTypeFactory() {
-	}
-	
-	public DataType newDataType(String name, int length, int scale) {
+    public DataTypeFactory() {
+    }
+    
+    public DataType newDataType(String name, int length, int scale) {
         name = name.toLowerCase();
         DataType type = null;
         if ("_long".equals(name)) {
-        	type = new TypeInteger("_long", Types.BIGINT, Long.class, Value.FORMAT_BIGINT, Long.MIN_VALUE, Long.MAX_VALUE);
+            type = new TypeInteger("_long", 
+                                   Types.BIGINT, 
+                                   Long.class, 
+                                   Value.FORMAT_BIGINT, 
+                                   0, 
+                                   Long.MIN_VALUE, 
+                                   Long.MAX_VALUE);
         }
         if ("_boolean".equals(name)) {
-        	type = new TypeBoolean("_boolean");
+            type = new TypeBoolean("_boolean");
         }
-		return type;
-	}
+        return type;
+    }
 }

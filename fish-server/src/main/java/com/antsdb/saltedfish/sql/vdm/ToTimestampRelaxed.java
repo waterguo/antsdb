@@ -19,7 +19,6 @@ import java.sql.Timestamp;
 
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
-import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.util.CodingError;
 
@@ -32,14 +31,19 @@ import com.antsdb.saltedfish.util.CodingError;
  *
  */
 public class ToTimestampRelaxed extends UnaryOperator {
-    public ToTimestampRelaxed(Operator upstream) {
+    static final int[] TIME_FRACTION_SCALE = new int[] 
+            {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10};
+    private int precision;
+
+    public ToTimestampRelaxed(Operator upstream, int precision) {
         super(upstream);
+        this.precision = precision;
     }
 
-	@Override
+    @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long addrVal = this.upstream.eval(ctx, heap, params, pRecord);
-        return toTimestamp(heap, addrVal);
+        return toTimestamp(heap, addrVal, this.precision);
     }
 
     @Override
@@ -48,11 +52,7 @@ public class ToTimestampRelaxed extends UnaryOperator {
     }
 
     @SuppressWarnings("deprecation")
-    public static long toTimestamp(Heap heap, long pValue) {
-        	int format = Value.getFormat(heap, pValue);
-        	if (format == Value.FORMAT_TIMESTAMP) {
-        		return pValue;
-        	}
+    public static long toTimestamp(Heap heap, long pValue, int precision) {
         Object val = FishObject.get(heap, pValue);
         if (val instanceof byte[]) {
             val = new String((byte[])val);
@@ -65,33 +65,39 @@ public class ToTimestampRelaxed extends UnaryOperator {
         else if (val instanceof Timestamp) {
         }
         else if (val instanceof String) {
-            	long pResult = AutoCaster.toTimestamp(heap, pValue);
-            	return pResult;
+            val = (Timestamp)FishObject.get(heap, AutoCaster.toTimestamp(heap, pValue));
         }
         else if (val instanceof Long) {
-            	long n = (Long)val;
-            	if (n == 0) {
-            		val = new Timestamp(Long.MIN_VALUE);
-            	}
-            	else {
-    	        	int sec = (int)(n % 100);
-    	        	n = n / 100;
-    	        	int min = (int)(n % 100);
-    	        	n = n / 100;
-    	        	int hour = (int)(n % 100);
-    	        	n = n / 100;
-    	        	int day = (int)(n % 100);
-    	        	n = n / 100;
-    	        	int month = (int)(n % 100);
-    	        	int year = (int)(n / 100);
-    	        	val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
-            	}
+            long n = (Long)val;
+            if (n == 0) {
+                val = new Timestamp(Long.MIN_VALUE);
+            }
+            else {
+                int sec = (int)(n % 100);
+                n = n / 100;
+                int min = (int)(n % 100);
+                n = n / 100;
+                int hour = (int)(n % 100);
+                n = n / 100;
+                int day = (int)(n % 100);
+                n = n / 100;
+                int month = (int)(n % 100);
+                int year = (int)(n / 100);
+                val = new Timestamp(year-1900, month-1, day, hour, min, sec, 0);
+            }
         }
         else if (val instanceof Date) {
             val = new Timestamp(((Date)val).getTime());
         }
         else {
             throw new CodingError();
+        }
+        if ((precision < 9) && (val instanceof Timestamp)) {
+            Timestamp ts = (Timestamp)val;
+            if (ts.getTime() != Long.MIN_VALUE) {
+                int nano = ts.getNanos() / TIME_FRACTION_SCALE[precision] * TIME_FRACTION_SCALE[precision];
+                ts.setNanos(nano);
+            }
         }
         return FishObject.allocSet(heap, val);
     }

@@ -32,6 +32,7 @@ public class DataType {
     Class<?> klass;
     byte fishType;
     String name;
+    boolean zerofill = false;
     
     public DataType(String name, int length, int scale, int sqlType, Class<?> klass, byte fishType) {
         this.length = length;
@@ -44,20 +45,20 @@ public class DataType {
     
     @Override
     public boolean equals(Object obj) {
-            if (!(obj instanceof DataType)) {
-                return false;
-            }
-            DataType that =(DataType)obj;
-            if (this.fishType != that.fishType) {
-                return false;
-            }
-            if (this.length != that.length) {
-                return false;
-            }
-            if (this.scale != that.scale) {
-                return false;
-            }
-            return true;
+        if (!(obj instanceof DataType)) {
+            return false;
+        }
+        DataType that =(DataType)obj;
+        if (this.fishType != that.fishType) {
+            return false;
+        }
+        if (this.length != that.length) {
+            return false;
+        }
+        if (this.scale != that.scale) {
+            return false;
+        }
+        return true;
     }
 
     public int getLength() {
@@ -109,6 +110,7 @@ public class DataType {
             Types.INTEGER, 
             Integer.class, 
             Value.TYPE_NUMBER, 
+            0,
             Long.MIN_VALUE, 
             Long.MAX_VALUE);
     public static DataType integer() {
@@ -120,8 +122,10 @@ public class DataType {
             Types.BIGINT, 
             Long.class, 
             Value.TYPE_NUMBER, 
+            0,
             Long.MIN_VALUE, 
             Long.MAX_VALUE);
+    
     public static DataType longtype() {
         return _long;
     }
@@ -146,6 +150,11 @@ public class DataType {
         return _timestamp;
     }
 
+    static DataType _binary = new TypeBinary("_binary", Types.VARBINARY, Long.MAX_VALUE);
+    public static DataType binary() {
+        return _binary;
+    }
+    
     static DataType _clob = new TypeClob("_clob", Types.CLOB, Long.MAX_VALUE);
     public static DataType clob() { 
         return _clob; 
@@ -182,11 +191,17 @@ public class DataType {
                 text = this.name + '(' + length + ')';
             }
             else if (this.getJavaType() == byte[].class) {
-            text = this.name + '(' + length + ')';
-        }
+                text = this.name + '(' + length + ')';
+            }
             else if (this.getJavaType() == BigDecimal.class) {
                 text = this.name + '(' + length + ',' + scale + ')';
             } 
+            else if (this.getJavaType() == Integer.class) {
+                text = this.name + '(' + length + ')';
+            }
+            else if (this.getJavaType() == Long.class) {
+                text = this.name + '(' + length + ')';
+            }
             else {
                 text = this.name;
             }
@@ -258,4 +273,11 @@ public class DataType {
         return this.name;
     }
 
+    public boolean isZerofill() {
+        return this.zerofill;
+    }
+
+    public void setZeroFill(boolean value) {
+        this.zerofill = value;
+    }
 }

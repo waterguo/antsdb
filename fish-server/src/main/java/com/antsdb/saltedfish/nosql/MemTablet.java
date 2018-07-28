@@ -42,7 +42,9 @@ import com.antsdb.saltedfish.util.AtomicUtil;
 import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.ConsoleHelper;
+import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.LongLong;
+
 import static com.antsdb.saltedfish.util.UberFormatter.*;
 import com.antsdb.saltedfish.util.UberTimer;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -845,7 +847,13 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
             // realize the version if this is a trxid
             
             if (currentRawVersion < -10) {
-                currentVersion = this.trxman.getTimestamp(currentRawVersion);
+                if (this.trxman != null) {
+                    currentVersion = this.trxman.getTimestamp(currentRawVersion);
+                }
+                else {
+                    // happens extremely rarely when trxman crashes
+                    currentVersion = TrxMan.MARK_ROLLED_BACK; 
+                }
             }
             else {
                 currentVersion = currentRawVersion;
@@ -1135,7 +1143,9 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         this.casRetries.incrementAndGet();
                         continue;
                     }
-                    long spRow = this.humpback.getGobbler().logInsert(row, this.tableId);
+                    long spRow = LatencyDetector.run(_log, "logInsert", ()->{
+                        return this.humpback.getGobbler().logInsert(row, this.tableId);
+                    });
                     node.setSpacePointer(spRow);
                     trackTrxId(version, node.getOffset());
                     trackSp(spRow - Gobbler.InsertEntry.getHeaderSize());
@@ -1831,5 +1841,4 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
         return false;
     }
-
 }

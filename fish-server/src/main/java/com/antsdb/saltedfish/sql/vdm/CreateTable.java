@@ -20,12 +20,17 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 public class CreateTable extends Statement {
     ObjectName tableName;
+    private String charset;
     
     public CreateTable(ObjectName tableName) {
         super();
         this.tableName = tableName;
     }
 
+    public void setCharset(String value) {
+        this.charset = value;
+    }
+    
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Humpback humpback = ctx.getOrca().getHumpback();
@@ -37,28 +42,29 @@ public class CreateTable extends Statement {
         Checks.tableNotExist(ctx.getSession(), this.tableName);
         TableMeta tableMeta = new TableMeta(ctx.getOrca(), this.tableName);
         tableMeta.setNamespace(ns);
+        tableMeta.setCharset(this.charset);
         ctx.getOrca().getMetaService().addTable(trx, tableMeta);
         
         // find a good non-conflict name
         
-    	tableMeta.setExternalName(tableMeta.getTableName());
+        tableMeta.setExternalName(tableMeta.getTableName());
         
         // create physical table
 
         if (Orca.SYSNS.equals(tableName.getNamespace())) {
             if (humpback.getTable(tableName.getNamespace(), tableMeta.getHtableId()) == null) {
                 humpback.createTable(
-                		tableName.getNamespace(), 
-                		tableMeta.getExternalName(), 
-                		tableMeta.getHtableId(),
-                		TableType.DATA);
+                        tableName.getNamespace(), 
+                        tableMeta.getExternalName(), 
+                        tableMeta.getHtableId(),
+                        TableType.DATA);
             }
         }
         else {
             humpback.createTable(tableName.getNamespace(), 
-            					 tableMeta.getExternalName(), 
-            		             tableMeta.getHtableId(),
-            		             TableType.DATA);
+                                 tableMeta.getExternalName(), 
+                                 tableMeta.getHtableId(),
+                                 TableType.DATA);
         }
         
         // done

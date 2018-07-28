@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.minke.LRUEvictor;
 import com.antsdb.saltedfish.minke.MinkeCache;
+import com.antsdb.saltedfish.util.SizeConstants;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -25,17 +26,22 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 public class CacheEvictor implements Runnable{
     static final Logger _log = UberUtil.getThisLogger();
-    /** percentage of cache supposed to be free */
-    static final int EVICTION_TARGET=30;
+    /** number of bytes from the cache supposed to be free */
+    static final long EVICTION_TARGET=SizeConstants.gb(10);
     
     private MinkeCache cache;
     private LRUEvictor evictor;
-
+    
     CacheEvictor(MinkeCache cache) {
+        this(cache, EVICTION_TARGET);
+    }
+    
+    CacheEvictor(MinkeCache cache, long target) {
         this.cache = cache;
-        this.evictor = new LRUEvictor(cache, EVICTION_TARGET);
+        this.evictor = new LRUEvictor(cache, target);
     }
 
+    
     @Override
     public void run() {
         try {

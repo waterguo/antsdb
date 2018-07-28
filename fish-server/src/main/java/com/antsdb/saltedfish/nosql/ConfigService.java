@@ -123,7 +123,7 @@ public class ConfigService {
     }
 
     public long getCacheSize() {
-        return Size.parse(this.props.getProperty("cache.size"), "10g");
+        return Size.parse(this.props.getProperty("cache.size"), "100g");
     }
 
     private long getLong(String key, long defaultValue) {
@@ -241,5 +241,26 @@ public class ConfigService {
 
     public String getSlavePassword() {
         return this.props.getProperty("humpback.slave.password");
+    }
+
+    public long getCacheEvictorTarget() {
+        long result = Size.parse(this.props.getProperty("cache.evictor.target"), "10g");
+        return result;
+    }
+    
+    public long getWarmerSize() {
+        long result = Size.parse(this.props.getProperty("humpback.warmer.size"), "0");
+        return result;
+    }
+    
+    public int getLatencyDetectionMs() {
+        String value = this.props.getProperty("humpback.latency-detection-ms");
+        if (value != null) {
+            try {
+                return Integer.parseInt(value);
+            }
+            catch (Exception ignored) {}
+        }
+        return 0;
     }
 }

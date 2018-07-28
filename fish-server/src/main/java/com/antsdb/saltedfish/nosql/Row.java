@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishObject;
@@ -32,6 +33,7 @@ import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberObject;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * Row is a read-only view of the raw data stored in the file
@@ -49,6 +51,7 @@ import com.antsdb.saltedfish.util.UberObject;
  *
  */
 public class Row extends UberObject implements Map<Integer, Object> {
+    static Logger _log = UberUtil.getThisLogger();
     public static final int DELETE_MARK = 1;
     protected static final Row TOMB_STONE = new Row(Unsafe.allocateMemory(100));
     protected static final int OFFSET_FORMAT = 0;
@@ -350,6 +353,11 @@ public class Row extends UberObject implements Map<Integer, Object> {
         return this.addr + offset;
     }
 
+    public final String getKeySpec(int tableId) {
+        String result = String.valueOf(tableId) + ":" + KeyBytes.toString(getKeyAddress());
+        return result;
+    }
+    
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();

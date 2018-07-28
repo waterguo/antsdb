@@ -51,13 +51,14 @@ import com.google.common.base.Charsets;
 public class AutoCaster {
     static Pattern _ptnDate = Pattern.compile("(\\d+)-(\\d+)-(\\d+)");
     static Pattern _ptnTimestamp = Pattern.compile(
-            "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+)(\\.\\d+)?");
+            "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+)(\\.(\\d{1,6}))?");
     static Pattern _ptnTimeDHMS = Pattern.compile(
             "(\\d+) (\\d+):(\\d+):(\\d+)");
     static Pattern _ptnTimeHMS = Pattern.compile(
             "(\\d{2}+)(\\d{2}+)(\\d{2}+)");
     static Pattern _ptnTimeHMSC = Pattern.compile(
             "-?(\\d+):(\\d+):(\\d+)(\\.(\\d+))?");
+    static final int[] TIME_FRACTION_SCALE = new int[] {100000000, 10000000, 1000000, 100000, 10000, 1000};
 
     /**
      * WARNING: Integer.MIN_VALUE means NULL
@@ -432,13 +433,17 @@ public class AutoCaster {
             int hour = Integer.parseInt(m.group(4));
             int minute = Integer.parseInt(m.group(5));
             int second = Integer.parseInt(m.group(6));
-            String g7 = m.group(7);
-            int milli = (g7 != null) ? Integer.parseInt(m.group(7).substring(1)) : 0;
+            String g8 = m.group(8);
+            int nano = 0;
+            if (g8 != null) {
+                int g7len = g8.length();
+                nano = Integer.parseInt(m.group(7).substring(1)) * TIME_FRACTION_SCALE[g7len - 1];
+            }
             if ((year == 0) && (month == 0) && (day == 0)) {
                 return new Timestamp(Long.MIN_VALUE);
             }
             else {
-                return new Timestamp(year - 1900, month-1, day, hour, minute, second, milli * 1000000);
+                return new Timestamp(year - 1900, month-1, day, hour, minute, second, nano);
             }
         }
         return null;

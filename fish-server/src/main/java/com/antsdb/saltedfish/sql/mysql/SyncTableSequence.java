@@ -27,44 +27,44 @@ import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 public class SyncTableSequence extends Statement {
-	ObjectName tableName;
-	Map<String, String> tableOptions;
-	
-	public SyncTableSequence(ObjectName tableName, Map<String, String> options) {
-		this.tableName = tableName;
-		this.tableOptions = options;
-	}
+    ObjectName tableName;
+    Map<String, String> tableOptions;
+    
+    public SyncTableSequence(ObjectName tableName, Map<String, String> options) {
+        this.tableName = tableName;
+        this.tableOptions = options;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params) {
-		int autoIncrement = 1;
-		if (this.tableOptions != null) {
-			if (this.tableOptions.containsKey("AUTO_INCREMENT")) {
-				autoIncrement = Integer.parseInt(this.tableOptions.get("AUTO_INCREMENT"));
-			}
-		}
+    @Override
+    public Object run(VdmContext ctx, Parameters params) {
+        int autoIncrement = 1;
+        if (this.tableOptions != null) {
+            if (this.tableOptions.containsKey("AUTO_INCREMENT")) {
+                autoIncrement = Integer.parseInt(this.tableOptions.get("AUTO_INCREMENT"));
+            }
+        }
         MetadataService meta = ctx.getOrca().getMetaService();
         Transaction trx = ctx.getTransaction();
-		TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
-		if (table.getId() < 0) {
-			// don't do anything to system tables. at the initialization stage, it will crash in the following
-			// steps
-			return null;
-		}
-		ColumnMeta column = table.findAutoIncrementColumn();
-		ObjectName name = table.getAutoIncrementSequenceName();
-		SequenceMeta seq = meta.getSequence(trx, name);
-		if ((column != null) && (seq == null)) {
-	        seq = new SequenceMeta(ctx.getOrca(), name);
-	        seq.setLastNumber(autoIncrement-1);
-	        seq.setSeed(1);
-	        seq.setIncrement(1);
-	        meta.addSequence(trx, seq);
-		}
-		else if ((column == null) && (seq != null)) {
-			meta.dropSequence(trx, seq);
-		}
-		return null;
-	}
+        TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
+        if (table.getId() < 0) {
+            // don't do anything to system tables. at the initialization stage, it will crash in the following
+            // steps
+            return null;
+        }
+        ColumnMeta column = table.findAutoIncrementColumn();
+        ObjectName name = table.getAutoIncrementSequenceName();
+        SequenceMeta seq = meta.getSequence(trx, name);
+        if ((column != null) && (seq == null)) {
+            seq = new SequenceMeta(ctx.getOrca(), name);
+            seq.setLastNumber(autoIncrement-1);
+            seq.setSeed(1);
+            seq.setIncrement(1);
+            meta.addSequence(trx, seq);
+        }
+        else if ((column == null) && (seq != null)) {
+            meta.dropSequence(trx, seq);
+        }
+        return null;
+    }
 
 }

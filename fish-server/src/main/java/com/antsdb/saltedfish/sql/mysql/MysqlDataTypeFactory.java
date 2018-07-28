@@ -20,6 +20,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Data_typeContext;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.DataTypeFactory;
 import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.TypeBinary;
 import com.antsdb.saltedfish.sql.TypeBlob;
 import com.antsdb.saltedfish.sql.TypeClob;
 import com.antsdb.saltedfish.sql.TypeDate;
@@ -66,19 +67,19 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             type = new TypeDecimal("decimal", length, scale);
         }
         else if ("datetime".equals(name)) {
-            type = new TypeTimestamp("datetime", 0);
+            type = new TypeTimestamp("datetime", length);
         }
         else if ("timestamp".equals(name)) {
-            type = new TypeTimestamp("timestamp", 0);
+            type = new TypeTimestamp("timestamp", length);
         }
         else if ("time".equals(name)) {
             type = new TypeTime("time");
         }
         else if ("text".equals(name)) {
-            type = new TypeClob("text", Types.CLOB, 0xffff);
+            type = new TypeString("text", Types.CLOB, 0xffff);
         }
         else if ("tinytext".equals(name)) {
-            type = new TypeClob("tinytext", Types.CLOB, 0xff);
+            type = new TypeString("tinytext", Types.CLOB, 0xff);
         }
         else if ("mediumtext".equals(name)) {
             type = new TypeClob("mediumtext", Types.CLOB, 0xffffff);
@@ -87,10 +88,10 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             type = new TypeClob("longtext", Types.CLOB, 0xffffffffl);
         }
         else if ("blob".equals(name)) {
-            type = new TypeBlob("blob", Types.BLOB, 0xffff);
+            type = new TypeBinary("blob", Types.BLOB, 0xffff);
         }
         else if ("tinyblob".equals(name)) {
-            type = new TypeBlob("tinyblob", Types.BLOB, 0xff);
+            type = new TypeBinary("tinyblob", Types.BLOB, 0xff);
         }
         else if ("mediumblob".equals(name)) {
             type = new TypeBlob("mediumblob", Types.BLOB, 0xffffff);
@@ -99,17 +100,18 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             type = new TypeBlob("longblob", Types.BLOB, 0xffffffffl);
         }
         else if ("binary".equals(name)) {
-            type = new TypeBlob("binary", Types.BINARY, 0xffffffffl);
+            type = new TypeBinary("binary", Types.BINARY, 0xffffffffl);
         }
         else if ("varbinary".equals(name)) {
-            type = new TypeBlob("varbinary", Types.VARBINARY, 0xffffffffl);
+            type = new TypeBinary("varbinary", Types.VARBINARY, 0xffffffffl);
         }
         else if ("bool".equals(name) || "boolean".equals(name)) {
             type = new TypeInteger(
                     "tinyint", 
                     Types.TINYINT, 
                     Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    Value.TYPE_NUMBER,
+                    0,
                     127, 
                     -128);
             type.setLength(1);
@@ -119,7 +121,8 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     "tinyint", 
                     Types.TINYINT, 
                     Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    Value.TYPE_NUMBER,
+                    length,
                     127, 
                     -128);
             type.setLength(length);
@@ -130,6 +133,7 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     Types.SMALLINT, 
                     Integer.class, 
                     Value.TYPE_NUMBER, 
+                    length,
                     32767, 
                     -32768); 
         }
@@ -139,6 +143,7 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     Types.INTEGER, 
                     Integer.class, 
                     Value.TYPE_NUMBER, 
+                    length,
                     8388607, 
                     -8388608); 
         }
@@ -148,6 +153,7 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     Types.INTEGER, 
                     Integer.class, 
                     Value.TYPE_NUMBER, 
+                    length,
                     Integer.MAX_VALUE, 
                     Integer.MIN_VALUE + 1); 
             type.setLength(length);
@@ -158,20 +164,15 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     Types.BIGINT, 
                     Long.class, 
                     Value.TYPE_NUMBER, 
+                    length,
                     Long.MAX_VALUE, 
                     Long.MIN_VALUE + 1); 
         }
         else if ("date".equals(name)) {
-                type = new TypeDate("date");
+            type = new TypeDate("date");
         }
         else if ("enum".equals(name)) {
-            type = new TypeInteger(
-                    "enum", 
-                    Types.INTEGER, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER, 
-                    65535,
-                    0); 
+            type = new TypeString("enum", length, Types.VARCHAR);
         }
         else {
             throw new OrcaException(902, "invalid data type: " + name);

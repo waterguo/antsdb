@@ -74,7 +74,7 @@ public class AsynchronusInsert implements AutoCloseable {
         this.session = session;
         this.trx = session.getTransaction();
         trx.makeAutonomous();
-        int ncpu = Runtime.getRuntime().availableProcessors();
+        int ncpu = this.session.getOrca().getConfig().getAsyncInsertThreads();
         executor = new ThreadPoolExecutor(0, ncpu, 1, TimeUnit.MINUTES, new SynchronousQueue<>());
         executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
             @Override

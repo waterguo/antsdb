@@ -22,43 +22,43 @@ import com.antsdb.saltedfish.cpp.Heap;
  * @author wgu0
  */
 public abstract class CursorWithHeap extends Cursor {
-	private Heap heap;
-	private long pRecord;
-	private long heapMark;
-	
-	public CursorWithHeap(CursorMeta meta) {
-		super(meta);
-		this.heap = new FlexibleHeap();
-		this.pRecord = Record.alloc(heap, meta.getColumnCount());
-		this.heapMark = this.heap.position();
-	}
+    private Heap heap;
+    private long pRecord;
+    private long heapMark;
+    
+    public CursorWithHeap(CursorMeta meta) {
+        super(meta);
+        this.heap = new FlexibleHeap();
+        this.pRecord = Record.alloc(heap, meta.getColumnCount());
+        this.heapMark = this.heap.position();
+    }
 
-	public CursorWithHeap(CursorMaker maker) {
-		super(maker);
-		this.heap = new FlexibleHeap();
-		this.pRecord = Record.alloc(heap, meta.getColumnCount());
-		this.heapMark = this.heap.position();
-	}
+    public CursorWithHeap(CursorMaker maker) {
+        super(maker);
+        this.heap = new FlexibleHeap();
+        this.pRecord = Record.alloc(heap, meta.getColumnCount());
+        this.heapMark = this.heap.position();
+    }
 
-	@Override
-	public void close() {
-		if (this.heap != null) {
-			this.heap.free();
-		}
-		this.heap = null;
-	}
-	
-	protected Heap newHeap() {
-		this.heap.reset(heapMark);
-		return this.heap;
-	}
+    @Override
+    public void close() {
+        if (this.heap != null) {
+            this.heap.free();
+        }
+        this.heap = null;
+    }
+    
+    protected Heap newHeap() {
+        this.heap.reset(heapMark);
+        return this.heap;
+    }
 
-	protected Heap getHeap() {
-		return this.heap;
-	}
-	
-	protected long newRecord() {
-		Record.reset(this.pRecord);
-		return this.pRecord;
-	}
+    protected Heap getHeap() {
+        return this.heap;
+    }
+    
+    protected long newRecord() {
+        Record.reset(this.pRecord);
+        return this.pRecord;
+    }
 }

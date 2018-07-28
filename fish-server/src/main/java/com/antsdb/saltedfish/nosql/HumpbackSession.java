@@ -34,5 +34,8 @@ public class HumpbackSession implements Closeable{
     public void close() {
         this.ts = 0;
     }
-    
+
+    public long getOpenTime() {
+        return this.ts;
+    }
 }

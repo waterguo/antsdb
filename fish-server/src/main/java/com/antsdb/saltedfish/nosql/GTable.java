@@ -93,15 +93,15 @@ public final class GTable implements AutoCloseable, LogSpan {
     }
     
     public HumpbackError update(VaporizingRow row, long oldVersion, int timeout) {
-            return this.memtable.update(row, oldVersion, timeout);
+        return this.memtable.update(row, oldVersion, timeout);
     }
     
     public HumpbackError put(long trxid, SlowRow row, int timeout) {
-            try (BluntHeap heap = new BluntHeap()) {
-                VaporizingRow vrow = row.toVaporisingRow(heap);
-                vrow.setVersion(trxid);
-                return put(vrow, timeout);
-            }
+        try (BluntHeap heap = new BluntHeap()) {
+            VaporizingRow vrow = row.toVaporisingRow(heap);
+            vrow.setVersion(trxid);
+            return put(vrow, timeout);
+        }
     }
     
     public HumpbackError put(VaporizingRow row, int timeout) {
@@ -109,10 +109,10 @@ public final class GTable implements AutoCloseable, LogSpan {
     }
     
     public HumpbackError delete(long trxid, byte[] key, int timeout) {
-            try (BluntHeap heap = new BluntHeap()) {
-                long pKey = KeyBytes.allocSet(heap, key).getAddress();
-                return delete(trxid, pKey, timeout);
-            }
+        try (BluntHeap heap = new BluntHeap()) {
+            long pKey = KeyBytes.allocSet(heap, key).getAddress();
+            return delete(trxid, pKey, timeout);
+        }
     }
     
     public HumpbackError delete(long trxid, long pKey, int timeout) {

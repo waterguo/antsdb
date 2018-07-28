@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -71,6 +72,13 @@ public final class MemoryManager {
     }
     
     public static ByteBuffer alloc(int size) {
+        ByteBuffer result = LatencyDetector.run(_log, "alloc0", ()->{
+           return alloc0(size); 
+        });
+        return result;
+    }
+    
+    private static ByteBuffer alloc0(int size) {
         int index = 32 - Integer.numberOfLeadingZeros(size-1);
         Queue<ByteBuffer> q = getArray()[index];
         ByteBuffer buf = q.poll();

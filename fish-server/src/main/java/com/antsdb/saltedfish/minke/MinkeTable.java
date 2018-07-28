@@ -94,6 +94,10 @@ public class MinkeTable implements StorageTable, Recycable {
             this.range.endMark = range.endMark;
         }
 
+        MinkePage getPage() {
+            return this.pageResult.getPage();
+        }
+        
         @Override
         public boolean next() {
             for (;;) {
@@ -389,7 +393,7 @@ public class MinkeTable implements StorageTable, Recycable {
             
             // at last we do half split
             
-            result = mergeSplit1(page, 0.5f, cb);
+            result = mergeSplit1(page, 0.8f, cb);
             return result;
         }
         catch (IOException x) {
@@ -845,13 +849,16 @@ public class MinkeTable implements StorageTable, Recycable {
         return result;
     }
     
-    public void read(DataInputStream in) throws IOException, ClassNotFoundException {
+    public void read(long version, DataInputStream in) throws IOException, ClassNotFoundException {
         for (;;) {
             int pageId = in.readInt();
             if (pageId == -1) {
                 return;
             }
             MinkePage mpage = this.minke.getPage(pageId);
+            if (version >= 1) {
+                mpage.lastAccess.set(in.readLong()); 
+            }
             KeyBytes startKey = readKeyBytes(in);
             KeyBytes endKey = readKeyBytes(in);
             mpage.assign(this.tableId, startKey, endKey);
@@ -874,6 +881,7 @@ public class MinkeTable implements StorageTable, Recycable {
         for (Map.Entry<KeyBytes, MinkePage> i:this.pages.entrySet()) {
             MinkePage ii = i.getValue();
             out.writeInt(ii.id);
+            out.writeLong(ii.lastAccess.get());
             writeKeyBytes(out, ii.getStartKey());
             writeKeyBytes(out, ii.getEndKey());
         }

@@ -20,10 +20,10 @@ import com.antsdb.saltedfish.cpp.Value;
  * @author wgu0
  */
 public class TypeBlob extends DataType {
-	long max;
-	
-	public TypeBlob(String name, int sqlType, long max) {
-		super(name, 0, 0, sqlType, byte[].class, Value.TYPE_BLOB);
-		this.max = max;
-	}
+    long max;
+    
+    public TypeBlob(String name, int sqlType, long max) {
+        super(name, 0, 0, sqlType, byte[].class, Value.TYPE_BLOB);
+        this.max = max;
+    }
 }

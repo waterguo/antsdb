@@ -55,6 +55,7 @@ class Helper {
                 encoder.writePacket(
                         out,
                         (packet) -> encoder.writeRowTextBody(
+                            cursor.getMetadata(),
                             packet, 
                             pRecord, 
                             nColumns));

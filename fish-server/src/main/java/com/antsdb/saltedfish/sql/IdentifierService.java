@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
@@ -22,23 +23,23 @@ import com.antsdb.saltedfish.util.IdGenerator;
 
 
 public class IdentifierService {
-	static Transaction _trx = new Transaction(1, Long.MAX_VALUE);
-	static final ObjectName GLOBAL_SEQUENCE_NAME = new ObjectName(Orca.SYSNS, "GlobalId");
+    static Transaction _trx = new Transaction(1, Long.MAX_VALUE);
+    static final ObjectName GLOBAL_SEQUENCE_NAME = new ObjectName(Orca.SYSNS, "GlobalId");
     static final ObjectName ROWID_SEQUENCE_NAME = new ObjectName(Orca.SYSNS, "rowid");
-	static int  GLOBAL_SEQUENCE_ID = 0;
-	
+    static int  GLOBAL_SEQUENCE_ID = 0;
+    
     Orca orca;
-    SequenceMeta global;
-    AtomicLong rowid = new AtomicLong();
-    long rowidEnd;
+    AtomicLong nextRowid = new AtomicLong();
+    volatile long rowidEnd;
+    MetadataService meta;
 
     IdentifierService(Orca orca) {
         super();
         this.orca = orca;
-        this.global = this.orca.getMetaService().getSequence(_trx, GLOBAL_SEQUENCE_NAME);
+        this.meta = orca.getMetaService();
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME);
-        this.rowid.set(seq.getLastNumber());
-        this.rowidEnd = this.rowid.get();
+        this.nextRowid.set(seq.getLastNumber());
+        this.rowidEnd = this.nextRowid.get();
     }
     
     /**
@@ -60,52 +61,40 @@ public class IdentifierService {
     }
     
     public long getNextRowid() {
-        long result = this.rowid.getAndIncrement();
-        if (result >= this.rowidEnd) {
-            allocRowidBlock();
+        for (;;) {
+            long result = this.nextRowid.getAndIncrement();
+            if (result >= this.rowidEnd) {
+                allocRowidBlock();
+                continue;
+            }
+            return result;
         }
-        return result;
     }
     
-    private void allocRowidBlock() {
-        this.rowidEnd = this.rowid.get() + 1000000;
+    private synchronized void allocRowidBlock() {
+        this.rowidEnd = this.nextRowid.get() + 1000000;
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
         seq.setLastNumber(rowidEnd);
-        this.orca.metaService.updateSequence(_trx.getTrxId(), seq);
+        long version = this.orca.getTrxMan().getNewVersion();
+        this.orca.metaService.updateSequence(version, seq);
+        seq.getRow().setTrxTimestamp(version);;
     }
     
     public long getNextGlobalId(int increment) {
-        long result = this.global.getLastNumber();
-        result += increment;
-        this.global.setLastNumber(result);
-        this.orca.getMetaService().updateSequence(_trx.getTrxId(), this.global);
-        return result;
+        return getNextId(GLOBAL_SEQUENCE_NAME, increment);
     }
     
     public long getNextId(ObjectName name) {
-        return getNextId(name, 0);
+        return this.meta.nextSequence(name);
     }
     
     public long getNextId(ObjectName name, int increment) {
-        SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, name);
-        long counter;
-        if (seq == null) {
-            seq = new SequenceMeta(this.orca, name);
-            seq.setLastNumber(0l);
-            counter = 0;
-        }
-        else {
-            counter = seq.getLastNumber();
-            counter += (increment == 0) ? seq.getIncrement() : increment;
-            seq.setLastNumber(counter);
-            this.orca.getMetaService().updateSequence(seq.getTransactionTimestamp(), seq);
-        }
-        return counter;
+        return this.meta.nextSequence(name, increment);
     }
     
     void close() {
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
-        seq.setLastNumber(this.rowid.get());
-        this.orca.metaService.updateSequence(_trx.getTrxId(), seq);
+        seq.setLastNumber(this.nextRowid.get());
+        this.orca.metaService.updateSequence(this.orca.getTrxMan().getNewVersion(), seq);
     }
 }

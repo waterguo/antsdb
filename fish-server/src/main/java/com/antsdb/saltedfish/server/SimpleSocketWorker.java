@@ -65,6 +65,9 @@ public class SimpleSocketWorker implements Runnable {
         }
         catch (EOFException x) {
         }
+        catch (IOException x) {
+            _log.trace("", x);
+        }
         catch (Exception x) {
             _log.error("error", x);
         }

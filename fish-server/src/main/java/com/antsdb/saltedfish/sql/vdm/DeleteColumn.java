@@ -88,8 +88,6 @@ public class DeleteColumn extends Statement {
         
         ctx.getMetaService().deleteColumn(trx, table, column);
         
-        // done
-        
         return null;
     }
     

@@ -18,8 +18,8 @@ import org.slf4j.helpers.MessageFormatter;
 import com.antsdb.saltedfish.nosql.HumpbackError;
 
 public class OrcaException extends RuntimeException {
-	int code;
-	
+    int code;
+    
     /**
      * 
      */
@@ -33,8 +33,12 @@ public class OrcaException extends RuntimeException {
         super(error.toString());
     }
 
+    public OrcaException(HumpbackError error, Object... params) {
+        super(MessageFormatter.arrayFormat(error.toString() + " {}", params).getMessage());
+    }
+
     public OrcaException(String message) {
-    	super(message);
+            super(message);
     }
     
     public OrcaException(Exception x, String message, Object... params) {
@@ -45,13 +49,13 @@ public class OrcaException extends RuntimeException {
         super(MessageFormatter.arrayFormat(message, params).getMessage());
     }
 
-	public OrcaException(int code, String message, Object... params) {
-		super(message);
-		this.code = code;
-	}
+    public OrcaException(int code, String message, Object... params) {
+        super(message);
+        this.code = code;
+    }
 
-	public OrcaException(Exception x) {
-		super(x);
-	}
+    public OrcaException(Exception x) {
+        super(x);
+    }
 
 }

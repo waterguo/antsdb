@@ -11,21 +11,39 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.nosql;
+package com.antsdb.saltedfish.slave;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class LogRetentionStrategy {
-    public boolean shouldRetain(SpaceManager sm, Space space) {
-        long spnow = sm.getAllocationPointer();
-        int nowSpaceId = SpaceManager.getSpaceId(spnow);
-        return nowSpaceId - space.id <= 1;
+class BlobTracker {
+    Map<Long, Long> rowByTrxid = new HashMap<>();
+    
+    void add(long trxid, long pRow) {
+        this.rowByTrxid.put(trxid, pRow);
+    }
+    
+    void end(long trxid) {
+        this.rowByTrxid.remove(trxid);
+    }
+    
+    void freeTo(long trxid) {
+        for (Iterator<Map.Entry<Long, Long>> it = rowByTrxid.entrySet().iterator();it.hasNext();) {
+            Map.Entry<Long, Long> entry = it.next();
+            long key = entry.getKey();
+            if ((key < 0) && (key > trxid)) {
+                it.remove();
+            }
+        }
     }
 
-    @Override
-    public String toString() {
-        return "minimum log retention strategy";
+    long get(long trxid) {
+        Long result = this.rowByTrxid.get(trxid);
+        return (result == null) ? 0 : result;
     }
 }

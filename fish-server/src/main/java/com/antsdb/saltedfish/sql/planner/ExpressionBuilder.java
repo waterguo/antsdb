@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 
 import com.antsdb.saltedfish.nosql.SlowRow;
+import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.FuncNow;
@@ -42,6 +43,7 @@ class ExpressionBuilder {
     ColumnMeta buildColumn(String name) {
         ColumnMeta result = new ColumnMeta(null, new SlowRow(1));
         result.setColumnName(name);
+        result.setType(DataType.varchar());
         return result;
     }
     

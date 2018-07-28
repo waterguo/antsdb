@@ -53,9 +53,12 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
         
         Map<String, String> options = new HashMap<>();
         for (Table_optionContext i:rule.table_options().table_option()) {
-        	String option = i.table_option_name().getText();
-        	String value = i.table_option_value().getText();
-        	options.put(option, value);
+            String option = i.table_option_name().getText();
+            String value = i.table_option_value().getText();
+            options.put(option, value);
+            if (option.equalsIgnoreCase("DEFAULTCHARSET")) {
+                createTable.setCharset(value);
+            }
         }
         
         // count number of unique keys
@@ -64,13 +67,12 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
         
         for (Create_defContext i:rule.create_defs().create_def()) {
             if (i.primary_key_def() != null) {
-            	nUniqueKeys++;
+                nUniqueKeys++;
             }
             else if (i.index_def() != null) {
-            	if (i.index_def().K_UNIQUE() != null) {
-            		nUniqueKeys++;
-            	}
-            	
+                if (i.index_def().K_UNIQUE() != null) {
+                    nUniqueKeys++;
+                }
             }
         }
         
@@ -83,38 +85,37 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
                 hasPrimaryKey = true;
             }
             else if (i.index_def() != null) {
-            	boolean isUnique = i.index_def().K_UNIQUE() != null;
-            	if (isUnique && !hasPrimaryKey && (nUniqueKeys==1)) {
-            		// special treatment, if there is only one unique key, make it as primary key
+                boolean isUnique = i.index_def().K_UNIQUE() != null;
+                if (isUnique && !hasPrimaryKey && (nUniqueKeys==1)) {
+                    // special treatment, if there is only one unique key, make it as primary key
                     flow.add(createPrimrayKey(ctx, tableName, i.index_def()));
-            	}
-            	else {
-                	flow.add(createIndex(ctx, tableName, i.index_def()));
-            	}
+                }
+                else {
+                    flow.add(createIndex(ctx, tableName, i.index_def()));
+                }
             }
             else if (i.column_def() != null) {
-            	List<String> keyColumns = new ArrayList<>();
-            	CreateColumn cc = createColumn(ctx, i.column_def(), tableName, keyColumns);
+                List<String> keyColumns = new ArrayList<>();
+                CreateColumn cc = createColumn(ctx, i.column_def(), tableName, keyColumns);
                 flow.add(cc);
                 if (keyColumns.size() > 0) {
-                	CreatePrimaryKey cpk = new CreatePrimaryKey(tableName, keyColumns);
-                	hasPrimaryKey = true;
-                	flow.add(cpk);
+                    CreatePrimaryKey cpk = new CreatePrimaryKey(tableName, keyColumns);
+                    hasPrimaryKey = true;
+                    flow.add(cpk);
                 }
                 else if (keyColumns.size() > 1) {
-                	throw new OrcaException("Multiple primary key defined");
+                    throw new OrcaException("Multiple primary key defined");
                 }
             }
             else if (i.constraint_def() != null) {
-            	Instruction step = createConstraint(ctx, tableName, i.constraint_def());
-            	flow.add(step);
+                Instruction step = createConstraint(ctx, tableName, i.constraint_def());
+                flow.add(step);
             }
             else {
-            	throw new NotImplementedException();
+                throw new NotImplementedException();
             }
         }
         flow.add(new SyncTableSequence(tableName, options));
-        flow.add(new CreateDelayedForeignKey(tableName));
         if (rule.K_NOT() == null) {
             return flow;
         }
@@ -123,52 +124,55 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
         }
     }
 
-	private Instruction createConstraint(GeneratorContext ctx, ObjectName tableName, Constraint_defContext rule) {
+    private Instruction createConstraint(GeneratorContext ctx, ObjectName tableName, Constraint_defContext rule) {
         ObjectName parentTableName = TableName.parse(ctx, rule.table_name_());
         List<String> childColumns = Utils.getColumns(rule.columns(0));
         List<String> parentColumns = Utils.getColumns(rule.columns(1));
-        String name = (rule.identifier() == null) ? null : rule.identifier().getText();
-		CreateForeignKey fk = new CreateForeignKey(tableName, name, parentTableName, childColumns, parentColumns);
-		fk.setRebuildIndex(false);
-		return fk;
-	}
+        String name = (rule.identifier() == null) ? null : Utils.getIdentifier(rule.identifier());
+        String onDelete = Alter_table_stmtGenerator.getOnAction(true, rule.cascade_option());
+        String onUpdate = Alter_table_stmtGenerator.getOnAction(false, rule.cascade_option());
+        CreateForeignKey fk;
+        fk = new CreateForeignKey(tableName, name, parentTableName, childColumns, parentColumns, onDelete, onUpdate);
+        fk.setRebuildIndex(false);
+        return fk;
+    }
 
-	private CreateColumn createColumn(GeneratorContext ctx, 
-			                          Column_defContext rule, 
-			                          ObjectName tableName, 
-			                          List<String> keyColumns) {
+    private CreateColumn createColumn(GeneratorContext ctx, 
+                                      Column_defContext rule, 
+                                      ObjectName tableName, 
+                                      List<String> keyColumns) {
         CreateColumn createColumn = new CreateColumn();
         createColumn.tableName = tableName;
         Utils.updateColumnAttributes(ctx, createColumn, rule, keyColumns);
         return createColumn;
     }
 
-	private Instruction createPrimrayKey(GeneratorContext ctx, ObjectName tableName, Primary_key_defContext rule) {
+    private Instruction createPrimrayKey(GeneratorContext ctx, ObjectName tableName, Primary_key_defContext rule) {
         List<String> columns = Utils.getColumns(rule.index_columns());
         CreatePrimaryKey step = new CreatePrimaryKey(tableName, columns);
         return step;
     }
 
-	private Instruction createPrimrayKey(GeneratorContext ctx, ObjectName tableName, Index_defContext rule) {
+    private Instruction createPrimrayKey(GeneratorContext ctx, ObjectName tableName, Index_defContext rule) {
         List<String> columns = Utils.getColumns(rule.index_columns());
         CreatePrimaryKey step = new CreatePrimaryKey(tableName, columns);
         return step;
     }
 
     private Instruction createIndex(GeneratorContext ctx, ObjectName tableName, Index_defContext rule) {
-    	boolean isUnique = rule.K_UNIQUE() != null;
-    	String indexName = null;
+        boolean isUnique = rule.K_UNIQUE() != null;
+        String indexName = null;
         List<String> columns = Utils.getColumns(rule.index_columns());
-        	if (rule.identifier() != null) {
-        		indexName = Utils.getIdentifier(rule.identifier());
-        	}
-        	else {
-        		indexName = columns.get(0); 
-        	}
+            if (rule.identifier() != null) {
+                indexName = Utils.getIdentifier(rule.identifier());
+            }
+            else {
+                indexName = columns.get(0); 
+            }
         boolean isFullText = rule.K_FULLTEXT() != null;
         CreateIndex step = new CreateIndex(indexName, isFullText, isUnique, false, tableName, columns);
         step.setRebuild(false);
         return step;
-	}
+    }
 
 }

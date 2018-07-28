@@ -44,7 +44,7 @@ public class InsertOnDuplicate extends UpdateBase {
         Object result;
         try (Heap heap = new FlexibleHeap()) {
             heap.reset(0);
-            VaporizingRow row = this.insert.genRow(ctx, heap, params);
+            VaporizingRow row = this.insert.genRow(ctx, heap, params, null);
             long pKey = getExistingRowKey(trx, heap, row);
             if (pKey == 0) {
                 result = this.insert.run(ctx, params);

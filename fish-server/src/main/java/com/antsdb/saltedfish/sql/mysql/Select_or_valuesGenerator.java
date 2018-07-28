@@ -68,16 +68,16 @@ import com.antsdb.saltedfish.sql.vdm.ToString;
 import com.antsdb.saltedfish.util.CodingError;
 
 public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext>{
-	static Set<String> _aggregates = new HashSet<>();
-	
-	static {
-		_aggregates.add("count");
-		_aggregates.add("avg");
-		_aggregates.add("sum");
-		_aggregates.add("min");
-		_aggregates.add("max");
-	}
-	
+    static Set<String> _aggregates = new HashSet<>();
+    
+    static {
+        _aggregates.add("count");
+        _aggregates.add("avg");
+        _aggregates.add("sum");
+        _aggregates.add("min");
+        _aggregates.add("max");
+    }
+    
     @Override
     public Instruction gen(GeneratorContext ctx, Select_or_valuesContext rule)
     throws OrcaException {
@@ -86,7 +86,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         return maker;
     }
 
-	/**
+    /**
      * generate subquery
      * 
      * @param ctx
@@ -97,7 +97,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
      */
     public CursorMaker genSubquery(GeneratorContext ctx, Select_stmtContext rule, Planner parent) 
     throws OrcaException {
-    	CursorMaker subquery = Select_stmtGenerator.gen(ctx, rule, parent);
+        CursorMaker subquery = Select_stmtGenerator.gen(ctx, rule, parent);
         return subquery;
     }
     
@@ -162,9 +162,9 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                         }
                     }
                     if (ii.getColumn() != null) {
-	                    if (ii.getColumn().getColumnName().startsWith("*")) {
-	                    	continue;
-	                    }
+                        if (ii.getColumn().getColumnName().startsWith("*")) {
+                            continue;
+                        }
                     }
                     FieldValue cv = new FieldValue(ii);
                     planner.addOutputField(cv.getName(), cv);
@@ -182,7 +182,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                 String fieldName = getFieldName(expr, op);
                 planner.addOutputField(fieldName, op);
                 if (expr.column_alias() != null) {
-                	    exprByAlias.put(fieldName.toLowerCase(), op);
+                        exprByAlias.put(fieldName.toLowerCase(), op);
                 }
             }
             else {
@@ -226,125 +226,125 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         return planner;
     }
     
-	private static ExprContext rewriteHaving(GeneratorContext ctx, Planner planner, ExprContext expr) {
-		ExprContext rewritten = new ExprContext(expr.getParent(), expr.invokingState);
-		for (ParseTree i:expr.children) {
-			if (i instanceof Expr_functionContext) {
-				rewritten.addChild(rewriteHaving(ctx, planner, (Expr_functionContext)i));
-			}
-			else if (i instanceof ExprContext) {
-				rewritten.addChild(rewriteHaving(ctx, planner, (ExprContext)i));
-			}
-			else if (i instanceof RuleContext) {
-				rewritten.addChild((RuleContext)i);
-			}
-			else if (i instanceof TerminalNode) {
-				rewritten.addChild((TerminalNode)i);
-			}
-			else {
-				throw new CodingError();
-			}
-		}
-		return rewritten;
-	}
+    private static ExprContext rewriteHaving(GeneratorContext ctx, Planner planner, ExprContext expr) {
+        ExprContext rewritten = new ExprContext(expr.getParent(), expr.invokingState);
+        for (ParseTree i:expr.children) {
+            if (i instanceof Expr_functionContext) {
+                rewritten.addChild(rewriteHaving(ctx, planner, (Expr_functionContext)i));
+            }
+            else if (i instanceof ExprContext) {
+                rewritten.addChild(rewriteHaving(ctx, planner, (ExprContext)i));
+            }
+            else if (i instanceof RuleContext) {
+                rewritten.addChild((RuleContext)i);
+            }
+            else if (i instanceof TerminalNode) {
+                rewritten.addChild((TerminalNode)i);
+            }
+            else {
+                throw new CodingError();
+            }
+        }
+        return rewritten;
+    }
 
-	private static RuleContext rewriteHaving(GeneratorContext ctx, Planner planner, Expr_functionContext rule) {
-		String funcname = rule.function_name().getText().toLowerCase();
-		if (_aggregates.contains(funcname)) {
-			OutputField field = findExisting(ctx, planner, rule);
-			if (field != null) {
-				return createColumnName_(rule, field);
-			}
-			else {
-				Operator expr = ExprGenerator.gen(ctx, planner, (ExprContext)rule.getParent());
-				field = planner.addOutputField("*" + planner.getOutputFields().size(), expr);
-				return createColumnName_(rule, field);
-			}
-		}
-		else {
-			return rule;
-		}
-	}
+    private static RuleContext rewriteHaving(GeneratorContext ctx, Planner planner, Expr_functionContext rule) {
+        String funcname = rule.function_name().getText().toLowerCase();
+        if (_aggregates.contains(funcname)) {
+            OutputField field = findExisting(ctx, planner, rule);
+            if (field != null) {
+                return createColumnName_(rule, field);
+            }
+            else {
+                Operator expr = ExprGenerator.gen(ctx, planner, (ExprContext)rule.getParent());
+                field = planner.addOutputField("*" + planner.getOutputFields().size(), expr);
+                return createColumnName_(rule, field);
+            }
+        }
+        else {
+            return rule;
+        }
+    }
 
-	private static RuleContext createColumnName_(Expr_functionContext rule, OutputField field) {
-		Column_name_Context column_name_ = new Column_name_Context(rule.getParent(), rule.invokingState);
-		Column_nameContext column_name = new Column_nameContext(column_name_.getParent(), rule.invokingState);
-		IdentifierContext identifier = new IdentifierContext(column_name, rule.invokingState);
-		CommonToken token = CommonTokenFactory.DEFAULT.create(
-				MysqlParser.BACKTICK_QUOTED_IDENTIFIER, 
-				'`' + field.name + '`' );
-		TerminalNode term = new TerminalNodeImpl(token);
-		identifier.addChild(term);
-		column_name.addChild(identifier);
-		column_name_.addChild(column_name);
-		return column_name_;
-	}
+    private static RuleContext createColumnName_(Expr_functionContext rule, OutputField field) {
+        Column_name_Context column_name_ = new Column_name_Context(rule.getParent(), rule.invokingState);
+        Column_nameContext column_name = new Column_nameContext(column_name_.getParent(), rule.invokingState);
+        IdentifierContext identifier = new IdentifierContext(column_name, rule.invokingState);
+        CommonToken token = CommonTokenFactory.DEFAULT.create(
+                MysqlParser.BACKTICK_QUOTED_IDENTIFIER, 
+                '`' + field.name + '`' );
+        TerminalNode term = new TerminalNodeImpl(token);
+        identifier.addChild(term);
+        column_name.addChild(identifier);
+        column_name_.addChild(column_name);
+        return column_name_;
+    }
 
-	private static OutputField findExisting(GeneratorContext ctx, Planner planner, Expr_functionContext rule) {
-		for (OutputField i:planner.getOutputFields()) {
-			Operator expr = i.getExpr();
-			if (!(expr instanceof Function)) {
-				continue;
-			}
-			Function func = (Function)expr;
-			String funcname = rule.function_name().getText().toLowerCase();
-			if ((func instanceof FuncCount) && funcname.equals("count")) {
-				if (matchParameters(ctx, planner, func, rule)) {
-					return i;
-				}
-			}
-			else if ((func instanceof FuncSum) && funcname.equals("sum")) {
-				return i;
-			}
-			else if ((func instanceof FuncMin) && funcname.equals("min")) {
-				return i;
-			}
-			else if ((func instanceof FuncMax) && funcname.equals("max")) {
-				return i;
-			}
-		}
-		return null;
-	}
+    private static OutputField findExisting(GeneratorContext ctx, Planner planner, Expr_functionContext rule) {
+        for (OutputField i:planner.getOutputFields()) {
+            Operator expr = i.getExpr();
+            if (!(expr instanceof Function)) {
+                continue;
+            }
+            Function func = (Function)expr;
+            String funcname = rule.function_name().getText().toLowerCase();
+            if ((func instanceof FuncCount) && funcname.equals("count")) {
+                if (matchParameters(ctx, planner, func, rule)) {
+                    return i;
+                }
+            }
+            else if ((func instanceof FuncSum) && funcname.equals("sum")) {
+                return i;
+            }
+            else if ((func instanceof FuncMin) && funcname.equals("min")) {
+                return i;
+            }
+            else if ((func instanceof FuncMax) && funcname.equals("max")) {
+                return i;
+            }
+        }
+        return null;
+    }
 
-	private static boolean matchParameters(
-			GeneratorContext ctx, 
-			Planner planner, 
-			Function func, 
-			Expr_functionContext rule) {
-		if (rule.expr_function_star_parameter() != null) {
-			if (func.getChildren().size() == 1) {
-				if (func.getChildren().get(0) == null) {
-					return true;
-				}
-			}
-		}
-		Expr_function_parametersContext params = rule.expr_function_parameters();
-		if (params == null) {
-			return false;
-		}
-		if (func.getChildren().size() != params.getChildCount()) {
-			return false;
-		}
-		for (int i=0; i<func.getChildren().size(); i++) {
-			if (!matchParameter(ctx, planner, func.getChildren().get(i), params.expr(i))) {
-				return false;
-			}
-		}
-		return true;
-	}
+    private static boolean matchParameters(
+            GeneratorContext ctx, 
+            Planner planner, 
+            Function func, 
+            Expr_functionContext rule) {
+        if (rule.expr_function_star_parameter() != null) {
+            if (func.getChildren().size() == 1) {
+                if (func.getChildren().get(0) == null) {
+                    return true;
+                }
+            }
+        }
+        Expr_function_parametersContext params = rule.expr_function_parameters();
+        if (params == null) {
+            return false;
+        }
+        if (func.getChildren().size() != params.getChildCount()) {
+            return false;
+        }
+        for (int i=0; i<func.getChildren().size(); i++) {
+            if (!matchParameter(ctx, planner, func.getChildren().get(i), params.expr(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
 
-	private static boolean matchParameter(GeneratorContext ctx, Planner planner, Operator op, ExprContext rule) {
-		if ((op instanceof FieldValue) && (rule.getChild(0) instanceof Column_name_Context)) {
-			return matchFieldValue(ctx, planner, (FieldValue)op, (Column_name_Context)rule.getChild(0));
-		}
-		return false;
-	}
+    private static boolean matchParameter(GeneratorContext ctx, Planner planner, Operator op, ExprContext rule) {
+        if ((op instanceof FieldValue) && (rule.getChild(0) instanceof Column_name_Context)) {
+            return matchFieldValue(ctx, planner, (FieldValue)op, (Column_name_Context)rule.getChild(0));
+        }
+        return false;
+    }
 
-	private static boolean matchFieldValue(
-			GeneratorContext ctx, 
-			Planner planner, 
-			FieldValue op, 
-			Column_name_Context rule) {
+    private static boolean matchFieldValue(
+            GeneratorContext ctx, 
+            Planner planner, 
+            FieldValue op, 
+            Column_name_Context rule) {
         ObjectName tableName = TableName.parse(ctx, rule.identifier());
         String table = (tableName != null) ? tableName.getTableName() : null;
         String column = Utils.getIdentifier(rule.column_name().identifier());
@@ -358,17 +358,17 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                 }
             }
             return true;
-		});
+        });
         return field != null;
-	}
+    }
 
-	static void addTableToPlanner(
-			GeneratorContext ctx, 
-			Planner planner, 
-			From_itemContext rule, 
-			ExprContext condition,
-			boolean left,
-			boolean isOuter) {
+    static void addTableToPlanner(
+            GeneratorContext ctx, 
+            Planner planner, 
+            From_itemContext rule, 
+            ExprContext condition,
+            boolean left,
+            boolean isOuter) {
         String alias = null;
         ObjectName name = null;
         if (rule.table_alias() != null && rule.table_alias().identifier()!=null) {
@@ -416,7 +416,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
     static Object getTable(GeneratorContext ctx, Table_name_Context name) {
         ObjectName tableName = TableName.parse(ctx, name);
         if (tableName.getTableName().equalsIgnoreCase("dual")) {
-        	return new Dual();
+            return new Dual();
         }
         Object table = Checks.tableOrViewExist(ctx.getSession(), tableName);
         return table;

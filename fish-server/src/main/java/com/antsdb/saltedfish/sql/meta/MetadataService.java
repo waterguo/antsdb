@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackError;
@@ -30,6 +31,7 @@ import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.SlowRow;
+import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.NativeAuthPlugin;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -55,11 +57,15 @@ public class MetadataService {
     
     Orca orca;
     Map<Integer, TableMeta> cache = new ConcurrentHashMap<>();
+    Map<ObjectName, SequenceMeta> seqCache = new ConcurrentHashMap<>();
     private long version;
+    GTable gtableSeq;
+    private TrxMan trxman;
     
     public MetadataService(Orca orca) {
         super();
         this.orca = orca;
+        this.trxman = orca.getTrxMan();
     }
     
     public TableMeta getTable(Transaction trx, int id) {
@@ -343,6 +349,8 @@ public class MetadataService {
     }
 
     public void addColumn(Transaction trx, TableMeta table, ColumnMeta columnMeta) throws HumpbackException {
+        // add column metadata
+        
         long trxid = trx.getGuaranteedTrxId();
         GTable sysColumn = getSysColumn();
         columnMeta.row.setTrxTimestamp(trxid);
@@ -354,11 +362,14 @@ public class MetadataService {
         
         // inform humpback
         
-        this.orca.getHumpback().addColumn(
-                trxid, 
-                table.getHtableId(), 
-                columnMeta.getColumnId(), 
-                columnMeta.getColumnName());
+        Humpback humpback = this.orca.getHumpback();
+        int columnPos = columnMeta.getColumnId();
+        String columnName = columnMeta.getColumnName();
+        humpback.addColumn(trxid, table.getHtableId(), columnPos, columnName);
+        int fishType = columnMeta.getDataType().getFishType();
+        if ((fishType == Value.TYPE_BLOB) || (fishType == Value.TYPE_CLOB)) {
+            humpback.addColumn(trxid, table.getBlobTableId(), columnPos, columnName);
+        }
     }
     
     public void modifyColumn(Transaction trx, ColumnMeta columnMeta) throws HumpbackException {
@@ -382,7 +393,13 @@ public class MetadataService {
         
         // inform humpback
         
-        this.orca.getHumpback().deleteColumn(trxid, table.getHtableId(), column.getColumnId());
+        Humpback humpback = this.orca.getHumpback();
+        humpback.deleteColumn(trxid, table.getHtableId(), column.getColumnId());
+        if (column.isBlobClob()) {
+            if (humpback.getTable(table.getBlobTableId()) != null) {
+                humpback.deleteColumn(trxid, table.getBlobTableId(), column.getColumnId());
+            }
+        }
     }
     
     public List<String> getNamespaces() {
@@ -404,18 +421,41 @@ public class MetadataService {
         return tables;
     }
     
-    public SequenceMeta getSequence(Transaction trx, ObjectName name) {
-        GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSSEQUENCE);
-        Row raw = table.getRow(
-                  trx.getTrxId(), 
-                  trx.getTrxTs(), 
-                  KeyMaker.make(name.getNamespace() + "." + name.getTableName()));
+    private SequenceMeta loadSequence(Transaction trx, ObjectName name) {
+        Row raw = getSequenceTable().getRow(
+                trx.getTrxId(), 
+                trx.getTrxTs(), 
+                KeyMaker.make(name.getNamespace() + "." + name.getTableName()));
         SlowRow row = SlowRow.from(raw);
         if (row == null) {
             return null;
         }
-        SequenceMeta sequenceMeta = new SequenceMeta(row);
-        return sequenceMeta;
+        SequenceMeta seq = new SequenceMeta(row);
+        return seq;
+    }
+    
+    public SequenceMeta getSequence(Transaction trx, ObjectName name) {
+        // load from database is this is a ddl trx
+        
+        if (trx.isDddl()) {
+            return loadSequence(trx, name);
+        }
+        
+        // find it from cache
+        
+        SequenceMeta seq = this.seqCache.get(name);
+        if (seq == null) {
+            synchronized (this) {
+                seq = this.seqCache.get(name);
+                if (seq == null) {
+                    seq = loadSequence(trx, name);
+                    if (seq != null) {
+                        this.seqCache.put(name, seq);
+                    }
+                }
+            }
+        }
+        return seq;
     }
     
     public void addSequence(Transaction trx, SequenceMeta seq) {
@@ -434,12 +474,12 @@ public class MetadataService {
     
     public void dropSequence(Transaction trx, SequenceMeta seq) {
         long trxid = trx.getGuaranteedTrxId();
-        GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSSEQUENCE);
-        table.delete(trxid, seq.getKey(), 1000);
+        getSequenceTable().delete(trxid, seq.getKey(), 1000);
 
         // doh, this is a ddl transaction, remember it
         
         trx.setDdl(true);
+        this.seqCache.remove(new ObjectName(seq.getNamespace(), seq.getSequenceName()));
     }
 
     public void updateSequence(long trxid, SequenceMeta seq) {
@@ -448,6 +488,23 @@ public class MetadataService {
         if (error != HumpbackError.SUCCESS) {
             throw new OrcaException(error);
         }
+        this.seqCache.remove(seq.getObjectName());
+    }
+
+    public long nextSequence(ObjectName name) {
+        SequenceMeta seq = getSequence(Transaction.getSeeEverythingTrx(), name);
+        if (seq == null) {
+            throw new IllegalArgumentException();
+        }
+        return seq.next(getSequenceTable(), this.trxman);
+    }
+    
+    public long nextSequence(ObjectName name, int increment) {
+        SequenceMeta seq = getSequence(Transaction.getSeeEverythingTrx(), name);
+        if (seq == null) {
+            throw new IllegalArgumentException();
+        }
+        return seq.next(getSequenceTable(), this.trxman, increment);
     }
 
     public void addRule(Transaction trx, RuleMeta<?> rule) {
@@ -572,5 +629,19 @@ public class MetadataService {
         }
         userMeta.setDeleteMark(true);
         sysuser.update(1, userMeta.row, 0);
+    }
+    
+    public void close() {
+        for (SequenceMeta i:this.seqCache.values()) {
+            i.closeAndUpdate(getSequenceTable(), this.trxman);
+        }
+        this.seqCache = null;
+    }
+    
+    private GTable getSequenceTable() {
+        if (this.gtableSeq == null) {
+            this.gtableSeq = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSSEQUENCE);
+        }
+        return this.gtableSeq;
     }
 }

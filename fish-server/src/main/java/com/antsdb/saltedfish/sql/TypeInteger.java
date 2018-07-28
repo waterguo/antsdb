@@ -19,12 +19,12 @@ package com.antsdb.saltedfish.sql;
  * @author wgu0
  */
 public class TypeInteger extends DataType {
-	long max;
-	long min;
-	
-	public TypeInteger(String name, int sqlType, Class<?> klass, byte fishType, long max, long min) {
-		super(name, 0, 0, sqlType, klass, fishType);
-		this.max = max;
-		this.min = min;
-	}
+    long max;
+    long min;
+    
+    public TypeInteger(String name, int sqlType, Class<?> klass, byte fishType, int length, long max, long min) {
+        super(name, length, 0, sqlType, klass, fishType);
+        this.max = max;
+        this.min = min;
+    }
 }

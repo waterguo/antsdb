@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.antsdb</groupId>
 		<artifactId>fish-root</artifactId>
-		<version>18.05.27</version>
+		<version>18.07.27</version>
 	</parent>
 
 	<modelVersion>4.0.0</modelVersion>
@@ -14,6 +14,14 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
+
+	<repositories>
+		<repository>
+			<id>my-repos</id>
+			<name>my repos</name>
+			<url>http://lepton.iceup.net/repos</url>
+		</repository>
+	</repositories>
 
 	<build>
 		<plugins>
@@ -40,11 +48,11 @@
 					<includeConfigurationDirectoryInClasspath>true</includeConfigurationDirectoryInClasspath>
 					<programs>
 						<program>
-							<name>hbase-util</name>
+							<id>hbase-util</id>
 							<mainClass>com.antsdb.saltedfish.storage.HBaseUtilMain</mainClass>
 						</program>
 						<program>
-							<name>hbase-relink</name>
+							<id>hbase-relink</id>
 							<mainClass>com.antsdb.saltedfish.storage.OrcaRelinkMain</mainClass>
 							<commandLineArguments>
 								<commandLineArgument>--home</commandLineArgument>
@@ -58,7 +66,15 @@
 							<mainClass>com.antsdb.saltedfish.server.SaltedFishMain</mainClass>
 							<commandLineArguments>
 								<commandLineArgument>.</commandLineArgument>
-							</commandLineArguments>
+                            </commandLineArguments>
+                            <wrapperLogFile>logs/wrapper.log</wrapperLogFile>
+							<jvmSettings>
+								<initialMemorySize>1024</initialMemorySize>
+								<maxMemorySize>4096</maxMemorySize>
+								<extraArguments>
+								    <extraArgument>-XX:+PerfDisableSharedMem</extraArgument>
+								</extraArguments>
+							</jvmSettings>
 							<platforms>
 								<platform>jsw</platform>
 							</platforms>

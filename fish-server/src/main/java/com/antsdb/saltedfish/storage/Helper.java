@@ -54,6 +54,7 @@ import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.vdm.BlobReference;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -67,26 +68,17 @@ final class Helper {
     
     private static final byte[] EMPTY = new byte[0];
 
-    public static final String SYS_COLUMN_FAMILY     = "s";            // all system information columns use "s" as column family
-    public static final String DATA_COLUMN_FAMILY     = "d";             // all data columns use same column family - "d"
+    public static final String SYS_COLUMN_FAMILY     = "d";            // all system information columns use "s" as column family
+    public static final String DATA_COLUMN_FAMILY    = "d";             // all data columns use same column family - "d"
 
-    public static final String SYS_COLUMN_KEYPREFIX = "k";      // key id (first 4 bytes) of "Key" in antsdb
-    public static final String SYS_COLUMN_DATATYPE     = "t";            // array of bytes to store data type for each column
-    public static final String SYS_COLUMN_VERSION     = "v";            // version of row in antsdb
-    public static final String SYS_COLUMN_INDEXKEY     = "i";             // index key column name
-    public static final String SYS_COLUMN_MISC      = "m";          // misc
-    public static final String SYS_COLUMN_SIZE      = "s";         // size in bytes
-    public static final String SYS_COLUMN_HASH      = "h";
-    
-    public static final byte[] SYS_COLUMN_FAMILY_BYTES = Bytes.toBytes(SYS_COLUMN_FAMILY);
     public static final byte[] DATA_COLUMN_FAMILY_BYTES = Bytes.toBytes(DATA_COLUMN_FAMILY);    
-    public static final byte[] SYS_COLUMN_KEYPREFIX_BYTES = Bytes.toBytes(SYS_COLUMN_KEYPREFIX);
-    public static final byte[] SYS_COLUMN_DATATYPE_BYTES = Bytes.toBytes(SYS_COLUMN_DATATYPE);    
-    public static final byte[] SYS_COLUMN_VERSION_BYTES = Bytes.toBytes(SYS_COLUMN_VERSION);
-    public static final byte[] SYS_COLUMN_INDEXKEY_BYTES = Bytes.toBytes(SYS_COLUMN_INDEXKEY);    
-    public static final byte[] SYS_COLUMN_MISC_BYTES = Bytes.toBytes(SYS_COLUMN_MISC);    
-    public static final byte[] SYS_COLUMN_SIZE_BYTES = Bytes.toBytes(SYS_COLUMN_SIZE);
-    public static final byte[] SYS_COLUMN_HASH_BYTES = Bytes.toBytes(SYS_COLUMN_HASH);
+    public static final byte[] SYS_COLUMN_ROWID_BYTES = Bytes.toBytes("*rowid");    
+    public static final byte[] SYS_COLUMN_DATATYPE_BYTES = Bytes.toBytes("*type");    
+    public static final byte[] SYS_COLUMN_VERSION_BYTES = Bytes.toBytes("*version");
+    public static final byte[] SYS_COLUMN_INDEXKEY_BYTES = Bytes.toBytes("*key");    
+    public static final byte[] SYS_COLUMN_MISC_BYTES = Bytes.toBytes("*misc");    
+    public static final byte[] SYS_COLUMN_SIZE_BYTES = Bytes.toBytes("*size");
+    public static final byte[] SYS_COLUMN_HASH_BYTES = Bytes.toBytes("*hash");
 
     public static Map<String, byte[]> toMap(Result r) {
         Map<String, byte[]> row = new HashMap<>();
@@ -106,8 +98,8 @@ final class Helper {
     public static Put toPut(Mapping mapping, Row row) {
         byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
         Put put = new Put(key);
-        put.addColumn(SYS_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(row.getLength()));
-        put.addColumn(SYS_COLUMN_FAMILY_BYTES, SYS_COLUMN_HASH_BYTES, Bytes.toBytes(row.getHash()));
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(row.getLength()));
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_HASH_BYTES, Bytes.toBytes(row.getHash()));
         
         // populate fields
         
@@ -117,11 +109,18 @@ final class Helper {
             long pValue = row.getFieldAddress(i); 
             types[i] = Helper.getType(pValue);
             byte[] value = Helper.toBytes(pValue);
-            put.addColumn(mapping.getUserFamily(), mapping.getColumn(i), value);
+            byte[] columnName = mapping.getColumn(i);
+            if (columnName != null) {
+                put.addColumn(mapping.getUserFamily(), mapping.getColumn(i), value);
+            }
+            else if (pValue != 0) {
+                String msg = String.format("%d:%s", mapping.tableId, KeyBytes.toString(row.getKeyAddress()));
+                throw new IllegalArgumentException(msg);
+            }
         }
 
         // populate data types
-        put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, types);
+        put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, types);
         return put;
     }
     
@@ -131,8 +130,8 @@ final class Helper {
         byte[] misc = new byte[1];
         misc[0] = line.getMisc();
         Put put = new Put(key);
-        put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, rowKey);
-        put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_MISC_BYTES, misc);
+        put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, rowKey);
+        put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_MISC_BYTES, misc);
         return put;
     }
 
@@ -294,7 +293,6 @@ final class Helper {
             // Create table
             try (Admin admin = conn.getAdmin()) {
             HTableDescriptor table = new HTableDescriptor(TableName.valueOf(namespace, tableName));
-            table.addFamily(new HColumnDescriptor(SYS_COLUMN_FAMILY).setCompressionType(compressionType));
             table.addFamily(new HColumnDescriptor(DATA_COLUMN_FAMILY).setCompressionType(compressionType));
             _log.debug("creating table {}", table.toString());
             admin.createTable(table);
@@ -352,7 +350,7 @@ final class Helper {
     public static Result exist(Connection conn, TableName tableName, byte[] key) throws IOException {
         Table htable = conn.getTable(tableName);
         Get get = new Get(key);
-        get.addColumn(SYS_COLUMN_FAMILY_BYTES, SYS_COLUMN_VERSION_BYTES);
+        get.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_VERSION_BYTES);
         Result r = htable.get(get);
         return r;
     }
@@ -370,7 +368,7 @@ final class Helper {
     }
 
     public static long getVersion(Result r) {
-        NavigableMap<byte[], byte[]> sys = r.getFamilyMap(SYS_COLUMN_FAMILY_BYTES);
+        NavigableMap<byte[], byte[]> sys = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
         byte[] versionBytes = sys.get(SYS_COLUMN_VERSION_BYTES);
         long version = Bytes.toLong(versionBytes);
         return version;
@@ -383,23 +381,21 @@ final class Helper {
 
         // some preparation
         
-        NavigableMap<byte[], byte[]> sysFamilyMap = r.getFamilyMap(SYS_COLUMN_FAMILY_BYTES);
         NavigableMap<byte[], byte[]> dataFamilyMap = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
-        byte[] colDataType = sysFamilyMap.get(SYS_COLUMN_DATATYPE_BYTES);
-        byte[] sizeBytes = sysFamilyMap.get(SYS_COLUMN_SIZE_BYTES);
+        byte[] colDataType = dataFamilyMap.get(SYS_COLUMN_DATATYPE_BYTES);
+        byte[] sizeBytes = dataFamilyMap.get(SYS_COLUMN_SIZE_BYTES);
         int size = Bytes.toInt(sizeBytes);
         
         // populate the row. system table doesn't come with metadata
         
         VaporizingRow row = null;
+        byte[] key = hbaseKeyToAnts(r.getRow());
         if (table != null) {
-            row = populateUsingMetadata(heap, table, dataFamilyMap, colDataType, size);
+            row = populateUsingMetadata(heap, table, dataFamilyMap, colDataType, size, key);
         }
         else {
-            row = populateDirect(heap, dataFamilyMap, colDataType, size);
+            row = populateDirect(heap, dataFamilyMap, colDataType, size, key);
         }
-        byte[] key = hbaseKeyToAnts(r.getRow());
-        row.setKey(key);
         row.setVersion(1);
         long pRow = Row.from(heap, row);
         return pRow;
@@ -415,16 +411,21 @@ final class Helper {
             NavigableMap<byte[], 
             byte[]> data, 
             byte[] types,
-            int size) {
+            int size, 
+            byte[] rowkey) {
         VaporizingRow row = new VaporizingRow(heap, types.length-1);
+        row.setKey(rowkey);
         for (Map.Entry<byte[], byte[]> i:data.entrySet()) {
             byte[] key = i.getKey();
+            if (key[0] == '*') {
+                continue;
+            }
             int column = key[0] << 8 | key[1];
             if (types[column] == Value.FORMAT_NULL) {
                 continue;
             }
-            long pValue = toMemory(heap, types[column], i.getValue());
-                row.setFieldAddress(column, pValue);
+            long pValue = toMemory(heap, types[column], i.getValue(), row.getKeyAddress());
+            row.setFieldAddress(column, pValue);
         }
         return row;
     }
@@ -434,33 +435,34 @@ final class Helper {
             TableMeta table, 
             NavigableMap<byte[], byte[]> data, 
             byte[] types,
-            int size) {
+            int size, 
+            byte[] rowkey) {
         VaporizingRow row = new VaporizingRow(heap, table.getMaxColumnId());
+        row.setKey(rowkey);
         for (int i=0; i<=table.getMaxColumnId(); i++) {
             if (i == 0) {
                 // rowid
-                byte[] colRowid = Bytes.toBytes((short)0);
-                byte[] colValueBytes = data.get(colRowid);
-                long pValue = toMemory(heap, Value.FORMAT_INT8, colValueBytes);
+                byte[] colValueBytes = data.get(SYS_COLUMN_ROWID_BYTES);
+                long pValue = toMemory(heap, Value.FORMAT_INT8, colValueBytes, row.getKeyAddress());
                 row.setFieldAddress(i, pValue);
                 continue;
             }
             ColumnMeta colMeta;
-                colMeta = table.getColumnByColumnId(i);
+            colMeta = table.getColumnByColumnId(i);
             // skip invalid column - not found column meta
             if (colMeta == null) {
-                    continue;
+                continue;
             }
             // skip non-existing column
             if (i >= types.length) {
-                    break;
+                break;
             }
             // Add column
             // Get column name
             String colName = colMeta.getColumnName();
             byte[] colNameBytes = Bytes.toBytes(colName);
             byte[] colValueBytes = data.get(colNameBytes);
-            long pValue = toMemory(heap, types[i], colValueBytes);
+            long pValue = toMemory(heap, types[i], colValueBytes, row.getKeyAddress());
             row.setFieldAddress(i, pValue);
         }
         return row;
@@ -482,7 +484,7 @@ final class Helper {
         return p;
     }
     
-    public static long toMemory(Heap heap, int type, byte[] value) {
+    public static long toMemory(Heap heap, int type, byte[] value, long pKey) {
         if (value == null) {
             return 0;
         }
@@ -538,6 +540,10 @@ final class Helper {
         else if (type == Value.FORMAT_INT4_ARRAY) {
             pValue = Int4Array.alloc(heap, value).getAddress();
         }
+        else if (type == Value.FORMAT_BLOB_REF) {
+            int dataSize = Bytes.toInt(value);
+            pValue = BlobReference.alloc(heap, pKey, dataSize).getAddress();
+        }
         else {
             throw new IllegalArgumentException(String.valueOf(type));
         }
@@ -546,7 +552,7 @@ final class Helper {
     
     public static byte[] toBytes(long pValue) {
         if (pValue == 0) {
-            return EMPTY;
+            return null;
         }
         
         int length = 0;
@@ -605,6 +611,10 @@ final class Helper {
         else if (dataType == Value.FORMAT_INT4_ARRAY) {
             return new Int4Array(pValue).toBytes();
         }
+        else if (dataType == Value.FORMAT_BLOB_REF) {
+            BlobReference ref = new BlobReference(pValue);
+            return Bytes.toBytes(ref.getDataSize());
+        }
         else {
             throw new IllegalArgumentException(String.valueOf(dataType));
         }
@@ -631,7 +641,7 @@ final class Helper {
         if (r.isEmpty()) {
             return 0;
         }
-        NavigableMap<byte[], byte[]> sys = r.getFamilyMap(SYS_COLUMN_FAMILY_BYTES);
+        NavigableMap<byte[], byte[]> sys = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
         byte[] indexKey = r.getRow();
         byte[] rowKey = sys.get(SYS_COLUMN_INDEXKEY_BYTES);
         byte misc = sys.get(SYS_COLUMN_MISC_BYTES)[0];

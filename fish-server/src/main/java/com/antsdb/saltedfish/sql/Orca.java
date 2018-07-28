@@ -350,6 +350,8 @@ public class Orca {
                 session.tableLocks.put(tableId, newlock);
             }
         }
+        String msg = String.format("session %d user %s from %s", session.getId(), user, remoteEndpoint);
+        getHumpback().getGobbler().logMessage(msg);
         this.sessions.add(session);
         return session;
     }
@@ -357,6 +359,8 @@ public class Orca {
     public void closeSession(Session session) {
         session.close();
         this.sessions.remove(session);
+        String msg = String.format("session %d is closed", session.getId());
+        getHumpback().getGobbler().logMessage(msg);
         this.deadSessions.add(new DeadSession(session));
         while (this.deadSessions.size() > 200) {
             this.deadSessions.poll();
@@ -391,10 +395,6 @@ public class Orca {
 
         MysqlSlave.stopIfExists();
 
-        // close services
-
-        this.idService.close();
-
         // close all sessions
 
         if (this.sessionSweeperFuture != null) {
@@ -407,6 +407,11 @@ public class Orca {
             closeSession(i);
         }
 
+        // close services
+
+        this.idService.close();
+        this.metaService.close();
+        
         // shutdown hbase storage service
 
         try {

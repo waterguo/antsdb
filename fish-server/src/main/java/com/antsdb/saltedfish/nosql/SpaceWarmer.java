@@ -11,34 +11,33 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.sql.mysql;
+package com.antsdb.saltedfish.nosql;
 
-import com.antsdb.saltedfish.sql.meta.TableMeta;
-import com.antsdb.saltedfish.sql.vdm.Checks;
-import com.antsdb.saltedfish.sql.vdm.CreateForeignKey;
-import com.antsdb.saltedfish.sql.vdm.ObjectName;
-import com.antsdb.saltedfish.sql.vdm.Parameters;
-import com.antsdb.saltedfish.sql.vdm.Statement;
-import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import java.nio.MappedByteBuffer;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class CreateDelayedForeignKey extends Statement {
+public class SpaceWarmer implements Runnable {
 
-    private ObjectName tableName;
+    private SpaceManager sm;
+    byte checksum = 0;
 
-    public CreateDelayedForeignKey(ObjectName tableName) {
-        this.tableName = tableName;
+    SpaceWarmer(SpaceManager sm) {
+        this.sm = sm;
     }
-
+    
     @Override
-    public Object run(VdmContext ctx, Parameters params) {
-        TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
-        CreateForeignKey.createDelayedKeys(ctx, table);
-        ctx.getSession().commit();
-        return null;
+    public void run() {
+        for (int i=this.sm.spaces.length-1; i>=0; i--) {
+            Space ii = this.sm.spaces[i];
+            if (ii != null) {
+                MappedByteBuffer buf = ii.mmf.buf;
+                for (int j=0; i<buf.capacity(); j+=0x100) {
+                    this.checksum ^= buf.get(j);
+                }
+            }
+        }
     }
-
 }

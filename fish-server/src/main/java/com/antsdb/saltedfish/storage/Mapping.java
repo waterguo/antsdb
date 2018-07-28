@@ -13,20 +13,20 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
+import java.util.List;
+
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.util.Bytes;
 
+import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.sql.Orca;
-import com.antsdb.saltedfish.sql.meta.ColumnMeta;
-import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 /**
  * 
  * @author *-xguo0<@
  */
 class Mapping {
-    final static byte[] SYSTEM_FAMILY = Helper.SYS_COLUMN_DATATYPE_BYTES;
     final static byte[] USER_FAMILY = Helper.DATA_COLUMN_FAMILY_BYTES;
     final static byte[][] SYSTEM_QUALIFIERS = new byte[100][];
     
@@ -41,31 +41,28 @@ class Mapping {
         }
     }
     
-    Mapping(String sysns, SysMetaRow tableInfo, TableMeta tableMeta) {
+    Mapping(String sysns, SysMetaRow tableInfo, List<HColumnRow> columns) {
         this.tableId = tableInfo.getTableId();
         this.ns = tableInfo.getNamespace();
         this.ns = (this.ns.equals(Orca.SYSNS)) ? sysns : this.ns; 
         this.tableName = tableInfo.getTableName();
-        if (tableMeta != null) {
-            this.qualifiers = new byte[tableMeta.getMaxColumnId()+1][];
-            for (int i=0; i<=tableMeta.getMaxColumnId(); i++) {
-                ColumnMeta column = tableMeta.getColumnByColumnId(i);
-                if (column == null) {
-                    if (i == 0) {
-                        // rowid
-                        byte[] bytes = Bytes.toBytes((short)0);
-                        this.qualifiers[i] = bytes;
-                    }
+        if ((columns != null) && (columns.size() > 0)) {
+            int max = 0;
+            for (HColumnRow i:columns) {
+                if (i.isDeleted()) {
                     continue;
                 }
-                byte[] bytes = Bytes.toBytes(column.getColumnName());
-                this.qualifiers[i] = bytes;
+                max = Math.max(max, i.getColumnPos());
+            }
+            this.qualifiers = new byte[max+1][];
+            this.qualifiers[0] = Helper.SYS_COLUMN_ROWID_BYTES;
+            for (HColumnRow i:columns) {
+                if (i.isDeleted()) {
+                    continue;
+                }
+                this.qualifiers[i.getColumnPos()] = Bytes.toBytes(i.getColumnName());
             }
         }
-    }
-    
-    byte[] getSystemFamily() {
-        return SYSTEM_FAMILY;
     }
     
     byte[] getUserFamily() {
@@ -74,7 +71,7 @@ class Mapping {
     
     byte[] getColumn(int i) {
         if (this.qualifiers != null) {
-            return this.qualifiers[i];
+            return (i<this.qualifiers.length) ? this.qualifiers[i] : null;
         }
         else {
             return SYSTEM_QUALIFIERS[i];

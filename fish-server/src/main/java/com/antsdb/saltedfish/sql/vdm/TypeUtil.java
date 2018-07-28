@@ -37,15 +37,13 @@ public class TypeUtil {
     }
 
     public static Operator autoCast(ColumnMeta column, Operator expr, boolean nullIfEmpty) {
-        if (expr.getReturnType() != null) {
-            if (expr.getReturnType().getJavaType() == column.getDataType().getJavaType()) {
-                return expr;
-            }
-        }
         DataType dtype = column.getDataType();
         Class<?> type = dtype.getJavaType();
-        if (type == Timestamp.class) {
-            return new ToTimestampRelaxed(new NullIfEmpty(expr));
+        if (column.getDataType().getName().equals("enum")) {
+            return new ToEnumIndex(column, expr);
+        }
+        else if (type == Timestamp.class) {
+            return new ToTimestampRelaxed(new NullIfEmpty(expr), column.getTypeLength());
         }
         else if (type == BigDecimal.class) {
             return new ToBigDecimal(new NullIfEmpty(expr), dtype.getLength(), dtype.getScale());

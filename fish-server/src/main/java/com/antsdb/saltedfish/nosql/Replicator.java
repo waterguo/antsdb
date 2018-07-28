@@ -198,7 +198,7 @@ public class Replicator extends Thread {
 
     @Override
     public void run() {
-        log.info("{} started ...", getName());
+        log.info("{} started {} ...", getName(), this.replicable.getReplicateLogPointer());
         for (;;) {
 
             // sanity check
@@ -344,5 +344,9 @@ public class Replicator extends Thread {
         props.put("retries", this.retries);
         props.put("pending data", capacity(getPendingBytes()));
         return props;
+    }
+    
+    public long getLogPointer() {
+        return this.replicable.getReplicateLogPointer();
     }
 }

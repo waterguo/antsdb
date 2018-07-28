@@ -23,6 +23,7 @@ import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.LockLevel;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
+import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -60,6 +61,9 @@ public class TruncateTable extends Statement {
                 // new table
                 
                 clone.setHtableId((int)ctx.getOrca().getIdentityService().getNextGlobalId(0x10));
+                if (humpback.getTable(table.getBlobTableId()) != null) {
+                    humpback.truncateTable(table.getBlobTableId(), clone.getBlobTableId());
+                }
                 humpback.truncateTable(table.getHtableId(), clone.getHtableId());
                 meta.updateTable(ctx.getTransaction(), clone);
                 TableMeta stub = new TableMeta(ctx.getOrca(), clone.getHtableId());
@@ -71,6 +75,15 @@ public class TruncateTable extends Statement {
                 // delete old indexes
     
                 deleteOldIndexes(ctx, table);
+                
+                // reset auto increment
+                
+                ObjectName seqname = table.getAutoIncrementSequenceName();
+                SequenceMeta seq = meta.getSequence(trx, seqname);
+                if (seq != null) {
+                    seq.setLastNumber(seq.getSeed() - seq.getIncrement());
+                    meta.updateSequence(trx.getTrxId(), seq);
+                }
                 
                 return null;
             }

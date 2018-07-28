@@ -36,7 +36,9 @@ public class ChannelWriterNio extends ChannelWriter {
 
     @Override
     protected void writeDirect(ByteBuffer bytes) throws IOException {
-        this.channel.write(bytes);
+        while (bytes.hasRemaining()) {
+            this.channel.write(bytes);
+        }
     }
 
 }

@@ -17,13 +17,13 @@ import com.antsdb.saltedfish.cpp.Value;
 
 /**
  * 
- * @author wgu0
+ * @author *-xguo0<@
  */
-public class TypeClob extends DataType {
+public class TypeBinary extends DataType {
     long max;
     
-    public TypeClob(String name, int sqlType, long max) {
-        super(name, 0, 0, sqlType, String.class, Value.TYPE_CLOB);
+    public TypeBinary(String name, int sqlType, long max) {
+        super(name, 0, 0, sqlType, byte[].class, Value.TYPE_BYTES);
         this.max = max;
     }
 }

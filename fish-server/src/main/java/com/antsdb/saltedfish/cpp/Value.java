@@ -64,6 +64,10 @@ public class Value {
     public static final byte FORMAT_BOUNDARY = TYPE_UNKNOWN + 0;
     /** an array of integers **/
     public static final byte FORMAT_INT4_ARRAY = TYPE_UNKNOWN + 1;
+    /** clob reference */
+    public static final byte FORMAT_CLOB_REF = TYPE_UNKNOWN + 2;
+    /** blob reference */
+    public static final byte FORMAT_BLOB_REF = TYPE_UNKNOWN + 3;
     public static final byte FORMAT_ROW = TYPE_UNKNOWN + 0x10;
     
     public final static byte getFormat(Heap heap, long address) {

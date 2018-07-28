@@ -31,7 +31,7 @@ public class UpdateSingleRow extends UpdateBase {
     int tableId;
 
     public UpdateSingleRow(
-                Orca orca, 
+            Orca orca, 
             TableMeta table, 
             GTable gtable, 
             Operator key, 

@@ -33,8 +33,8 @@ import com.antsdb.saltedfish.util.BytesUtil;
  *
  */
 public abstract class Record {
-	public final static long GROUP_END = Unsafe.allocateMemory(16);
-	
+    public final static long GROUP_END = Unsafe.allocateMemory(16);
+    
     final static byte TYPE_RECORD = Value.FORMAT_RECORD;
     final static int OFFSET_SIZE = 2;
     final static int OFFSET_KEY = OFFSET_SIZE + 2;
@@ -105,158 +105,158 @@ public abstract class Record {
         return pResult;
     }
     
-	public static void reset(long pRecord) {
-    	checkType(pRecord);
-		int bytes = 8 + size(pRecord) * 8; 
-    	Unsafe.setMemory(pRecord + OFFSET_KEY, bytes, (byte)0);
-	}
-	
+    public static void reset(long pRecord) {
+        checkType(pRecord);
+        int bytes = 8 + size(pRecord) * 8; 
+        Unsafe.setMemory(pRecord + OFFSET_KEY, bytes, (byte)0);
+    }
+    
     public final static long getValueAddress(long pRecord, int field) {
-    	long pValue = get(pRecord, field);
-    	return pValue;
+        long pValue = get(pRecord, field);
+        return pValue;
     }
     
     public final static Object getValue(long pRecord, int field) {
-    	long pValue = get(pRecord, field);
-    	if (pValue == 0) {
-    		return null;
-    	}
-    	Object value = FishObject.get(null, pValue);
-    	return value;
+        long pValue = get(pRecord, field);
+        if (pValue == 0) {
+            return null;
+        }
+        Object value = FishObject.get(null, pValue);
+        return value;
     }
     
     public final static long get(long pRecord, int field) {
-    	checkType(pRecord);
-		int size = size(pRecord);
-		if ((field < 0) || (field >=size)) {
-			return 0;
-		}
-    	long pField = pRecord + OFFSET_FIELDS + field * 8;
-    	long pValue = Unsafe.getLong(pField);
-    	return pValue;
+        checkType(pRecord);
+        int size = size(pRecord);
+        if ((field < 0) || (field >=size)) {
+            return 0;
+        }
+        long pField = pRecord + OFFSET_FIELDS + field * 8;
+        long pValue = Unsafe.getLong(pField);
+        return pValue;
     }
     
-	public final static void set(long pRecord, int field, long pValue) {
-    	checkType(pRecord);
-    	checkField(pRecord, field);
-    	long pField = pRecord + OFFSET_FIELDS + field * 8;
-    	Unsafe.putLong(pField, pValue);
+    public final static void set(long pRecord, int field, long pValue) {
+        checkType(pRecord);
+        checkField(pRecord, field);
+        long pField = pRecord + OFFSET_FIELDS + field * 8;
+        Unsafe.putLong(pField, pValue);
     }
     
     public final static int size(long pRecord) {
-    	checkType(pRecord);
-    	long pSize = pRecord + OFFSET_SIZE;
-    	int size = Unsafe.getShort(pSize);
-    	return size;
+        checkType(pRecord);
+        long pSize = pRecord + OFFSET_SIZE;
+        int size = Unsafe.getShort(pSize);
+        return size;
     }
     
     public final static long getKey(long pRecord) {
-    	checkType(pRecord);
-    	long pKey = Unsafe.getLong(pRecord + OFFSET_KEY);
-    	return pKey;
-	}
+        checkType(pRecord);
+        long pKey = Unsafe.getLong(pRecord + OFFSET_KEY);
+        return pKey;
+    }
     
     public final static byte[] getKeyBytes(long pRecord) {
-    	long pKey = getKey(pRecord);
-    	if (pKey == 0) {
-    		return null;
-    	}
-    	return KeyBytes.create(pKey).get();
+        long pKey = getKey(pRecord);
+        if (pKey == 0) {
+            return null;
+        }
+        return KeyBytes.create(pKey).get();
     }
     
     public final static void setKey(long pRecord, long pKey) {
-    	checkType(pRecord);
-    	Unsafe.putLong(pRecord + OFFSET_KEY, pKey);
+        checkType(pRecord);
+        Unsafe.putLong(pRecord + OFFSET_KEY, pKey);
     }
     
-	public static void setKey(Heap heap, long pRecord, byte[] bytes) {
-    	long pBytes = bytes != null ? KeyBytes.allocSet(heap, bytes).getAddress() : 0;
-    	setKey(pRecord, pBytes);
-	}
-	
+    public static void setKey(Heap heap, long pRecord, byte[] bytes) {
+        long pBytes = bytes != null ? KeyBytes.allocSet(heap, bytes).getAddress() : 0;
+        setKey(pRecord, pBytes);
+    }
+    
     private final static void checkType(long pRecord) {
-    	if (pRecord == 0) {
-    		throw new IllegalArgumentException();
-    	}
-    	byte type = Unsafe.getByte(pRecord);
-    	if (type != TYPE_RECORD) {
-    		throw new IllegalArgumentException();
-    	}
+        if (pRecord == 0) {
+            throw new IllegalArgumentException();
+        }
+        byte type = Unsafe.getByte(pRecord);
+        if (type != TYPE_RECORD) {
+            throw new IllegalArgumentException(String.valueOf(type));
+        }
     }
 
     private final static void checkField(long pRecord, int field) {
-		int size = size(pRecord);
-		if ((field < 0) || (field >=size)) {
-			throw new IllegalArgumentException();
-		}
-	}
+        int size = size(pRecord);
+        if ((field < 0) || (field >=size)) {
+            throw new IllegalArgumentException();
+        }
+    }
     
-	public static void set(Heap heap, long pRecord, Record rec) {
-		for (int i=0; i<rec.size(); i++) {
-			Object value = rec.get(i);
-			long pValue = FishObject.allocSet(heap, value);
-			Record.set(pRecord, i, pValue);
-		}
-	}
-	
-	public final static boolean isGroupEnd(long pRecord) {
-		return pRecord == GROUP_END;
-	}
-	
-	public static boolean isEmpty(long pRecord) {
-		return getKey(pRecord) == 0;
-	}
-	
-	public static Record toRecord(long pRecord) {
-		Record rec = new HashMapRecord();
-		int size = size(pRecord);
-		for (int i=0; i<size; i++) {
-			Object value = getValue(pRecord, i);
-			rec.set(i, value);
-		}
-		return rec;
-	}
-	
-	public static long fromRow(Heap heap, TableMeta table, SlowRow row) {
-		throw new NotImplementedException();
-	}
-	
-	public static long fromRow(Heap heap, TableMeta table, Row row) {
-		long pRecord = alloc(heap, table.getColumns().size() + 2);
-		int i=0;
-		setKey(pRecord, row.getKeyAddress());
-		set(pRecord, i++, row.getFieldAddress(-1));
-		set(pRecord, i++, row.getFieldAddress(0));
-		for (ColumnMeta column:table.getColumns()) {
-			long pValue = row.getFieldAddress(column.getColumnId());
-			set(pRecord, i++, pValue);
-		}
-		return pRecord;
-	}
-	
-	public static String dump(long pRecord) {
-		if (pRecord == 0) {
-			return "NULL";
-		}
-		StringBuilder buf = new StringBuilder();
-		try {
-			buf.append("size:");
-			buf.append(size(pRecord));
-			buf.append("\n");
-			buf.append("key:");
-			buf.append(BytesUtil.toHex(getKeyBytes(pRecord)));
-			buf.append("\n");
-			for (int i=0; i<size(pRecord); i++) {
-				buf.append(i);
-				buf.append(":");
-				buf.append(getValue(pRecord, i));
-				buf.append("\n");
-			}
-		}
-		catch (Exception x) {
-			return "not a record";
-		}
-		return buf.toString();
-	}
+    public static void set(Heap heap, long pRecord, Record rec) {
+        for (int i=0; i<rec.size(); i++) {
+            Object value = rec.get(i);
+            long pValue = FishObject.allocSet(heap, value);
+            Record.set(pRecord, i, pValue);
+        }
+    }
+    
+    public final static boolean isGroupEnd(long pRecord) {
+        return pRecord == GROUP_END;
+    }
+    
+    public static boolean isEmpty(long pRecord) {
+        return getKey(pRecord) == 0;
+    }
+    
+    public static Record toRecord(long pRecord) {
+        Record rec = new HashMapRecord();
+        int size = size(pRecord);
+        for (int i=0; i<size; i++) {
+            Object value = getValue(pRecord, i);
+            rec.set(i, value);
+        }
+        return rec;
+    }
+    
+    public static long fromRow(Heap heap, TableMeta table, SlowRow row) {
+        throw new NotImplementedException();
+    }
+    
+    public static long fromRow(Heap heap, TableMeta table, Row row) {
+        long pRecord = alloc(heap, table.getColumns().size() + 2);
+        int i=0;
+        setKey(pRecord, row.getKeyAddress());
+        set(pRecord, i++, row.getFieldAddress(-1));
+        set(pRecord, i++, row.getFieldAddress(0));
+        for (ColumnMeta column:table.getColumns()) {
+            long pValue = row.getFieldAddress(column.getColumnId());
+            set(pRecord, i++, pValue);
+        }
+        return pRecord;
+    }
+    
+    public static String dump(long pRecord) {
+        if (pRecord == 0) {
+            return "NULL";
+        }
+        StringBuilder buf = new StringBuilder();
+        try {
+            buf.append("size:");
+            buf.append(size(pRecord));
+            buf.append("\n");
+            buf.append("key:");
+            buf.append(BytesUtil.toHex(getKeyBytes(pRecord)));
+            buf.append("\n");
+            for (int i=0; i<size(pRecord); i++) {
+                buf.append(i);
+                buf.append(":");
+                buf.append(getValue(pRecord, i));
+                buf.append("\n");
+            }
+        }
+        catch (Exception x) {
+            return "not a record";
+        }
+        return buf.toString();
+    }
 }
 

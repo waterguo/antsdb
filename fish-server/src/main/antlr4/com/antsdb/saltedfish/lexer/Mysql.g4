@@ -137,7 +137,7 @@ alter_table_add_constraint
  ;
 
 alter_table_add_constraint_fk
- : K_FOREIGN K_KEY '(' child_columns ')' K_REFERENCES table_name_ '(' parent_columns ')'
+ : K_FOREIGN K_KEY '(' child_columns ')' K_REFERENCES table_name_ '(' parent_columns ')' cascade_option*
  ;
  
 alter_table_add_constraint_pk
@@ -229,7 +229,7 @@ create_def
  ;
  
 column_def
- : column_name data_type K_UNSIGNED? K_SIGNED? K_BINARY? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)?
+ : column_name data_type K_UNSIGNED? K_SIGNED? K_BINARY? K_ZEROFILL? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)?
    (K_AFTER identifier)? 
    (K_COMMENT (STRING_LITERAL | DOUBLE_QUOTED_LITERAL))? 
  ;
@@ -303,13 +303,9 @@ index_column
  
 constraint_def
  : ((K_CONSTRAINT identifier K_FOREIGN K_KEY) | (K_CONSTRAINT? K_FOREIGN K_KEY identifier?))  
-   '(' columns ')' K_REFERENCES table_name_ '(' columns ')' cascade_options
+   '(' columns ')' K_REFERENCES table_name_ '(' columns ')' cascade_option*
  ;
 
-cascade_options
- : cascade_option*
- ;
- 
 cascade_option
  : K_ON K_DELETE (K_CASCADE | K_NO K_ACTION)
  | K_ON K_UPDATE (K_CASCADE | K_NO K_ACTION)
@@ -744,7 +740,7 @@ expr_case_when : K_WHEN expr K_THEN expr;
 expr_case_else : K_ELSE expr;
 
 like_expr
- : literal_value | bind_parameter
+ : expr_simple
  ;
  
 pattern
@@ -854,6 +850,7 @@ name
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
  | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
+ | K_ZEROFILL
  ;
  
 identifier
@@ -1124,6 +1121,7 @@ K_WHEN : W H E N;
 K_WHERE : W H E R E;
 K_WITH : W I T H;
 K_WITHOUT : W I T H O U T;
+K_ZEROFILL : Z E R O F I L L;
 K_ISOLATION : I S O L A T I O N;
 K_LEVEL : L E V E L;
 K_READ : R E A D;

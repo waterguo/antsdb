@@ -189,4 +189,8 @@ public final class VaporizingRow {
         return row;
     }
 
+    public final String getKeySpec(int tableId) {
+        String result = String.valueOf(tableId) + ":" + KeyBytes.toString(getKeyAddress());
+        return result;
+    }
 }

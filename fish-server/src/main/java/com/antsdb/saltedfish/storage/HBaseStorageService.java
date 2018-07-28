@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.ConfigService;
+import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Replicable;
@@ -240,17 +241,17 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         if (!this.isMutable) {
             return;
         }
-            if (!Helper.existsNamespace(this.hbaseConnection, this.sysns)) {
-                _log.info("namespace {} is not found in HBase, creating ...", this.sysns);
-                createNamespace(this.sysns);
-            }
-            if (!Helper.existsTable(this.hbaseConnection, this.tnCheckpoint)) {
-                _log.info("checkpoint table {} is not found in HBase, creating ...", this.tnCheckpoint);
-                createTable(this.sysns, TABLE_SYNC_PARAM);
-                CheckPoint cp = new CheckPoint(this.hbaseConnection, this.tnCheckpoint, isMutable);
-                cp.setServerId(this.humpback.getServerId());
-                cp.updateHBase();
-            }
+        if (!Helper.existsNamespace(this.hbaseConnection, this.sysns)) {
+            _log.info("namespace {} is not found in HBase, creating ...", this.sysns);
+            createNamespace(this.sysns);
+        }
+        if (!Helper.existsTable(this.hbaseConnection, this.tnCheckpoint)) {
+            _log.info("checkpoint table {} is not found in HBase, creating ...", this.tnCheckpoint);
+            createTable(this.sysns, TABLE_SYNC_PARAM);
+            CheckPoint cp = new CheckPoint(this.hbaseConnection, this.tnCheckpoint, isMutable);
+            cp.setServerId(this.humpback.getServerId());
+            cp.updateHBase();
+        }
     }
 
     @Override
@@ -343,11 +344,11 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         if (tableInfo.isDeleted()) {
             return null;
         }
-        TableMeta tableMeta = getTableMeta(tableId);
-        if ((tableId >= 0x100) && (tableMeta == null)) {
+        List<HColumnRow> columns = this.humpback.getColumns(tableId);
+        if ((tableId >= 0x100) && (columns == null)) {
             throw new OrcaHBaseException("orca metadata for table {} is not found", tableId);
         }
-        Mapping mapping = new Mapping(this.sysns, tableInfo, tableMeta);
+        Mapping mapping = new Mapping(this.sysns, tableInfo, columns);
         return mapping;
     }
     
@@ -386,11 +387,11 @@ public class HBaseStorageService implements StorageEngine, Replicable {
             if (version < 0) {
                 throw new OrcaHBaseException("invalid version {}", version);
             }
-            put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
+            put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_VERSION_BYTES, version, Bytes.toBytes(version));
             
             // populate size
             
-            put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, version, Bytes.toBytes(row.getLength()));
+            put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_SIZE_BYTES, version, Bytes.toBytes(row.getLength()));
             
             // populate fields
             
@@ -408,7 +409,7 @@ public class HBaseStorageService implements StorageEngine, Replicable {
             }
     
             // populate data types
-            put.addColumn(Helper.SYS_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, version, types);
+            put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_DATATYPE_BYTES, version, types);
             puts.add(put);
             totalColumns += put.size();
             
@@ -457,16 +458,16 @@ public class HBaseStorageService implements StorageEngine, Replicable {
     }
     
     public TableName getTableName(int tableId) {
-            SysMetaRow metarow = this.humpback.getTableInfo(tableId);
-            if (metarow == null) {
-                throw new OrcaHBaseException("metadata of table {} is not found", tableId);
-            }
-            if (metarow.isDeleted()) {
-                return null;
-            }
-            String ns = metarow.getNamespace();
-            ns = (ns.equals(Orca.SYSNS)) ? this.sysns : ns;
-            return TableName.valueOf(ns, metarow.getTableName());
+        SysMetaRow metarow = this.humpback.getTableInfo(tableId);
+        if (metarow == null) {
+            throw new OrcaHBaseException("metadata of table {} is not found", tableId);
+        }
+        if (metarow.isDeleted()) {
+            return null;
+        }
+        String ns = metarow.getNamespace();
+        ns = (ns.equals(Orca.SYSNS)) ? this.sysns : ns;
+        return TableName.valueOf(ns, metarow.getTableName());
     }
 
     public TableMeta getTableMeta(int tableId) {

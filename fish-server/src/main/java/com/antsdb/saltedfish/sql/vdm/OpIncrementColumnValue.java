@@ -28,47 +28,47 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  */
 public class OpIncrementColumnValue extends UnaryOperator {
 
-	private TableMeta table;
-	
-	public OpIncrementColumnValue(TableMeta table, Operator upstream) {
-		super(upstream);
-		this.table = table;
-	}
+    private TableMeta table;
+    
+    public OpIncrementColumnValue(TableMeta table, Operator upstream) {
+        super(upstream);
+        this.table = table;
+    }
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		if (upstream != null) {
-			long pValue = this.upstream.eval(ctx, heap, params, pRecord);
-			if (pValue != 0) {
-				long pNumber = AutoCaster.toNumber(heap, pValue);
-				long val = FishNumber.longValue(pNumber);
-				if (val != 0 || ctx.getSession().getConfig().isNoAutoValueOnZero()) {
-					// if user set a value to an auto_increment column, we need to remember it
-					SequenceMeta seq = getSequence(ctx);
-					if (val > seq.getLastNumber()) {
-						seq.setLastNumber(val);
-						ctx.getMetaService().updateSequence(seq.getTransactionTimestamp(), seq);
-					}
-					return pNumber;
-				}
-			}
-		}
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        if (upstream != null) {
+            long pValue = this.upstream.eval(ctx, heap, params, pRecord);
+            if (pValue != 0) {
+                long pNumber = AutoCaster.toNumber(heap, pValue);
+                long val = FishNumber.longValue(pNumber);
+                if (val != 0 || ctx.getSession().getConfig().isNoAutoValueOnZero()) {
+                    // if user set a value to an auto_increment column, we need to remember it
+                    SequenceMeta seq = getSequence(ctx);
+                    if (val > seq.getLastNumber()) {
+                        seq.setLastNumber(val);
+                        ctx.getMetaService().updateSequence(seq.getTransactionTimestamp(), seq);
+                    }
+                    return pNumber;
+                }
+            }
+        }
         IdentifierService idService = ctx.getOrca().getIdentityService();
         long value = idService.getNextId(this.table.getAutoIncrementSequenceName());
         ctx.getSession().setLastInsertId(value);
         long addr = Int8.allocSet(heap, value);
         return addr;
-	}
+    }
 
-	SequenceMeta getSequence(VdmContext ctx) {
-    	Transaction trx = ctx.getTransaction();
-		ObjectName name = this.table.getAutoIncrementSequenceName();
-		return ctx.getMetaService().getSequence(trx, name);
-	}
-	
-	@Override
-	public DataType getReturnType() {
+    SequenceMeta getSequence(VdmContext ctx) {
+        Transaction trx = ctx.getTransaction();
+        ObjectName name = this.table.getAutoIncrementSequenceName();
+        return ctx.getMetaService().getSequence(trx, name);
+    }
+    
+    @Override
+    public DataType getReturnType() {
         return DataType.longtype();
-	}
-	
+    }
+    
 }

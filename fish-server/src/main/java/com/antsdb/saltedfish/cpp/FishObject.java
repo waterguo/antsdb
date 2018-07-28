@@ -19,6 +19,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 
 import com.antsdb.saltedfish.sql.vdm.AutoCaster;
+import com.antsdb.saltedfish.sql.vdm.BlobReference;
 import com.antsdb.saltedfish.sql.vdm.ToTimestampRelaxed;
 
 public class FishObject {
@@ -78,6 +79,9 @@ public class FishObject {
         }
         else if (type == Value.FORMAT_INT4_ARRAY) {
             result = new Int4Array(addr).toArray();
+        }
+        else if (type == Value.FORMAT_BLOB_REF) {
+            result = new BlobReference(addr);
         }
         else {
             throw new IllegalArgumentException();
@@ -254,7 +258,7 @@ public class FishObject {
     }
 
     public static long toTimestamp(Heap heap, long addr) {
-        return ToTimestampRelaxed.toTimestamp(heap, addr);
+        return ToTimestampRelaxed.toTimestamp(heap, addr, Integer.MAX_VALUE);
     }
 
     public static long toDate(Heap heap, long addr) {
@@ -362,6 +366,8 @@ public class FishObject {
             return 1;
         case Value.FORMAT_INT4_ARRAY:
             return new Int4Array(pValue).getSize();
+        case Value.FORMAT_BLOB_REF:
+            return new BlobReference(pValue).getSize();
         default:
             throw new IllegalArgumentException();
         }
@@ -418,6 +424,10 @@ public class FishObject {
             break;
         case Value.FORMAT_FLOAT8:
             buf.append(Float8.get(null, pValue));
+            break;
+        case Value.FORMAT_BLOB_REF:
+            buf.append("BLOBREF SIZE=");
+            buf.append(new BlobReference(pValue).getDataSize());
             break;
         default:
             Object obj = FishObject.get(null, pValue);

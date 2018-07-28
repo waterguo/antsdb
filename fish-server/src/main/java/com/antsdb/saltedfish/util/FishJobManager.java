@@ -59,6 +59,10 @@ public class FishJobManager {
 		return poolOneTime.schedule(callable, delay, unit);
 	}
 
+    public ScheduledFuture<?> schedule(long delay, TimeUnit unit, Callable<?> callable) {
+        return poolOneTime.schedule(callable, delay, unit);
+    }
+
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public void close() {
 		// shutdown periodic futures

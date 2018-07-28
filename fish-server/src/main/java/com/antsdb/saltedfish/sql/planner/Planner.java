@@ -112,7 +112,7 @@ public class Planner {
     static {
         KEY.setColumnId(-1);
         KEY.setColumnName("*key");
-        KEY.setType(DataType.blob());
+        KEY.setType(DataType.binary());
         ROWID.setColumnId(0);
         ROWID.setColumnName("*rowid");
         ROWID.setType(DataType.longtype());

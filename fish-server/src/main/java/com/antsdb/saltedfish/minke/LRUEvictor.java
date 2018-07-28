@@ -30,9 +30,17 @@ public class LRUEvictor {
     static final Logger _log = UberUtil.getThisLogger();
     static final long GB = 1024 * 1024 * 1024;
     private MinkeCache cache;
-    private int target;
+    private long target;
 
-    public LRUEvictor(MinkeCache cache, int target) {
+    /**
+     * 
+     * @param cache
+     * @param target number of bytes to be kept as free 
+     */
+    public LRUEvictor(MinkeCache cache, long target) {
+        if (cache.getMinke().size < target * 2) {
+            throw new IllegalArgumentException("cache size must be larger than " + target * 2);
+        }
         this.cache = cache;
         this.target = target;
     }
@@ -105,9 +113,8 @@ public class LRUEvictor {
     }
 
     int getBucketSize() {
-        int nUsedPage = this.cache.minke.getUsedPageCount();
-        int nTotalPage = this.cache.minke.getMaxPages();
-        int result = nUsedPage - nTotalPage * (100 - this.target) / 100;
-        return result;
+        long pageSize = this.cache.minke.getPageSize();
+        long freeBytes = this.cache.getMinke().getFreePageCount() * pageSize;
+        return freeBytes>=this.target ? 0 : (int)((this.target-freeBytes) / pageSize);
     }
 }

@@ -209,7 +209,7 @@ public class CursorUtil {
                 column.setType(DataType.timestamp());
             }
             else if (i.getType() == byte[].class) {
-                column.setType(DataType.blob());
+                column.setType(DataType.binary());
             }
             else if (i.getType() == Double.class) {
                 column.setType(DataType.doubleType());

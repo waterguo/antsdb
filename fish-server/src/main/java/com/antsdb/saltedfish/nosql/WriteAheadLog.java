@@ -178,7 +178,7 @@ class WriteAheadLog {
         this.thread.logFileSize = size;
     }
 
-	void recover(Humpback humpback) throws Exception {
+    void recover(Humpback humpback) throws Exception {
         _log.info("starting recovery process");
         
         // recover rows and transactions
@@ -200,23 +200,23 @@ class WriteAheadLog {
                 }
                 gtable.put(row.getTrxTimestamp(), (SlowRow)null, 0);
                 if (tableId == Humpback.SYSMETA_TABLE_ID) {
-                	try {
-						humpback.recoverTable();
-					}
-					catch (Exception e) {
-						e.printStackTrace();
-					}
+                    try {
+                        humpback.recoverTable();
+                    }
+                    catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
                 counts[0]++;
             }
             
             void commit(long trxid, long trxts) {
-            	humpback.commit(trxid, trxts);
+                    humpback.commit(trxid, trxts, 0);
                 counts[1]++;
             }
             
             void rollback(long trxid) {
-            	humpback.rollback(trxid);
+                humpback.rollback(trxid, 0);
             }
         });
         _log.info("{} rows have been recovered", counts[0]);
@@ -230,5 +230,5 @@ class WriteAheadLog {
         // done
         
         _log.info("recovery is finished");
-	}
+    }
 }

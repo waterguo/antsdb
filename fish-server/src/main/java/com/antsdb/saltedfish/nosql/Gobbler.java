@@ -27,6 +27,7 @@ import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
 
+import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -74,7 +75,10 @@ public class Gobbler {
         LogEntry(SpaceManager sm, int size) {
             this.sp = sm.alloc(HEADER_SIZE + size);
             this.addr = sm.toMemory(this.sp);
-            setSize(size);
+            LatencyDetector.run(_log, "setSize", ()->{ 
+                setSize(size);
+                return null;
+            });
         }
         
         public LogEntry(long sp, long addr) {
@@ -222,13 +226,15 @@ public class Gobbler {
             buf.append(this.getTrxId());
             return buf.toString();
         }
-        
     }
     
     public static class InsertEntry extends RowUpdateEntry {
-        InsertEntry(SpaceManager sm, VaporizingRow row, int tableId) {
+        InsertEntry(SpaceManager sm, VaporizingRow row, int tableId, long start) {
             super(sm, row.getSize(), tableId);
-            Row.from(getRowPointer(), row);
+            LatencyDetector.run(_log, "Row.from", ()->{ 
+                Row.from(getRowPointer(), row);
+                return null;
+            });
             finish(EntryType.INSERT);
         }
         
@@ -353,7 +359,7 @@ public class Gobbler {
         }
     
         public static long getHeaderSize() {
-            return OFFSET_MISC;
+            return ENTRY_HEADER_SIZE;
         }
         
         public long getIndexLineAddress() {
@@ -404,11 +410,13 @@ public class Gobbler {
     
     public final static class CommitEntry extends LogEntry {
         protected final static int OFFSET_VERSION = LogEntry.HEADER_SIZE + 8;
+        protected final static int OFFSET_SESSION = OFFSET_VERSION + 8;
         
-        CommitEntry(SpaceManager sm, long trxid, long trxts) {
-            super(sm, 8 + 8);
+        CommitEntry(SpaceManager sm, long trxid, long trxts, int sessionId) {
+            super(sm, 8 + 8 + 4);
             setTrxId(trxid);
             setVersion(trxts);
+            setSessionId(sessionId);
             finish(EntryType.COMMIT);
         }
         
@@ -431,12 +439,23 @@ public class Gobbler {
         void setVersion(long version) {
             Unsafe.putLong(this.addr + OFFSET_VERSION, version);
         }
+        
+        public int getSessionId() {
+            return Unsafe.getInt(this.addr + OFFSET_SESSION);
+        }
+        
+        void setSessionId(int value) {
+            Unsafe.putInt(this.addr + OFFSET_SESSION, value);
+        }
     }
     
     public final static class RollbackEntry extends LogEntry {
-        RollbackEntry(SpaceManager sm, long trxid) {
-            super(sm, 8);
+        protected final static int OFFSET_SESSION = OFFSET_TRX_ID + 8;
+        
+        RollbackEntry(SpaceManager sm, long trxid, int sessionId) {
+            super(sm, 8 + 4);
             setTrxId(trxid);
+            setSessionId(sessionId);
             finish(EntryType.ROLLBACK);
         }
         
@@ -450,6 +469,14 @@ public class Gobbler {
         
         void setTrxId(long trxid) {
             Unsafe.putLong(this.addr + OFFSET_TRX_ID, trxid);
+        }
+        
+        public int getSessionId() {
+            return Unsafe.getInt(this.addr + OFFSET_SESSION);
+        }
+        
+        void setSessionId(int value) {
+            Unsafe.putInt(this.addr + OFFSET_SESSION, value);
         }
     }
     
@@ -563,15 +590,15 @@ public class Gobbler {
         updatePersistencePointer(sp);
     }
 
-    public void logCommit(long trxid, long trxts) {
-        CommitEntry entry = new CommitEntry(spaceman, trxid, trxts);
+    public void logCommit(long trxid, long trxts, int sessionId) {
+        CommitEntry entry = new CommitEntry(spaceman, trxid, trxts, sessionId);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
         logTimestamp();
     }
 
-    void logRollback(long trxid) {
-        RollbackEntry entry = new RollbackEntry(spaceman, trxid);
+    void logRollback(long trxid, int sessionId) {
+        RollbackEntry entry = new RollbackEntry(spaceman, trxid, sessionId);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
         logTimestamp();
@@ -586,7 +613,8 @@ public class Gobbler {
     }
     
     long logInsert(VaporizingRow row, int tableId) {
-        InsertEntry entry = new InsertEntry(spaceman, row, tableId);
+        long start = UberTime.getTime();
+        InsertEntry entry = new InsertEntry(spaceman, row, tableId, start);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
         logTimestamp();
@@ -851,5 +879,4 @@ public class Gobbler {
         }
         return result.get();
     }
-
 }

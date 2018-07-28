@@ -481,7 +481,7 @@ public class HBaseUtilDataComparer {
 			}
 			
 			// hbase data		
-		    NavigableMap<byte[], byte[]> sysFamilyMap = r.getFamilyMap(Helper.SYS_COLUMN_FAMILY_BYTES);
+		    NavigableMap<byte[], byte[]> sysFamilyMap = r.getFamilyMap(Helper.DATA_COLUMN_FAMILY_BYTES);
 	    	// index key
 		    byte[] rowKeyBytes = sysFamilyMap.get(Helper.SYS_COLUMN_INDEXKEY_BYTES);
 	    	// version

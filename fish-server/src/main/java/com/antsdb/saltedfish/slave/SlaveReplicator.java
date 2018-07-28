@@ -66,10 +66,9 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     private long nupdates;
     private long ndeletes;
     private Speedometer speedometer = new Speedometer();
-
     private long latency;
-
     private long commitedLp;
+    private BlobTracker tracker = new BlobTracker();
 
     public SlaveReplicator(Humpback humpback) throws Exception {
         this.humpback = humpback;
@@ -99,6 +98,8 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         String user = this.humpback.getConfig().getSlaveUser();
         String password = this.humpback.getConfig().getSlavePassword();
         Connection result = DriverManager.getConnection(url, user, password);
+        // we don't want mysql AUTO_INCREMENT during replication
+        DbUtils.execute(result, "SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'");
         return result;
     }
     
@@ -137,13 +138,21 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     @Override
     public void insert(InsertEntry entry) throws Exception {
         int tableId = entry.getTableId();
-        if (isSystemTable(tableId)) {
-            this.handlers.clear();
+        if (detectMetadataChange(tableId)) {
             return;
         }
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
-        getHandler(tableId).insert(row);
+        if (_log.isTraceEnabled()) {
+            _log.trace("insert {} {}", entry.getSpacePointer(), row.getKeySpec(entry.getTableId()));
+        }
+        CudHandler handler = getHandler(tableId);
+        boolean isBlobRow = false;
+        if (handler.isBlobTable) {
+            isBlobRow = true;
+            handler = getHandler(tableId-1);
+        }
+        handler.insert(entry.getTrxId(), row, isBlobRow);
         this.ninserts++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.sp = entry.getSpacePointer();
@@ -152,14 +161,21 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     @Override
     public void update(UpdateEntry entry) throws Exception {
         int tableId = entry.getTableId();
-        if (isSystemTable(tableId)) {
-            this.handlers.clear();
-            this.sp = entry.getSpacePointer();
+        if (detectMetadataChange(tableId)) {
             return;
         }
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
-        getHandler(tableId).update(row);
+        if (_log.isTraceEnabled()) {
+            _log.trace("update {} {}", entry.getSpacePointer(), row.getKeySpec(entry.getTableId()));
+        }
+        CudHandler handler = getHandler(tableId);
+        boolean isBlobRow = false;
+        if (handler.isBlobTable) {
+            isBlobRow = true;
+            handler = getHandler(tableId-1);
+        }
+        handler.update(entry.getTrxId(), row, isBlobRow);
         this.nupdates++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.sp = entry.getSpacePointer();
@@ -168,23 +184,25 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     @Override
     public void put(PutEntry entry) throws Exception {
         int tableId = entry.getTableId();
-        if (isSystemTable(tableId)) {
-            this.handlers.clear();
-            this.sp = entry.getSpacePointer();
+        if (detectMetadataChange(tableId)) {
             return;
         }
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
-        getHandler(tableId).update(row);
+        CudHandler handler = getHandler(tableId);
+        boolean isBlobRow = false;
+        if (handler.isBlobTable) {
+            isBlobRow = true;
+            handler = getHandler(tableId-1);
+        }
+        handler.update(entry.getTrxId(), row, isBlobRow);
         this.sp = entry.getSpacePointer();
     }
 
     @Override
     public void delete(DeleteEntry entry) throws Exception {
         int tableId = entry.getTableId();
-        if (isSystemTable(tableId)) {
-            this.handlers.clear();
-            this.sp = entry.getSpacePointer();
+        if (detectMetadataChange(tableId)) {
             return;
         }
         if (isIndex(tableId)) {
@@ -196,17 +214,34 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     @Override
     public void deleteRow(DeleteRowEntry entry) throws Exception {
         int tableId = entry.getTableId();
-        if (isSystemTable(tableId)) {
-            this.handlers.clear();
-            this.sp = entry.getSpacePointer();
+        if (detectMetadataChange(tableId)) {
             return;
         }
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
-        getHandler(tableId).delete(row);
-        this.ndeletes++;
-        this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
+        if (_log.isTraceEnabled()) {
+            _log.trace("delete {} {}", entry.getSpacePointer(), row.getKeySpec(entry.getTableId()));
+        }
+        CudHandler handler = getHandler(tableId);
+        if (!handler.isBlobTable) {
+            handler.delete(row);
+            this.ndeletes++;
+            this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
+        }
         this.sp = entry.getSpacePointer();
+    }
+
+    private boolean detectMetadataChange(int tableId) {
+        if (tableId < 0x100) {
+            if (tableId != 0x50) {
+                // 0x50 is sequence table
+                this.handlers.clear();
+            }
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     @Override
@@ -238,10 +273,6 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         this.sp = entry.getSpacePointer();
     }
     
-    private boolean isSystemTable(int tableId) {
-        return tableId < 0x100;
-    }
-    
     private boolean isIndex(int tableId) {
         SysMetaRow info = this.humpback.getTableInfo(tableId);
         return info.getType() == TableType.INDEX;
@@ -268,7 +299,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     private CudHandler createHandler(int tableId) throws SQLException {
         SysMetaRow table = this.humpback.getTableInfo(tableId);
         List<HColumnRow> columns = this.humpback.getColumns(tableId);
-        CudHandler result = new CudHandler();
+        CudHandler result = new CudHandler(this.tracker);
         result.prepare(this.conn, table, columns);
         return result;
     }

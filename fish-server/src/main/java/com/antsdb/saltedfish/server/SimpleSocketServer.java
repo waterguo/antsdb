@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.server;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.ExecutorService;
@@ -47,6 +48,7 @@ public class SimpleSocketServer extends TcpServer implements Runnable {
         this.serverChannel.bind(new InetSocketAddress((InetAddress)null, port));
         Thread thread = new Thread(this);
         thread.setName("fish listener");
+        thread.setDaemon(true);
         thread.start();
     }
 
@@ -55,8 +57,12 @@ public class SimpleSocketServer extends TcpServer implements Runnable {
         try {
             for (;;) {
                 SocketChannel channel = this.serverChannel.accept();
+                channel.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
+                if (this.fish.getOrca() == null) {
+                    channel.close();
+                    continue;
+                }
                 this.pool.execute(new SimpleSocketWorker(this.fish, channel));
-                // new Thread().start();;
             }
         }
         catch (Exception x) {

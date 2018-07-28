@@ -51,6 +51,19 @@ public class ObjectName {
         this.table = table;
     }
     
+    public static ObjectName parse(String fullname) {
+        String[] names = StringUtils.split(fullname, '.');
+        if (names.length == 2) {
+            return new ObjectName(names[0], names[1]);
+        }
+        else if (names.length == 3) {
+            return new ObjectName(names[0], names[1], names[2]);
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
+    }
+    
     @Override
     public String toString() {
         String ns = getNamespace();

@@ -147,5 +147,9 @@ public class MemoryMappedFile implements Closeable {
             buff.force();
         }
     }
+
+    public FileChannel getChannel() {
+        return this.channel;
+    }
     
 }

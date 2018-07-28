@@ -281,6 +281,19 @@ public class SystemParameters {
         return parseBoolean(get("antsdb_asynchronous_import"), true);
     }
     
+    public int getAsyncInsertThreads() {
+        if (get("antsdb_asynchronous_import_threads") == null) {
+            int result = Runtime.getRuntime().availableProcessors();
+            if (result > 8) {
+                result = 8;
+            }
+            return result;
+        }
+        else {
+            return parseInteger(get("antsdb_asynchronous_import_threads"), 8);
+        }
+    }
+    
     public boolean getForeignKeyCheck() {
         String result = get("foreign_key_checks");
         return (result == null) ? true : "1".equals(result); 

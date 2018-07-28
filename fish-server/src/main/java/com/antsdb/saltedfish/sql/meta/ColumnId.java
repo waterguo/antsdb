@@ -21,7 +21,8 @@ public enum ColumnId {
     systable_table_type(4),
     systable_ext_name(5),
     systable_htable_id(6),
-    systable_end_of_columns(7),
+    systable_charset(7),
+    systable_end_of_columns(8),
     /* syscolumn */
     syscolumn_id(1),
     syscolumn_column_id(2),
@@ -39,7 +40,8 @@ public enum ColumnId {
     syscolumn_enum_values(14),
     syscolumn_seq(15),
     syscolumn_table_id(16),
-    syscolumn_end_of_columns(17),
+    syscolumn_zerofill(17),
+    syscolumn_end_of_columns(18),
     /* syssequence */
     syssequence_id(1),
     syssequence_namespace(2),
@@ -56,11 +58,15 @@ public enum ColumnId {
     sysrule_is_unique(6),
     sysrule_index_table_id(7),
     sysrule_index_external_name(8),
-    sysrule_parent_table_id(9),
+    sysrule_parent_table_id(9), // deprecated, use sysrule_parent_table_name
     sysrule_is_fulltext(10),
     sysrule_columns(11),
-    sysrule_parent_columns(12),
-    sysrule_end_of_columns(13),
+    sysrule_parent_columns(12), // deprecated, use sysrule_parent_column_names
+    sysrule_parent_table_name(13),
+    sysrule_parent_column_names(14),
+    sysrule_on_delete(15),
+    sysrule_on_update(16),
+    sysrule_end_of_columns(17),
     /* sysparam */
     sysparam_name(1),
     sysparam_type(2),

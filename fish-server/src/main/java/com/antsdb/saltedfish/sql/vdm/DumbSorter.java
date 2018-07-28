@@ -76,6 +76,9 @@ public class DumbSorter extends CursorMaker {
                 return 0;
             }
             long pResult = items.get(this.i).pRecord;
+            if (pResult != 0) {
+                Record.size(pResult);
+            }
             this.i++;
             return pResult;
         }
@@ -104,29 +107,32 @@ public class DumbSorter extends CursorMaker {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-         AtomicLong counter = ctx.getCursorStats(makerId);
-         Heap heap = new FlexibleHeap();
-         try (Cursor cc = this.upstream.make(ctx, params, pMaster)) {
-             try (Cursor rb = new RecordBuffer(cc)) {
-                 try {
-                     List<Item> items = new ArrayList<>();
-                     for (long pRecord = rb.next(); pRecord != 0; pRecord = rb.next()) {
-                          Item item = new Item();
-                          item.pRecord = pRecord;
-                          heap.reset(0);
-                          item.key = getSortKey(ctx, heap, params, pRecord);
-                          items.add(item);
-                     }
-                     counter.addAndGet(items.size());
-                     Collections.sort(items, new MyComparator());
-                     Cursor result = new MyCursor(getCursorMeta(), items);
-                     return result;
-                 }
-                 finally {
-                     heap.free();
-                 }
-             }
-         }
+        AtomicLong counter = ctx.getCursorStats(makerId);
+        Heap heap = new FlexibleHeap();
+        try (Cursor cc = this.upstream.make(ctx, params, pMaster)) {
+            try (Cursor rb = new RecordBuffer(cc)) {
+                try {
+                    List<Item> items = new ArrayList<>();
+                    for (long pRecord = rb.next(); pRecord != 0; pRecord = rb.next()) {
+                        if (pRecord != 0) {
+                            Record.size(pRecord);
+                        }
+                        Item item = new Item();
+                        item.pRecord = pRecord;
+                        heap.reset(0);
+                        item.key = getSortKey(ctx, heap, params, pRecord);
+                        items.add(item);
+                    }
+                    counter.addAndGet(items.size());
+                    Collections.sort(items, new MyComparator());
+                    Cursor result = new MyCursor(getCursorMeta(), items);
+                    return result;
+                }
+                finally {
+                    heap.free();
+                }
+            }
+        }
     }
 
     @Override

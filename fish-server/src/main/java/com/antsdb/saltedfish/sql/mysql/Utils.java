@@ -89,6 +89,7 @@ class Utils {
             List<String> keyColumns) {
         String columnName = getIdentifier(rule.column_name().identifier());
         DataType type = parse(ctx.getTypeFactory(), rule.data_type());
+        type.setZeroFill(rule.K_ZEROFILL() != null);
         attrs.setColumnName(columnName).setType(type).setNullable(true).setAutoIncrement(false);
         if (type.getName().equals("enum")) {
             String values = rule.data_type().enum_type().enum_type_value().getText();

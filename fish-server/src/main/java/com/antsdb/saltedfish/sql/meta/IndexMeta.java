@@ -39,63 +39,63 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
     }
 
     public boolean isUnique() {
-        	Object obj = row.get(ColumnId.sysrule_is_unique.getId());
-        	if (obj instanceof Integer) {
-        		return ((Integer)obj) == 1;
-        	}
-        	else {
-        		return false;
-        	}
+            Object obj = row.get(ColumnId.sysrule_is_unique.getId());
+            if (obj instanceof Integer) {
+                return ((Integer)obj) == 1;
+            }
+            else {
+                return false;
+            }
     }
     
-	public KeyMaker getKeyMaker() {
-		return this.keyMaker;
-	}
+    public KeyMaker getKeyMaker() {
+        return this.keyMaker;
+    }
 
-	/**
-	 * dont be confused with table_id. table_id is the owner of this index. index_table_id is the humpback table used
-	 * to store index data 
-	 * 
-	 * @param value
-	 */
-	public void setIndexTableId(int value) {
-		row.set(ColumnId.sysrule_index_table_id.getId(), value);
-	}
-	
-	public int getIndexTableId() {
-		int value = (Integer)row.get(ColumnId.sysrule_index_table_id.getId());
-		return value;
-	}
+    /**
+     * dont be confused with table_id. table_id is the owner of this index. index_table_id is the humpback table used
+     * to store index data 
+     * 
+     * @param value
+     */
+    public void setIndexTableId(int value) {
+        row.set(ColumnId.sysrule_index_table_id.getId(), value);
+    }
+    
+    public int getIndexTableId() {
+        int value = (Integer)row.get(ColumnId.sysrule_index_table_id.getId());
+        return value;
+    }
 
-	public String getExternalName() {
-		String value = (String)row.get(ColumnId.sysrule_index_external_name.getId());
-		return value;
-	}
+    public String getExternalName() {
+        String value = (String)row.get(ColumnId.sysrule_index_external_name.getId());
+        return value;
+    }
 
-	/**
-	 * we need an unique external name due to how truncate works. truncate basically creates new set of tables for
-	 * base table and indexes before deleting the old ones. we want the new indexes have a different name than the old 
-	 * ones. 
-	 */
-	public void genUniqueExternalName(TableMeta table, String indexName, int globalId) {
-	    String externalName = String.format("%s-%s-%x", table.getTableName(), indexName, globalId);
-		setExternalName(externalName);
-	}
-	
-	public void setExternalName(String value) {
-		row.set(ColumnId.sysrule_index_external_name.getId(), value);
-	}
-	
-	public void setFullText(boolean value) {
-		row.set(ColumnId.sysrule_is_fulltext.getId(), value);
-	}
-	
-	public boolean isFullText() {
-		Boolean value = (Boolean)row.get(ColumnId.sysrule_is_fulltext.getId());
-		return value != null ? value : false;
-	}
+    /**
+     * we need an unique external name due to how truncate works. truncate basically creates new set of tables for
+     * base table and indexes before deleting the old ones. we want the new indexes have a different name than the old 
+     * ones. 
+     */
+    public void genUniqueExternalName(TableMeta table, String indexName, int globalId) {
+        String externalName = String.format("%s-%s-%x", table.getTableName(), indexName, globalId);
+        setExternalName(externalName);
+    }
+    
+    public void setExternalName(String value) {
+        row.set(ColumnId.sysrule_index_external_name.getId(), value);
+    }
+    
+    public void setFullText(boolean value) {
+        row.set(ColumnId.sysrule_is_fulltext.getId(), value);
+    }
+    
+    public boolean isFullText() {
+        Boolean value = (Boolean)row.get(ColumnId.sysrule_is_fulltext.getId());
+        return value != null ? value : false;
+    }
 
-	@Override
+    @Override
     public IndexMeta clone() {
         SlowRow clone = this.row.clone();
         IndexMeta result = new IndexMeta(clone);

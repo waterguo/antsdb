@@ -43,6 +43,8 @@ abstract class UpdateBase extends Statement {
     IndexEntryHandlers indexHandlers;
     TableMeta table;
     boolean isPrimaryKeyAffected = false;
+    private GTable blobTable;
+    private boolean hasBlob;
 
     public UpdateBase(Orca orca, TableMeta table, GTable gtable, List<ColumnMeta> columns, List<Operator> values) {
         super();
@@ -56,9 +58,16 @@ abstract class UpdateBase extends Statement {
             List<ColumnMeta> pkColumns = table.getPrimaryKey().getColumns(table);
             for (ColumnMeta i:columns) {
                 if (pkColumns.contains(i)) {
-                            this.isPrimaryKeyAffected = true;
-                            break;
-                        }
+                    this.isPrimaryKeyAffected = true;
+                    break;
+                }
+            }
+        }
+        for (ColumnMeta i:table.getColumns()) {
+            if (i.isBlobClob()) {
+                this.blobTable = orca.getHumpback().getTable(table.getBlobTableId());
+                this.hasBlob = true;
+                break;
             }
         }
     }
@@ -83,11 +92,33 @@ abstract class UpdateBase extends Statement {
             
             // update new values
             
+            VaporizingRow blobRow = null;
+            if (this.hasBlob) {
+                Row oldBlobRow = this.blobTable.getRow(trx.getTrxId(), trx.getTrxTs(), oldRow.getKey());
+                if (oldBlobRow != null) {
+                    blobRow = VaporizingRow.from(heap, this.table.getMaxColumnId(), oldBlobRow);
+                }
+                else {
+                    blobRow = new VaporizingRow(heap, this.table.getMaxColumnId());
+                }
+            }
             for (int i=0; i<this.columns.size(); i++) {
                 ColumnMeta column = this.columns.get(i);
                 Operator expr = this.values.get(i);
                 long pValue = expr.eval(ctx, heap, params, pRecord);
-                newRow.setFieldAddress(column.getColumnId(), pValue);
+                if (!column.isBlobClob()) {
+                    newRow.setFieldAddress(column.getColumnId(), pValue);
+                }
+                else {
+                    if (pValue != 0) {
+                        BlobReference blobref = BlobReference.alloc(heap, pKey, pValue);
+                        newRow.setFieldAddress(column.getColumnId(), blobref.addr);
+                        blobRow.setFieldAddress(column.getColumnId(), pValue);
+                    }
+                    else {
+                        newRow.setFieldAddress(column.getColumnId(), 0);
+                    }
+                }
             }
             
             // update storage
@@ -112,6 +143,29 @@ abstract class UpdateBase extends Statement {
                 error = this.gtable.update(newRow, oldRow.getTrxTimestamp(), timeout);
             }
             if (error == HumpbackError.SUCCESS) {
+                if (blobRow != null) {
+                    blobRow.setKey(newRow.getKeyAddress());
+                    blobRow.setVersion(newRow.getVersion());
+                }
+                // update blob
+                if (blobRow != null) {
+                    if (primaryKeyChange) {
+                        error = this.blobTable.delete(trx.getTrxId(), oldRow.getKeyAddress(), timeout);
+                        if (error != HumpbackError.SUCCESS) {
+                            throw new OrcaException(error);
+                        }
+                        error = this.blobTable.insert(blobRow, timeout);
+                        if (error != HumpbackError.SUCCESS) {
+                            throw new OrcaException(error);
+                        }
+                    }
+                    else {
+                        error = this.blobTable.put(blobRow, timeout);
+                        if (error != HumpbackError.SUCCESS) {
+                            throw new OrcaException(error);
+                        }
+                    }
+                }
                 // update indexes
                 this.indexHandlers.update(heap, trx, oldRow, newRow, primaryKeyChange, timeout);
                 success = true;

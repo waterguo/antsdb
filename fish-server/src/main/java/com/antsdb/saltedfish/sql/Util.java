@@ -24,7 +24,6 @@ import com.antsdb.saltedfish.sql.vdm.ToBigDecimal;
 import com.antsdb.saltedfish.sql.vdm.ToBytes;
 import com.antsdb.saltedfish.sql.vdm.ToDate;
 import com.antsdb.saltedfish.sql.vdm.ToDouble;
-import com.antsdb.saltedfish.sql.vdm.ToEnumIndex;
 import com.antsdb.saltedfish.sql.vdm.ToFloat;
 import com.antsdb.saltedfish.sql.vdm.ToInteger;
 import com.antsdb.saltedfish.sql.vdm.ToLong;
@@ -44,16 +43,11 @@ public class Util {
         if (type == String.class) {
             newone = new ToString(expr);
             if (nullIfEmpty) {
-            	newone = new NullIfEmpty(newone);
+                newone = new NullIfEmpty(newone);
             }
         }
         else if (type == Integer.class) {
-        	if (column.getDataType().getName().equals("enum")) {
-        		newone = new ToEnumIndex(column, expr);
-        	}
-        	else {
-                newone = new ToInteger(expr);
-        	}
+            newone = new ToInteger(expr);
         }
         else if (type == Long.class) {
             newone = new ToLong(expr);
@@ -68,13 +62,13 @@ public class Util {
             newone = new NullIfEmpty(new ToBytes(expr));
         }
         else if (type == Date.class) {
-        	newone = new ToDate(expr);
+            newone = new ToDate(expr);
         }
         else if (type == Double.class) {
-        	newone = new ToDouble(expr);
+            newone = new ToDouble(expr);
         }
         else if (type == Time.class) {
-        	newone = new ToTime(expr);
+            newone = new ToTime(expr);
         }
         else {
             throw new CodingError();

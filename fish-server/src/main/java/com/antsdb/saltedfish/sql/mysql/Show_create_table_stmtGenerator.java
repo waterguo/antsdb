@@ -32,7 +32,6 @@ import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
-import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.sql.vdm.ViewMaker;
 import com.antsdb.saltedfish.util.CursorUtil;
@@ -43,44 +42,58 @@ import com.antsdb.saltedfish.util.CursorUtil;
  */
 public class Show_create_table_stmtGenerator extends Generator<Show_create_table_stmtContext> {
     public static class Item {
-    	    public String Table;
-    	    public String Create_Table;
+            public String Table;
+            public String Create_Table;
     }
 
-	@Override
-	public Instruction gen(GeneratorContext ctx, Show_create_table_stmtContext rule) throws OrcaException {
-	    ObjectName tableName = TableName.parse(ctx, rule.table_name_());
-	    TableMeta table = ctx.getTable(tableName);
-	    if (table == null) {
-	        throw new OrcaException("table not found: {}", tableName.toString());
-	    }
-	    String sql = gen(ctx, table);
-		CursorMeta meta = CursorUtil.toMeta(Item.class);
-		ArrayList<Item> list = new ArrayList<>();
-		Item item = new Item();
-		item.Table = tableName.toString();
-		item.Create_Table = sql;
-		list.add(item);
+    @Override
+    public Instruction gen(GeneratorContext ctx, Show_create_table_stmtContext rule) throws OrcaException {
+        ObjectName tableName = TableName.parse(ctx, rule.table_name_());
+        TableMeta table = ctx.getTable(tableName);
+        if (table == null) {
+            throw new OrcaException("table not found: {}", tableName.toString());
+        }
+        String sql = gen(ctx, table);
+        CursorMeta meta = CursorUtil.toMeta(Item.class);
+        ArrayList<Item> list = new ArrayList<>();
+        Item item = new Item();
+        item.Table = tableName.toString();
+        item.Create_Table = sql;
+        list.add(item);
         return new ViewMaker(meta) {
-		    @Override
-		    public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		        Cursor c = CursorUtil.toCursor(meta, list);
-		        return c;
-		    }
+            @Override
+            public Object run(VdmContext ctx, Parameters params, long pMaster) {
+                Cursor c = CursorUtil.toCursor(meta, list);
+                return c;
+            }
         };
-	}
+    }
 
     private String gen(GeneratorContext ctx, TableMeta table) {
         StringBuilder buf = new StringBuilder();
         buf.append("CREATE TABLE `");
         buf.append(table.getTableName());
-        buf.append("` (");
+        buf.append("` (\n");
         for (ColumnMeta column:table.getColumns()) {
+            buf.append("  ");
             buf.append("`");
             buf.append(column.getColumnName());
             buf.append("` ");
             buf.append(column.getDataType().toString());
-            buf.append(",");
+            if (column.isNullable()) {
+                
+            }
+            else {
+                buf.append(" NOT NULL");
+            }
+            if (column.getDefault() != null) {
+                buf.append(" DEFAULT ");
+                buf.append(column.getDefault());
+            }
+            else {
+                buf.append(" DEFAULT NULL");
+            }
+            buf.append(",\n");
         }
         appendRule(buf, table, table.getPrimaryKey());
         for (IndexMeta index:table.getIndexes()) {
@@ -90,7 +103,10 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
             appendForeignKey(ctx.getOrca(), buf, table, fk);
         }
         buf.deleteCharAt(buf.length()-1);
-        buf.append(")");
+        buf.deleteCharAt(buf.length()-1);
+        buf.append("\n) ENGINE=InnoDB ");
+        buf.append("DEFAULT CHARSET=");
+        buf.append(table.getCharset() != null ? table.getCharset() : "utf8");
         return buf.toString();
     }
 
@@ -98,25 +114,37 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
         if (rule == null) {
             return;
         }
-        buf.append("FOREIGN KEY ");
+        buf.append("  CONSTRAINT");
+        buf.append(" `");
         buf.append(rule.getName());
-        buf.append(" (");
+        buf.append("` ");
+        buf.append("FOREIGN KEY ");
+        buf.append("(");
         for (ColumnMeta column:rule.getColumns(table)) {
+            buf.append("`");
             buf.append(column.getColumnName());
+            buf.append("`");
             buf.append(",");
         }
         buf.deleteCharAt(buf.length()-1);
         buf.append(") REFERENCES ");
-        TableMeta parent = orca.getMetaService().getTable(Transaction.getSeeEverythingTrx(), rule.getParentTable());
-        buf.append(parent.getTableName());
-        buf.append("(");
-        for (int i:rule.getRuleParentColumns()) {
-            ColumnMeta column = parent.getColumn(i);
-            buf.append(column.getColumnName());
+        buf.append("`");
+        buf.append(rule.getParentTable().getTableName());
+        buf.append("`");
+        buf.append(" (");
+        for (String i:rule.getParentColumns()) {
+            buf.append("`");
+            buf.append(i);
+            buf.append("`");
             buf.append(",");
         }
         buf.deleteCharAt(buf.length()-1);
-        buf.append("),");
+        buf.append(")");
+        if (rule.getOnDelete() != null) {
+            buf.append(" ON DELETE ");
+            buf.append(rule.getOnDelete());
+        }
+        buf.append(",\n");
     }
 
     private void appendRule(StringBuilder buf, TableMeta table, RuleMeta<?> rule) {
@@ -124,29 +152,35 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
             return;
         }
         if (rule instanceof PrimaryKeyMeta) {
+            buf.append("  ");
             buf.append("PRIMARY KEY ");
         }
         else if (rule instanceof IndexMeta) {
             if (isForeignKeyIndex(table, (IndexMeta)rule)) {
                 return;
             }
+            buf.append("  ");
             if (((IndexMeta) rule).isUnique()) {
-                buf.append("UNIQUE INDEX ");
+                buf.append("UNIQUE KEY ");
             }
             else {
-                buf.append("INDEX ");
+                buf.append("KEY ");
             }
+            buf.append("`");
             buf.append(rule.getName());
+            buf.append("`");
             buf.append(" ");
         }
         buf.append("(");
         for (ColumnMeta column:rule.getColumns(table)) {
+            buf.append("`");
             buf.append(column.getColumnName());
+            buf.append("`");
             buf.append(",");
         }
         buf.deleteCharAt(buf.length()-1);
         buf.append(")");
-        buf.append(",");
+        buf.append(",\n");
     }
 
     private boolean isForeignKeyIndex(TableMeta table, IndexMeta rule) {

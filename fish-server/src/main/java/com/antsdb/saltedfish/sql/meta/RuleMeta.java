@@ -73,23 +73,6 @@ public abstract class RuleMeta<T> extends UberObject {
         return (String)row.get(ColumnId.sysrule_rule_name.getId());
     }
     
-    public int[] getRuleParentColumns() {
-        int[] result = (int[])this.row.get(ColumnId.sysrule_parent_columns.getId());
-        return result;
-    }
-    
-    public void setRuleParentColumns(List<ColumnMeta> columns) {
-        int[] array = new int[columns.size()];
-        for (int i=0; i<columns.size(); i++) {
-            array[i] = columns.get(i).getId();
-        }
-        setRuleParentColumns(array);
-    }
-    
-    public void setRuleParentColumns(int[] value) {
-        this.row.set(ColumnId.sysrule_parent_columns.getId(), value);
-    }
-    
     public void setRuleColumns(List<ColumnMeta> columns) {
         int[] array = new int[columns.size()];
         for (int i=0; i<columns.size(); i++) {
@@ -119,11 +102,32 @@ public abstract class RuleMeta<T> extends UberObject {
         return list;
     }
 
+    public List<String> getColumnNames(TableMeta table) {
+        List<String> result = new ArrayList<>();
+        for (ColumnMeta i:table.getColumns()) {
+            result.add(i.getColumnName());
+        }
+        return result;
+    }
+    
     public String getNamespace() {
         return (String)this.row.get(ColumnId.sysrule_namespace.getId());
     }
     
     public void setNamespace(String value) {
         this.row.set(ColumnId.sysrule_namespace.getId(), value);
+    }
+    
+    public boolean conform(TableMeta table, List<String> columns) {
+        List<ColumnMeta> keyColumns = getColumns(table);
+        if (keyColumns.size() != columns.size()) {
+            return false;
+        }
+        for (int i=0; i<columns.size(); i++) {
+            if (!keyColumns.get(i).getColumnName().equalsIgnoreCase(columns.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 }

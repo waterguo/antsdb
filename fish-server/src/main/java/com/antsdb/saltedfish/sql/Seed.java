@@ -110,7 +110,7 @@ class Seed {
             return;
         }
         notifyUpgrade();
-        this.humpback.createTable(Orca.SYSNS, String.format("x%08x", tableId), tableId, TableType.DATA);
+        this.humpback.createTable(Orca.SYSNS, String.format("x%x", tableId), tableId, TableType.DATA);
     }
 
     private void createSystemSequence(ObjectName name, int id, long next, int increment) {

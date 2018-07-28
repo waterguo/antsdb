@@ -19,6 +19,7 @@ import java.util.Map;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.DataTypeFactory;
@@ -28,8 +29,8 @@ import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class ColumnMeta extends MetaObject {
-	static Logger _log = UberUtil.getThisLogger();
-	
+    static Logger _log = UberUtil.getThisLogger();
+    
     SlowRow row;
     DataType type;
     
@@ -53,7 +54,8 @@ public class ColumnMeta extends MetaObject {
         setColumnName(columnName);
         setTableId(table.getId());
         if (getTypeName() != null) {
-        	this.type = orca.getTypeFactory().newDataType(getTypeName(), getTypeLength(), getTypeScale());
+            this.type = orca.getTypeFactory().newDataType(getTypeName(), getTypeLength(), getTypeScale());
+            this.type.setZeroFill(isZerofill());
         }
     }
 
@@ -62,6 +64,7 @@ public class ColumnMeta extends MetaObject {
         this.row = row;
         if (getTypeName() != null) {
             this.type = fac.newDataType(getTypeName(), getTypeLength(), getTypeScale());
+            this.type.setZeroFill(isZerofill());
         }
     }
     
@@ -107,8 +110,18 @@ public class ColumnMeta extends MetaObject {
         setTypeName(type.getName());
         setTypeLength(type.getLength());
         setTypeScale(type.getScale());
+        setZerofill(type.isZerofill());
         this.type = type;
         return this;
+    }
+    
+    private void setZerofill(boolean value) {
+        row.set(ColumnId.syscolumn_zerofill.getId(), value);
+    }
+
+    private boolean isZerofill() {
+        Boolean result = (Boolean)row.get(ColumnId.syscolumn_zerofill.getId());
+        return (result != null) ? result : false;
     }
     
     private void setTypeName(String string) {
@@ -173,31 +186,31 @@ public class ColumnMeta extends MetaObject {
     }
 
     public boolean isAutoIncrement() {
-    	Boolean result = (Boolean)row.get(ColumnId.syscolumn_auto_increment.getId());
-    	return (result != null) ? result : false;
+        Boolean result = (Boolean)row.get(ColumnId.syscolumn_auto_increment.getId());
+        return (result != null) ? result : false;
     }
     
-	public void setAutoIncrement(boolean autoIncrement) {
+    public void setAutoIncrement(boolean autoIncrement) {
         row.set(ColumnId.syscolumn_auto_increment.getId(), autoIncrement);
-	}
-	
-	public int getColumnId() {
-    	Integer result = (Integer)row.get(ColumnId.syscolumn_column_id.getId());
-    	return result;
-	}
-	
-	public void setColumnId(int columnId) {
-		row.set(ColumnId.syscolumn_column_id.getId(), columnId);
-	}
-	
-	public String getCollation() {
-		return (String)row.get(ColumnId.syscolumn_collation.getId());
-	}
+    }
+    
+    public int getColumnId() {
+        Integer result = (Integer)row.get(ColumnId.syscolumn_column_id.getId());
+        return result;
+    }
+    
+    public void setColumnId(int columnId) {
+        row.set(ColumnId.syscolumn_column_id.getId(), columnId);
+    }
+    
+    public String getCollation() {
+        return (String)row.get(ColumnId.syscolumn_collation.getId());
+    }
 
-	public void setCollation(String value) {
-		row.set(ColumnId.syscolumn_collation.getId(), value);
-	}
-	
+    public void setCollation(String value) {
+        row.set(ColumnId.syscolumn_collation.getId(), value);
+    }
+    
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();
@@ -230,45 +243,45 @@ public class ColumnMeta extends MetaObject {
         return buf.toString();
     }
 
-	@Override
-	public ColumnMeta clone() {
-		ColumnMeta newone =  new ColumnMeta();
-		newone.row = this.row.clone();
-		newone.type = this.type;
-		return newone;
-	}
+    @Override
+    public ColumnMeta clone() {
+        ColumnMeta newone =  new ColumnMeta();
+        newone.row = this.row.clone();
+        newone.type = this.type;
+        return newone;
+    }
 
-	public Map<String, Integer> getEnumValueMap() {
-		String values = getEnumValues();
-		if (values == null) {
-			return null;
-		}
-		Map<String, Integer> map = new HashMap<>();
-		int j=1;
-		for (String i:StringUtils.split(values, ',')) {
-			i = i.substring(1, i.length()-1);
-			map.put(i, j);
-			j++;
-		}
-		return map;
-	}
-	
-	public String getEnumValues() {
-		return (String)row.get(ColumnId.syscolumn_enum_values.getId());
-	}
+    public Map<String, Integer> getEnumValueMap() {
+        String values = getEnumValues();
+        if (values == null) {
+            return null;
+        }
+        Map<String, Integer> map = new HashMap<>();
+        int j=1;
+        for (String i:StringUtils.split(values, ',')) {
+            i = i.substring(1, i.length()-1);
+            map.put(i, j);
+            j++;
+        }
+        return map;
+    }
+    
+    public String getEnumValues() {
+        return (String)row.get(ColumnId.syscolumn_enum_values.getId());
+    }
 
-	public void setEnumValues(String value) {
-		row.set(ColumnId.syscolumn_enum_values.getId(), value);
-	}
-	
-	public float getSequence() {
-		Float value = (Float)row.get(ColumnId.syscolumn_seq.getId());
-		return (value == null) ? getId() : value;
-	}
-	
-	public void setSequence(float value) {
-		row.set(ColumnId.syscolumn_seq.getId(), value);
-	}
+    public void setEnumValues(String value) {
+        row.set(ColumnId.syscolumn_enum_values.getId(), value);
+    }
+    
+    public float getSequence() {
+        Float value = (Float)row.get(ColumnId.syscolumn_seq.getId());
+        return (value == null) ? getId() : value;
+    }
+    
+    public void setSequence(float value) {
+        row.set(ColumnId.syscolumn_seq.getId(), value);
+    }
 
     public void setTableId(int value) {
         row.set(ColumnId.syscolumn_table_id.getId(), value);
@@ -276,5 +289,10 @@ public class ColumnMeta extends MetaObject {
 
     public int getTableId() {
         return (Integer)row.get(ColumnId.syscolumn_table_id.getId());
+    }
+    
+    public boolean isBlobClob() {
+        int fishType = getDataType().getFishType();
+        return (fishType == Value.TYPE_BLOB) || (fishType == Value.TYPE_CLOB);
     }
 }

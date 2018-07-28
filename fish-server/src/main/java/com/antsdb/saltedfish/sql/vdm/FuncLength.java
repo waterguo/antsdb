@@ -25,23 +25,23 @@ import com.antsdb.saltedfish.sql.DataType;
  * @author *-xguo0<@
  */
 public class FuncLength extends Function {
-	
+    
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pValue = this.parameters.get(0).eval(ctx, heap, params, pRecord);
         if (pValue == 0) {
-        	return 0;
+            return 0;
         }
         int type = Value.getType(heap, pValue);
         int length;
         if (type == Value.TYPE_STRING) {
-        	length = FishString.getLength(pValue);
+            length = FishString.getLength(pValue);
         }
         else if (type == Value.TYPE_BYTES) {
-        	length = Bytes.getLength(pValue);
+            length = Bytes.getLength(pValue);
         }
         else {
-        	throw new IllegalArgumentException();
+            throw new IllegalArgumentException();
         }
         return Int4.allocSet(heap, length);
     }
@@ -51,9 +51,9 @@ public class FuncLength extends Function {
         return DataType.integer();
     }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 
 }
