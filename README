@@ -15,7 +15,7 @@ Features
 
 Requirements
 ------------
-AntsDB requires Java 1.8. It runs on a wide range of platforms such as Ubuntu, CentOS, Windows etc. It needs at leat 1G memory and 10G storage. 
+AntsDB requires Java 1.8. It runs on Linux, Windows and MacOS. It needs at leat 1G memory and 10G storage. 
 
 Installation
 ------------
