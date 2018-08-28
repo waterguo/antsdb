@@ -1664,24 +1664,24 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         return this.humpback.getSpaceManager();
     }
 
-	private boolean lockWait(HumpbackError error, UberTimer timer, long pKey, int oHeadValue, long trxid) {
-	    if (Thread.interrupted()) {
-	        throw new HumpbackException("thread killed");
-	    }
-		if (error == HumpbackError.LOCK_COMPETITION) {
-			this.lockwaits.incrementAndGet();
-			if (!timer.isExpired()) {
-				try {
-					ListNode node = new ListNode(this.base, oHeadValue);
-					registerLock(trxid, node.getVersion(), pKey, oHeadValue);
-					Thread.sleep(0, 10000);
-				}
-				catch (InterruptedException e) {
-		            throw new HumpbackException("thread killed");
-				}
-				return true;
-			}
-			else {
+    private boolean lockWait(HumpbackError error, UberTimer timer, long pKey, int oHeadValue, long trxid) {
+        if (Thread.interrupted()) {
+            throw new HumpbackException("thread killed");
+        }
+        if (error == HumpbackError.LOCK_COMPETITION) {
+            this.lockwaits.incrementAndGet();
+            if (!timer.isExpired()) {
+                try {
+                    ListNode node = new ListNode(this.base, oHeadValue);
+                    registerLock(trxid, node.getVersion(), pKey, oHeadValue);
+                    Thread.sleep(0, 10000);
+                }
+                catch (InterruptedException e) {
+                    throw new HumpbackException("thread killed");
+                }
+                return true;
+            }
+            else {
                 ListNode node = new ListNode(this.base, oHeadValue);
                 throw new HumpbackException("failed to acquire lock {} oHeadValue={} timeout={} trxid={} node={}",
                         getKeySpec(pKey),

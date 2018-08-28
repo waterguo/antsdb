@@ -13,39 +13,48 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.sql.DataType;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class RecordBuffer extends CursorWithHeap {
-    private Cursor upstream;
+public class FuncMod extends Function {
 
-    public RecordBuffer(Cursor upstream) {
-        super(upstream.getMetadata());
-        this.upstream = upstream;
+    @Override
+    public int getMinParameters() {
+        return 2;
     }
 
     @Override
-    public long next() {
-        long pRecord = this.upstream.next();
-        if (pRecord == 0) {
+    public int getMaxParameters() {
+        return 2;
+    }
+
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long px = this.parameters.get(0).eval(ctx, heap, params, pRecord);
+        if (px == 0) {
             return 0;
         }
-        Heap heap = getHeap();
-        long pResult = Record.clone(heap, pRecord);
-        return pResult;
-    }
-    
-    public void clear() {
-        newHeap();
+        long py = this.parameters.get(1).eval(ctx, heap, params, pRecord);
+        if (py == 0) {
+            return 0;
+        }
+        long x = AutoCaster.getLong(px);
+        long y = AutoCaster.getLong(py);
+        if (y == 0) {
+            return 0;
+        }
+        long z = x % y;
+        return FishObject.allocSet(heap, z);
     }
 
     @Override
-    public void close() {
-        this.upstream.close();
-        super.close();
+    public DataType getReturnType() {
+        return DataType.longtype();
     }
-    
+
 }

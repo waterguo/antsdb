@@ -31,7 +31,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author *-xguo0<@
  */
-public class AsynchronusInsert implements AutoCloseable {
+public class AsynchronousInsert implements AutoCloseable {
     private static Logger _log = UberUtil.getThisLogger();
     
     private ThreadPoolExecutor executor;
@@ -52,7 +52,7 @@ public class AsynchronusInsert implements AutoCloseable {
         public void run() {
             // if something bad has happened, stop
             
-            if (AsynchronusInsert.this.error.get() != null) {
+            if (AsynchronousInsert.this.error.get() != null) {
                 return;
             }
             
@@ -63,14 +63,14 @@ public class AsynchronusInsert implements AutoCloseable {
                 step.run(ctx, new Parameters(), 0);
             }
             catch (Exception x) {
-                if (AsynchronusInsert.this.error.compareAndSet(null, x)) {
-                    AsynchronusInsert.this.sql = cs.toString();
+                if (AsynchronousInsert.this.error.compareAndSet(null, x)) {
+                    AsynchronousInsert.this.sql = cs.toString();
                 }
             }
         }
     }
     
-    public AsynchronusInsert(Session session) {
+    public AsynchronousInsert(Session session) {
         this.session = session;
         this.trx = session.getTransaction();
         trx.makeAutonomous();

@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.cpp.FishObject;
-import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.planner.SortKey;
@@ -61,15 +60,18 @@ public class DumbSorter extends CursorMaker {
         long pRecord;
     }
     
-    private static class MyCursor extends Cursor {
-        private List<Item> items;
+    private static class MyCursor extends CursorWithHeap {
+        List<Item> items;
         int i = 0;
 
-        public MyCursor(CursorMeta meta, List<Item> items) {
+        public MyCursor(CursorMeta meta) {
             super(meta);
-            this.items = items;
         }
 
+        public Heap getHeap() {
+            return super.getHeap();
+        }
+        
         @Override
         public long next() {
             if (i >= this.items.size()) {
@@ -85,6 +87,7 @@ public class DumbSorter extends CursorMaker {
 
         @Override
         public void close() {
+            super.close();
         }
     }
     
@@ -108,29 +111,31 @@ public class DumbSorter extends CursorMaker {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         AtomicLong counter = ctx.getCursorStats(makerId);
-        Heap heap = new FlexibleHeap();
+        MyCursor result = null;
+        boolean success = false;
         try (Cursor cc = this.upstream.make(ctx, params, pMaster)) {
-            try (Cursor rb = new RecordBuffer(cc)) {
-                try {
-                    List<Item> items = new ArrayList<>();
-                    for (long pRecord = rb.next(); pRecord != 0; pRecord = rb.next()) {
-                        if (pRecord != 0) {
-                            Record.size(pRecord);
-                        }
-                        Item item = new Item();
-                        item.pRecord = pRecord;
-                        heap.reset(0);
-                        item.key = getSortKey(ctx, heap, params, pRecord);
-                        items.add(item);
-                    }
-                    counter.addAndGet(items.size());
-                    Collections.sort(items, new MyComparator());
-                    Cursor result = new MyCursor(getCursorMeta(), items);
-                    return result;
+            result = new MyCursor(getCursorMeta());
+            Heap heap = result.getHeap();
+            List<Item> items = new ArrayList<>();
+            for (long pRecord = cc.next(); pRecord != 0; pRecord = cc.next()) {
+                if (pRecord != 0) {
+                    Record.size(pRecord);
                 }
-                finally {
-                    heap.free();
-                }
+                pRecord = Record.clone(heap, pRecord);
+                Item item = new Item();
+                item.pRecord = pRecord;
+                item.key = getSortKey(ctx, heap, params, pRecord);
+                items.add(item);
+            }
+            counter.addAndGet(items.size());
+            Collections.sort(items, new MyComparator());
+            result.items = items;
+            success = true;
+            return result;
+        }
+        finally {
+            if (!success && (result != null)) {
+                result.close();
             }
         }
     }

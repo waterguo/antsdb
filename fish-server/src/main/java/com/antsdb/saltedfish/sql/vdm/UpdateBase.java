@@ -117,6 +117,7 @@ abstract class UpdateBase extends Statement {
                     }
                     else {
                         newRow.setFieldAddress(column.getColumnId(), 0);
+                        blobRow.setFieldAddress(column.getColumnId(), 0);
                     }
                 }
             }

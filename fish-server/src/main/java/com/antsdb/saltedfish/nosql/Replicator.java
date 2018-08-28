@@ -64,6 +64,7 @@ public class Replicator extends Thread {
     private int retries = 0;
     private int errors = 0;
     private TransactionReplayer trxFilter;
+    private BlobReorderReplayer blobReorder;
 
     static class Stats {
         long inserts;
@@ -190,7 +191,8 @@ public class Replicator extends Thread {
         this.replicable = replicable;
         this.gobbler = this.humpback.getGobbler();
         this.replicationHandler = replicable.getReplayHandler();
-        this.trxFilter  = new TransactionReplayer(this.humpback.getGobbler(), this.replicationHandler);
+        this.blobReorder = new BlobReorderReplayer(this.replicationHandler);
+        this.trxFilter  = new TransactionReplayer(this.humpback.getGobbler(), this.blobReorder);
         this.relay = new Relay(trxFilter);
         setName(name);
         setDaemon(true);

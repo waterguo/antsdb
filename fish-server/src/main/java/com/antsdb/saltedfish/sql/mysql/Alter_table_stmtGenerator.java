@@ -209,7 +209,7 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
             ObjectName tableName, 
             Alter_table_add_constraintContext rule) {
         if (rule.alter_table_add_constraint_fk() != null) {
-            String name = (rule.any_name() != null) ? rule.any_name().getText() : null;
+            String name = Utils.getIdentifier(rule.identifier());
             return createAddForeignKey(ctx, tableName, name, rule.alter_table_add_constraint_fk());
         }
         else if (rule.alter_table_add_constraint_pk() != null) {

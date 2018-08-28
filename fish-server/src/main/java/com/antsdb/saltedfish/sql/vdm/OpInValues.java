@@ -55,12 +55,12 @@ public class OpInValues extends BinaryOperator {
         }
     }
 
-	@Override
-	public String toString() {
-		return "IN (...)";
-	}
+    @Override
+    public String toString() {
+        return "IN (...)";
+    }
 
-	public List<Operator> getValues() {
-		return this.values;
-	}
+    public List<Operator> getValues() {
+        return this.values;
+    }
 }

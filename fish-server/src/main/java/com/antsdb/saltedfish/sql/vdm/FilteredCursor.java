@@ -57,7 +57,7 @@ public class FilteredCursor extends CursorWithHeap {
             Heap heap = newHeap();
             long pBool = this.filter.eval(ctx, heap, params, pRecord);
             if (pBool == 0) {
-            	    continue;
+                continue;
             }
             boolean b = FishBool.get(null, pBool);
             if (b) {

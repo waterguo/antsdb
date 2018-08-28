@@ -76,4 +76,39 @@ public interface MysqlConstant {
     static final int FIELD_TYPE_BLOB = 252;
     static final int FIELD_TYPE_DATE = 10;
     static final int FIELD_TYPE_DATETIME = 12;
+    
+    // data type flags
+    
+    /* The field value cannot be NULL (it is declared with the NOT NULL attribute). */
+    static final int NOT_NULL_FLAG = 0x1;
+    /* The field is a part of the primary key. */
+    static final int PRI_KEY_FLAG = 0x2;
+    /* The field is a part of a unique key. */
+    static final int UNIQUE_KEY_FLAG = 0x0004;
+    /* The field is a part of some non-unique key. */
+    static final int  MULTIPLE_KEY_FLAG = 0x0008;
+    /* The field is a BLOB or TEXT. */
+    static final int BLOB_FLAG = 0x0010;
+    /* The field was declared with the UNSIGNED attribute, which has the same meaning as the unsigned keyword in C. */
+    static final int UNSIGNED_FLAG = 0x0020;
+    /* The field has been declared with the ZEROFILL attribute, which tells the server to pad the numeric types with
+     *  leading zeros in the output to fit the specified field length.
+     */
+    static final int ZEROFILL_FLAG = 0x0040;
+    /* The field has been declared with the BINARY attribute, which tells the server to compare strings byte-for-byte
+     *  in a case-sensitive manner.
+     */
+    static final int BINARY_FLAG = 0x0080;
+    /* The field is an ENUM. */
+    static final int ENUM_FLAG = 0x0100;
+    /* The field has been declared with the AUTO_INCREMENT attribute, which enables the automatic generation of 
+     * primary key values when a new record is inserted.
+     */
+    static final int AUTO_INCREMENT_FLAG = 0x0200;
+    /* The field is a timestamp. */
+    static final int TIMESTAMP_FLAG = 0x0400;
+    /* The field is a SET. */
+    static final int SET_FLAG = 0x0800;
+    /* Used with cursors in version 4.1 to indicate that the field is numeric. */
+    static final int NUM_FLAG = 0x8000;
 }

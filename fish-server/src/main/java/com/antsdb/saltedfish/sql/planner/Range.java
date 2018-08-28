@@ -30,8 +30,6 @@ import com.antsdb.saltedfish.sql.vdm.CursorPrimaryKeySeek;
 import com.antsdb.saltedfish.sql.vdm.DumbDistinctFilter;
 import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
 import com.antsdb.saltedfish.sql.vdm.IndexSeek;
-import com.antsdb.saltedfish.sql.vdm.OpInSelect;
-import com.antsdb.saltedfish.sql.vdm.OpInValues;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.RangeScannable;
 import com.antsdb.saltedfish.sql.vdm.Seekable;
@@ -215,7 +213,7 @@ final class Range {
             }
             else if (isSingleLike()) {
                 Operator like = this.from[0].source;
-                Operator operand = this.from[0].operand;
+                Operator operand = (Operator)this.from[0].operand;
                 UncertainScan maker = new UncertainScan(table, index, ctx.getNextMakerId(), like, operand);
                 return maker;
             }
@@ -263,15 +261,16 @@ final class Range {
         maker.setKey(key, select);
     }
 
+    @SuppressWarnings("unchecked")
     private CursorMaker findSelect(ColumnFilter[] values) {
         CursorMaker select = null;
         for (ColumnFilter i : values) {
             if (i.op == FilterOp.INSELECT) {
-                select = ((OpInSelect) i.operand).getSelect();
+                select = (CursorMaker) i.operand;
                 break;
             }
             if (i.op == FilterOp.INVALUES) {
-                Constants constants = new Constants(((OpInValues) i.operand).getValues(), "");
+                Constants constants = new Constants((List<Operator>) i.operand, "");
                 select = constants;
                 break;
             }
@@ -288,7 +287,7 @@ final class Range {
             if ((i.op == FilterOp.INSELECT) || (i.op == FilterOp.INVALUES)) {
                 break;
             }
-            result.add(i.operand);
+            result.add((Operator)i.operand);
         }
         return result;
     }

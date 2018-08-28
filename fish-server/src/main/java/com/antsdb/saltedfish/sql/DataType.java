@@ -33,6 +33,7 @@ public class DataType {
     byte fishType;
     String name;
     boolean zerofill = false;
+    boolean isUnsigned = false;
     
     public DataType(String name, int length, int scale, int sqlType, Class<?> klass, byte fishType) {
         this.length = length;
@@ -90,7 +91,7 @@ public class DataType {
             return new TypeString("_varchar", length, Types.VARCHAR);
     }
 
-    static DataType _number = new TypeDecimal("_decimal", 38, 10);
+    static DataType _number = new TypeDecimal("_decimal", 38, 4);
     public static DataType number() {
         return _number;
     }
@@ -279,5 +280,13 @@ public class DataType {
 
     public void setZeroFill(boolean value) {
         this.zerofill = value;
+    }
+
+    public boolean isUnsigned() {
+        return isUnsigned;
+    }
+
+    public void setUnsigned(boolean value) {
+        this.isUnsigned = value;
     }
 }

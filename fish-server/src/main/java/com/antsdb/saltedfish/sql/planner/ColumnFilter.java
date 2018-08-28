@@ -24,12 +24,12 @@ import com.antsdb.saltedfish.sql.vdm.StringLiteral;
 class ColumnFilter {
     PlannerField field;
     FilterOp op;
-    Operator operand;
+    Object operand;
     boolean isConstant;
     Operator source;
     int version;
 
-    public ColumnFilter(PlannerField field, FilterOp op, Operator operand, Operator source) {
+    public ColumnFilter(PlannerField field, FilterOp op, Object operand, Operator source) {
         super();
         this.field = field;
         this.op = op;

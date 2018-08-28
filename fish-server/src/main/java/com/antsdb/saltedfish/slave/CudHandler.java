@@ -53,15 +53,15 @@ class CudHandler {
     PreparedStatement replace;
     List<ReplicatorColumnMeta> replaceParams;
     boolean isBlobTable;
-    private BlobTracker tracker;
-    private int tableId;
+    @SuppressWarnings("unused")
+    private SysMetaRow table;
     
-    CudHandler(BlobTracker tracker) {
-        this.tracker = tracker;
+    CudHandler() {
     }
     
     public void prepare(Connection conn, SysMetaRow table, List<HColumnRow> hcolumns) throws SQLException {
-        this.tableId = table.getTableId();
+        this.table = table;
+        
         DatabaseMetaData meta = conn.getMetaData();
         this.isBlobTable = table.isBlobTable();
         if (this.isBlobTable) {
@@ -168,39 +168,33 @@ class CudHandler {
     }
 
     public void insert(long trxid, Row row, boolean isBlobRow) throws SQLException {
-        if (isBlobRow) {
-            long pBaseRow = this.tracker.get(trxid);
-            if (pBaseRow == 0) {
-                return;
-            }
-            if (pBaseRow == 0) {
-                throw new IllegalArgumentException("base row not found " + trxid + " " + row.getKeySpec(this.tableId));
-            }
-            Row baseRow = Row.fromMemoryPointer(pBaseRow, trxid);
-            for (int i=0; i<this.replaceParams.size(); i++) {
-                Object value = getValue(baseRow, replaceParams.get(i), isBlobRow);
-                if (value instanceof BlobReference) {
-                    value = row.get(replaceParams.get(i).hcolumnPos);
+        boolean hasBlobRef = false;
+        boolean nullRow = true;
+        for (int i=0; i<this.replaceParams.size(); i++) {
+            Object value = getValue(row, replaceParams.get(i), isBlobRow);
+            if (isBlobRow) {
+                if (value != null) {
+                    this.replace.setObject(i+1, value);
+                    nullRow = false;
                 }
-                this.replace.setObject(i+1, value);
             }
-        }
-        else {
-            for (int i=0; i<this.replaceParams.size(); i++) {
-                Object value = getValue(row, replaceParams.get(i), isBlobRow);
+            else {
                 if (value instanceof BlobReference) {
-                    this.tracker.add(trxid, row.getAddress());
-                    return;
+                    hasBlobRef = true;
                 }
-                this.replace.setObject(i+1, value);
+                else {
+                    this.replace.setObject(i+1, value);
+                    nullRow = false;
+                }
             }
         }
-        int result = this.replace.executeUpdate();
-        if (result < 1) {
-            throw new IllegalArgumentException();
-        }
-        if (isBlobRow) {
-            this.tracker.end(trxid);
+        if (!hasBlobRef) {
+            if (!nullRow) {
+                int result = this.replace.executeUpdate();
+                if (result < 1) {
+                    throw new IllegalArgumentException();
+                }
+            }
         }
     }
 
@@ -249,5 +243,10 @@ class CudHandler {
 
     boolean isBlobTable() {
         return this.isBlobTable;
+    }
+    
+    @Override
+    public String toString() {
+        return this.table.toString();
     }
 }

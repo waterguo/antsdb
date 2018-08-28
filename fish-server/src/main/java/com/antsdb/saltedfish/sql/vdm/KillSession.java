@@ -20,9 +20,10 @@ import com.antsdb.saltedfish.sql.Session;
  * 
  * @author *-xguo0<@
  */
-public class KillQuery extends Statement {
+public class KillSession extends Statement {
     int sessionId;
-    public KillQuery(int sessionId) {
+    
+    public KillSession(int sessionId) {
         this.sessionId = sessionId;
     }
 

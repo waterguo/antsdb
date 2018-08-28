@@ -103,6 +103,9 @@ public final class MemoryManager {
         buf.clear();
         q.offer(buf);
         _pooled.getAndAdd(buf.capacity());
+        if (_isTraceEnabled) {
+            _traces.remove(UberUtil.getAddress(buf));
+        }
     }
 
     public static void threadEnd() {

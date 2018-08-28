@@ -68,7 +68,6 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     private Speedometer speedometer = new Speedometer();
     private long latency;
     private long commitedLp;
-    private BlobTracker tracker = new BlobTracker();
 
     public SlaveReplicator(Humpback humpback) throws Exception {
         this.humpback = humpback;
@@ -299,7 +298,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     private CudHandler createHandler(int tableId) throws SQLException {
         SysMetaRow table = this.humpback.getTableInfo(tableId);
         List<HColumnRow> columns = this.humpback.getColumns(tableId);
-        CudHandler result = new CudHandler(this.tracker);
+        CudHandler result = new CudHandler();
         result.prepare(this.conn, table, columns);
         return result;
     }

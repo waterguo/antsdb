@@ -13,96 +13,88 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
-import org.slf4j.Logger;
-
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.util.JumpException;
-import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-class TransactionScanner implements ReplayHandler {
-    private static final Logger _log = UberUtil.getThisLogger();
-    
-    private TrxMan trxman;
-    private long stopId;
-    private long lp;
-
-    TransactionScanner(TrxMan trxman, long lp) {
-        this.trxman = trxman;
-        this.lp = lp;
-    }
+public class ReplayRelay implements ReplayHandler {
+    protected ReplayHandler downstream;
     
     @Override
+    public void all(LogEntry entry) throws Exception {
+        this.downstream.all(entry);
+    }
+
+    @Override
     public void insert(InsertEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
+        this.downstream.insert(entry);
     }
 
     @Override
     public void update(UpdateEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
+        this.downstream.update(entry);
     }
 
     @Override
     public void put(PutEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
+        this.downstream.put(entry);
     }
 
     @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
+    public void index(IndexEntry entry) throws Exception {
+        this.downstream.index(entry);
+    }
+
+    @Override
+    public void delete(DeleteEntry entry) throws Exception {
+        this.downstream.delete(entry);
     }
 
     @Override
     public void commit(CommitEntry entry) throws Exception {
-        long trxid = entry.getTrxid();
-        try {
-            this.trxman.commit(trxid, entry.getVersion());
-        }
-        catch (IllegalArgumentException ignored) {
-            // there is a chance TransactionScanner is falling behind TransactionReplayer. See TestTransactionReplayer
-        }
-        this.lp = entry.getSpacePointer();
-        if (trxid == this.stopId) {
-            throw new JumpException();
-        }
+        this.downstream.commit(entry);
     }
 
     @Override
     public void rollback(RollbackEntry entry) throws Exception {
-        long trxid = entry.getTrxid();
-        this.trxman.rollback(trxid);
-        this.lp = entry.getSpacePointer();
-        if (trxid == this.stopId) {
-            throw new JumpException();
-        }
+        this.downstream.rollback(entry);
+    }
+
+    @Override
+    public void message(MessageEntry entry) throws Exception {
+        this.downstream.message(entry);
     }
 
     @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
-        if (entry.getTrxid() <= this.stopId) {
-            throw new JumpException();
-        }
+        this.downstream.transactionWindow(entry);
     }
 
-    public void scan(Gobbler gobbler, long trxid) {
-        try {
-            this.stopId = trxid;
-            gobbler.replay(this.lp, false, this);
-        }
-        catch (JumpException x) {
-        }
-        catch (Exception x) {
-            _log.error("error", x);
-        }
+    @Override
+    public void timestamp(TimestampEntry entry) {
+        this.downstream.timestamp(entry);
     }
 
+    @Override
+    public void deleteRow(DeleteRowEntry entry) throws Exception {
+        this.downstream.deleteRow(entry);
+    }
+
+    public ReplayRelay(ReplayHandler downstream) {
+        this.downstream = downstream;
+    }
+    
 }

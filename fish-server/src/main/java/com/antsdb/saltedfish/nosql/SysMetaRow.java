@@ -81,4 +81,9 @@ public class SysMetaRow {
     public boolean isBlobTable() {
         return getTableName().endsWith("blob_");
     }
+
+    @Override
+    public String toString() {
+        return getNamespace() + "." + getTableName();
+    }
 }

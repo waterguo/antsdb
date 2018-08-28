@@ -586,6 +586,8 @@ public class AutoCaster {
             return (double)Int4.get(pValue);
         case Value.FORMAT_INT8:
             return (double)Int8.get(null, pValue);
+        case Value.FORMAT_FLOAT8:
+            return (double)Float8.get(null, pValue);
         case Value.FORMAT_DECIMAL:
             BigDecimal bd = FishDecimal.get(null, pValue);
             return bd.doubleValue();

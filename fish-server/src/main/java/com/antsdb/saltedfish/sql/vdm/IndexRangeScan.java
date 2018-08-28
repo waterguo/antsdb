@@ -41,8 +41,8 @@ public class IndexRangeScan extends CursorMaker implements RangeScannable {
     private boolean isAsc = true;
 
     public IndexRangeScan(TableMeta table, IndexMeta index, int makerId) {
-            this.table = table;
-            this.index = index;
+        this.table = table;
+        this.index = index;
         this.meta = CursorMeta.from(table);
         this.mapping = this.meta.getHumpbackMapping();
         setMakerId(makerId);

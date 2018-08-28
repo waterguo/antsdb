@@ -11,39 +11,29 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.slave;
+package com.antsdb.saltedfish.sql.mysql;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import com.antsdb.saltedfish.lexer.MysqlParser.Show_procedureContext;
+import com.antsdb.saltedfish.sql.Generator;
+import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.Instruction;
 
 /**
  * 
  * @author *-xguo0<@
  */
-class BlobTracker {
-    Map<Long, Long> rowByTrxid = new HashMap<>();
-    
-    void add(long trxid, long pRow) {
-        this.rowByTrxid.put(trxid, pRow);
-    }
-    
-    void end(long trxid) {
-        this.rowByTrxid.remove(trxid);
-    }
-    
-    void freeTo(long trxid) {
-        for (Iterator<Map.Entry<Long, Long>> it = rowByTrxid.entrySet().iterator();it.hasNext();) {
-            Map.Entry<Long, Long> entry = it.next();
-            long key = entry.getKey();
-            if ((key < 0) && (key > trxid)) {
-                it.remove();
-            }
+public class Show_procedureGenerator extends Generator<Show_procedureContext> {
+
+    @Override
+    public Instruction gen(GeneratorContext ctx, Show_procedureContext rule) throws OrcaException {
+        String like = null;
+        if (rule.K_LIKE() != null) {
+            like = Utils.getLiteralValue(rule.string_value());
         }
+        CursorMaker result = new ShowProcedure(like);
+        return result;
     }
 
-    long get(long trxid) {
-        Long result = this.rowByTrxid.get(trxid);
-        return (result == null) ? 0 : result;
-    }
 }

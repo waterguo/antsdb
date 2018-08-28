@@ -16,10 +16,14 @@ package com.antsdb.saltedfish.sql.planner;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+
+import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.sql.vdm.BinaryOperator;
 import com.antsdb.saltedfish.sql.vdm.BooleanValue;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.NullValue;
 import com.antsdb.saltedfish.sql.vdm.OpAnd;
@@ -68,6 +72,7 @@ class Analyzer {
         int set = makeSet(0, this.version);
         return analyze_(Mode.AND, set, planner, expr, scope);
     }
+    
     boolean analyze_(Mode mode, int set, Planner planner, Operator expr, Node scope) {
         if (expr instanceof OpAnd) {
             return analyze_and(mode, set, planner, (OpAnd) expr, scope);
@@ -83,10 +88,12 @@ class Analyzer {
             Operator upstream = between.getLeftOperator();
             if (upstream instanceof FieldValue) {
                 FieldValue field = (FieldValue) upstream;
+                int ystart = this.version;
                 if (!analyze_binary(mode, set, planner, FilterOp.LARGEREQUAL, field, between.getFrom(), expr, scope)) {
                     return false;
                 }
-                if (!analyze_binary(mode, set, planner, FilterOp.LESSEQUAL, field, between.getTo(), expr, scope)) {
+                int y = makeSet(ystart, this.version);
+                if (!analyze_binary(Mode.AND, y, planner, FilterOp.LESSEQUAL, field, between.getTo(), expr, scope)) {
                     return false;
                 }
                 return true;
@@ -184,10 +191,12 @@ class Analyzer {
                 result = analyze_binary(mode, set, planner, FilterOp.LIKE, field, op.right, op, scope);
             }
             else if (op instanceof OpInSelect) {
-                result = analyze_binary(mode, set, planner, FilterOp.INSELECT, field, op, op, scope);
+                OpInSelect in = (OpInSelect)op;
+                result = analyze_binary(mode, set, planner, FilterOp.INSELECT, field, in.getSelect(), op, scope);
             }
             else if (op instanceof OpInValues) {
-                result = analyze_binary(mode, set, planner, FilterOp.INVALUES, field, op, op, scope);
+                OpInValues in = (OpInValues)op;
+                result = analyze_binary(mode, set, planner, FilterOp.INVALUES, field, in.getValues(), op, scope);
             }
         }
         if (op.right instanceof FieldValue) {
@@ -220,7 +229,7 @@ class Analyzer {
             Planner planner, 
             FilterOp op, 
             FieldValue field, 
-            Operator value,
+            Object value,
             Operator source, 
             Node scope) {
         // the whole purpose of analysis is to translate condition to column
@@ -307,21 +316,36 @@ class Analyzer {
      * @param expr
      * @return
      */
-    static boolean isConstant(Node node, Operator expr) {
-        boolean[] valid = new boolean[1];
-        valid[0] = true;
-        expr.visit(it -> {
-            if (!valid[0]) {
-                return;
-            }
-            if (it instanceof FieldValue) {
-                FieldValue cv = (FieldValue) it;
-                if (cv.getField().owner != node) {
-                    valid[0] = false;
+    static boolean isConstant(Node node, Object expr) {
+        if (expr instanceof CursorMaker) {
+            return false;
+        }
+        else if (expr instanceof List<?>) {
+            for (Object i:(List<?>)expr) {
+                if (!isConstant(node, i)) {
+                    return false;
                 }
             }
-        });
-        return valid[0];
+            return true;
+        }
+        else if (expr instanceof Operator) {
+            AtomicBoolean valid = new AtomicBoolean(true);
+            ((Operator)expr).visit(it -> {
+                if (!valid.get()) {
+                    return;
+                }
+                if (it instanceof FieldValue) {
+                    FieldValue cv = (FieldValue) it;
+                    if (cv.getField().owner != node) {
+                        valid.set(false);
+                    }
+                }
+            });
+            return valid.get();
+        }
+        else {
+            throw new NotImplementedException();
+        }
     }
     
     private static int makeSet(int start, int end) {

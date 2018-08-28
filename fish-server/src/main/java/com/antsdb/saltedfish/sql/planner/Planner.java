@@ -61,6 +61,7 @@ import com.antsdb.saltedfish.sql.vdm.OpAnd;
 import com.antsdb.saltedfish.sql.vdm.OpEqual;
 import com.antsdb.saltedfish.sql.vdm.OpEqualNull;
 import com.antsdb.saltedfish.sql.vdm.OpInSelect;
+import com.antsdb.saltedfish.sql.vdm.OpInValues;
 import com.antsdb.saltedfish.sql.vdm.OpLarger;
 import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
 import com.antsdb.saltedfish.sql.vdm.OpLess;
@@ -619,6 +620,7 @@ public class Planner {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     private Operator createOperator(Node node, ColumnFilter filter) {
         PlannerField pf = new PlannerField(node, filter.field.field);
         pf.column = filter.field.column;
@@ -630,31 +632,31 @@ public class Planner {
         FieldValue cv = new FieldValue(pf);
         Operator op = null;
         if (filter.op == FilterOp.EQUAL) {
-            op = new OpEqual(cv, filter.operand);
+            op = new OpEqual(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.EQUALNULL) {
-            op = new OpEqualNull(cv, filter.operand);
+            op = new OpEqualNull(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.LARGER) {
-            op = new OpLarger(cv, filter.operand);
+            op = new OpLarger(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.LARGEREQUAL) {
-            op = new OpLargerEqual(cv, filter.operand);
+            op = new OpLargerEqual(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.LESS) {
-            op = new OpLess(cv, filter.operand);
+            op = new OpLess(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.LESSEQUAL) {
-            op = new OpLessEqual(cv, filter.operand);
+            op = new OpLessEqual(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.LIKE) {
-            op = new OpLike(cv, filter.operand);
+            op = new OpLike(cv, (Operator)filter.operand);
         }
         else if (filter.op == FilterOp.INSELECT) {
-            op = filter.source;
+            op = new OpInSelect(cv, (CursorMaker)filter.operand);
         }
         else if (filter.op == FilterOp.INVALUES) {
-            op = filter.source;
+            op = new OpInValues(cv, (List<Operator>)filter.operand);
         }
         else {
             throw new NotImplementedException();
@@ -968,30 +970,43 @@ public class Planner {
     }
 
     /** is the expression calculable with given path */
-    private boolean checkColumnReference(Link previous, Node node, Operator expr) {
-        if (expr instanceof OpInSelect) {
+    private boolean checkColumnReference(Link previous, Node node, Object expr) {
+        if (expr instanceof CursorMaker) {
             return true;
         }
-        boolean[] valid = new boolean[1];
-        valid[0] = true;
-        expr.visit(it -> {
-            if (!valid[0]) {
-                return;
+        else if (expr instanceof List<?>) {
+            for (Object i:(List<?>)expr) {
+                if (!checkColumnReference(previous, node, i)) {
+                    return false;
+                }
             }
-            if (it instanceof FieldValue) {
-                FieldValue cv = (FieldValue) it;
-                if (node.findField(cv.getField()) != null) {
+            return true;
+        }
+        else if (expr instanceof Operator) {
+            boolean[] valid = new boolean[1];
+            valid[0] = true;
+            ((Operator)expr).visit(it -> {
+                if (!valid[0]) {
                     return;
                 }
-                if (previous != null) {
-                    if (previous.findField(cv.getField()) != null) {
+                if (it instanceof FieldValue) {
+                    FieldValue cv = (FieldValue) it;
+                    if (node.findField(cv.getField()) != null) {
                         return;
                     }
+                    if (previous != null) {
+                        if (previous.findField(cv.getField()) != null) {
+                            return;
+                        }
+                    }
+                    valid[0] = false;
                 }
-                valid[0] = false;
-            }
-        });
-        return valid[0];
+            });
+            return valid[0];
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
     }
 
     void analyze() {

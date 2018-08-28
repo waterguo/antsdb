@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
+
 import static com.antsdb.saltedfish.util.UberFormatter.*;
 
 import com.antsdb.saltedfish.util.LatencyDetector;
@@ -61,6 +62,7 @@ public class Gobbler {
         TIMESTAMP,
         DELETE_ROW,
     } 
+    
     public static class LogEntry {
         private final static int HEADER_SIZE = 6;
         protected final static int OFFSET_MAGIC = 0;
@@ -97,6 +99,49 @@ public class Gobbler {
         
         final void setMagic() {
             Unsafe.putShortVolatile(addr + OFFSET_MAGIC, MAGIC);
+        }
+        
+        public static final LogEntry getEntry(long sp, long p) {
+            Gobbler.EntryType type = new LogEntry(sp, p).getType();
+            LogEntry result;
+            switch (type) {
+                case INSERT:
+                    result = new InsertEntry(sp, p);
+                    break;
+                case UPDATE:
+                    result = new UpdateEntry(sp, p);
+                    break;
+                case PUT:
+                    result = new PutEntry(sp, p);
+                    break;
+                case DELETE:
+                    result = new DeleteEntry(sp, p);
+                    break;
+                case DELETE_ROW:
+                    result = new DeleteRowEntry(sp, p);
+                    break;
+                case COMMIT:
+                    result = new CommitEntry(sp, p);
+                    break;
+                case ROLLBACK:
+                    result = new RollbackEntry(sp, p);
+                    break;
+                case INDEX:
+                    result = new IndexEntry(sp, p);
+                    break;
+                case MESSAGE:
+                    result = new MessageEntry(sp, p);
+                    break;
+                case TRXWINDOW:
+                    result = new TransactionWindowEntry(sp, p);
+                    break;
+                case TIMESTAMP:
+                    result = new TimestampEntry(sp, p);
+                    break;
+                default:
+                    throw new IllegalArgumentException();
+            }
+            return result;
         }
         
         public final EntryType getType() {
@@ -716,10 +761,10 @@ public class Gobbler {
                 _log.trace("recover type {} length {} @ {}", type, length, sp);
             }
             if (sp >= spStart) {
-                    if ((sp != spStart) || inclusive) {
-                        replayCallback(type, sp, p, handler);
-                        end = sp;
-                    }
+                if ((sp != spStart) || inclusive) {
+                    replayCallback(type, sp, p, handler);
+                    end = sp;
+                }
             }
             sp = this.spaceman.plus(sp, length + ENTRY_HEADER_SIZE, 2);
             if (sp == Long.MAX_VALUE) {

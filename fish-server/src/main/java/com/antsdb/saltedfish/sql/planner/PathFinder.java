@@ -22,9 +22,9 @@ import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.RuleMeta;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.OpAnd;
-import com.antsdb.saltedfish.sql.vdm.OpInSelect;
 import com.antsdb.saltedfish.sql.vdm.OpMatch;
 import com.antsdb.saltedfish.sql.vdm.OpOr;
 import com.antsdb.saltedfish.sql.vdm.Operator;
@@ -200,7 +200,6 @@ class PathFinder {
     }
 
     private Path tryKey(Path previous, QueryNode node, List<ColumnFilter> filters, RuleMeta<?> key) {
-        boolean isUnique = isUnique(key);
         boolean isFullText = isFullText(key);
         
         // no filters, can't do table range scan
@@ -274,6 +273,7 @@ class PathFinder {
         return false;
     }
 
+    @SuppressWarnings("unused")
     private boolean isUnique(RuleMeta<?> key) {
         if (key instanceof PrimaryKeyMeta) {
             return true;
@@ -305,13 +305,16 @@ class PathFinder {
     }
 
     /** is the expression calculable with given path */
-    private boolean checkColumnReference(Path previous, QueryNode node, Operator expr) {
-        if (expr instanceof OpInSelect) {
+    private boolean checkColumnReference(Path previous, QueryNode node, Object expr) {
+        if (expr instanceof CursorMaker) {
+            return true;
+        }
+        if (expr instanceof List<?>) {
             return true;
         }
         boolean[] valid = new boolean[1];
         valid[0] = true;
-        expr.visit(it -> {
+        ((Operator)expr).visit(it -> {
             if (!valid[0]) {
                 return;
             }

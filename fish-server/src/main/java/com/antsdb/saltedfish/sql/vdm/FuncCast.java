@@ -49,12 +49,15 @@ public class FuncCast extends UnaryOperator {
         }
         else if (type.getJavaType() == Integer.class) {
             if (value instanceof String) {
-                return Integer.valueOf((String) value);
+                FishObject.allocSet(heap, Integer.valueOf((String) value));
             }
         }
         else if (type.getJavaType() == Long.class) {
             if (value instanceof String) {
-                return Long.valueOf((String) value);
+                return FishObject.allocSet(heap, Long.valueOf((String) value));
+            }
+            if (value instanceof Integer) {
+                return FishObject.allocSet(heap, Long.valueOf((Integer)value));
             }
         }
         else if (type.getJavaType() == String.class) {

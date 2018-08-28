@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -33,7 +34,7 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.sql.command.FishParserFactory;
-import com.antsdb.saltedfish.sql.vdm.AsynchronusInsert;
+import com.antsdb.saltedfish.sql.vdm.AsynchronousInsert;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.FishParameters;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
@@ -60,14 +61,14 @@ public class Session {
     ConcurrentMap<Integer, TableLock> tableLocks = new ConcurrentHashMap<>();
 
     private volatile Transaction trx;
-    private boolean isClosed = false;
+    private AtomicBoolean isClosed = new AtomicBoolean(false);
     private long lastInsertId;
     private int id = _id.incrementAndGet();
-    AsynchronusInsert asyncExecutor;
+    AsynchronousInsert asyncExecutor;
     private HumpbackSession hsession;
     public String remote;
     private SystemParameters config;
-    Thread thread;
+    private volatile Thread thread;
     private Object sql;
     ConcurrentSkipListMap<Long, Execution> slowOnes = new ConcurrentSkipListMap<>();
     
@@ -94,11 +95,11 @@ public class Session {
     public Object run(CharBuffer cbuf, Parameters params, Consumer<Object> callback) throws SQLException {
         long startTime = UberTime.getTime();
         try {
-            if (this.isClosed) {
-                throw new OrcaException("session is closed");
-            }
             this.sql = cbuf;
             this.thread = Thread.currentThread();
+            if (this.isClosed.get()) {
+                throw new OrcaException("session is closed");
+            }
                 
             Object result = null;
             if ((this.asyncExecutor != null) && isInsert(cbuf)) {
@@ -112,7 +113,7 @@ public class Session {
                 // main stuff
                 startTrx();
                 Script script = LatencyDetector.run(_log, "parse", ()->{
-                    return parse(cbuf);
+                    return parse0(cbuf);
                 });
                 VdmContext ctx = new VdmContext(this, script.getVariableCount());
                 result = script.run(ctx, params, 0);
@@ -140,6 +141,9 @@ public class Session {
         long startTime = UberTime.getTime();
         try {
             this.thread = Thread.currentThread();
+            if (this.isClosed.get()) {
+                throw new OrcaException("session is closed");
+            }
             this.sql = stmt.sql;
             Object result = stmt.run(this, params);
             if (result instanceof Cursor) {
@@ -182,7 +186,17 @@ public class Session {
     }
 
     public Script parse(CharBuffer cbuf) {
-        if (this.isClosed) {
+        try {
+            this.thread = Thread.currentThread();
+            return parse0(cbuf);
+        }
+        finally {
+            this.thread = null;
+        }
+    }
+    
+    private Script parse0(CharBuffer cbuf) {
+        if (this.isClosed.get()) {
             throw new OrcaException("session is closed");
         }
     
@@ -228,7 +242,6 @@ public class Session {
                 this.getOrca().cacheStatement(script);
             }
         }
-        
         return script;
     }
     
@@ -291,14 +304,35 @@ public class Session {
     }
 
     public void close() {
+        for (;;) {
+            // already closed return
+            if (this.isClosed.get()) {
+                return;
+            }
+            // if not, go to the close process
+            if (this.isClosed.compareAndSet(false, true)) {
+                break;
+            }
+        }
+        if (this.thread != null) {
+            // wait 1 second for the session to end
+            
+            UberUtil.sleep(1000);
+            
+            // otherwise, force the thread to stop
+            
+            if (this.thread != null) {
+                this.thread.interrupt();
+                UberUtil.sleep(3000);
+            }
+        }
         rollback();
         unlockAll();
         this.orca.sessions.remove(this);
-        this.isClosed  = true;
     }
     
     public boolean isClosed() {
-        return this.isClosed;
+        return this.isClosed.get();
     }
     
     private void endTransaction(boolean success) {
@@ -576,7 +610,7 @@ public class Session {
             // window correctly
             this.variables.put("##oldAutoCommit", this.config.getAutoCommit());
             setAutoCommit(false);
-            this.asyncExecutor = new AsynchronusInsert(this);
+            this.asyncExecutor = new AsynchronousInsert(this);
         }
         else {
             if (this.asyncExecutor != null) {
@@ -594,7 +628,7 @@ public class Session {
             return false;
         }
         t.interrupt();
-        AsynchronusInsert insert = this.asyncExecutor;
+        AsynchronousInsert insert = this.asyncExecutor;
         if (insert != null) {
             insert.close();
         }

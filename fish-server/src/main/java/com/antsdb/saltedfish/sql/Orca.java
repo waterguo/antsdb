@@ -80,7 +80,7 @@ public class Orca {
     Cache<String, Script> statementCache;
     Map<String, CursorMaker> sysviews = new HashMap<>();
     Map<String, String> namespaces = new HashMap<>();
-    boolean isClosed = false;
+    volatile boolean isClosed = false;
     Set<Session> sessions = ConcurrentHashMap.newKeySet();
     private ScheduledFuture<?> sessionSweeperFuture;
     private File home;
@@ -340,6 +340,9 @@ public class Orca {
     }
     
     public Session createSession(String user, String remoteEndpoint) {
+        if (this.isClosed) {
+            throw new OrcaException("orca is closed");
+        }
         Session session = new Session(this, getSqlParserFactory(), user);
         session.remote = remoteEndpoint;
         if (this.sysdefault != null) {

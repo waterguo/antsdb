@@ -66,8 +66,6 @@ import com.antsdb.saltedfish.util.UberUtil;
 final class Helper {
     final static Logger _log = UberUtil.getThisLogger();
     
-    private static final byte[] EMPTY = new byte[0];
-
     public static final String SYS_COLUMN_FAMILY     = "d";            // all system information columns use "s" as column family
     public static final String DATA_COLUMN_FAMILY    = "d";             // all data columns use same column family - "d"
 

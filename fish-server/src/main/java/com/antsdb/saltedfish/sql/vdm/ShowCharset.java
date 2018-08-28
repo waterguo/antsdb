@@ -13,20 +13,33 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.ArrayList;
 import java.util.List;
 
-import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class ShowCharset extends CursorMaker {
-    CursorMeta meta = new CursorMeta();
-
+public class ShowCharset extends ViewMaker {
+    public static class Line {
+        Line(String name, String description, String collate, long maxlen) {
+            this.CHARACTER_SET_NAME = name;
+            this.DEFAULT_COLLATE_NAME = collate;
+            this.DESCRIPTION = description;
+            this.MAXLEN = maxlen;
+        }
+        
+        // Charset
+        public String CHARACTER_SET_NAME;
+        // Default collation
+        public String DESCRIPTION;
+        // Description
+        public String DEFAULT_COLLATE_NAME;
+        // Maxlen
+        public Long MAXLEN;
+    }
+    
     public ShowCharset() {
-        meta.addColumn(new FieldMeta("Charset", DataType.varchar()))
-            .addColumn(new FieldMeta("Description", DataType.varchar()))
-            .addColumn(new FieldMeta("Default collation", DataType.varchar()))
-            .addColumn(new FieldMeta("Maxlen", DataType.integer()));
+        super(CursorUtil.toMeta(Line.class));
     }
 
     @Override
@@ -37,12 +50,11 @@ public class ShowCharset extends CursorMaker {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         // wgu0: hard coded for now
-        Record rec = new HashMapRecord();
-        rec.set(0, "ascii")
-           .set(1, "US ASCII")
-           .set(2, "ascii_general_ci")
-           .set(3, 1);
-        Cursor c = CursorUtil.toCursor(meta, rec);
+        List<Line> result = new ArrayList<>();
+        result.add(new Line("ascii", "US ASCII", "ascii_general_ci", 1));
+        result.add(new Line("utf8", "UTF-8 Unicode", "utf8_general_ci", 3));
+        result.add(new Line("utf8mb4", "UTF-8 Unicode", "utf8mb4_general_ci", 4));
+        Cursor c = CursorUtil.toCursor(getCursorMeta(), result);
         return c;
     }
 

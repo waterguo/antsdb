@@ -55,18 +55,18 @@ public class OpInSelect extends BinaryOperator {
         }
     }
 
-	public void explain(int level, List<ExplainRecord> records) {
+    public void explain(int level, List<ExplainRecord> records) {
         ExplainRecord rec = new ExplainRecord(-1, level, getClass().getSimpleName());
         records.add(rec);
-		this.select.explain(level+1, records);
-	}
+        this.select.explain(level+1, records);
+    }
 
-	public CursorMaker getSelect() {
-		return this.select;
-	}
+    public CursorMaker getSelect() {
+        return this.select;
+    }
 
-	@Override
-	public String toString() {
-		return "IN (...)";
-	}
+    @Override
+    public String toString() {
+        return "IN (...)";
+    }
 }

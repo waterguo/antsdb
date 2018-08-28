@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.server.mysql;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.sql.Date;
@@ -215,7 +216,7 @@ public final class PacketEncoder {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TINY & 0xff));
-            buffer.writeByte((byte)0);
+            buffer.writeByte((byte)(meta.getType().isUnsigned() ? UNSIGNED_FLAG : 0));
             buffer.writeByte((byte)0);
             buffer.writeByte((byte)meta.getType().getScale());
         }
@@ -576,6 +577,7 @@ public final class PacketEncoder {
     }
     
     private void writeTextValue(PacketWriter buffer, Object fv, FieldMeta column) {
+        DataType type = column.getType();
         if (fv instanceof Boolean) {
             // mysql has no boolean it is actually tinyint
             fv = ((Boolean)fv) ? 1 : 0;
@@ -614,8 +616,17 @@ public final class PacketEncoder {
             // special case for mysql '0000-00-00' 
             buffer.writeLenString("0000-00-00", getEncoder());
         }
+        else if ((type.getJavaType() == BigDecimal.class) && (fv instanceof Double)) {
+            BigDecimal bd = new BigDecimal((Double)fv);
+            bd = bd.setScale(type.getScale(), RoundingMode.HALF_UP);
+            buffer.writeLenString(bd.toPlainString(), getEncoder());
+        }
+        else if ((type.getJavaType() == BigDecimal.class) && (fv instanceof Float)) {
+            BigDecimal bd = new BigDecimal((Float)fv);
+            bd = bd.setScale(type.getScale(), RoundingMode.HALF_UP);
+            buffer.writeLenString(bd.toPlainString(), getEncoder());
+        }
         else if ((fv instanceof Integer) || (fv instanceof Long)){
-            DataType type = column.getType();
             String val = fv.toString();
             if (type.isZerofill()) {
                 val = StringUtils.leftPad(val, type.getLength(), '0');
@@ -628,8 +639,7 @@ public final class PacketEncoder {
                 buffer.writeLenString(val, getEncoder());
             }
         }
-        else 
-        {
+        else {
             String val = fv.toString();
             if (val.length() == 0) {
                 // empty mark is 0

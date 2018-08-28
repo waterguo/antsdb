@@ -37,6 +37,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.ExprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_caseContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_case_whenContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_castContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_cast_data_typeContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_existContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_functionContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_selectContext;
@@ -56,6 +57,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Unary_operatorContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.ValueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Variable_referenceContext;
 import com.antsdb.saltedfish.sql.DataType;
+import com.antsdb.saltedfish.sql.DataTypeFactory;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.planner.Planner;
@@ -95,6 +97,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncLocate;
 import com.antsdb.saltedfish.sql.vdm.FuncLower;
 import com.antsdb.saltedfish.sql.vdm.FuncMax;
 import com.antsdb.saltedfish.sql.vdm.FuncMin;
+import com.antsdb.saltedfish.sql.vdm.FuncMod;
 import com.antsdb.saltedfish.sql.vdm.FuncMonth;
 import com.antsdb.saltedfish.sql.vdm.FuncNow;
 import com.antsdb.saltedfish.sql.vdm.FuncRand;
@@ -179,6 +182,7 @@ public class ExprGenerator {
         _functionByName.put("left", FuncLeft.class);
         _functionByName.put("locate", FuncLocate.class);
         _functionByName.put("lower", FuncLower.class);
+        _functionByName.put("mod", FuncMod.class);
         _functionByName.put("month", FuncMonth.class);
         _functionByName.put("now", FuncNow.class);
         _functionByName.put("rand", FuncRand.class);
@@ -343,6 +347,22 @@ public class ExprGenerator {
                 Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpDivide(left, right);
             }
+            else if ("%".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
+                FuncMod result = new FuncMod();
+                result.addParameter(left);
+                result.addParameter(right);
+                return result;
+            }
+            else if ("MOD".equalsIgnoreCase(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
+                FuncMod result = new FuncMod();
+                result.addParameter(left);
+                result.addParameter(right);
+                return result;
+            }
             else if (">".equals(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
@@ -501,7 +521,11 @@ public class ExprGenerator {
             Operator expr = gen(ctx, cursorMeta, i);
             values.add(expr);
         }
-        return new OpInValues(left, values);
+        Operator result = new OpInValues(left, values);
+        if (rule.K_NOT() != null) {
+            result = new OpNot(result);
+        }
+        return result;
     }
 
     private static Operator genSingleValueQuery(GeneratorContext ctx, Planner cursorMeta, Expr_selectContext rule) {
@@ -565,9 +589,27 @@ public class ExprGenerator {
     }
 
     private static Operator gen_cast(GeneratorContext ctx, Planner cursorMeta, Expr_castContext rule) {
-        DataType type = DataType.parse(ctx.getTypeFactory(), rule.data_type());
+        DataType type = genCastType(ctx.getTypeFactory(), rule.expr_cast_data_type());
         Operator expr = gen(ctx, cursorMeta, rule.expr());
         return new FuncCast(type, expr);
+    }
+
+    private static DataType genCastType(DataTypeFactory fac, Expr_cast_data_typeContext rule) {
+        String name = rule.any_name() != null ? rule.any_name().getText() : null;
+        int length = 0;
+        int scale = 0;
+        if (name == null) {
+            if (rule.K_SIGNED() != null) {
+                name = "bigint";
+            }
+            else if (rule.K_UNSIGNED() != null) {
+                name = "bigint";
+            }
+        }
+        if (name == null) {
+            throw new OrcaException("data type is not specified");
+        }
+        return fac.newDataType(name, length, scale);
     }
 
     static Operator genSystemVariableRef(GeneratorContext ctx, Planner meta, Session_variable_referenceContext rule) {

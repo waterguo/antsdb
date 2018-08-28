@@ -42,7 +42,13 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
     @Override
     public DataType newDataType(String name, int length, int scale) {
         DataType type = super.newDataType(name, length, scale);
-        return  (type == null) ?  newDataType_(name, length, scale) : type;
+        if (type == null) {
+            type = newDataType_(name, length, scale);
+        }
+        if (name.endsWith(" unsigned")) {
+            type.setUnsigned(true);
+        }
+        return type;
     }
 
     public static DataType newDataType_(String name, int length, int scale) {
@@ -57,11 +63,20 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
         else if ("float".equals(name)) {
             type = new TypeFloat("float");
         }
+        else if ("float unsigned".equals(name)) {
+            type = new TypeFloat("float unsigned");
+        }
         else if ("double".equals(name)) {
             type = new TypeDouble("double");
         }
+        else if ("double unsigned".equals(name)) {
+            type = new TypeDouble("double unsigned");
+        }
         else if ("real".equals(name)) {
             type = new TypeDouble("double");
+        }
+        else if ("real unsigned".equals(name)) {
+            type = new TypeDouble("double unsigned");
         }
         else if ("decimal".equals(name)) {
             type = new TypeDecimal("decimal", length, scale);
@@ -127,6 +142,17 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     -128);
             type.setLength(length);
         }
+        else if ("tinyint unsigned".equals(name)) {
+            type = new TypeInteger(
+                    "tinyint unsigned", 
+                    Types.TINYINT, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER,
+                    length,
+                    255,
+                    0);
+            type.setLength(length);
+        }
         else if ("smallint".equals(name)) {
             type = new TypeInteger(
                     "smallint", 
@@ -137,6 +163,16 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     32767, 
                     -32768); 
         }
+        else if ("smallint unsigned".equals(name)) {
+            type = new TypeInteger(
+                    "smallint unsigned", 
+                    Types.SMALLINT, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    length,
+                    0, 
+                    65535); 
+        }
         else if ("mediumint".equals(name)) {
             type = new TypeInteger(
                     "mediumint", 
@@ -146,6 +182,16 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     length,
                     8388607, 
                     -8388608); 
+        }
+        else if ("mediumint unsigned".equals(name)) {
+            type = new TypeInteger(
+                    "mediumint unsigned", 
+                    Types.INTEGER, 
+                    Integer.class, 
+                    Value.TYPE_NUMBER, 
+                    length,
+                    16777215,
+                    0); 
         }
         else if ("int".equals(name) || "integer".equals(name)) {
             type = new TypeInteger(
@@ -158,9 +204,30 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
                     Integer.MIN_VALUE + 1); 
             type.setLength(length);
         }
+        else if ("int unsigned".equals(name) || "integer unsigned".equals(name)) {
+            type = new TypeInteger(
+                    "int unsigned", 
+                    Types.BIGINT, 
+                    Long.class, 
+                    Value.TYPE_NUMBER, 
+                    length,
+                    4294967295l,
+                    0); 
+            type.setLength(length);
+        }
         else if ("bigint".equals(name)) {
             type = new TypeInteger(
                     "bigint", 
+                    Types.BIGINT, 
+                    Long.class, 
+                    Value.TYPE_NUMBER, 
+                    length,
+                    Long.MAX_VALUE, 
+                    Long.MIN_VALUE + 1); 
+        }
+        else if ("bigint unsigned".equals(name)) {
+            type = new TypeInteger(
+                    "bigint unsigned", 
                     Types.BIGINT, 
                     Long.class, 
                     Value.TYPE_NUMBER, 

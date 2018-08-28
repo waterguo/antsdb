@@ -56,6 +56,9 @@ class Utils {
     }
 
     static String getIdentifier(IdentifierContext id) {
+        if (id == null) {
+            return null;
+        }
         String s = id.getText();
         if (id.BACKTICK_QUOTED_IDENTIFIER() != null) {
             return s.substring(1, s.length() - 1);
@@ -169,6 +172,9 @@ class Utils {
         }
         else if (rule.enum_type() != null) {
             typeName = rule.enum_type().any_name().getText();
+        }
+        if (rule.K_UNSIGNED() != null) {
+            typeName += " unsigned";
         }
         return fac.newDataType(typeName, length, scale);
     }

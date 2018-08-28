@@ -60,6 +60,7 @@ sql_stmt
  | show_grants
  | show_index_stmt
  | show_privileges
+ | show_procedure
  | show_processlist
  | show_status
  | show_table_status_stmt
@@ -133,7 +134,7 @@ column_def_list
  ;
  
 alter_table_add_constraint
- : K_ADD (K_CONSTRAINT any_name)? (alter_table_add_constraint_fk | alter_table_add_constraint_pk)
+ : K_ADD (K_CONSTRAINT identifier)? (alter_table_add_constraint_fk | alter_table_add_constraint_pk)
  ;
 
 alter_table_add_constraint_fk
@@ -229,7 +230,7 @@ create_def
  ;
  
 column_def
- : column_name data_type K_UNSIGNED? K_SIGNED? K_BINARY? K_ZEROFILL? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)?
+ : column_name data_type K_BINARY? K_ZEROFILL? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)?
    (K_AFTER identifier)? 
    (K_COMMENT (STRING_LITERAL | DOUBLE_QUOTED_LITERAL))? 
  ;
@@ -239,10 +240,10 @@ colmn_name
  ;
 
 data_type
- : data_type_nothing
+ : (data_type_nothing
  | data_type_length
  | data_type_length_scale
- | enum_type
+ | enum_type) (K_UNSIGNED | K_SIGNED)? 
  ;
  
 data_type_nothing
@@ -534,7 +535,7 @@ join_constraint
  ;
 
 show_charset
- : K_SHOW K_CHARSET
+ : K_SHOW (K_CHARSET | K_CHARACTER K_SET)
  ;
  
 show_collation
@@ -556,7 +557,11 @@ show_grants
 show_privileges
  : K_SHOW K_PRIVILEGES
  ;
-  
+
+show_procedure
+ : K_SHOW K_PROCEDURE K_STATUS ( K_LIKE string_value )? where_clause? 
+ ;
+   
 show_processlist
  : K_SHOW K_FULL? K_PROCESSLIST
  ;
@@ -700,7 +705,7 @@ expr
  | expr_parenthesis
  | expr_select 
  | expr '||' expr
- | expr ( '*' | '/' | '%' ) expr
+ | expr ( '*' | '/' | '%' | K_MOD) expr
  | expr ( '+' | '-' ) expr
  | expr ( '<<' | '>>' | '&' | '|' ) expr
  | expr ( '<' | '<=' | '>' | '>=' ) expr
@@ -756,9 +761,13 @@ bind_parameter
  ;
  
 expr_cast
- : K_CAST '(' expr  K_AS data_type ')'
+ : K_CAST '(' expr  K_AS expr_cast_data_type ')' ?
  ;
- 
+
+expr_cast_data_type
+ : (K_SIGNED | K_UNSIGNED) ? any_name? ('(' signed_number (',' signed_number )* ')')?
+ ;
+  
 expr_function
  : function_name '(' (expr_function_parameters | expr_function_star_parameter | group_concat_parameter)? ')'
  ;
@@ -838,7 +847,7 @@ table_alias
  ;
 
 function_name
- : any_name | K_LEFT | K_IF
+ : any_name | K_LEFT | K_IF | K_MOD
  ;
 
 any_name
@@ -850,7 +859,7 @@ name
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
  | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
- | K_ZEROFILL
+ | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION
  ;
  
 identifier
@@ -1042,6 +1051,7 @@ K_LOCAL : L O C A L;
 K_LOCK : L O C K;
 K_MASTER : M A S T E R;
 K_MATCH : M A T C H;
+K_MOD : M O D;
 K_MODE : M O D E;
 K_MODIFY : M O D I F Y;
 K_NAMES : N A M E S;
@@ -1062,6 +1072,7 @@ K_PLAN : P L A N;
 K_PRAGMA : P R A G M A;
 K_PRIMARY : P R I M A R Y;
 K_PRIVILEGES : P R I V I L E G E S;
+K_PROCEDURE : P R O C E D U R E;
 K_PROCESSLIST : P R O C E S S L I S T;
 K_PROFILE : P R O F I L E;
 K_QUERY : Q U E R Y;

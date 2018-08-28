@@ -43,9 +43,10 @@ public class FuncAvg extends Function {
             data = init(ctx);
         }
         if (Record.isGroupEnd(pRecord)) {
-            data.sum = 0;
             this.expr.eval(ctx, heap, params, pRecord);
             double avg = (data.count == 0) ? 0 : data.sum/data.count;
+            data.sum = 0;
+            data.count = 0;
             return Float8.allocSet(heap, avg);
         }
         long addrValue = this.expr.eval(ctx, heap, params, pRecord);
@@ -66,7 +67,7 @@ public class FuncAvg extends Function {
 
     @Override
     public DataType getReturnType() {
-        return DataType.doubleType();
+        return DataType.number();
     }
 
     @Override
