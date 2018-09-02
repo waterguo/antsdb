@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql.vdm;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.Orca;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 public class CreateTable extends Statement {
@@ -35,6 +36,9 @@ public class CreateTable extends Statement {
     public Object run(VdmContext ctx, Parameters params) {
         Humpback humpback = ctx.getOrca().getHumpback();
         String ns = Checks.namespaceExist(ctx.getOrca(), this.tableName.getNamespace());
+        if (ns.equalsIgnoreCase(Orca.SYSNS)) {
+            throw new OrcaException("creating table in system database {} is not allowed", ns);
+        }
         Transaction trx = ctx.getTransaction();
         
         // create metadata

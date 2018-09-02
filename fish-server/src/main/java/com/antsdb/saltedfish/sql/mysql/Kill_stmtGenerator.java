@@ -13,8 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
-import org.apache.directory.api.util.exception.NotImplementedException;
-
 import com.antsdb.saltedfish.lexer.MysqlParser.Kill_stmtContext;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
@@ -30,10 +28,6 @@ public class Kill_stmtGenerator extends Generator<Kill_stmtContext> {
 
     @Override
     public Instruction gen(GeneratorContext ctx, Kill_stmtContext rule) throws OrcaException {
-        boolean isQuery = rule.K_QUERY() != null;
-        if (isQuery) {
-            throw new NotImplementedException();
-        }
         int sessionId = Integer.parseInt(rule.number_value().getText());
         return new KillSession(sessionId);
     }

@@ -497,6 +497,11 @@ public class Planner {
 
     private CursorMaker buildJoin(Link path) {
         if (path.previous == null) {
+            if (path.join != null) {
+                // need to apply the join conditions when there is no join
+                // @see TestPlanner.testMultipleInSelect
+                path.maker = new Filter(path.maker, path.join, this.ctx.getNextMakerId());
+            }
             return path.maker;
         }
         CursorMaker makerLeft = buildJoin(path.previous);
@@ -571,18 +576,23 @@ public class Planner {
         return (result != null) ? result : link;
     }
 
+    /**
+     * build the expression that can't be used at table level
+     * @see TestPlanner.
+     * @param previous
+     * @param link
+     * @param filters
+     */
     private void buildNodeJoinConditions(Link previous, Link link, List<ColumnFilter> filters) {
-        if (previous != null) {
-            for (ColumnFilter i : filters) {
-                if (i.isConstant) {
-                    continue;
-                }
-                if (link.consumed.contains(i)) {
-                    continue;
-                }
-                if (checkColumnReference(previous, link.to, i.operand)) {
-                    link.join = buildAnd(link.join, i.source);
-                }
+        for (ColumnFilter i : filters) {
+            if (i.isConstant) {
+                continue;
+            }
+            if (link.consumed.contains(i)) {
+                continue;
+            }
+            if (checkColumnReference(previous, link.to, i.operand)) {
+                link.join = buildAnd(link.join, i.source);
             }
         }
     }
@@ -764,20 +774,25 @@ public class Planner {
 
     Link buildUnion(List<Link> union) {
         Link result = null;
-        if (union.size() == 1) {
-            result = union.get(0);
-        }
-        else {
-            for (Link i:union) {
-                if (result == null) {
-                    result = i;
+        for (Link i:union) {
+            if (result == null) {
+                result = i;
+            }
+            else {
+                Link merge = new Link(i.to);
+                merge.isUnion = true;
+                Link x = result;
+                Link y = i;
+                // we cant union join conditions. if there is any, create a filter
+                // @see TestTopkaQueries.testSlowQuery2()
+                if (x.join != null) {
+                    x.maker = new Filter(x.maker, x.join, ctx.getNextMakerId());
                 }
-                else {
-                    Link merge = new Link(i.to);
-                    merge.isUnion = true;
-                    merge.maker = new Union(result.maker, i.maker, false, ctx.getNextMakerId());
-                    result = merge;
+                if (y.join != null) {
+                    y.maker = new Filter(y.maker, y.join, ctx.getNextMakerId());
                 }
+                merge.maker = new Union(x.maker, y.maker, false, ctx.getNextMakerId());
+                result = merge;
             }
         }
         return result;
