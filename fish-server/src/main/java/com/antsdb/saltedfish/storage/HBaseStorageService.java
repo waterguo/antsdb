@@ -99,7 +99,7 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         this.cp.updateHBase();
         
         // HBase connection
-            this.hbaseConnection.close();
+        this.hbaseConnection.close();
         this.hbaseConfig.clear();
         this.hbaseConnection = null;
         
@@ -176,19 +176,22 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         return result;
     }
 
-    static Configuration getHBaseConfig(ConfigService config) {
+    public static Configuration getHBaseConfig(ConfigService config) {
         Configuration result = HBaseConfiguration.create();
         if (config.getHBaseConf() != null) {
             Path path = new Path(config.getHBaseConf());
             result.addResource(path);
         }
-        else {
+        else if (config.getProperty("hbase.zookeeper.quorum", null) != null) {
             for (Map.Entry<Object, Object> i:config.getProperties().entrySet()) {
                 String key = (String)i.getKey();
                 if (key.startsWith("hbase.") || key.startsWith("zookeeper.")) {
                     result.set(key, (String)i.getValue());
                 }
             }
+        }
+        else {
+            throw new OrcaHBaseException("quorum is not set");
         }
         return result;
     }

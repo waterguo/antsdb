@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.antsdb</groupId>
 		<artifactId>fish-root</artifactId>
-		<version>18.09.02</version>
+		<version>18.09.02-beyond</version>
 	</parent>
 
 	<modelVersion>4.0.0</modelVersion>
@@ -50,6 +50,13 @@
 						<program>
 							<id>hbase-util</id>
 							<mainClass>com.antsdb.saltedfish.storage.HBaseUtilMain</mainClass>
+						</program>
+						<program>
+							<id>antsdb-check</id>
+							<mainClass>com.antsdb.saltedfish.nosql.HumpbackStorageCheckMain</mainClass>
+							<commandLineArguments>
+								<commandLineArgument>$BASEDIR</commandLineArgument>
+							</commandLineArguments>
 						</program>
 						<program>
 							<id>hbase-relink</id>
