@@ -18,7 +18,7 @@ import com.antsdb.saltedfish.server.mysql.replication.MysqlSlave;
 public class StartSlave extends Instruction {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	MysqlSlave.start();
+        MysqlSlave.start();
         return null;
     }
 }

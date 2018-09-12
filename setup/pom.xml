@@ -78,9 +78,6 @@
 							<jvmSettings>
 								<initialMemorySize>1024</initialMemorySize>
 								<maxMemorySize>4096</maxMemorySize>
-								<extraArguments>
-								    <extraArgument>-XX:+PerfDisableSharedMem</extraArgument>
-								</extraArguments>
 							</jvmSettings>
 							<platforms>
 								<platform>jsw</platform>

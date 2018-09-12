@@ -11,24 +11,23 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.sql.meta;
+package com.antsdb.saltedfish.sql.mysql;
 
-public final class TableId {
-    public static final int SYSSEQUENCE = 0x50;
-    public static final int SYSTABLE = 0x51;
-    public static final int SYSCOLUMN = 0x52;
-    public static final int SYSRULE = 0x54;
-    public static final int SYSUSER = 0x55;
-    public static final int MAX = 0xff;
-            
-    public static int valueOf(String name) {
-        switch (name) {
-        case "SYSSEQUENCE": return SYSSEQUENCE;
-        case "SYSTABLE": return SYSTABLE;
-        case "SYSCOLUMN": return SYSCOLUMN;
-        case "SYSRULE": return SYSRULE;
-        default:
-            throw new IllegalArgumentException(name);
-        }
+import com.antsdb.saltedfish.lexer.MysqlParser.Show_master_statusContext;
+import com.antsdb.saltedfish.sql.Generator;
+import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.ShowMasterStatus;
+
+/**
+ * 
+ * @author *-xguo0<@
+ */
+public class Show_master_statusGenerator extends Generator<Show_master_statusContext> {
+
+    @Override
+    public Instruction gen(GeneratorContext ctx, Show_master_statusContext rule) throws OrcaException {
+        return new ShowMasterStatus();
     }
 }

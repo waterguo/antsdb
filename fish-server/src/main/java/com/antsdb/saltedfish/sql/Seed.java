@@ -14,7 +14,6 @@
 package com.antsdb.saltedfish.sql;
 
 import static com.antsdb.saltedfish.sql.OrcaConstant.TABLEID_SYSCOLUMN;
-import static com.antsdb.saltedfish.sql.OrcaConstant.TABLEID_SYSPARAM;
 import static com.antsdb.saltedfish.sql.OrcaConstant.TABLEID_SYSRULE;
 import static com.antsdb.saltedfish.sql.OrcaConstant.TABLEID_SYSSEQUENCE;
 import static com.antsdb.saltedfish.sql.OrcaConstant.TABLEID_SYSTABLE;
@@ -25,14 +24,10 @@ import java.util.Random;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.nosql.TableType;
-import com.antsdb.saltedfish.sql.meta.ColumnId;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.SequenceMeta;
-import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -59,7 +54,6 @@ class Seed {
         createSystemTable(TABLEID_SYSSEQUENCE);
         createSystemTable(TABLEID_SYSTABLE);
         createSystemTable(TABLEID_SYSCOLUMN);
-        createSystemTable(TABLEID_SYSPARAM);
         createSystemTable(TABLEID_SYSRULE);
         createSystemTable(TABLEID_SYSUSER);
         
@@ -93,16 +87,12 @@ class Seed {
     }
     
     private void setConfig(String key, String value) {
-        key = key.toLowerCase();
-        GTable sysparam = this.humpback.getTable(TABLEID_SYSPARAM);
-        if (sysparam.get(0, Long.MAX_VALUE, KeyMaker.make(key)) != 0) {
+        if (this.humpback.getConfig(key) != null) {
             return;
         }
+        key = key.toLowerCase();
         notifyUpgrade();
-        SlowRow row = new SlowRow(key);
-        row.set(ColumnId.sysparam_name.getId(), key);
-        row.set(ColumnId.sysparam_value.getId(), value);
-        sysparam.put(1, row, 0);
+        this.humpback.setConfig(key, value);
     }
 
     private void createSystemTable(int tableId) {

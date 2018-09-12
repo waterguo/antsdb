@@ -87,7 +87,7 @@ public class Orca {
     private SqlDialect dialect;
     private SessionSweeper sessionSweeper;
     private ScheduledFuture<?> recyclerFuture;
-    private Replicator replicator;
+    private Replicator<Replicable> replicator;
     private Session sysdefault;
     SystemParameters config;
     ConcurrentLinkedQueue<DeadSession> deadSessions = new ConcurrentLinkedQueue<>();
@@ -202,7 +202,7 @@ public class Orca {
         if (this.humpback.getStorageEngine().supportReplication()) {
             getHBaseStorageService().setMetaService(this.metaService);
             Replicable replicable = (Replicable)this.humpback.getStorageEngine();
-            this.replicator = new Replicator("replicator", this.humpback, replicable);
+            this.replicator = new Replicator<>("replicator", this.humpback, replicable);
             this.replicator.start();
         }
 
@@ -215,7 +215,6 @@ public class Orca {
         registerSystemView(SYSNS, TABLENAME_SYSSEQUENCE, new SysSequence(this));
         registerSystemView(SYSNS, TABLENAME_SYSTABLE, new SysTable(this));
         registerSystemView(SYSNS, TABLENAME_SYSCOLUMN, new SysColumn(this));
-        registerSystemView(SYSNS, TABLENAME_SYSPARAM, new SysParam(this));
         registerSystemView(SYSNS, TABLENAME_SYSRULE, new SysRule(this));
         registerSystemView(SYSNS, TABLENAME_SYSUSER, new SysUser());
 
@@ -238,6 +237,7 @@ public class Orca {
         registerSystemView(SYSNS, "x1", new SystemViewHumpbackNamespace(this));
         registerSystemView(SYSNS, "x2", new SystemViewTableStats(this));
         registerSystemView(SYSNS, "x3", new SystemViewHumpbackColumns(this));
+        registerSystemView(SYSNS, "x4", new SystemViewHumpbackConfig(this));
         registerSystemView(SYSNS, "SLOW_QUERIES", new SlowQueries());
     }
 
@@ -282,9 +282,6 @@ public class Orca {
         }
         if (this.humpback.getTable(TABLEID_SYSCOLUMN) == null) {
             throw new OrcaException("system table not found: " + TABLENAME_SYSCOLUMN);
-        }
-        if (this.humpback.getTable(TABLEID_SYSPARAM) == null) {
-            throw new OrcaException("system table not found: " + TABLENAME_SYSPARAM);
         }
         if (this.humpback.getTable(TABLEID_SYSSEQUENCE) == null) {
             throw new OrcaException("system table not found: " + TABLENAME_SYSSEQUENCE);
@@ -597,7 +594,7 @@ public class Orca {
         return null;
     }
     
-    public Replicator getReplicator() {
+    public Replicator<Replicable> getReplicator() {
         return this.replicator;
     }
     
@@ -614,5 +611,4 @@ public class Orca {
             return new NoPasswordAuthPlugin(this);
         }
     }
-
 }

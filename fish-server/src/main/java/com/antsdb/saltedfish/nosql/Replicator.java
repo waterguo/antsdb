@@ -45,13 +45,13 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author *-xguo0<@
  */
-public class Replicator extends Thread {
+public class Replicator<E extends Replicable> extends Thread {
     static final int RETRY_WAIT = 20 * 1000;
     
     private Logger log;
     private Humpback humpback;
     private Gobbler gobbler;
-    private Replicable replicable;
+    private E replicable;
     private ReplicationHandler replicationHandler;
     private Relay relay;
     private volatile boolean isPaused = false;
@@ -185,7 +185,7 @@ public class Replicator extends Thread {
         }
     }
     
-    public Replicator(String name, Humpback humpback, Replicable replicable) {
+    public Replicator(String name, Humpback humpback, E replicable) {
         this.log = LoggerFactory.getLogger(UberUtil.getThisClassName() + "." + name);
         this.humpback = humpback;
         this.replicable = replicable;
@@ -350,5 +350,9 @@ public class Replicator extends Thread {
     
     public long getLogPointer() {
         return this.replicable.getReplicateLogPointer();
+    }
+    
+    public E getReplicable() {
+        return this.replicable;
     }
 }

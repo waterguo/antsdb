@@ -959,4 +959,23 @@ public final class PacketEncoder {
         return result;
     }
 
+    /*
+     * this ony works in mariadb
+     * https://mariadb.com/kb/en/library/err_packet/
+     */
+    public void writeProgressBody(PacketWriter buffer, String result, Session session) {
+        // header
+        buffer.writeByte((byte) 0xff);
+        // error code
+        buffer.writeUB2(0xffff);
+        // stage
+        buffer.writeByte((byte)1);
+        // max stage
+        buffer.writeByte((byte)11);
+        // progress
+        buffer.writeLongInt(1);
+        // message
+        buffer.writeLenString(result, Charsets.UTF_8);
+   }
+
 }

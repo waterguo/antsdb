@@ -28,9 +28,8 @@ public class StopSlave extends Instruction {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	// TODO stop mysql slave clinet thread
-    	MysqlSlave.stop();
-    	
+        	// TODO stop mysql slave clinet thread
+        	MysqlSlave.stop();
         if (this.next != null) {
             return this.next.run(ctx, params, pMaster);
         }

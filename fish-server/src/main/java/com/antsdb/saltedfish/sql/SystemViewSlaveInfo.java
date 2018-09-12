@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql;
 import java.util.Map;
 
 import com.antsdb.saltedfish.nosql.Replicator;
+import com.antsdb.saltedfish.slave.SlaveReplicator;
 
 /**
  * 
@@ -31,7 +32,7 @@ public class SystemViewSlaveInfo extends PropertyBasedView {
 
     @Override
     public Map<String, Object> getProperties() {
-        Replicator replicator = this.orca.getHumpback().getSlaveReplicator();
+        Replicator<SlaveReplicator> replicator = this.orca.getHumpback().getSlaveReplicator();
         if (replicator != null) {
             return replicator.getSummary();
         }

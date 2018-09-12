@@ -38,7 +38,7 @@ public class ConfigService {
 
     public int getPort() {
         try {
-            return Integer.valueOf(props.getProperty("fish.port"));
+            return Integer.valueOf(props.getProperty("fish.port").trim());
         }
         catch (Exception x) {
             return 3306;
@@ -46,7 +46,7 @@ public class ConfigService {
     }
 
     public String getAuthPlugin() {
-    	return props.getProperty("fish.auth_plugin");
+    	    return props.getProperty("fish.auth_plugin");
     }
     
     public boolean isKerberosEnable() {

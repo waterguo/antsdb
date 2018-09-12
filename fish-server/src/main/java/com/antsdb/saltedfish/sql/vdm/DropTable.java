@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Humpback;
@@ -46,6 +47,9 @@ public class DropTable extends Statement {
         List<ObjectName> failTbls = new ArrayList<>();
         for (ObjectName tblName: tableNames)
         {
+            if (StringUtils.isEmpty(tblName.getNamespace())) {
+                throw new OrcaException("No database selected");
+            }
             TableMeta table = ctx.getOrca().getMetaService().getTable(ctx.getTransaction(), tblName);
             if (table == null) {
                 if (!this.ifExist) {

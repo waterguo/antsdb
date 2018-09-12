@@ -132,6 +132,14 @@ class Helper {
                             null,
                             mysession.session));
         }
+        else if (result instanceof String) {
+            mysession.encoder.writePacket(
+                    out,
+                    (packet) -> mysession.encoder.writeProgressBody(
+                            packet, 
+                            (String)result,
+                            mysession.session));
+        }
         else {
             mysession.out.write(PacketEncoder.OK_PACKET);
         }

@@ -29,7 +29,6 @@ public class OrcaConstant {
     public static final int TABLEID_SYSSEQUENCE = TableId.SYSSEQUENCE;
     public static final int TABLEID_SYSTABLE = TableId.SYSTABLE;
     public static final int TABLEID_SYSCOLUMN = TableId.SYSCOLUMN;
-    public static final int TABLEID_SYSPARAM = TableId.SYSPARAM;
     public static final int TABLEID_SYSRULE = TableId.SYSRULE;
     public static final int TABLEID_SYSUSER = TableId.SYSUSER;
 }

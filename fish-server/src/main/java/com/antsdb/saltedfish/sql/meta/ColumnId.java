@@ -67,11 +67,6 @@ public enum ColumnId {
     sysrule_on_delete(15),
     sysrule_on_update(16),
     sysrule_end_of_columns(17),
-    /* sysparam */
-    sysparam_name(1),
-    sysparam_type(2),
-    sysparam_value(3),
-    sysparam_end_of_columns(4),
     /* sysuser */
     sysuser_id(1),
     sysuser_name(2),

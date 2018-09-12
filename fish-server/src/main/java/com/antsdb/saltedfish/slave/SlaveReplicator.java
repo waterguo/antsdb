@@ -57,6 +57,12 @@ import com.antsdb.saltedfish.nosql.TableType;
 public class SlaveReplicator extends ReplicationHandler implements Replicable {
     private static Logger _log = UberUtil.getThisLogger();
     
+    public static final String KEY_HOST = "humpback.slave.host";
+    public static final String KEY_PORT = "humpback.slave.port";
+    public static final String KEY_USER = "humpback.slave.user";
+    public static final String KEY_PASSWORD = "humpback.slave.password";
+    public static final String KEY_ENABLED = "humpback.slave.enabled";
+    
     private Connection conn;
     private long sp;
     private Humpback humpback;
@@ -89,13 +95,16 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     
     private void connect() throws Exception {
         this.conn = getConnection();
+        this.handlers.clear();
     }
     
     Connection getConnection() throws Exception {
+        String host = this.humpback.getConfig(KEY_HOST);
+        String port = this.humpback.getConfig(KEY_PORT);
+        String user = this.humpback.getConfig(KEY_USER);
+        String password = this.humpback.getConfig(KEY_PASSWORD);
         Class.forName("com.mysql.jdbc.Driver");
-        this.url = this.humpback.getConfig().getSlaveUrl();
-        String user = this.humpback.getConfig().getSlaveUser();
-        String password = this.humpback.getConfig().getSlavePassword();
+        this.url = String.format("jdbc:mysql://%s:%s", host, port);
         Connection result = DriverManager.getConnection(url, user, password);
         // we don't want mysql AUTO_INCREMENT during replication
         DbUtils.execute(result, "SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'");
@@ -129,6 +138,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
 
     @Override
     public void flush() throws Exception {
+        reconnectIfClosed();
         String sql = "REPLACE antsdb.antsdb_slave VALUES ('sp', ?)";
         DbUtils.executeUpdate(this.conn, sql, this.sp);
         this.commitedLp = this.sp;
@@ -257,6 +267,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     public void message(MessageEntry entry) throws Exception {
         String msg = entry.getMessage();
         if (msg.startsWith("!!")) {
+            reconnectIfClosed();
             String sql = msg.substring(2);
             int indexOfSemicolon = sql.indexOf(';');
             if (indexOfSemicolon > 0) {
@@ -278,15 +289,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     }
     
     private CudHandler getHandler(int tableId) throws Exception {
-        if (this.conn == null) {
-            this.conn = getConnection();
-            _log.info("connection to {} is resumed", this.url);
-        }
-        if (!DbUtils.ping(this.conn)) {
-            _log.info("connection to {} is lost", this.url);
-            this.conn = null;
-            connect();
-        }
+        reconnectIfClosed();
         CudHandler result = this.handlers.get(tableId);
         if (result == null) {
             result = createHandler(tableId);
@@ -328,4 +331,14 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         return this.commitedLp;
     }
     
+    private void reconnectIfClosed() throws Exception {
+        if (this.conn == null) {
+            connect();
+            _log.info("connection to {} is resumed", this.url);
+        }
+        else if (this.conn.isClosed()) {
+            connect();
+            _log.info("connection to {} is resumed", this.url);
+        }
+    }
 }

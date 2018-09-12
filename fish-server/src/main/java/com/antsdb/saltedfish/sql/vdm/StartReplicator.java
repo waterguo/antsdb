@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.Replicator;
 
 /**
@@ -23,7 +24,7 @@ public class StartReplicator extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        Replicator rep = ctx.getOrca().getReplicator();
+        Replicator<Replicable> rep = ctx.getOrca().getReplicator();
         rep.pause(false);
         return null;
     }

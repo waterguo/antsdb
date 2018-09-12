@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,7 @@ public final class Humpback {
     public final static int SYSNS_TABLE_ID = 1;
     public final static int SYSSTATS_TABLE_ID = 2;
     public final static int SYSCOLUMN_TABLE_ID = 3;
+    public final static int SYSCONFIG_TABLE_ID = 4;
     public final static int SYSTABLE_MAX_ID = 0xf;
     public final static String SYS_NAMESAPCE = "ANTSDB";
 
@@ -90,10 +92,12 @@ public final class Humpback {
     GTable sysns;
     GTable sysstats;
     GTable syscolumn;
+    GTable sysconfig;
     SysMetaRow sysmetaTableInfo;
     SysMetaRow sysnsTableInfo;
     SysMetaRow sysstatsTableInfo;
     SysMetaRow syscolumnTableInfo;
+    SysMetaRow sysconfigTableInfo;
     Gobbler gobbler;
     SpaceManager spaceman;
     HBaseStorageService hbaseService = null;
@@ -114,10 +118,8 @@ public final class Humpback {
     private ScheduledFuture<?> cacheEvictorFuture;
     private Set<HumpbackSession> sessions = ConcurrentHashMap.newKeySet();
     private int tabletSize = 64 * 1024 * 1024;
-    private Statistician statistician;
-    private Replicator statisticianThread;
-    private SlaveReplicator slave;
-    private Replicator slaveThread;
+    private Replicator<Statistician> statisticianThread;
+    private Replicator<SlaveReplicator> slaveThread;
 
     class ShutdownThread extends Thread {
         @Override
@@ -218,12 +220,6 @@ public final class Humpback {
         // krb login
         KerberosHelper.initialize(this.config.getKrbRealm(), this.config.getKrbKdc(), this.config.getKrbJaasConf());
 
-        // slave replicator
-        
-        if (isMutable && this.config.isSlaveEnabled()) {
-            this.slave = new SlaveReplicator(this);
-        }
-        
         // storage engine
 
         initStorage();
@@ -232,9 +228,9 @@ public final class Humpback {
 
         initSysmeta(isRecovering);
         
-        // load data
+        // initialize tables
 
-        loadData(isRecovering);
+        initTables(isRecovering);
 
         // data recovery
 
@@ -242,16 +238,16 @@ public final class Humpback {
             recover();
         }
 
+        // initialize name spaces. this step must be executed after recover()
+        
+        initNamespaces();
+        
         // marking database is open
 
         if (this.isMutable) {
             this.cp.setDatabaseOpen(true);
         }
 
-        // misc.
-        
-        this.statistician = new Statistician(this);
-        
         // validate
 
         if (this.isMutable) {
@@ -302,16 +298,8 @@ public final class Humpback {
         
         // start statistician
         
-        this.statistician = new Statistician(this);
-        this.statisticianThread = new Replicator("statistician", this, this.statistician);
+        this.statisticianThread = new Replicator<>("statistician", this, new Statistician(this));
         this.statisticianThread.start();
-        
-        // start slave replicator
-        
-        if (this.slave != null) {
-            this.slaveThread = new Replicator("slave", this, this.slave);
-            this.slaveThread.start();
-        }
         
         // start synchronizer
         
@@ -328,16 +316,7 @@ public final class Humpback {
         // start delayed jobs
         
         this.jobman.schedule(10, TimeUnit.SECONDS, () -> {
-            if (this.isClosed) {
-                return;
-            }
-            this.carbonfreezerFuture = this.jobman.scheduleWithFixedDelay(this.carbonfreezer, 2, TimeUnit.MINUTES);
-            if (this.config.isSynchronizerEnabled() && (this.synchronizer != null)) {
-                this.synchronizer.start();
-            }
-            if (this.cacheEvictor != null) {
-                this.cacheEvictorFuture = this.jobman.scheduleWithFixedDelay(this.cacheEvictor, 10, TimeUnit.SECONDS);
-            }
+            initDelayedJobs();
         });
         
         // start warmer
@@ -357,29 +336,53 @@ public final class Humpback {
             Warmer warmer = new Warmer(minke, warmSize);
             this.jobman.schedule(1, TimeUnit.SECONDS, warmer);
         }
-        
     }
 
+    private void initDelayedJobs() {
+        if (this.isClosed) {
+            return;
+        }
+        this.carbonfreezerFuture = this.jobman.scheduleWithFixedDelay(this.carbonfreezer, 2, TimeUnit.MINUTES);
+        if (this.config.isSynchronizerEnabled() && (this.synchronizer != null)) {
+            this.synchronizer.start();
+        }
+        if (this.cacheEvictor != null) {
+            this.cacheEvictorFuture = this.jobman.scheduleWithFixedDelay(this.cacheEvictor, 10, TimeUnit.SECONDS);
+        }
+        if ("true".equals(getConfig(SlaveReplicator.KEY_ENABLED))) {
+            try {
+                startSlave();
+            }
+            catch (Exception x) {
+                _log.error("unable to start job", x);
+            }
+        }
+    }
+    
     private void initSysmeta(boolean isRecovering) throws IOException {
         this.sysmetaTableInfo = createMetaRow(SYSMETA_TABLE_ID);
         this.sysnsTableInfo = createMetaRow(SYSNS_TABLE_ID);
         this.sysstatsTableInfo = createMetaRow(SYSSTATS_TABLE_ID);
         this.syscolumnTableInfo = createMetaRow(SYSCOLUMN_TABLE_ID);
+        this.sysconfigTableInfo = createMetaRow(SYSCONFIG_TABLE_ID);
 
         if (this.isMutable) {
             seedCreateStorgeTable(this.sysmetaTableInfo);
             seedCreateStorgeTable(this.sysnsTableInfo);
             seedCreateStorgeTable(this.sysstatsTableInfo);
             seedCreateStorgeTable(this.syscolumnTableInfo);
+            seedCreateStorgeTable(this.sysconfigTableInfo);
         }
         this.storage.syncTable(this.sysmetaTableInfo);
         this.storage.syncTable(this.sysnsTableInfo);
         this.storage.syncTable(this.sysstatsTableInfo);
         this.storage.syncTable(this.syscolumnTableInfo);
+        this.storage.syncTable(this.sysconfigTableInfo);
         this.sysmeta = createGtable(this.sysmetaTableInfo, isRecovering);
         this.sysns = createGtable(this.sysnsTableInfo, isRecovering);
         this.sysstats = createGtable(this.sysstatsTableInfo, isRecovering);
         this.syscolumn = createGtable(this.syscolumnTableInfo, isRecovering);
+        this.sysconfig = createGtable(this.sysconfigTableInfo, isRecovering);
     }
 
     private GTable createGtable(SysMetaRow meta, boolean isRecovering) throws IOException {
@@ -406,9 +409,7 @@ public final class Humpback {
         return row;
     }
     
-    private void loadData(boolean isRecovering) throws Exception {
-        // load name spaces
-
+    private void initNamespaces() throws Exception {
         this.namespaces.put(SYS_NAMESAPCE.toLowerCase(), SYS_NAMESAPCE);
         for (RowIterator i = this.sysns.scan(1, 1, true);i.next();) {
             SysNamespaceRow row = new SysNamespaceRow(i.getRow());
@@ -420,9 +421,9 @@ public final class Humpback {
                 }
             }
         }
-        
-        // load tables
-
+    }
+    
+    private void initTables(boolean isRecovering) throws Exception {
         for (RowIterator i = this.sysmeta.scan(1, 1, true);i.next();) {
             SysMetaRow row = new SysMetaRow(SlowRow.from(i.getRow()));
             this.storage.syncTable(row);
@@ -431,9 +432,6 @@ public final class Humpback {
             }
             int id = row.getTableId();
             String ns = row.getNamespace();
-            if (!this.namespaces.containsKey(ns.toLowerCase())) {
-                throw new HumpbackException("namespace is not found: " + ns);
-            }
             this.storage.syncTable(row);
             GTable gtable = new GTable(this, ns, id, this.tabletSize, row.getType());
             gtable.setMutable(this.isMutable);
@@ -470,11 +468,13 @@ public final class Humpback {
             if (this.jobman != null) {
                 this.jobman.close();
             }
+            if (this.slaveThread != null) {
+                this.slaveThread.close();
+            }
         }
         catch (Exception e) {
             _log.warn("errors shutting down carbonfreezer", e);
         }
-
         // close all jobs
 
         this.jobman.close();
@@ -876,15 +876,15 @@ public final class Humpback {
             // system not initialized
             return;
         }
-        long lp = this.statistician.getReplicateLogPointer();
+        long lp = getStatistician().getReplicateLogPointer();
         if (this.storage.supportReplication()) {
             lp = Math.min(lp, ((Replicable)this.storage).getReplicateLogPointer());
         }
         if (lp == 0) {
             return;
         }
-        if (this.slave != null) {
-            lp = Math.min(lp, this.slave.getReplicateLogPointer());
+        if (getSlave() != null) {
+            lp = Math.min(lp, getSlave().getReplicateLogPointer());
         }
         TrxRecoverer recoverer = new TrxRecoverer();
         recoverer.run(this.trxMan, this.gobbler, lp);
@@ -1014,6 +1014,9 @@ public final class Humpback {
         if (tableId == this.syscolumnTableInfo.getTableId()) {
             return this.syscolumnTableInfo;
         }
+        if (tableId == this.sysconfigTableInfo.getTableId()) {
+            return this.sysconfigTableInfo;
+        }
         Row row = this.sysmeta.getRow(1, 1, KeyMaker.make(tableId));
         if (row == null) {
             return null;
@@ -1065,10 +1068,10 @@ public final class Humpback {
         if (storageSpan != null) {
             result = Math.min(result, storageSpan.y);
         }
-        if (this.slave != null) {
-            result = Math.min(result, this.slave.getCommittedLogPointer());
+        if (getSlave() != null) {
+            result = Math.min(result, getSlave().getCommittedLogPointer());
         }
-        result = Math.min(result, this.statistician.getReplicateLogPointer());
+        result = Math.min(result, getStatistician().getReplicateLogPointer());
         return result;
     }
     
@@ -1172,7 +1175,7 @@ public final class Humpback {
     }
     
     public Statistician getStatistician() {
-        return this.statistician;
+        return this.statisticianThread.getReplicable();
     }
 
     public HColumnRow addColumn(long trxid, int tableId, String name) {
@@ -1228,7 +1231,56 @@ public final class Humpback {
         return result;
     }
     
-    public Replicator getSlaveReplicator() {
+    public Replicator<SlaveReplicator> getSlaveReplicator() {
         return this.slaveThread;
+    }
+
+    public void setConfig(String key, String value) {
+        SysConfigRow row = new SysConfigRow(key);
+        row.setValue(value);
+        row.row.setTrxTimestamp(this.trxMan.getNewVersion());
+        this.sysconfig.put(0, row.row, 0);
+    }
+    
+    public Map<String,String> getAllConfig() {
+        Map<String,String> result = new HashMap<>();
+        for (RowIterator i=this.sysconfig.scan(0, Integer.MAX_VALUE, true); i.next();) {
+            Row row = i.getRow();
+            SysConfigRow ii = new SysConfigRow(SlowRow.from(row));
+            result.put(ii.getKey(), ii.getVale());
+        }
+        return result;
+    }
+    
+    public String getConfig(String key) {
+        Row row = this.sysconfig.getRow(0, Long.MAX_VALUE, KeyMaker.make(key));
+        if (row == null) {
+            return null;
+        }
+        SysConfigRow result = new SysConfigRow(SlowRow.from(row));
+        return result.getVale();
+    }
+    
+    public SlaveReplicator getSlave() {
+        return this.slaveThread != null ? this.slaveThread.getReplicable() : null;
+    }
+    
+    public synchronized void startSlave() throws Exception {
+        if (this.isClosed) {
+            throw new HumpbackException("database is closed");
+        }
+        if (this.slaveThread != null) {
+            throw new HumpbackException("slave already started");
+        }
+        this.slaveThread = new Replicator<>("slave", this, new SlaveReplicator(this));
+        this.slaveThread.start();
+    }
+    
+    public synchronized void stopSlave() {
+        if (this.slaveThread == null) {
+            throw new HumpbackException("slave not started");
+        }
+        this.slaveThread.close();
+        this.slaveThread = null;
     }
 }

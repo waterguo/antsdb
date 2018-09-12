@@ -22,15 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang.StringUtils;
 
-import com.antsdb.saltedfish.nosql.GTable;
-import com.antsdb.saltedfish.nosql.Row;
-import com.antsdb.saltedfish.nosql.RowIterator;
-import com.antsdb.saltedfish.nosql.SlowRow;
-import com.antsdb.saltedfish.sql.meta.ColumnId;
-import com.antsdb.saltedfish.util.UberUtil;
-
-import static com.antsdb.saltedfish.sql.OrcaConstant.*;
-
 public class ConfigService {
     Properties props;
     Orca orca;
@@ -56,36 +47,19 @@ public class ConfigService {
         return this.params.get(key);
     }
     
-    public void set(String key, Object value) {
-        GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSPARAM);
+    public void set(String key, String value) {
+        this.orca.getHumpback().setConfig(key, value);
         if (value == null) {
-            table.delete(1, UberUtil.toUtf8(key), 1000);
             this.params.remove(key);
         }
-        String type = value.getClass().getName();
-        SlowRow row = new SlowRow(key);
-        row.set(ColumnId.sysparam_name.getId(), key);
-        row.set(ColumnId.sysparam_type.getId(), type);
-        row.set(ColumnId.sysparam_value.getId(), value.toString());
-        table.put(1, row, 0);
-        this.params.put(key, value);
+        else {
+            this.params.put(key, value);
+        }
     }
     
     void loadParams() {
-        GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSPARAM);
-        if (table == null) {
-            return;
-        }
-        
-        for (RowIterator i=table.scan(0, Integer.MAX_VALUE, true); i.next();) {
-            Row rrow = i.getRow();
-            if (rrow == null) {
-                break;
-            }
-            SlowRow row = SlowRow.from(rrow);
-            String key = (String)row.get(ColumnId.sysparam_name.getId());
-            String value = (String)row.get(ColumnId.sysparam_value.getId());
-            this.params.put(key, value);
+        for (Map.Entry<String, String> i:this.orca.getHumpback().getAllConfig().entrySet()) {
+            this.params.put(i.getKey(), i.getValue());
         }
     }
 

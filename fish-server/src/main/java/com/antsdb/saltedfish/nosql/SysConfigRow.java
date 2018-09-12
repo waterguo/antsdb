@@ -11,24 +11,41 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.sql.meta;
+package com.antsdb.saltedfish.nosql;
 
-public final class TableId {
-    public static final int SYSSEQUENCE = 0x50;
-    public static final int SYSTABLE = 0x51;
-    public static final int SYSCOLUMN = 0x52;
-    public static final int SYSRULE = 0x54;
-    public static final int SYSUSER = 0x55;
-    public static final int MAX = 0xff;
-            
-    public static int valueOf(String name) {
-        switch (name) {
-        case "SYSSEQUENCE": return SYSSEQUENCE;
-        case "SYSTABLE": return SYSTABLE;
-        case "SYSCOLUMN": return SYSCOLUMN;
-        case "SYSRULE": return SYSRULE;
-        default:
-            throw new IllegalArgumentException(name);
-        }
+/**
+ * 
+ * @author *-xguo0<@
+ */
+public class SysConfigRow {
+    final static int COLUMN_KEY = 1;
+    final static int COLUMN_VALUE = 2;
+    
+    SlowRow row;
+
+    public SysConfigRow(String key) {
+        this.row = new SlowRow(key);
+        setKey(key);
+    }
+    
+    public SysConfigRow(SlowRow row) {
+        super();
+        this.row = row;
+    }
+    
+    public String getKey() {
+        return (String)this.row.get(COLUMN_KEY);
+    }
+    
+    public void setKey(String value) {
+        this.row.set(COLUMN_KEY, value);
+    }
+    
+    public String getVale() {
+        return (String)this.row.get(COLUMN_VALUE);
+    }
+    
+    public void setValue(String value) {
+        this.row.set(COLUMN_VALUE, value);
     }
 }

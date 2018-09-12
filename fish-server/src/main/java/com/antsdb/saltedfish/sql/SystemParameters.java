@@ -26,20 +26,13 @@ import org.apache.commons.lang.StringUtils;
 import static com.antsdb.saltedfish.util.ParseUtil.*;
 import com.antsdb.saltedfish.charset.Codecs;
 import com.antsdb.saltedfish.charset.Decoder;
-import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.nosql.Row;
-import com.antsdb.saltedfish.nosql.RowIterator;
-import com.antsdb.saltedfish.nosql.SlowRow;
-import com.antsdb.saltedfish.sql.meta.ColumnId;
-import com.antsdb.saltedfish.sql.meta.TableId;
 
 /**
  * 
  * @author *-xguo0<@
  */
 public class SystemParameters {
-    private GTable sysparam;
     private SystemParameters parent;
     private Map<String, String> params = new HashMap<>();
     private Boolean autoCommit;
@@ -47,26 +40,20 @@ public class SystemParameters {
     private Boolean no_auto_value_on_zero;
     private Decoder requestDecoder;
     private Charset resultEncoder;
+    private Humpback humpback;
     
     SystemParameters(SystemParameters parent) {
         this.parent = parent;
     }
     
     SystemParameters(Humpback humpback) {
-        this.sysparam = humpback.getTable(TableId.SYSPARAM);
+        this.humpback = humpback;
         loadParams();
     }
     
     private void loadParams() {
-        for (RowIterator i=this.sysparam.scan(0, Integer.MAX_VALUE, true); i.next();) {
-            Row rrow = i.getRow();
-            if (rrow == null) {
-                break;
-            }
-            SlowRow row = SlowRow.from(rrow);
-            String key = (String)row.get(ColumnId.sysparam_name.getId());
-            String value = (String)row.get(ColumnId.sysparam_value.getId());
-            this.params.put(key, value);
+        for (Map.Entry<String, String> i:this.humpback.getAllConfig().entrySet()) {
+            this.params.put(i.getKey(), i.getValue());
         }
     }
 
@@ -86,10 +73,7 @@ public class SystemParameters {
         }
         key = key.toLowerCase();
         set(key, value);
-        SlowRow row = new SlowRow(key.toLowerCase());
-        row.set(ColumnId.sysparam_name.getId(), key);
-        row.set(ColumnId.sysparam_value.getId(), value);
-        this.sysparam.put(1, row, 0);
+        this.humpback.setConfig(key, value);
     }
     
     public void set(String key, String value) {

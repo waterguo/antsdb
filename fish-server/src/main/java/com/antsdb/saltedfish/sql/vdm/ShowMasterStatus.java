@@ -13,20 +13,34 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import com.antsdb.saltedfish.nosql.Replicable;
-import com.antsdb.saltedfish.nosql.Replicator;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class StoptReplicator extends Statement {
-
-    @Override
-    public Object run(VdmContext ctx, Parameters params) {
-        Replicator<Replicable> rep = ctx.getOrca().getReplicator();
-        rep.pause(true);
-        return null;
+public class ShowMasterStatus extends ViewMaker {
+    public static class Line {
+        public String File = "";
+        public Long Position;
+        public String Binlog_Do_DB = "";
+        public String Binlog_Ignore_DB = "";
     }
-
+    
+    public ShowMasterStatus() {
+        super(CursorUtil.toMeta(Line.class));
+    }
+    
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        List<Line> result = new ArrayList<>();
+        Line line = new Line();
+        line.Position = ctx.getHumpback().getSpaceManager().getAllocationPointer();
+        result.add(line);
+        Cursor c = CursorUtil.toCursor(getCursorMeta(), result);
+        return c;
+    }
 }

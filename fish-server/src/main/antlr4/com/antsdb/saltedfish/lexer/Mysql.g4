@@ -59,6 +59,7 @@ sql_stmt
  | show_engines
  | show_grants
  | show_index_stmt
+ | show_master_status
  | show_privileges
  | show_procedure
  | show_processlist
@@ -554,6 +555,10 @@ show_grants
  : K_SHOW K_GRANTS
  ;
  
+show_master_status
+ : K_SHOW K_MASTER K_STATUS
+ ;
+  
 show_privileges
  : K_SHOW K_PRIVILEGES
  ;
