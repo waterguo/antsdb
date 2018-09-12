@@ -37,77 +37,77 @@ import com.antsdb.saltedfish.util.CommandLineHelper;
  * @author wgu0
  */
 public abstract class FishCommandLine extends CommandLineHelper {
-	protected CommandLine cmd;
-	
-	abstract protected Options getOptions();
-	abstract protected String getName();
-	
-	static {
-		String level = System.getenv("ANTSDB_LOG_LEVEL");
-		BasicConfigurator.resetConfiguration();
-		if (level != null) {
-			BasicConfigurator.resetConfiguration();
-			BasicConfigurator.configure();
-			Logger.getRootLogger().setLevel(Level.toLevel(level));
-		}
-		else {
-			BasicConfigurator.resetConfiguration();
-			BasicConfigurator.configure(new NullAppender());
-		}
-	}
-	
-	public FishCommandLine(String[] args) throws ParseException {
-	    Options options = getOptions();
+    protected CommandLine cmd;
+    
+    abstract protected Options getOptions();
+    abstract protected String getName();
+    
+    static {
+        String level = System.getenv("ANTSDB_LOG_LEVEL");
+        BasicConfigurator.resetConfiguration();
+        if (level != null) {
+            BasicConfigurator.resetConfiguration();
+            BasicConfigurator.configure();
+            Logger.getRootLogger().setLevel(Level.toLevel(level));
+        }
+        else {
+            BasicConfigurator.resetConfiguration();
+            BasicConfigurator.configure(new NullAppender());
+        }
+    }
+    
+    public FishCommandLine(String[] args) throws ParseException {
+        Options options = getOptions();
         options.addOption("h", "help", false, "print help");
         options.addOption(null, "home", true, "antsdb home");
-		this.cmd = parse(options, args);
-	}
-	
-	public File getHome() {
-		String home = cmd.getOptionValue("home");
-		if (home == null) {
-			home = System.getenv("ANTSDB_HOME");
-		}
-		if (home == null) {
-			println("error: home directory is not specified");
-			System.exit(-1);
-		}
-		File file = new File(home);
-		if (!new File(file, "data").isDirectory()) {
-			println("error: home directory '%s' is invalid", file.getAbsolutePath());
+        this.cmd = parse(options, args);
+    }
+    
+    public File getHome() {
+        String home = cmd.getOptionValue("home");
+        if (home == null) {
+            home = System.getenv("ANTSDB_HOME");
+        }
+        if (home == null) {
+            println("error: home directory is not specified");
             System.exit(-1);
-		}
-		return file;
-	}
-	
-	public Humpback getHumpbackReadOnly() throws Exception {
-		File home = getHome();
-		if (home == null) {
-			return null;
-		}
-		Humpback humpback = new Humpback(home);
-		humpback.setMutable(false);
-		humpback.open();
-		return humpback;
-	}
-	
-	public Minke getMinke() throws Exception  {
-	    StorageEngine storage = getHumpbackReadOnly().getStorageEngine();
-	    if (storage instanceof Minke) {
-	        return (Minke)storage;
-	    }
+        }
+        File file = new File(home);
+        if (!new File(file, "data").isDirectory()) {
+            println("error: home directory '%s' is invalid", file.getAbsolutePath());
+            System.exit(-1);
+        }
+        return file;
+    }
+    
+    public Humpback getHumpbackReadOnly() throws Exception {
+        File home = getHome();
+        if (home == null) {
+            return null;
+        }
+        Humpback humpback = new Humpback(home);
+        humpback.setMutable(false);
+        humpback.open();
+        return humpback;
+    }
+    
+    public Minke getMinke() throws Exception  {
+        StorageEngine storage = getHumpbackReadOnly().getStorageEngine();
+        if (storage instanceof Minke) {
+            return (Minke)storage;
+        }
         if (storage instanceof MinkeCache) {
             return ((MinkeCache)storage).getMinke();
         }
         return null;
-	}
-	
-	/**
-	 * find the table either by name or id
-	 * @param name
-	 * @return
-	 * @throws Exception 
-	 */
+    }
+    
+    /**
+     * find the table either by name or id
+     * @param name
+     * @return
+     * @throws Exception 
+     */
     protected GTable findTable(String name) throws Exception {
         String ns = null;
         String[] words = StringUtils.split(name, '.');

@@ -27,13 +27,13 @@ import com.antsdb.saltedfish.util.BytesUtil;
  */
 public class Delete_stmt__Generator extends Generator<Delete_stmt__Context> {
 
-	@Override
-	public Instruction gen(GeneratorContext ctx, Delete_stmt__Context rule) throws OrcaException {
-		int tableId = Integer.parseInt(rule.number_value().getText());
-		String hex = rule.STRING_LITERAL().getText();
-		hex = hex.substring(1, hex.length()-1);
-		byte[] key = BytesUtil.hexToBytes(hex);
-		return new HumpbackDelete(tableId, key);
-	}
+    @Override
+    public Instruction gen(GeneratorContext ctx, Delete_stmt__Context rule) throws OrcaException {
+        int tableId = Integer.parseInt(rule.number_value().getText());
+        String hex = rule.STRING_LITERAL().getText();
+        hex = hex.substring(1, hex.length()-1);
+        byte[] key = BytesUtil.hexToBytes(hex);
+        return new HumpbackDelete(tableId, key);
+    }
 
 }

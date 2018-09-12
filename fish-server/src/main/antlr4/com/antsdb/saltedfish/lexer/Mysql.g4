@@ -346,7 +346,7 @@ create_user_stmt
  ;
   
 delete_stmt
- : K_DELETE table_name_? from_clause ( K_WHERE expr )?
+ : K_DELETE table_name_? from_clause ( K_WHERE expr )? limit_clause?
  ;
 
 drop_database_stmt: K_DROP K_DATABASE (K_IF K_EXISTS)? any_name;

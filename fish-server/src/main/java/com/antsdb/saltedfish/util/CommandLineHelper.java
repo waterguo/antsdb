@@ -39,30 +39,30 @@ public class CommandLineHelper implements ConsoleHelper {
     }
 
     public CommandLine parse(Options options, String[] args) throws ParseException {
-		CommandLineParser parser = new DefaultParser();
+        CommandLineParser parser = new DefaultParser();
         options.addOption("h", "help", false, "help");
-		CommandLine line = parser.parse(options, args);
-		if (line.hasOption('h')) {
+        CommandLine line = parser.parse(options, args);
+        if (line.hasOption('h')) {
             HelpFormatter formatter = new HelpFormatter();
             formatter.printHelp(getCommandName(), options);
             System.exit(0);
-		}
-		return line;
-	}
+        }
+        return line;
+    }
 
     protected int parseInteger(String value) {
-	    int result = 0;
-	    if (value.startsWith("0x")) {
-	        value = StringUtils.substring(value, 2);
-	        result = Integer.parseInt(value, 16);
-	    }
-	    else {
-	        result = Integer.parseInt(value);
-	    }
-	    return result;
-	}
+        int result = 0;
+        if (value.startsWith("0x")) {
+            value = StringUtils.substring(value, 2);
+            result = Integer.parseInt(value, 16);
+        }
+        else {
+            result = Integer.parseInt(value);
+        }
+        return result;
+    }
 
-	protected long parseLong(String value) {
+    protected long parseLong(String value) {
         long result = 0;
         if (value.startsWith("0x")) {
             value = StringUtils.substring(value, 2);

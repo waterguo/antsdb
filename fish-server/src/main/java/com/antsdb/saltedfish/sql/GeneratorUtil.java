@@ -36,8 +36,7 @@ import com.antsdb.saltedfish.sql.vdm.UpdateSingleRow;
 
 public class GeneratorUtil {
 
-    public static Statement genDelete(GeneratorContext ctx, TableMeta table, Planner planner) {
-        CursorMaker maker = planner.run();
+    public static Statement genDelete(GeneratorContext ctx, TableMeta table, CursorMaker maker) {
         GTable gtable = ctx.getGtable(table.getObjectName());
         if (maker instanceof TableSeek) {
             TableSeek seeker = (TableSeek)maker;

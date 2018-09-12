@@ -24,6 +24,7 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.planner.PlannerField;
 import com.antsdb.saltedfish.sql.vdm.Checks;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
@@ -54,11 +55,11 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
                         outer = i.join_operator().K_LEFT() != null;
                     }
                     Select_or_valuesGenerator.addTableToPlanner(ctx, 
-                    		                                    planner, 
-                    		                                    i.from_item(), 
-                    		                                    i.join_constraint().expr(),
-                    		                                    true,
-                    		                                    outer);
+                                                                planner, 
+                                                                i.from_item(), 
+                                                                i.join_constraint().expr(),
+                                                                true,
+                                                                outer);
                 }
             }
         }
@@ -67,29 +68,29 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
         
         TableMeta table = null;
         if (rule.table_name_() != null) {
-        	String name = rule.table_name_().getText();
-        	Object obj = planner.findTable(name);
-        	if (obj == null) {
-        		throw new OrcaException("table is not found {}", rule.table_name_().getText());
-        	}
-        	if (!(obj instanceof TableMeta)) {
-        		throw new OrcaException("{} must be a table", rule.table_name_().getText());
-        	}
-        	table = (TableMeta)obj;
-        	PlannerField field = planner.findField((FieldMeta it) -> {
-        		if (it.getColumn() == null) {
-        			return false;
-        		}
-        		if (it.getColumn().getColumnId() != -1) {
-        			return false;
-        		}
-        		return (it.getTableAlias().equals(name));
-        	});
-        	planner.addOutputField(name, new FieldValue(field));
+            String name = rule.table_name_().getText();
+            Object obj = planner.findTable(name);
+            if (obj == null) {
+                throw new OrcaException("table is not found {}", rule.table_name_().getText());
+            }
+            if (!(obj instanceof TableMeta)) {
+                throw new OrcaException("{} must be a table", rule.table_name_().getText());
+            }
+            table = (TableMeta)obj;
+            PlannerField field = planner.findField((FieldMeta it) -> {
+                if (it.getColumn() == null) {
+                    return false;
+                }
+                if (it.getColumn().getColumnId() != -1) {
+                    return false;
+                }
+                return (it.getTableAlias().equals(name));
+            });
+            planner.addOutputField(name, new FieldValue(field));
         }
         else {
-        	ObjectName name = TableName.parse(ctx, rule.from_clause().from_item(0).from_table().table_name_());
-        	table = Checks.tableExist(ctx.getSession(), name);
+            ObjectName name = TableName.parse(ctx, rule.from_clause().from_item(0).from_table().table_name_());
+            table = Checks.tableExist(ctx.getSession(), name);
         }
         
         // apply where clause
@@ -101,7 +102,11 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
         
         // done
         
-        return GeneratorUtil.genDelete(ctx, table, planner);
+        CursorMaker maker = planner.run();
+        if (rule.limit_clause() != null) {
+            maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+        }
+        return GeneratorUtil.genDelete(ctx, table, maker);
     }
 
 }

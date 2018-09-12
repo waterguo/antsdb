@@ -244,7 +244,7 @@ class Recoverer implements ReplayHandler {
                 humpback.recoverTable();
             }
             catch (Exception e) {
-                _log.warn("unable to recreate table {} @ {}.", tableId, sp, e);
+                _log.warn("unable to recreate table {} @ {}.", sp, e);
                 return;
             }
         }

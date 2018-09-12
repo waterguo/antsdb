@@ -18,6 +18,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.*;
 import com.antsdb.saltedfish.lexer.MysqlParser.Data_typeContext;
@@ -187,25 +188,28 @@ public class DataType {
     
     @Override
     public String toString() {
-            String text;
-            if (this.getJavaType() == String.class) {
-                text = this.name + '(' + length + ')';
-            }
-            else if (this.getJavaType() == byte[].class) {
-                text = this.name + '(' + length + ')';
-            }
-            else if (this.getJavaType() == BigDecimal.class) {
-                text = this.name + '(' + length + ',' + scale + ')';
-            } 
-            else if (this.getJavaType() == Integer.class) {
-                text = this.name + '(' + length + ')';
-            }
-            else if (this.getJavaType() == Long.class) {
-                text = this.name + '(' + length + ')';
+        String text;
+        if (this.getJavaType() == String.class) {
+            text = this.name + '(' + length + ')';
+        }
+        else if (this.getJavaType() == byte[].class) {
+            text = this.name + '(' + length + ')';
+        }
+        else if (this.getJavaType() == BigDecimal.class) {
+            text = this.name + '(' + length + ',' + scale + ')';
+        } 
+        else if (this.getJavaType() == Integer.class || this.getJavaType() == Long.class) {
+            if (this.isUnsigned) {
+                String name = StringUtils.removeEnd(this.name, " unsigned");
+                text = name + '(' + length + ") unsigned";
             }
             else {
-                text = this.name;
+                text = this.name + '(' + length + ')';
             }
+        }
+        else {
+            text = this.name;
+        }
         return text;
     }
 
