@@ -38,7 +38,7 @@ public class ConfigService {
 
     public int getPort() {
         try {
-            return Integer.valueOf(props.getProperty("fish.port").trim());
+            return Integer.valueOf(props.getProperty("fish.port", "3306").trim());
         }
         catch (Exception x) {
             return 3306;

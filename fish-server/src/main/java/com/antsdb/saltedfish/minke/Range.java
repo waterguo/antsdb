@@ -134,7 +134,7 @@ final class Range {
         }
         if (cmpEnd < 0) {
             // ABCD wrong
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(this.toString() + "," + that.toString());
         }
         Range result = new Range();
         if (cmpStart == 0) {

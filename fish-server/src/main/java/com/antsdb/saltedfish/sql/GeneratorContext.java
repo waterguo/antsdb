@@ -19,6 +19,7 @@ import java.util.Map;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
@@ -32,6 +33,10 @@ public class GeneratorContext {
     int variablesCount;
     boolean compileDdl = false;
     int nextMakerId = 1;
+    
+    public Humpback getHumpback() {
+        return getOrca().getHumpback();
+    }
     
     public boolean isCompileDdl() {
         return compileDdl;

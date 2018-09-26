@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.server.mysql;
 
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -36,7 +37,7 @@ import com.antsdb.mysql.network.PacketQuit;
 import com.antsdb.mysql.network.PacketSetOption;
 import com.antsdb.mysql.network.PacketStmtClose;
 import com.antsdb.saltedfish.charset.Decoder;
-import com.antsdb.saltedfish.cpp.Bytes;
+import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.server.SaltedFish;
 import com.antsdb.saltedfish.server.mysql.packet.AuthPacket;
 import com.antsdb.saltedfish.sql.AuthPlugin;
@@ -262,8 +263,7 @@ public final class MysqlSession {
         if (stmt == null) {
             throw new ErrorMessage(ER_UNKNOWN_COM_ERROR, "statement id is not found: " + packet.getStatementId());
         }
-        long pData = Bytes.allocSet(stmt.getHeap(), packet.getDataAddress(), packet.getDataLength());
-        stmt.setParam(packet.getParameterId(), pData);
+        stmt.setLongData(packet.getParameterId(), packet.getDataAddress(), packet.getDataLength());
     }
 
     private void setOption(PacketSetOption packet) {
@@ -301,13 +301,18 @@ public final class MysqlSession {
 
     private void query(PacketQuery packet, Decoder decoder) throws Exception {
         boolean success = false;
+        CharBuffer sql = packet.getQueryAsCharBuf(decoder);
         try {
-            queryHandler.query(packet.getQueryAsCharBuf(decoder));
+            queryHandler.query(sql);
             success = true;
         }
         finally {
             if (!success && _log.isDebugEnabled()) {
                 _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 1024));
+            }
+            long alloc = MemoryManager.getThreadAllocation();
+            if (alloc != 0) {
+                _log.warn("memory leak {}: {}", alloc, sql.toString());
             }
         }
     }

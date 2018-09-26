@@ -16,36 +16,35 @@ package com.antsdb.saltedfish.server.mysql;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
-import com.antsdb.saltedfish.cpp.FlexibleHeap;
+import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.PreparedStatement;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.FishParameters;
-import com.antsdb.saltedfish.sql.vdm.Parameters;
+import com.antsdb.saltedfish.util.UberUtil;
 
 import io.netty.buffer.ByteBuf;
 
 /**
- * @author roger
+ * @author xgu0
  */
-public class MysqlPreparedStatement implements Closeable {
+public final class MysqlPreparedStatement implements Closeable {
 
     public int[] types;
     PreparedStatement script;
-    Heap heap = new FlexibleHeap();
-    VaporizingRow row;
     ByteBuffer meta;
     int packetSequence;
+    Map<Integer, ByteBuffer> longdata;
     
     public MysqlPreparedStatement(PreparedStatement script) {
         super();
         this.script = script;
-        if (script.getParameterCount() > 0) {
-            this.row = new VaporizingRow(heap, script.getParameterCount()-1);
-        }
     }
 
     public int getId() {
@@ -56,19 +55,7 @@ public class MysqlPreparedStatement implements Closeable {
         return this.script.getParameterCount();
     }
 
-    public Heap getHeap() {
-        return this.heap;
-    }
-
-    public void setParam(int paramId, long pValue) {
-        row.setFieldAddress(paramId, pValue);
-    }
-
-    public Parameters getParams() {
-        return new FishParameters(this.row);
-    }
-
-    public Object run(Session session, Consumer<Object> callback) {
+    public Object run(Session session, VaporizingRow row, Consumer<Object> callback) {
         FishParameters params = new FishParameters(row);
         Object result = session.run(this.script, params, callback);
         return result;
@@ -76,19 +63,16 @@ public class MysqlPreparedStatement implements Closeable {
 
     @Override
     public void close() {
-        if (this.heap != null) {
-            this.heap.free();
-        }
-        this.row = null;
-        this.heap = null;
+        clear();
     }
 
     public void clear() {
-        this.heap.reset(0);
-        this.row = new VaporizingRow(heap, getParameterCount()-1);
-    }
-
-    public void setParam(int paramId, ByteBuf content) {
+        if (this.longdata != null) {
+            for (ByteBuffer i:this.longdata.values()) {
+                MemoryManager.free(i);
+            }
+        }
+        this.longdata = null;
     }
 
     public ByteBuf getLongData(int i) {
@@ -99,7 +83,26 @@ public class MysqlPreparedStatement implements Closeable {
         return this.script.getSql();
     }
     
-    public VaporizingRow getParameters() {
-        return this.row;
+    public void setLongData(int paramId, long pSourceData, int dataLen) {
+        if (this.longdata == null) {
+            this.longdata = new HashMap<>();
+        }
+        ByteBuffer buf = MemoryManager.alloc(dataLen + 4);
+        Bytes.set(buf, pSourceData, dataLen);
+        this.longdata.put(paramId, buf);
+    }
+    
+    public void preExecute(VaporizingRow row) {
+        if (this.longdata == null) {
+            return;
+        }
+        for (Map.Entry<Integer, ByteBuffer> i:this.longdata.entrySet()) {
+            long pValue = UberUtil.getAddress(i.getValue());
+            row.setFieldAddress(i.getKey(), pValue);
+        }
+    }
+
+    public VaporizingRow createRow(Heap heap2) {
+        return new VaporizingRow(heap2, script.getParameterCount()-1);
     }
 }

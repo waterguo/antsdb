@@ -11,31 +11,25 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.sql.vdm;
+package com.antsdb.saltedfish.sql.command;
 
-import java.util.List;
-
-import com.antsdb.saltedfish.sql.planner.SortKey;
+import com.antsdb.saltedfish.lexer.FishParser.Hselect_stmtContext;
+import com.antsdb.saltedfish.sql.Generator;
+import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.Instruction;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class ViewMaker extends CursorMaker {
-    protected CursorMeta meta;
-    
-    public ViewMaker(CursorMeta meta) {
-        this.meta = meta;
-    }
-    
-    @Override
-    public CursorMeta getCursorMeta() {
-        return this.meta;
-    }
+public class Hselect_stmtGenerator extends Generator<Hselect_stmtContext> {
 
     @Override
-    public boolean setSortingOrder(List<SortKey> order) {
-        return false;
+    public Instruction gen(GeneratorContext ctx, Hselect_stmtContext rule) throws OrcaException {
+        int tableId = Integer.parseInt(rule.table().getText());
+        CursorMaker result = HCrudUtil.gen(ctx, tableId, rule.where(), rule.limit());
+        return result;
     }
-
 }

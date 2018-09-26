@@ -22,7 +22,7 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * 
  * @author *-xguo0<@
  */
-public class ShowMasterStatus extends ViewMaker {
+public class ShowMasterStatus extends View {
     public static class Line {
         public String File = "";
         public Long Position;

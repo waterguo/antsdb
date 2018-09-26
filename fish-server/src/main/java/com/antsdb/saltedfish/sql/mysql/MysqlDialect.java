@@ -43,6 +43,7 @@ public class MysqlDialect extends SqlDialect {
         orca.registerSystemView("information_schema", "KEY_COLUMN_USAGE", new KEY_COLUMN_USAGE());
         orca.registerSystemView("information_schema", "PARTITIONS", new PARTITIONS());
         orca.registerSystemView("information_schema", "FILES", new FILES());
+        orca.registerSystemView("information_schema", "PARAMETERS", new PARAMETERS());
         orca.registerSystemView(Orca.SYSNS, "mysql_slave", new MysqlSlaveView());
     }
 

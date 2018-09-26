@@ -194,7 +194,7 @@ public class Replicator<E extends Replicable> extends Thread {
         this.blobReorder = new BlobReorderReplayer(this.replicationHandler);
         this.trxFilter  = new TransactionReplayer(this.humpback.getGobbler(), this.blobReorder);
         this.relay = new Relay(trxFilter);
-        setName(name);
+        setName(name + "-" + getId());
         setDaemon(true);
     }
 
@@ -349,7 +349,8 @@ public class Replicator<E extends Replicable> extends Thread {
     }
     
     public long getLogPointer() {
-        return this.replicable.getReplicateLogPointer();
+        long result = Math.min(this.replicable.getReplicateLogPointer(), this.blobReorder.getLogPointer());
+        return result;
     }
     
     public E getReplicable() {

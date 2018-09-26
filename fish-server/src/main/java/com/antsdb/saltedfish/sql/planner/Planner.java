@@ -77,6 +77,7 @@ import com.antsdb.saltedfish.sql.vdm.TableRangeScan;
 import com.antsdb.saltedfish.sql.vdm.TableScan;
 import com.antsdb.saltedfish.sql.vdm.ThroughGrouper;
 import com.antsdb.saltedfish.sql.vdm.Union;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -178,10 +179,16 @@ public class Planner {
         return node.alias;
     }
 
-    public ObjectName addCursor(String name, CursorMaker maker, boolean left, boolean isOuter) {
+    public ObjectName addCursor(String alias, CursorMaker maker, boolean left, boolean isOuter) {
+        View view = (maker instanceof View) ? (View)maker : null;
         Node node = new Node();
         node.maker = maker;
-        node.alias = new ObjectName(null, name);
+        if ((alias == null) && (view != null)) {
+            node.alias = view.getName();
+        }
+        else {
+            node.alias = new ObjectName(null, alias);
+        }
         if (left) {
             node.isOuter = isOuter;
         }
@@ -193,6 +200,9 @@ public class Planner {
         this.nodes.put(node.alias, node);
         for (FieldMeta i : maker.getCursorMeta().getFields()) {
             PlannerField field = new PlannerField(node, i);
+            if (view != null) {
+                field.setSourceTable(view.getName());
+            }
             node.fields.add(field);
             this.rawMeta.addColumn(field);
         }
@@ -515,7 +525,12 @@ public class Planner {
     Link build() {
         Link link = build(null);
         if (link.getLevels() != nodes.size()) {
-            throw new CodingError();
+            if (this.parent != null) {
+                if (link.getLevels() != nodes.size()-1) {
+                    // levels could be less than number of nodes by 1 if the parent is not referenced
+                    throw new CodingError();
+                }
+            }
         }
         return link;
     }
@@ -523,6 +538,13 @@ public class Planner {
     Link build(Link previous) {
         Link link = null;
         for (Node node : this.nodes.values()) {
+            
+            // skip the parent node if it is not used
+            
+            if (node.isParent && !node.isUsed) {
+                continue;
+            }
+            
             // if node already been in the path, next
 
             if (previous != null) {
@@ -1075,7 +1097,12 @@ public class Planner {
     }
 
     public boolean isEmpty() {
-        return this.nodes.isEmpty();
+        if (this.parent == null) {
+            return this.nodes.isEmpty();
+        }
+        else {
+            return this.nodes.size() <= 1;
+        }
     }
 
     /**
@@ -1128,24 +1155,37 @@ public class Planner {
         return null;
     }
 
-    public PlannerField findField(Predicate<FieldMeta> predicate) {
+    private PlannerField findFrield(Predicate<FieldMeta> predicate, boolean inParent) {
         PlannerField result = null;
         for (Node i : this.nodes.values()) {
-            if (i.isParent) {
-                continue;
-            }
-            for (PlannerField j : i.fields) {
-                if (predicate.test(j)) {
-                    if (result != null) {
-                        throw new OrcaException("Column is ambiguous: " + j);
+            boolean b = i.isParent ^ inParent; 
+            if (!b) {
+                for (PlannerField j : i.fields) {
+                    if (predicate.test(j)) {
+                        if (result != null) {
+                            throw new OrcaException("Column is ambiguous: " + j);
+                        }
+                        result = j;
                     }
-                    result = j;
                 }
             }
         }
+        return result;
+    }
+    
+    public PlannerField findField(Predicate<FieldMeta> predicate) {
+        PlannerField result = null;
+        result = findFrield(predicate, false);
         if (result == null) {
             if (this.parent != null) {
-                result = this.parent.findField(predicate);
+                result = findFrield(predicate, true);
+                if (result != null) {
+                    for (Node i : this.nodes.values()) {
+                        if (i.isParent) {
+                            i.isUsed = true;
+                        }
+                    }
+                }
             }
         }
         return result;

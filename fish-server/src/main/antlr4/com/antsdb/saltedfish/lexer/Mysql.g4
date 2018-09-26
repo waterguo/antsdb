@@ -57,6 +57,7 @@ sql_stmt
  | show_create_table_stmt
  | show_databases
  | show_engines
+ | show_function_stmt
  | show_grants
  | show_index_stmt
  | show_master_status
@@ -550,6 +551,8 @@ show_databases
 show_engines
  : K_SHOW K_ENGINES
  ;
+
+show_function_stmt : K_SHOW K_FUNCTION K_STATUS where_clause?;
  
 show_grants
  : K_SHOW K_GRANTS
@@ -778,7 +781,7 @@ expr_function
  ;
 
 group_concat_parameter
- : K_DISTINCT? column_name_ ( K_ORDER K_BY ordering_term ( ',' ordering_term )* )?  (K_SEPARATOR literal_value)?
+ : K_DISTINCT? expr ( K_ORDER K_BY ordering_term ( ',' ordering_term )* )?  (K_SEPARATOR literal_value)?
  ;
  
 expr_function_parameters
@@ -802,7 +805,7 @@ expr_select
  ;
  
 expr_exist
- : ( K_NOT )? K_EXISTS '(' select_stmt ')'
+ : K_NOT? K_EXISTS '(' select_stmt ')'
  ;
 
 expr_in_select
@@ -852,7 +855,7 @@ table_alias
  ;
 
 function_name
- : any_name | K_LEFT | K_IF | K_MOD
+ : any_name | K_LEFT | K_IF | K_MOD | K_ISNULL
  ;
 
 any_name
@@ -864,7 +867,7 @@ name
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
  | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
- | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO
+ | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION
  ;
  
 identifier
@@ -1020,6 +1023,7 @@ K_FOR : F O R;
 K_FORCE : F O R C E;
 K_FOREIGN : F O R E I G N;
 K_FROM : F R O M;
+K_FUNCTION : F U N C T I O N;
 K_FULL : F U L L;
 K_FULLTEXT : F U L L T E X T;
 K_GLOB : G L O B;

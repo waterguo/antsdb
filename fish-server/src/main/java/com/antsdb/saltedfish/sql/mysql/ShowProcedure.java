@@ -18,14 +18,14 @@ import java.util.Collections;
 
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class ShowProcedure extends ViewMaker {
+public class ShowProcedure extends View {
     public static class Line {
         public String ROUTINE_SCHEMA;
         public String ROUTINE_NAME;

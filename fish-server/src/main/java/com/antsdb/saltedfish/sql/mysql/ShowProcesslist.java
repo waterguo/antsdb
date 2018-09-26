@@ -20,14 +20,14 @@ import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class ShowProcesslist extends ViewMaker {
+public class ShowProcesslist extends View {
     private static final CursorMeta META = CursorUtil.toMeta(Line.class);
     
     public static class Line {

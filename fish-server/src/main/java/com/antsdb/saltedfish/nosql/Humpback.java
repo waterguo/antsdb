@@ -1071,7 +1071,7 @@ public final class Humpback {
         if (getSlave() != null) {
             result = Math.min(result, getSlave().getCommittedLogPointer());
         }
-        result = Math.min(result, getStatistician().getReplicateLogPointer());
+        result = Math.min(result, this.statisticianThread.getLogPointer());
         return result;
     }
     

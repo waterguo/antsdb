@@ -33,8 +33,9 @@ import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
+import com.antsdb.saltedfish.util.MysqlColumnMeta;
 
 /**
  * 
@@ -42,8 +43,10 @@ import com.antsdb.saltedfish.util.CursorUtil;
  */
 public class Show_create_table_stmtGenerator extends Generator<Show_create_table_stmtContext> {
     public static class Item {
-            public String Table;
-            public String Create_Table;
+        @MysqlColumnMeta(column="")
+        public String Table;
+        @MysqlColumnMeta(alias="Create Table", column="")
+        public String Create_Table;
     }
 
     @Override
@@ -57,10 +60,10 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
         CursorMeta meta = CursorUtil.toMeta(Item.class);
         ArrayList<Item> list = new ArrayList<>();
         Item item = new Item();
-        item.Table = tableName.toString();
+        item.Table = table.getTableName();
         item.Create_Table = sql;
         list.add(item);
-        return new ViewMaker(meta) {
+        return new View(meta) {
             @Override
             public Object run(VdmContext ctx, Parameters params, long pMaster) {
                 Cursor c = CursorUtil.toCursor(meta, list);
@@ -80,17 +83,14 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
             buf.append(column.getColumnName());
             buf.append("` ");
             buf.append(column.getDataType().toString());
-            if (column.isNullable()) {
-                
-            }
-            else {
+            if (!column.isNullable()) {
                 buf.append(" NOT NULL");
             }
             if (column.getDefault() != null) {
                 buf.append(" DEFAULT ");
                 buf.append(column.getDefault());
             }
-            else {
+            else if (column.isNullable()){
                 buf.append(" DEFAULT NULL");
             }
             buf.append(",\n");

@@ -26,7 +26,7 @@ import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
 
@@ -34,7 +34,7 @@ import static com.antsdb.saltedfish.util.UberFormatter.*;
  * 
  * @author *-xguo0<@
  */
-public class SystemViewPages extends ViewMaker {
+public class SystemViewPages extends View {
     Orca orca;
     
     public static class Line {

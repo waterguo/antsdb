@@ -19,10 +19,10 @@ import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class SCHEMATA extends ViewMaker {
+public class SCHEMATA extends View {
 	Orca orca;
     
     public static class Item {

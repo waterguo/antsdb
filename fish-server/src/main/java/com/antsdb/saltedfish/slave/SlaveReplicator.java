@@ -82,11 +82,11 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
 
     private void open() throws Exception {
         connect();
-        Map<String, Object> row = DbUtils.firstRow(this.conn, "SHOW TABLES FROM antsdb LIKE 'antsdb_slave'");
+        Map<String, Object> row = DbUtils.firstRow(this.conn, "SHOW TABLES FROM antsdb_ LIKE 'antsdb_slave'");
         if (row == null) {
             throw new SQLException("antsdb_slave is not found in slave database");
         }
-        Properties props = DbUtils.properties(this.conn, "SELECT * FROM antsdb.antsdb_slave");
+        Properties props = DbUtils.properties(this.conn, "SELECT * FROM antsdb_.antsdb_slave");
         long defaultsp = this.humpback.getGobbler().getLatestSp();
         this.sp = Long.parseLong(props.getProperty("sp", String.valueOf(defaultsp)));
         this.commitedLp = this.sp;
@@ -139,7 +139,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
     @Override
     public void flush() throws Exception {
         reconnectIfClosed();
-        String sql = "REPLACE antsdb.antsdb_slave VALUES ('sp', ?)";
+        String sql = "REPLACE INTO antsdb_.antsdb_slave VALUES ('sp', ?)";
         DbUtils.executeUpdate(this.conn, sql, this.sp);
         this.commitedLp = this.sp;
     }

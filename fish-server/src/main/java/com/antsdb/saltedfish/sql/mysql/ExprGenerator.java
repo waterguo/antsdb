@@ -91,6 +91,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncGetLock;
 import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
 import com.antsdb.saltedfish.sql.vdm.FuncHex;
 import com.antsdb.saltedfish.sql.vdm.FuncIf;
+import com.antsdb.saltedfish.sql.vdm.FuncIsNull;
 import com.antsdb.saltedfish.sql.vdm.FuncLeft;
 import com.antsdb.saltedfish.sql.vdm.FuncLength;
 import com.antsdb.saltedfish.sql.vdm.FuncLocate;
@@ -178,6 +179,7 @@ public class ExprGenerator {
         _functionByName.put("get_lock", FuncGetLock.class);
         _functionByName.put("hex", FuncHex.class);
         _functionByName.put("if", FuncIf.class);
+        _functionByName.put("isnull", FuncIsNull.class);
         _functionByName.put("length", FuncLength.class);
         _functionByName.put("left", FuncLeft.class);
         _functionByName.put("locate", FuncLocate.class);
@@ -489,7 +491,7 @@ public class ExprGenerator {
         Operator in = new OpExists(select);
         if (rule.K_NOT() != null) {
             in = new OpNot(in);
-        }
+        }        
         return in;
     }
 
@@ -510,7 +512,7 @@ public class ExprGenerator {
         Operator in = new OpInSelect(left, select);
         if (rule.K_NOT() != null) {
             in = new OpNot(in);
-        }
+        }        
         return in;
     }
 
@@ -524,7 +526,7 @@ public class ExprGenerator {
         Operator result = new OpInValues(left, values);
         if (rule.K_NOT() != null) {
             result = new OpNot(result);
-        }
+        }        
         return result;
     }
 
@@ -688,7 +690,7 @@ public class ExprGenerator {
         }
         if (rule.group_concat_parameter() != null) {
             Group_concat_parameterContext params = rule.group_concat_parameter();
-            Operator col = genColumnValue(ctx, cursorMeta, params.column_name_());
+            Operator col = gen(ctx, cursorMeta, params.expr());
             func.addParameter(col);
             if (params.literal_value() != null) {
                 Operator separator = genLiteralValue(ctx, cursorMeta, params.literal_value());

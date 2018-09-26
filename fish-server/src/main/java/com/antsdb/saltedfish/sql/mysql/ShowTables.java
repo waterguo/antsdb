@@ -31,27 +31,27 @@ import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.SysTableRow;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class ShowTables extends ViewMaker {
-	String namespace;
-	boolean isFull;
-	String sql;
-	Script upstream;
-	String like;
+public class ShowTables extends View {
+    String namespace;
+    boolean isFull;
+    String sql;
+    Script upstream;
+    String like;
     Pattern pattern;
 
-	public static class LineShort {
-	    public String TABLE_NAME;
-	}
-	
-	public static class LineFull {
-	    public String TABLE_NAME;
-	    public String TABLE_TYPE;
-	}
-	
-	static class MetaReplacer extends Cursor {
+    public static class LineShort {
+        public String TABLE_NAME;
+    }
+    
+    public static class LineFull {
+        public String TABLE_NAME;
+        public String TABLE_TYPE;
+    }
+    
+    static class MetaReplacer extends Cursor {
         private Cursor upstream;
 
         public MetaReplacer(CursorMeta meta, Cursor upstream) {
@@ -68,21 +68,21 @@ public class ShowTables extends ViewMaker {
         public void close() {
             this.upstream.close();
         }
-	    
-	}
-	public ShowTables(Session session, String namespace, boolean isFull, String like) {
-		super(getMeta(isFull, namespace));
-		this.namespace = namespace;
-		this.isFull = isFull;
+        
+    }
+    public ShowTables(Session session, String namespace, boolean isFull, String like) {
+        super(getMeta(isFull, namespace));
+        this.namespace = namespace;
+        this.isFull = isFull;
         this.like = like;
         if (like != null) {
             this.pattern = OpLike.compile(like);
         }
-	}
-	
+    }
+    
     public void setLike(String like) {
-		this.like = like;
-	}
+        this.like = like;
+    }
 
     @Override
     public Object run(VdmContext ctx, Parameters notused, long notused1) {

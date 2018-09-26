@@ -42,10 +42,11 @@ class Node {
     boolean isParent = false;
     Operator joinCondition;
     LinkedList<List<ColumnFilter>> union = new LinkedList<>();
+    public boolean isUsed = false;
     
     // below are fields related to union
     
-	Operator where;
+    Operator where;
     
     PlannerField findField(FieldMeta field) {
         for (PlannerField i:fields) {
@@ -58,7 +59,7 @@ class Node {
 
     int findFieldPos(PlannerField field) {
         for (int i=0; i<this.fields.size(); i++) {
-        	if (this.fields.get(i) == field) {
+            if (this.fields.get(i) == field) {
                 return i;
             }
         }
@@ -109,5 +110,9 @@ class Node {
             }
         }
         return true;
+    }
+    
+    boolean isCursor() {
+        return this.table == null;
     }
 }

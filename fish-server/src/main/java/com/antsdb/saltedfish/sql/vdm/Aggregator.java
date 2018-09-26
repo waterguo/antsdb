@@ -38,10 +38,10 @@ public class Aggregator extends CursorMaker {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ExprCursor cursor = new ExprCursor(
-        		this, 
-        		(Cursor)this.upstream.run(ctx, params, pMaster), 
-        		params, 
-        		ctx.getCursorStats(makerId));
+                this, 
+                (Cursor)this.upstream.run(ctx, params, pMaster), 
+                params, 
+                ctx.getCursorStats(makerId));
         cursor.ctx = ctx.freeze();
         cursor.exprs = this.exprs;
         return cursor;
@@ -54,13 +54,13 @@ public class Aggregator extends CursorMaker {
         this.upstream.explain(level+1, records);
     }
 
-	@Override
-	public String toString() {
-		return "Aggregator";
-	}
+    @Override
+    public String toString() {
+        return "Aggregator";
+    }
 
     public CursorMaker getUpstream() {
-    	return this.upstream;
+        return this.upstream;
     }
 
     @Override

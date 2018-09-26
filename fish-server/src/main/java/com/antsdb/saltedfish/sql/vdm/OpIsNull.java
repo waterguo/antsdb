@@ -23,27 +23,26 @@ import com.antsdb.saltedfish.sql.DataType;
  * @author wgu0
  */
 public class OpIsNull extends UnaryOperator {
-	
-	public OpIsNull(Operator upstream) {
-		super(upstream);
-	}
+    
+    public OpIsNull(Operator upstream) {
+        super(upstream);
+    }
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pResult = this.upstream.eval(ctx, heap, params, pRecord);
         boolean result = pResult == 0;
         return FishBool.allocSet(heap, result);
-	}
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return DataType.bool();
-	}
+    @Override
+    public DataType getReturnType() {
+        return DataType.bool();
+    }
 
-	@Override
-	public String toString() {
-		return this.upstream.toString() + " IS NULL";
-	}
-
-	
+    @Override
+    public String toString() {
+        return this.upstream.toString() + " IS NULL";
+    }
+    
 }

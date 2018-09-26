@@ -92,28 +92,28 @@ class Link {
     float getScore() {
         if (this.to.table == null) {
             // not a table. source is a cursor/subquery
-            return 10;
+            return 100;
         }
         return getScore(this.maker);
     }
 
     private float getScore(CursorMaker maker) {
-    	    float score = 10000;
+        float score = 10000;
         if (maker instanceof TableSeek) {
             score = 1;
         }
         else if (maker instanceof CursorPrimaryKeySeek) {
-        	    score = 1.05f;
+            score = 1.05f;
         }
         else if (maker instanceof IndexSeek) {
-        	    score = 1.1f;
+            score = 1.1f;
         }
         else if (maker instanceof TableRangeScan) {
-        	    int factor = getMatchedColumns((RangeScannable)maker);
+            int factor = getMatchedColumns((RangeScannable)maker);
             score = 10 - factor * 0.1f;
         }
         else if (maker instanceof IndexRangeScan) {
-        	    int factor = getMatchedColumns((RangeScannable)maker);
+                int factor = getMatchedColumns((RangeScannable)maker);
             score = 10 - factor * 0.1f;
         }
         else if (maker instanceof CursorIndexRangeScan) {
@@ -126,7 +126,7 @@ class Link {
             score = 10;
         }
         else if (maker instanceof Filter) {
-        	    return getScore(((Filter)maker).getUpstream());
+            return getScore(((Filter)maker).getUpstream());
         }
         else if (maker instanceof Union) {
             return getScore(((Union)maker).getLeft()) + getScore(((Union)maker).getRight());
@@ -141,9 +141,9 @@ class Link {
             return getScore(((RecordLocker) maker).getUpstream());
         }
         else {
-        	    throw new CodingError();
+            throw new CodingError();
         }
-    	    return score;
+        return score;
     }
 
     private int getMatchedColumns(RangeScannable maker) {

@@ -21,7 +21,7 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * 
  * @author *-xguo0<@
  */
-public class ShowStatus extends ViewMaker {
+public class ShowStatus extends View {
     private static final CursorMeta META = CursorUtil.toMeta(Line.class);
     
     public static class Line {

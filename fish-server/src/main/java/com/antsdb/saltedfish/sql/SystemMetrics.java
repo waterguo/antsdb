@@ -20,10 +20,10 @@ import com.antsdb.saltedfish.sql.vdm.Measure;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class SystemMetrics extends ViewMaker {
+public class SystemMetrics extends View {
 	Orca orca;
 	
     public static class Item {

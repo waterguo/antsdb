@@ -49,6 +49,7 @@ public enum ColumnId {
     syssequence_last_number(4),
     syssequence_seed(5),
     syssequence_increment(6),
+    syssequence_end_of_columns(7),
     /* sysrule */
     sysrule_id(1),
     sysrule_namespace(2),

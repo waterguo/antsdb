@@ -13,7 +13,13 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-public class StringValue extends Instruction {
+import java.util.function.Consumer;
+
+import com.antsdb.saltedfish.cpp.FishUtf8;
+import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.sql.DataType;
+
+public class StringValue extends Operator {
     String value;
     
     public StringValue(String value) {
@@ -22,8 +28,18 @@ public class StringValue extends Instruction {
     }
 
     @Override
-    public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        return this.value;
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        return FishUtf8.allocSet(heap, this.value);
+    }
+
+    @Override
+    public DataType getReturnType() {
+        return DataType.varchar();
+    }
+
+    @Override
+    public void visit(Consumer<Operator> visitor) {
+        visitor.accept(this);
     }
 
 }

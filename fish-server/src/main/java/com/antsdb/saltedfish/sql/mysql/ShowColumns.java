@@ -29,12 +29,13 @@ import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
+import com.antsdb.saltedfish.util.MysqlColumnMeta;
 
-public class ShowColumns extends ViewMaker {
-    final static CursorMeta META_FULL = CursorUtil.toMeta(ItemFull.class);
-    final static CursorMeta META_SHORT = CursorUtil.toMeta(ItemShort.class);
+public class ShowColumns extends View {
+    final static CursorMeta META_FULL = CursorUtil.toMeta(ItemFull.class, "information_schema", "COLUMNS");
+    final static CursorMeta META_SHORT = CursorUtil.toMeta(ItemShort.class, "information_schema", "COLUMNS");
     
     boolean isFull = false;
     String nsName = "";
@@ -43,28 +44,43 @@ public class ShowColumns extends ViewMaker {
     private Pattern pattern;
 
     public static class ItemShort {
+        @MysqlColumnMeta(column="COLUMN_NAME")
         public String Field;
+        @MysqlColumnMeta(column="COLUMN_TYPE")
         public String Type;
+        @MysqlColumnMeta(column="IS_NULLABLE")
         public String Null;
+        @MysqlColumnMeta(column="COLUMN_KEY")
         public String Key;
+        @MysqlColumnMeta(column="COLUMN_DEFAULT")
         public String Default;
+        @MysqlColumnMeta(column="EXTRA")
         public String Extra;
     }
     
     public static class ItemFull {
+        @MysqlColumnMeta(column="COLUMN_NAME")
         public String Field;
+        @MysqlColumnMeta(column="COLUMN_TYPE")
         public String Type;
+        @MysqlColumnMeta(column="COLLATION_NAME")
         public String Collation;
+        @MysqlColumnMeta(column="IS_NULLABLE")
         public String Null;
+        @MysqlColumnMeta(column="COLUMN_KEY")
         public String Key;
+        @MysqlColumnMeta(column="COLUMN_DEFAULT")
         public String Default;
+        @MysqlColumnMeta(column="EXTRA")
         public String Extra;
+        @MysqlColumnMeta(column="PRIVILEGES")
         public String Privileges;
+        @MysqlColumnMeta(column="COLUMN_COMMENT")
         public String Comment;;
     }
     
     public ShowColumns(String ns, String table, boolean full, String like) {
-        super(full ? META_FULL : META_SHORT);
+        super(CursorUtil.toMeta(ItemShort.class, "information_schema", "COLUMNS"));
         this.nsName = ns;
         this.tableName = table;
         this.isFull = full;
@@ -80,7 +96,7 @@ public class ShowColumns extends ViewMaker {
     public Object run(VdmContext ctx, Parameters notused, long pMaster) {
         
         // normalize the namespace with real name
-    	
+        
         String ns = Checks.namespaceExist(ctx.getOrca(), this.nsName);
         
         // normalize the table name
@@ -111,22 +127,22 @@ public class ShowColumns extends ViewMaker {
         }
     }
 
-	private boolean like(ColumnMeta column) {
-	    if (pattern == null) {
-	        return true;
-	    }
-	    Matcher m = this.pattern.matcher(column.getColumnName());
+    private boolean like(ColumnMeta column) {
+        if (pattern == null) {
+            return true;
+        }
+        Matcher m = this.pattern.matcher(column.getColumnName());
         return m.find();
     }
 
     private ItemShort toItemShort(TableMeta table, ColumnMeta column) {
-	    ItemShort item = new ItemShort();
-	    item.Field = column.getColumnName();
+        ItemShort item = new ItemShort();
+        item.Field = column.getColumnName();
         item.Type = toString(column.getDataType());
-	    item.Null = column.isNullable() ? "YES" : "NO";
+        item.Null = column.isNullable() ? "YES" : "NO";
         item.Key = getColumnKeyType(table, column);
-	    item.Default = column.getDefault();
-	    item.Extra = "";
+        item.Default = column.getDefault();
+        item.Extra = "";
         return item;
     }
 
@@ -162,21 +178,21 @@ public class ShowColumns extends ViewMaker {
         }
         for (IndexMeta index:table.getIndexes()) {
             if (contains(index, column)) {
-                return "MUL";
+                return index.isUnique() ? "UNI" : "MUL";
             }
         }
         return "";
     }
 
-	private boolean isAutoIncrement(TableMeta table, String columnName) {
-		ColumnMeta column = table.findAutoIncrementColumn();
-		if (column == null) {
-			return false;
-		}
-		return (column.getColumnName().equals(columnName)); 
-	}
+    private boolean isAutoIncrement(TableMeta table, String columnName) {
+        ColumnMeta column = table.findAutoIncrementColumn();
+        if (column == null) {
+            return false;
+        }
+        return (column.getColumnName().equals(columnName)); 
+    }
     
-	private String toString(DataType type) {
+    private String toString(DataType type) {
         if (type.getJavaType() == BigDecimal.class) {
             return type.toString();
         }

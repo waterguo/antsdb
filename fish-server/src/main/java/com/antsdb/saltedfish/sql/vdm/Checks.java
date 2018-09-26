@@ -28,19 +28,19 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author *-xguo0<@
  */
 public class Checks {
-	
-	public static Object tableOrViewExist(Session session, ObjectName name) {
-		return tableOrViewExist(session, name.getNamespace(), name.getTableName());
-	}
-	
-	public static Object tableOrViewExist(Session session, String ns, String table) {
-		Object result = session.getOrca().getSystemView(ns, table);
-		if (result != null) {
-			return result;
-		}
-		return tableExist(session, ns, table);
-	}
-	
+    
+    public static Object tableOrViewExist(Session session, ObjectName name) {
+        return tableOrViewExist(session, name.getNamespace(), name.getTableName());
+    }
+    
+    public static Object tableOrViewExist(Session session, String ns, String table) {
+        Object result = session.getOrca().getSystemView(ns, table);
+        if (result != null) {
+            return result;
+        }
+        return tableExist(session, ns, table);
+    }
+    
     public static TableMeta tableExist(Session session, String ns, String table) throws OrcaException {
         Orca orca = session.getOrca();
         namespaceExist(orca, ns);

@@ -35,6 +35,10 @@ public class FieldValue extends Operator {
     byte fishType;
     boolean isEnum = false;
     
+    public FieldValue(FieldMeta field, int pos) {
+        this.field = new PlannerField(field, pos);
+    }
+    
     public FieldValue(PlannerField field) {
         this.field = field;
         this.fishType = field.getType().getFishType();

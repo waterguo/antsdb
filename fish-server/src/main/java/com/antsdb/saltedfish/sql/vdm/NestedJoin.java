@@ -40,6 +40,7 @@ public class NestedJoin extends CursorMaker {
         long pRecLeft = -1;
         boolean hasLeftMatched = false;
         private AtomicLong counter;
+        long pRecord;
 
         public JoinedCursor(VdmContext ctx, Parameters params, Cursor left, AtomicLong counter) {
             super(NestedJoin.this.meta);

@@ -28,15 +28,16 @@ import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.SysTableRow;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
+import com.antsdb.saltedfish.util.MysqlColumnMeta;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class ShowTableStatus extends ViewMaker {
-    private static final CursorMeta META = CursorUtil.toMeta(Line.class);
+public class ShowTableStatus extends View {
+    private static final CursorMeta META = CursorUtil.toMeta(Line.class, "information_schema", "TABLES");
     
     private String db;
     @SuppressWarnings("unused")
@@ -44,23 +45,41 @@ public class ShowTableStatus extends ViewMaker {
     private Pattern pattern;
 
     public static class Line {
+        @MysqlColumnMeta(column="TABLE_NAME")
         public String Name;
+        @MysqlColumnMeta(column="ENGINE")
         public String Engine;
+        @MysqlColumnMeta(column="VERSION")
         public Integer Version;
+        @MysqlColumnMeta(column="ROW_FORMAT")
         public String Row_format;
-        public Long Rows;
-        public Long Avg_row_length;
-        public Long Data_length;
-        public Long Max_data_length;
-        public Long Index_length;
-        public Long Data_free;
+        @MysqlColumnMeta(column="TABLE_ROWS")
+        public Long Rows = Long.valueOf(0);
+        @MysqlColumnMeta(column="AVG_ROW_LENGTH")
+        public Long Avg_row_length = Long.valueOf(0);
+        @MysqlColumnMeta(column="DATA_LENGTH")
+        public Long Data_length = Long.valueOf(0);
+        @MysqlColumnMeta(column="MAX_DATA_LENGTH")
+        public Long Max_data_length = Long.valueOf(0);
+        @MysqlColumnMeta(column="INDEX_LENGTH")
+        public Long Index_length = Long.valueOf(0);
+        @MysqlColumnMeta(column="DATA_FREE")
+        public Long Data_free = Long.valueOf(0);
+        @MysqlColumnMeta(column="AUTO_INCREMENT")
         public Long Auto_increment;
-        public Timestamp Create_time;
+        @MysqlColumnMeta(column="CREATE_TIME")
+        public Timestamp Create_time = new Timestamp(System.currentTimeMillis());
+        @MysqlColumnMeta(column="UPDATE_TIME")
         public Timestamp Update_time;
+        @MysqlColumnMeta(column="CHECK_TIME")
         public Timestamp Check_time;
+        @MysqlColumnMeta(column="TABLE_COLLATION")
         public String Collation;
+        @MysqlColumnMeta(column="CHECKSUM")
         public Long Checksum;
+        @MysqlColumnMeta(column="CREATE_OPTIONS")
         public String Create_options;
+        @MysqlColumnMeta(column="TABLE_COMMENT")
         public String Comment;
     }
     
@@ -103,11 +122,7 @@ public class ShowTableStatus extends ViewMaker {
         result.Version = 10;
         result.Row_format = "Compact";
         result.Auto_increment = getAutoIncrement(ctx, table);
-        result.Create_time = null;
-        result.Update_time = null;
-        result.Check_time = null;
         result.Collation = "utf8_general_ci";
-        result.Checksum = null;
         result.Create_options = "";
         result.Comment = "";
         fillStats(ctx, table, result);

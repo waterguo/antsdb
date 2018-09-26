@@ -23,7 +23,7 @@ import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class ShowIndex extends ViewMaker {
+public class ShowIndex extends View {
     final static CursorMeta META = CursorUtil.toMeta(Item.class);
 
     ObjectName tableName;

@@ -644,4 +644,9 @@ public class MetadataService {
         }
         return this.gtableSeq;
     }
+
+    public void clearCache() {
+        this.cache.clear();
+        this.orca.clearStatementCache();
+    }
 }

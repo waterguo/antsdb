@@ -20,14 +20,14 @@ import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.EmptyCursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public abstract class PropertyBasedView extends ViewMaker {
+public abstract class PropertyBasedView extends View {
     public abstract Map<String, Object> getProperties();
     
     public PropertyBasedView() {

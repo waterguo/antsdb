@@ -56,4 +56,8 @@ public class OpSingleValueQuery extends Operator {
         visitor.accept(this);
     }
 
+    @Override
+    public String toString() {
+        return " IN SELECT (...)";
+    }
 }

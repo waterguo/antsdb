@@ -23,7 +23,7 @@ import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.MemoryUtil;
@@ -34,7 +34,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author wgu0
  */
-public class SystemInfoView extends ViewMaker {
+public class SystemInfoView extends View {
     Orca orca;
     
     public SystemInfoView(Orca orca) {

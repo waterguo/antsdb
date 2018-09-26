@@ -30,7 +30,17 @@ import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
  * @author *-xguo0<@
  */
 public class BlobReorderReplayer extends ReplayRelay {
-    List<Long> buf = new ArrayList<>();
+    List<Entry> buf = new ArrayList<>();
+    
+    private static class Entry {
+        long p;
+        long lp;
+        
+        Entry(long p, long lp) {
+            this.p = p;
+            this.lp = lp;
+        }
+    }
     
     public BlobReorderReplayer(ReplayHandler downstream) {
         super(downstream);
@@ -66,18 +76,15 @@ public class BlobReorderReplayer extends ReplayRelay {
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
         if (hasBlobRef(row)) {
-            buf.add(entry.getAddress());
-            buf.add(entry.getSpacePointer());
+            buf.add(new Entry(entry.getAddress(), entry.getSpacePointer()));
             return;
         }
         else {
-            for (int i=0; i<this.buf.size(); i+=2) {
-                long pParentEntry = this.buf.get(i);
-                long lpParentEntry = this.buf.get(i+1);
-                LogEntry parent = LogEntry.getEntry(lpParentEntry, pParentEntry);
+            for (int i=0; i<this.buf.size(); i++) {
+                Entry ii = this.buf.get(i);
+                LogEntry parent = LogEntry.getEntry(ii.lp, ii.p);
                 if (isPair((RowUpdateEntry) parent, entry)) {
                     replay(parent);
-                    this.buf.remove(i+1);
                     this.buf.remove(i);
                     break;
                 }
@@ -119,4 +126,12 @@ public class BlobReorderReplayer extends ReplayRelay {
         return true;
     }
 
+    public long getLogPointer() {
+        long result = Long.MAX_VALUE;
+        for (Entry i:this.buf) {
+            long lpParentEntry = i.lp;
+            result = Math.min(result, lpParentEntry);
+        }
+        return result;
+    }
 }

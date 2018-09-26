@@ -122,7 +122,10 @@ class HBaseTable implements StorageTable {
 
         @Override
         public void close() {
-            this.heap.free();
+            if (this.heap != null) {
+                this.heap.free();
+                this.heap = null;
+            }
         }
 
         @Override

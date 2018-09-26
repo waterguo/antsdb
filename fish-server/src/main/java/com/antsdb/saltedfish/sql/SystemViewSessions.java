@@ -20,14 +20,14 @@ import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class SystemViewSessions extends ViewMaker {
+public class SystemViewSessions extends View {
 	Orca orca;
 	
     public static class Item {

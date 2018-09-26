@@ -19,7 +19,7 @@ import java.util.List;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class Explain extends ViewMaker {
+public class Explain extends View {
     Instruction root;
     
     public Explain(Instruction root) {

@@ -24,14 +24,14 @@ import com.antsdb.saltedfish.nosql.SysNamespaceRow;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class SystemViewHumpbackNamespace extends ViewMaker {
+public class SystemViewHumpbackNamespace extends View {
     private Orca orca;
 
     public static class Line {

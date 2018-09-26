@@ -44,9 +44,9 @@ public class OpEqual extends BinaryOperator {
         return DataType.bool();
     }
 
-	@Override
-	public String toString() {
-		return this.left.toString() + " = " + this.right.toString();
-	}
+    @Override
+    public String toString() {
+        return this.left.toString() + " = " + this.right.toString();
+    }
     
 }

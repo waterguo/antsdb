@@ -18,24 +18,25 @@ import java.util.List;
 
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
+import com.antsdb.saltedfish.util.MysqlColumnMeta;
 
-public class ShowCharset extends ViewMaker {
+public class ShowCharset extends View {
     public static class Line {
         Line(String name, String description, String collate, long maxlen) {
-            this.CHARACTER_SET_NAME = name;
-            this.DEFAULT_COLLATE_NAME = collate;
-            this.DESCRIPTION = description;
-            this.MAXLEN = maxlen;
+            this.Charset = name;
+            this.Default_collation = collate;
+            this.Description = description;
+            this.Maxlen = maxlen;
         }
         
-        // Charset
-        public String CHARACTER_SET_NAME;
-        // Default collation
-        public String DESCRIPTION;
-        // Description
-        public String DEFAULT_COLLATE_NAME;
-        // Maxlen
-        public Long MAXLEN;
+        @MysqlColumnMeta(column="CHARACTER_SET_NAME")
+        public String Charset;
+        @MysqlColumnMeta(column="DESCRIPTION")
+        public String Description;
+        @MysqlColumnMeta(column="DEFAULT_COLLATE_NAME")
+        public String Default_collation;
+        @MysqlColumnMeta(column="MAXLEN")
+        public Long Maxlen;
     }
     
     public ShowCharset() {

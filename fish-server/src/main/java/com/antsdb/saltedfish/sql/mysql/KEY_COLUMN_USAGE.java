@@ -18,7 +18,7 @@ import java.util.Collections;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
@@ -26,7 +26,7 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * 
  * @author *-xguo0<@
  */
-public class KEY_COLUMN_USAGE extends ViewMaker {
+public class KEY_COLUMN_USAGE extends View {
     private static final CursorMeta META = CursorUtil.toMeta(Line.class);
     
     public static class Line {

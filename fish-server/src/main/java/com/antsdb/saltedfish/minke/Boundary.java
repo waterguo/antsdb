@@ -44,6 +44,15 @@ class Boundary {
     }
     
     @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof Boundary)) {
+            return false;
+        }
+        Boundary that = (Boundary)obj;
+        return Range.compare(this.pKey, this.mark, that.pKey, that.mark) == 0;
+    }
+
+    @Override
     public String toString() {
         String result = toString(this.pKey, this.mark);
         return result;

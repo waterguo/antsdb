@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * Created by wguo on 15-01-06.
@@ -443,5 +444,9 @@ public class UberUtil {
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+    
+    public static <T,R> R ifNotNull(T x, Function<T, R> function) {
+        return (x != null) ? function.apply(x) : null;
     }
 }

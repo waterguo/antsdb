@@ -20,13 +20,16 @@ import java.util.TreeMap;
 
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
+import com.antsdb.saltedfish.util.MysqlColumnMeta;
 
 public class ShowVariables extends CursorMaker {
-    static CursorMeta META = CursorUtil.toMeta(Line.class);
+    static CursorMeta META = CursorUtil.toMeta(Line.class, "information_schema", "VARIABLES");
     private boolean isGlobal;
 
     public static class Line {
+        @MysqlColumnMeta(column="VARIABLE_NAME")
         public String Variable_name;
+        @MysqlColumnMeta(column="VARIABLE_VALUE")
         public String Value;
     }
 

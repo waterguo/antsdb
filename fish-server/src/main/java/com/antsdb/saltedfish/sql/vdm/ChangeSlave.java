@@ -86,11 +86,11 @@ public class ChangeSlave extends Statement {
     }
 
     private void setup(Connection conn, String pos) throws SQLException {
-        DbUtils.execute(conn, "CREATE DATABASE IF NOT EXISTS antsdb");
-        DbUtils.execute(conn, "CREATE TABLE IF NOT EXISTS antsdb.antsdb_slave (" + 
+        DbUtils.execute(conn, "CREATE DATABASE IF NOT EXISTS antsdb_");
+        DbUtils.execute(conn, "CREATE TABLE IF NOT EXISTS antsdb_.antsdb_slave (" + 
                 "name varchar(100) NOT NULL PRIMARY KEY," +
                 "value varchar(300) DEFAULT NULL) ENGINE=InnoDB;");
-        DbUtils.executeUpdate(conn,  "UPDATE antsdb.antsdb_slave SET value=? WHERE name='sp'", pos);
+        DbUtils.executeUpdate(conn, "REPLACE INTO antsdb_.antsdb_slave (name,value) VALUES (?,?)", "sp", pos);
     }
 
 }

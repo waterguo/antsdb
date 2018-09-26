@@ -25,14 +25,14 @@ import com.antsdb.saltedfish.sql.meta.UserMeta;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-class SysUser extends ViewMaker {
+class SysUser extends View {
     public static class Line {
         public Integer ID;
         public String NAME;

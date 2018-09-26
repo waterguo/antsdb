@@ -21,14 +21,14 @@ import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class SystemViewMinkeInfo extends ViewMaker {
+public class SystemViewMinkeInfo extends View {
     Orca orca;
 
     public SystemViewMinkeInfo(Orca orca) {

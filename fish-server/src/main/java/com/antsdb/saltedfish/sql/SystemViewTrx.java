@@ -19,14 +19,14 @@ import java.util.Map;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CursorUtil;
 
 /**
  * 
  * @author wgu0
  */
-public class SystemViewTrx extends ViewMaker {
+public class SystemViewTrx extends View {
 	Orca orca;
 	
     public static class Item {

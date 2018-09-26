@@ -67,7 +67,6 @@ public final class PacketEncoder {
     static final FastDateFormat TIMESTAMP19_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss");
     static final FastDateFormat TIMESTAMP29_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS000000");
     
-    private int csidx;
     private PacketWriter packet = new PacketWriter();
     int packetSequence = -1;
     private MysqlSession mysession;
@@ -165,7 +164,7 @@ public final class PacketEncoder {
      * 1-9   (Length-Coded-Binary)  field_count
      * 1-9   (Length-Coded-Binary)  extra
      * 
-     * @see http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Result_Set_Header_Packet
+     * @see https://mariadb.com/kb/en/library/resultset/#column-definition-packet
      * </pre>
      * 
      * @param buffer
@@ -190,11 +189,11 @@ public final class PacketEncoder {
         else {
             buffer.writeLenString("", getEncoder());
         }
-        // col name
+        // col alias
         buffer.writeLenString(meta.getName(), getEncoder());
         // col original name
         buffer.writeLenString(meta.getSourceName(), getEncoder());
-        // next length
+        // length of fixed fields
         buffer.writeByte((byte) 0x0C);
         if (meta.getType() == null) {
             buffer.writeInt(0x3f);
@@ -222,7 +221,7 @@ public final class PacketEncoder {
         }
         else if (meta.getType().getJavaType() == String.class) {
             // char set utf8_general_ci  : 0x21
-            buffer.writeInt(this.csidx);
+            buffer.writeInt(getCharSetId(getEncoder()));
             // length
             buffer.writeUB4(meta.getType().getLength() * 3);
             // type code
@@ -307,7 +306,7 @@ public final class PacketEncoder {
         else if (meta.getType().getJavaType() == byte[].class) {
             if (meta.getType().getSqlType() == Types.BINARY) {
                 // char set binary
-                buffer.writeInt(0x3f);
+                buffer.writeInt(MysqlConstant.MYSQL_COLLATION_INDEX_binary);
                 // length
                 buffer.writeUB4(meta.getType().getLength() * 3);
                 // type
@@ -358,6 +357,14 @@ public final class PacketEncoder {
         */
         // filler
         buffer.writeShort((short)0);
+    }
+
+    private int getCharSetId(Charset encoder) {
+        int result = MysqlConstant.MYSQL_COLLATION_INDEX_utf8_general_ci;
+        if (encoder == Charsets.ISO_8859_1) {
+            result = MysqlConstant.MYSQL_COLLATION_INDEX_latin1_swedish_ci;
+        }
+        return result;
     }
 
     /**

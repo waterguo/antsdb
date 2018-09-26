@@ -37,7 +37,9 @@ public interface MysqlConstant {
     public static final int    CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA    = 0x00200000;
     public static final int    CLIENT_CAN_HANDLE_EXPIRED_PASSWORD        = 0x00400000;
     public static final int CLIENT_ODBC                 = 0x00000040;
+    public static final int MYSQL_COLLATION_INDEX_latin1_swedish_ci = 8;
     public static final int MYSQL_COLLATION_INDEX_utf8_general_ci = 33;
+    public static final int MYSQL_COLLATION_INDEX_utf8mb_general_ci = 45;
     public static final int MYSQL_COLLATION_INDEX_binary = 63;
     public static final int MYSQL_COLLATION_INDEX_utf8_bin = 83;
 

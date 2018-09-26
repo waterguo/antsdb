@@ -53,9 +53,9 @@ public class PreparedStatement {
         this.script = session.parse(this.sql);
     }
 
-	public CharBuffer getSql() {
-		return this.sql;
-	}
+    public CharBuffer getSql() {
+        return this.sql;
+    }
 
     public int getParameterCount() {
         return this.script.getParameterCount();
@@ -64,8 +64,8 @@ public class PreparedStatement {
     public CursorMeta getCursorMeta() {
         return this.script.getCursorMeta();
     }
-	
-	public Script getLogic() {
-	    return this.script;
-	}
+    
+    public Script getLogic() {
+        return this.script;
+    }
 }

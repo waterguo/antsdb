@@ -184,6 +184,9 @@ public final class MemTable extends ScalableData implements LogSpan {
 
         @Override
         public void close() {
+            for (ScanResult i:this.upstreams) {
+                i.close();
+            }
         }
 
         @Override

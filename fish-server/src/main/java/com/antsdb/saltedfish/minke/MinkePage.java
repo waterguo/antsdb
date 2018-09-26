@@ -895,19 +895,13 @@ public final class MinkePage implements Comparable<MinkePage> {
             return null;
         }
         if (ascending) {
-            long pRange = this.ranges.floor(x.pKeyStart);
-            if (pRange != 0) {
-                Range range = toRange(pRange);
-                if (range == null) {
-                    return null;
-                }
-                if (range.hasIntersection(x)) {
-                    Range intersection = range.intersect(x);
-                    return callback.doShit(this, intersection, false, ascending);
-                }
+            Range range = findRange(new Boundary(x.pKeyStart, x.startMark));
+            if (range != null) {
+                Range intersection = range.intersect(x);
+                return callback.doShit(this, intersection, false, ascending);
             }
-            pRange = this.ranges.higher(x.pKeyStart);
-            Range range = toRange(pRange);
+            long pRange = this.ranges.higher(x.pKeyStart);
+            range = toRange(pRange);
             if (range == null) {
                 return null;
             }

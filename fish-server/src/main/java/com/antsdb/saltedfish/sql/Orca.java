@@ -41,12 +41,12 @@ import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.TableId;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.mysql.MysqlDialect;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.Validate;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.storage.HBaseStorageService;
 import com.antsdb.saltedfish.storage.SystemViewHBase;
 import com.antsdb.saltedfish.util.FishJobManager;
@@ -78,7 +78,7 @@ public class Orca {
     MetadataService metaService;
     Map<String, Object> variables = new ConcurrentHashMap<String, Object>();
     Cache<String, Script> statementCache;
-    Map<String, CursorMaker> sysviews = new HashMap<>();
+    Map<String, View> sysviews = new HashMap<>();
     Map<String, String> namespaces = new HashMap<>();
     volatile boolean isClosed = false;
     Set<Session> sessions = ConcurrentHashMap.newKeySet();
@@ -139,6 +139,8 @@ public class Orca {
         this.config.set("character_set_results", "utf8");
         this.config.set("character_set_connection", "utf8");
         this.config.set("collation_database", "utf8_general_ci");
+        this.config.set("lower_case_file_system", "NO");
+        this.config.set("lower_case_table_names", "1");
         this.config.set("max_allowed_packet", String.valueOf(32 * 1024 * 1024));
         this.config.set("sql_mode", "");
         this.config.set("tx_isolation", "READ-COMMITTED");
@@ -440,12 +442,12 @@ public class Orca {
         return this.dialect.getParserFactory();
     }
     
-    public Object getSystemView(String ns, String table) {
+    public View getSystemView(String ns, String table) {
         String key = (ns + '.' + table).toLowerCase();
         return this.sysviews.get(key);
     }
     
-    public void registerSystemView(String ns, String tableName, CursorMaker maker) {
+    public void registerSystemView(String ns, String tableName, View maker) {
         // register namespace if absent
         
         if (this.namespaces.get(ns.toLowerCase()) == null) {
@@ -455,6 +457,7 @@ public class Orca {
         // register view
         
         String key = (ns + '.' + tableName).toLowerCase();
+        maker.setName(new ObjectName(ns, tableName));
         this.sysviews.put(key, maker);
     }
     

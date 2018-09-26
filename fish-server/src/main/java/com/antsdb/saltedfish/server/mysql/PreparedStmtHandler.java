@@ -22,7 +22,9 @@ import org.slf4j.Logger;
 
 import com.antsdb.mysql.network.PacketPrepare;
 import com.antsdb.saltedfish.charset.Decoder;
+import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.server.mysql.packet.StmtClosePacket;
 import com.antsdb.saltedfish.server.mysql.packet.StmtPreparePacket;
 import com.antsdb.saltedfish.server.mysql.util.BindValueUtil;
@@ -37,7 +39,7 @@ import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * This class handle request, execute and response of prepared statement
- * @author roger
+ * @author xgu0, roger
  */
 public class PreparedStmtHandler {
 
@@ -70,7 +72,7 @@ public class PreparedStmtHandler {
     }
 
     @SuppressWarnings("unused")
-    private void setParameters(MysqlPreparedStatement pstmt, ByteBuffer in) {
+    private void setParameters(Heap heap, MysqlPreparedStatement pstmt, ByteBuffer in, VaporizingRow row) {
         byte flags = BufferUtils.readByte(in);
         long iterationCount = BufferUtils.readUB4(in);
         if (pstmt.getParameterCount() == 0) {
@@ -100,7 +102,6 @@ public class PreparedStmtHandler {
         if (pstmt.types == null) {
             // type information is supposed to be sent in the first execution.
         }
-        Heap heap = pstmt.getHeap();
         for (int i = 0; i < pstmt.getParameterCount(); i++) {
             if (nullBits.get(i)) {
                 continue;
@@ -112,7 +113,7 @@ public class PreparedStmtHandler {
                 continue;
             }
             long pValue = BindValueUtil.read(heap, in, pstmt.types[i]);
-            pstmt.setParam(i, pValue);
+            row.setFieldAddress(i, pValue);
         }
     }
 
@@ -122,46 +123,54 @@ public class PreparedStmtHandler {
         if (pstmt == null) {
             throw new ErrorMessage(MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Unknown prepared statement ID");
         }
-        setParameters(pstmt, packet);
-        execute(pstmt);
+        try (Heap heap = new FlexibleHeap()) {
+            VaporizingRow row = pstmt.createRow(heap);
+            setParameters(heap, pstmt, packet, row);
+            pstmt.preExecute(row);
+            execute(pstmt, row);
+        }
     }
     
-    private void execute(MysqlPreparedStatement pstmt) {
+    private void execute(MysqlPreparedStatement pstmt, VaporizingRow row) {
         boolean success = false;
         try {
             // Using column definition to parse detail info in packet
             // packet.readFull(pstmt);
             // packet.values hold BindValue, should we use it or convert it to Parameter?
-            pstmt.run(this.mysession.session, (result)-> {
-                if (result instanceof Cursor) {
-                    Cursor c = (Cursor)result;
-                    if (pstmt.meta == null) {
-                        ChannelWriterMemory buf = new ChannelWriterMemory();
-                        Helper.writeCursorMeta(buf,
-                                               this.mysession.session, 
-                                               this.mysession.encoder, 
-                                               (Cursor)result);
-                        pstmt.meta = (ByteBuffer)buf.getWrapped();
-                        pstmt.packetSequence = this.mysession.encoder.packetSequence;
-                    }
-                    pstmt.meta.flip();
-                    this.mysession.encoder.packetSequence = pstmt.packetSequence;
-                    Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
-                }
-                else {
-                    Helper.writeResonpse(mysession.out, mysession, result, false);
-                }
+            pstmt.run(this.mysession.session, row, (result)-> {
+                writeResult(pstmt, result);
             });
             success = true;
         }
         finally {
             if (!success) {
-                _log.error("statement parameters:\n{}", pstmt.getParameters());
+                _log.error("statement parameters:\n{}", row);
             }
             pstmt.clear();
         }
     }
     
+    private void writeResult(MysqlPreparedStatement pstmt, Object result) {
+        if (result instanceof Cursor) {
+            Cursor c = (Cursor)result;
+            if (pstmt.meta == null) {
+                ChannelWriterMemory buf = new ChannelWriterMemory();
+                Helper.writeCursorMeta(buf,
+                                       this.mysession.session, 
+                                       this.mysession.encoder, 
+                                       (Cursor)result);
+                pstmt.meta = (ByteBuffer)buf.getWrapped();
+                pstmt.packetSequence = this.mysession.encoder.packetSequence;
+            }
+            pstmt.meta.flip();
+            this.mysession.encoder.packetSequence = pstmt.packetSequence;
+            Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
+        }
+        else {
+            Helper.writeResonpse(mysession.out, mysession, result, false);
+        }
+    }
+
     /**
      * Build PreparedStatemet with sql
      * @param sql

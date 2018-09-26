@@ -20,7 +20,7 @@ import com.antsdb.saltedfish.sql.Orca.DeadSession;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
-import com.antsdb.saltedfish.sql.vdm.ViewMaker;
+import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.CursorUtil;
 
@@ -28,7 +28,7 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * 
  * @author *-xguo0<@
  */
-public class SlowQueries extends ViewMaker {
+public class SlowQueries extends View {
 
     public static class Line {
         public Integer SESSION_ID;

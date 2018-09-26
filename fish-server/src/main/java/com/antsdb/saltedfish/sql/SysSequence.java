@@ -19,30 +19,35 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.sql.meta.TableId;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.DumbCursor;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.View;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class SysSequence extends CursorMaker {
-    CursorMeta meta = new CursorMeta();
+public class SysSequence extends View {
+    static CursorMeta META = new CursorMeta();
+    
     Orca orca;
     int[] mapping;
     
+    static {
+        META.addColumn(new FieldMeta("id", DataType.integer()));
+        META.addColumn(new FieldMeta("namespace", DataType.varchar()));
+        META.addColumn(new FieldMeta("sequence_name", DataType.varchar()));
+        META.addColumn(new FieldMeta("last_number", DataType.longtype()));
+        META.addColumn(new FieldMeta("seed", DataType.longtype()));
+        META.addColumn(new FieldMeta("increment", DataType.longtype()));
+    }
+    
     SysSequence(Orca orca) {
+        super(META);
         this.orca = orca;
-        meta.addColumn(new FieldMeta("id", DataType.integer()));
-        meta.addColumn(new FieldMeta("namespace", DataType.varchar()));
-        meta.addColumn(new FieldMeta("sequence_name", DataType.varchar()));
-        meta.addColumn(new FieldMeta("last_number", DataType.longtype()));
-        meta.addColumn(new FieldMeta("seed", DataType.longtype()));
-        meta.addColumn(new FieldMeta("increment", DataType.longtype()));
         this.mapping = new int[] {1, 2, 3, 4, 5, 6};
     }
     

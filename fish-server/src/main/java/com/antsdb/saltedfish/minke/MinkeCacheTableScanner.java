@@ -78,6 +78,10 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
                 if (this.upstream.next()) {
                     return true;
                 }
+                else {
+                    this.upstream.close();
+                    this.upstream = null;
+                }
             }
             if (nextRange()) {
                 continue;

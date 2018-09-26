@@ -19,35 +19,40 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.sql.meta.TableId;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.DumbCursor;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
+import com.antsdb.saltedfish.sql.vdm.View;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class SysColumn extends CursorMaker {
-    CursorMeta meta = new CursorMeta();
+public class SysColumn extends View {
+    static CursorMeta META = new CursorMeta();
+    
     Orca orca;
     int[] mapping;
     
+    static {
+        META.addColumn(new FieldMeta("id", DataType.integer()));
+        META.addColumn(new FieldMeta("table_id", DataType.integer()));
+        META.addColumn(new FieldMeta("column_id", DataType.integer()));
+        META.addColumn(new FieldMeta("namespace", DataType.varchar()));
+        META.addColumn(new FieldMeta("table_name", DataType.varchar()));
+        META.addColumn(new FieldMeta("column_name", DataType.varchar()));
+        META.addColumn(new FieldMeta("type_name", DataType.varchar()));
+        META.addColumn(new FieldMeta("type_length", DataType.integer()));
+        META.addColumn(new FieldMeta("type_scale", DataType.integer()));
+        META.addColumn(new FieldMeta("nullable", DataType.integer()));
+        META.addColumn(new FieldMeta("default_value", DataType.varchar()));
+    }
+    
     SysColumn(Orca orca) {
+        super(META);
         this.orca = orca;
-        meta.addColumn(new FieldMeta("id", DataType.integer()));
-        meta.addColumn(new FieldMeta("table_id", DataType.integer()));
-        meta.addColumn(new FieldMeta("column_id", DataType.integer()));
-        meta.addColumn(new FieldMeta("namespace", DataType.varchar()));
-        meta.addColumn(new FieldMeta("table_name", DataType.varchar()));
-        meta.addColumn(new FieldMeta("column_name", DataType.varchar()));
-        meta.addColumn(new FieldMeta("type_name", DataType.varchar()));
-        meta.addColumn(new FieldMeta("type_length", DataType.integer()));
-        meta.addColumn(new FieldMeta("type_scale", DataType.integer()));
-        meta.addColumn(new FieldMeta("nullable", DataType.integer()));
-        meta.addColumn(new FieldMeta("default_value", DataType.varchar()));
         this.mapping = new int[] {1, 16, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     }
     

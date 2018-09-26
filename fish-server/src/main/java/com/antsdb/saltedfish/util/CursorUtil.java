@@ -25,6 +25,7 @@ import java.util.Properties;
 import java.util.TreeMap;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
@@ -36,6 +37,7 @@ import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.CursorWithHeap;
 import com.antsdb.saltedfish.sql.vdm.HashMapRecord;
 import com.antsdb.saltedfish.sql.vdm.Marker;
+import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Record;
 
 public class CursorUtil {
@@ -163,9 +165,8 @@ public class CursorUtil {
         }
         else {
             int field = 0;
-            for (FieldMeta i : meta.getColumns()) {
-                Field f;
-                f = obj.getClass().getField(i.getName());
+            for (int i=0; i<meta.getColumns().size(); i++) {
+                Field f = obj.getClass().getFields()[i];
                 Object value = f.get(obj);
                 long pValue = FishObject.allocSet(heap, value);
                 Record.set(pRecord, field, pValue);
@@ -175,9 +176,14 @@ public class CursorUtil {
     }
 
     public static CursorMeta toMeta(Class<?> klass) {
+        return toMeta(klass, "", "");
+    }
+    
+    public static CursorMeta toMeta(Class<?> klass, String catalog, String table) {
         CursorMeta meta = new CursorMeta();
         if (klass == Properties.class) {
             FieldMeta column = new FieldMeta();
+            column.setSourceTable(new ObjectName(catalog, table));
             column.setName("name");
             column.setType(DataType.varchar());
             meta.addColumn(column);
@@ -189,37 +195,69 @@ public class CursorUtil {
         }
         for (Field i : klass.getFields()) {
             FieldMeta column = new FieldMeta();
-            column.setName(i.getName());
-            if (i.getType() == String.class) {
-                column.setType(DataType.varchar());
-            }
-            else if (i.getType() == int.class) {
-                column.setType(DataType.integer());
-            }
-            else if (i.getType() == Integer.class) {
-                column.setType(DataType.integer());
-            }
-            else if (i.getType() == long.class) {
-                column.setType(DataType.longtype());
-            }
-            else if (i.getType() == Long.class) {
-                column.setType(DataType.longtype());
-            }
-            else if (i.getType() == Timestamp.class) {
-                column.setType(DataType.timestamp());
-            }
-            else if (i.getType() == byte[].class) {
-                column.setType(DataType.binary());
-            }
-            else if (i.getType() == Double.class) {
-                column.setType(DataType.doubleType());
-            }
-            else {
-                throw new NotImplementedException();
-            }
+            column.setSourceTable(new ObjectName(catalog, table));
+            column.setTableAlias(table);
+            column.setName(getAlias(i));
+            column.setSourceColumnName(getSourceName(i));
+            column.setType(getType(i));
             meta.addColumn(column);
         }
         return meta;
+    }
+
+    private static String getSourceName(Field field) {
+        if (field.isAnnotationPresent(MysqlColumnMeta.class)) {
+            MysqlColumnMeta ann = field.getAnnotation(MysqlColumnMeta.class);
+            if (!StringUtils.isEmpty(ann.column())) {
+                return ann.column();
+            }
+        }
+        return getAlias(field);
+    }
+
+    private static String getAlias(Field field) {
+        if (field.isAnnotationPresent(MysqlColumnMeta.class)) {
+            MysqlColumnMeta ann = field.getAnnotation(MysqlColumnMeta.class);
+            if (!StringUtils.isEmpty(ann.alias())) {
+                return ann.alias();
+            }
+        }
+        return field.getName();
+    }
+
+    private static DataType getType(Field field) {
+        DataType result;
+        if (field.getType() == String.class) {
+            result = DataType.varchar();
+        }
+        else if (field.getType() == int.class) {
+            result = DataType.integer();
+        }
+        else if (field.getType() == Integer.class) {
+            result = DataType.integer();
+        }
+        else if (field.getType() == long.class) {
+            result = DataType.longtype();
+        }
+        else if (field.getType() == Long.class) {
+            result = DataType.longtype();
+        }
+        else if (field.getType() == Timestamp.class) {
+            result = DataType.timestamp();
+        }
+        else if (field.getType() == byte[].class) {
+            result = DataType.blob();
+        }
+        else if (field.getType() == Double.class) {
+            result = DataType.doubleType();
+        }
+        else if (field.getType() == Boolean.class) {
+            result = DataType.bool();
+        }
+        else {
+            throw new NotImplementedException();
+        }
+        return result;
     }
 
     public static Record toRecord(Object obj) throws IllegalArgumentException, IllegalAccessException {

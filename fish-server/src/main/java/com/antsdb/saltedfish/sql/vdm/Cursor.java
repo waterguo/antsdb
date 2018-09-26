@@ -29,8 +29,8 @@ public abstract class Cursor implements Closeable {
     public abstract void close();
 
     public Cursor(CursorMaker maker) {
-    	this(maker.getCursorMeta());
-    	this.maker = maker;
+        this(maker.getCursorMeta());
+        this.maker = maker;
     }
     
     public Cursor(CursorMeta meta) {
@@ -41,18 +41,18 @@ public abstract class Cursor implements Closeable {
         return meta;
     }
     
-	public String getName() {
-		if (this.name != null) {
-			return this.name;
-		}
-		if (this.maker != null) {
-			return this.maker.toString();
-		}
-		return "";
-	}
-	
-	public void setName(String name) {
-		this.name = name;
-	}
+    public String getName() {
+        if (this.name != null) {
+            return this.name;
+        }
+        if (this.maker != null) {
+            return this.maker.toString();
+        }
+        return "";
+    }
+    
+    public void setName(String name) {
+        this.name = name;
+    }
     
 }

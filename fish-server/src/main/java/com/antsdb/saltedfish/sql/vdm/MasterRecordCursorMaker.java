@@ -39,7 +39,7 @@ public class MasterRecordCursorMaker extends CursorMaker {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-    	ctx.getCursorStats(makerId).incrementAndGet();
+        ctx.getCursorStats(makerId).incrementAndGet();
         Cursor c = CursorUtil.toCursor(meta, pMaster);
         return c;
     }

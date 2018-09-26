@@ -68,7 +68,7 @@ public class SetSystemParameter extends Statement {
             value = Util.eval(ctx, this.expr, params, 0);
         }
         else {
-        	    value = this.constant;
+            value = this.constant;
         }
         if (this.scope == Scope.GLOBAL) {
             if (this.permanent) {
