@@ -19,8 +19,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.TableType;
@@ -65,23 +68,14 @@ class PageIndexFile {
      * @return null if not found
      */
     static PageIndexFile find(File folder) {
-        File result = null;
-        for (File i:folder.listFiles()) {
-            if (!i.getName().endsWith(".pif")) {
-                continue;
-            }
-            if (result == null) {
-                result = i;
-                continue;
-            }
-            if (i.compareTo(result) > 0) {
-                result = i;
-            }
-        }
-        if (result == null) {
+        List<File> files = new ArrayList<>(Arrays.asList(folder.listFiles((it)->{
+            return it.getName().endsWith(".pif");
+        })));
+        if (files.size() == 0) {
             return null;
         }
-        return new PageIndexFile(result);
+        Collections.sort(files);
+        return new PageIndexFile(files.get(files.size()-1));
     }
     
     long load(Minke minke, Map<Integer, MinkeTable> tableById) throws Exception {
@@ -154,7 +148,7 @@ class PageIndexFile {
         }
     }
 
-    public void save(ConcurrentMap<Integer, MinkeTable> tableById, long sp) throws IOException {
+    public void save(Map<Integer, MinkeTable> tableById, long sp) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(file))) {
             out.writeLong(VERSION | (0xff << 56));
             out.writeLong(sp);

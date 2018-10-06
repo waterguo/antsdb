@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.util;
 
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -253,6 +254,9 @@ public class CursorUtil {
         }
         else if (field.getType() == Boolean.class) {
             result = DataType.bool();
+        }
+        else if (field.getType() == BigDecimal.class) {
+            result = DataType.number();
         }
         else {
             throw new NotImplementedException();

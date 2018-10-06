@@ -47,34 +47,53 @@ public class MinkeFile implements Closeable {
     private int fileId;
     private boolean isMutable;
     
+    /**
+     * open existing or new one
+     * 
+     * @param fileId
+     * @param file
+     * @param fileSize
+     * @param pageSize
+     * @param isMutable
+     */
     public MinkeFile(int fileId, File file, int fileSize, int pageSize, boolean isMutable) {
         this.file = file;
         this.fileId = fileId;
         this.pageSize = pageSize;
         this.fileSize = fileSize;
-        this.nPages = (fileSize - HEADER_SIZE) / this.pageSize;
-        this.pages = new MinkePage[this.nPages];
         this.isMutable = isMutable;
     }
 
+    /**
+     * open existing 
+     * 
+     * @param fileId
+     * @param file
+     * @param isMutable
+     */
+    public MinkeFile(int fileId, File file, boolean isMutable) {
+        this.file = file;
+        this.fileId = fileId;
+        this.isMutable = isMutable;
+    }
 
     public void open() throws IOException {
+        String mode = this.isMutable ? "rw" : "r";
         if (this.file.exists() && (this.file.length() != 0)) {
-            this.mmf = new MemoryMappedFile(file, this.isMutable ? "rw" : "r");
-        }
-        else {
-            this.mmf = new MemoryMappedFile(file, this.fileSize, this.isMutable ? "rw" : "r");
-        }
-        this.addr = this.mmf.getAddress();
-        if (getSignature() == SIGNATURE) {
+            this.mmf = new MemoryMappedFile(file, mode);
+            this.addr = this.mmf.getAddress();
             this.fileSize = getFileSize();
             this.pageSize = getPageSize();
         }
-        else if (this.isMutable){
+        else {
+            this.mmf = new MemoryMappedFile(file, this.fileSize, mode);
+            this.addr = this.mmf.getAddress();
             setSignature(SIGNATURE);
             setFileSize(this.fileSize);
             setPageSize(this.pageSize);
         }
+        this.nPages = (fileSize - HEADER_SIZE) / this.pageSize;
+        this.pages = new MinkePage[this.nPages];
         for (int i=0; i<this.pages.length; i++) {
             int pageId = (this.fileId << 16) + i;
             this.pages[i] = getPage(pageId);

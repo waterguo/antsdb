@@ -302,6 +302,14 @@ public final class MysqlSession {
     private void query(PacketQuery packet, Decoder decoder) throws Exception {
         boolean success = false;
         CharBuffer sql = packet.getQueryAsCharBuf(decoder);
+        /* for debug
+        if (FakeResponse.fake(sql, this.out)) {
+            return;
+        }
+        */
+        /* for debug
+         * MemoryManager.setTrace(true);
+         */
         try {
             queryHandler.query(sql);
             success = true;
@@ -313,6 +321,11 @@ public final class MysqlSession {
             long alloc = MemoryManager.getThreadAllocation();
             if (alloc != 0) {
                 _log.warn("memory leak {}: {}", alloc, sql.toString());
+                /* for debug
+                for (Exception i:MemoryManager.getTrace().values()) {
+                    i.printStackTrace();
+                }
+                */
             }
         }
     }

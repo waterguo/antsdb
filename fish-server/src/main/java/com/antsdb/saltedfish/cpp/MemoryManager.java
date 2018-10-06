@@ -41,7 +41,6 @@ public final class MemoryManager {
     
     static boolean _isTraceEnabled = false;
     static boolean _isDebugEnabled = true;
-    static Map<Long, Exception> _traces = new HashMap<>();
     static ThreadLocal<ThreadData> _local = ThreadLocal.withInitial(() ->{ return new ThreadData();});
 
     static class ThreadData {
@@ -49,6 +48,7 @@ public final class MemoryManager {
         Deque<ByteBuffer>[] buffers = new ArrayDeque[32 - Integer.numberOfLeadingZeros(MAX_CACHE_BLOCK_SIZE-1) + 1];
         long allocated = 0;
         long pooled = 0;
+        Map<Long, Exception> traces;;
         
         ThreadData() {
             for (int i=0; i<this.buffers.length; i++) {
@@ -102,7 +102,10 @@ public final class MemoryManager {
             local.allocated += result.capacity();
         }
         if (_isTraceEnabled) {
-            _traces.put(UberUtil.getAddress(result), new Exception());
+            if (local.traces == null) {
+                local.traces = new HashMap<>();
+            }
+            local.traces.put(UberUtil.getAddress(result), new Exception());
         }
         
         // done
@@ -116,7 +119,10 @@ public final class MemoryManager {
             local.allocated -= buf.capacity();
         }
         if (_isTraceEnabled) {
-            _traces.remove(UberUtil.getAddress(buf));
+            if (local.traces == null) {
+                local.traces = new HashMap<>();
+            }
+            local.traces.remove(UberUtil.getAddress(buf));
         }
         if (buf.capacity() <= MAX_CACHE_BLOCK_SIZE) {
             if ((buf.capacity() + local.pooled) <= MAX_CACHE_SIZE_PER_THREAD) {
@@ -200,6 +206,6 @@ public final class MemoryManager {
     }
     
     public static Map<Long, Exception> getTrace() {
-        return _traces;
+        return getThreadData().traces;
     }
 }

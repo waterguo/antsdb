@@ -28,6 +28,7 @@ public class FieldMeta {
     private ObjectName sourceTable;
     private String sourceColumn;
     private DataType type;
+    private boolean isKeyColumn = false;
     
     public FieldMeta() {}
     
@@ -139,7 +140,7 @@ public class FieldMeta {
     }
 
     public void setColumn(ColumnMeta col) {
-    	this.column = col;
+        this.column = col;
     }
     
     public Object setMatchWeight(int matchWeight2) {
@@ -150,4 +151,11 @@ public class FieldMeta {
         this.tableAlias = alias;
     }
 
+    public void setKeyColumn(boolean value) {
+        this.isKeyColumn = value;
+    }
+    
+    public boolean isKeyColumn() {
+        return this.isKeyColumn;
+    }
 }

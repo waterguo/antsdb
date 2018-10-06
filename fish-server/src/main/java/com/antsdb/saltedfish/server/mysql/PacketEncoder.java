@@ -199,24 +199,21 @@ public final class PacketEncoder {
             buffer.writeInt(0x3f);
             buffer.writeUB4(0);
             buffer.writeByte((byte) (FIELD_TYPE_NULL & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == Boolean.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TINY & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)0);
         }
         else if (meta.getType().getSqlType() == Types.TINYINT) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TINY & 0xff));
-            buffer.writeByte((byte)(meta.getType().isUnsigned() ? UNSIGNED_FLAG : 0));
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == String.class) {
@@ -226,80 +223,70 @@ public final class PacketEncoder {
             buffer.writeUB4(meta.getType().getLength() * 3);
             // type code
             buffer.writeByte((byte) (FIELD_TYPE_VAR_STRING & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == Integer.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(21);
             buffer.writeByte((byte) (FIELD_TYPE_LONG & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == Long.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(21);
             buffer.writeByte((byte) (FIELD_TYPE_LONGLONG & 0xff));
-            buffer.writeByte((byte)0); // signed.
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == BigInteger.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_LONGLONG & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)0);
         }
         else if (meta.getType().getJavaType() == BigDecimal.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_DECIMAL & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Float.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_FLOAT & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Double.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_DOUBLE & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Timestamp.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TIMESTAMP & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Date.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_DATE & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         else if (meta.getType().getJavaType() == Time.class) {
             buffer.writeInt(0x3f);
             buffer.writeUB4(meta.getType().getLength());
             buffer.writeByte((byte) (FIELD_TYPE_TIME & 0xff));
-            buffer.writeByte((byte)0);
-            buffer.writeByte((byte)0);
+            buffer.writeInt(getFieldDetailFlag(meta));
             buffer.writeByte((byte)meta.getType().getScale());
         }
         // BLOB return byte[] as its java type
@@ -312,7 +299,7 @@ public final class PacketEncoder {
                 // type
                 buffer.writeByte((byte)FIELD_TYPE_STRING);
                 // flags
-                buffer.writeInt(0x80);
+                buffer.writeInt((short)(getFieldDetailFlag(meta) | BINARY_FLAG));
                 // decimals
                 buffer.writeByte((byte)0);
             }
@@ -324,7 +311,7 @@ public final class PacketEncoder {
                 // type
                 buffer.writeByte((byte)FIELD_TYPE_VAR_STRING);
                 // flags
-                buffer.writeInt(0x80);
+                buffer.writeInt((short)(getFieldDetailFlag(meta) | BINARY_FLAG));
                 // decimals
                 buffer.writeByte((byte)0);
             }
@@ -333,8 +320,7 @@ public final class PacketEncoder {
                 buffer.writeUB4(2147483647);
                 buffer.writeByte((byte) (FIELD_TYPE_BLOB & 0xff));
                 // flag for Blob is x90 x00
-                buffer.writeByte((byte)0x90);
-                buffer.writeByte((byte)0);
+                buffer.writeInt((short)(getFieldDetailFlag(meta) | BINARY_FLAG | BLOB_FLAG));
                 buffer.writeByte((byte)meta.getType().getScale());
             }
         }
@@ -357,6 +343,19 @@ public final class PacketEncoder {
         */
         // filler
         buffer.writeShort((short)0);
+    }
+
+    private short getFieldDetailFlag(FieldMeta meta) {
+        short result = 0;
+        if (meta.getType() != null) {
+            if (meta.getType().isUnsigned()) {
+                result |= UNSIGNED_FLAG;
+            }
+        }
+        if (meta.isKeyColumn()) {
+            result |= PRI_KEY_FLAG | NOT_NULL_FLAG;
+        }
+        return result;
     }
 
     private int getCharSetId(Charset encoder) {

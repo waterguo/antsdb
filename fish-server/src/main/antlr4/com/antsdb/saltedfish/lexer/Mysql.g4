@@ -552,7 +552,7 @@ show_engines
  : K_SHOW K_ENGINES
  ;
 
-show_function_stmt : K_SHOW K_FUNCTION K_STATUS where_clause?;
+show_function_stmt : K_SHOW K_FUNCTION K_STATUS ( K_LIKE string_value )? where_clause? ;
  
 show_grants
  : K_SHOW K_GRANTS
@@ -717,7 +717,7 @@ expr
  | expr ( '+' | '-' ) expr
  | expr ( '<<' | '>>' | '&' | '|' ) expr
  | expr ( '<' | '<=' | '>' | '>=' ) expr
- | expr ( '=' | '==' | '!=' | '<>' | K_IS K_NOT | K_IS | K_GLOB | K_MATCH ) expr
+ | expr ( '=' | '==' | '!=' | '<>' | '<=>' | K_IS K_NOT | K_IS | K_GLOB | K_MATCH ) expr
  | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) like_expr ( K_ESCAPE expr )?
  | expr expr_in_select
  | expr expr_in_values

@@ -573,13 +573,11 @@ public class MinkeTable implements StorageTable, Recycable {
                     long pKey = scanner.getKeyPointer();
                     if (newpage == null) {
                         newpage = this.minke.alloc(this.tableId, page.getStartKey(), page.getEndKey());
-                        newpage.setParent(page.id);
                         newPage1 = newpage;
                     }
                     else if (newpage.getUsageRatio() >= 0.5f) {
                         if (newPage2 == null) {
                             newpage = this.minke.alloc(this.tableId, pKey, page.getEndKeyPointer());
-                            newpage.setParent(page.id);
                             newPage2 = newpage;
                             newPage1.setEndKey(pKey);
                         }
@@ -589,7 +587,6 @@ public class MinkeTable implements StorageTable, Recycable {
             }
             if (newPage1 == null) {
                 newPage1 = this.minke.alloc(this.tableId, page.getStartKey(), page.getEndKey());
-                newPage1.setParent(page.id);
             }
             if ((newPage1 != null) && (newPage2 != null)) {
                 page.splitRanges(newPage1, newPage2);

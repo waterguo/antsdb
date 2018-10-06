@@ -21,6 +21,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Value;
@@ -28,6 +30,8 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class DumbSorter extends CursorMaker {
+    final static Logger _log = UberUtil.getThisLogger();
+    
     CursorMaker upstream;
     List<Operator> exprs;
     List<Boolean> sortAsc;
@@ -135,6 +139,7 @@ public class DumbSorter extends CursorMaker {
         }
         finally {
             if (!success && (result != null)) {
+                _log.warn("unexpected close");
                 result.close();
             }
         }

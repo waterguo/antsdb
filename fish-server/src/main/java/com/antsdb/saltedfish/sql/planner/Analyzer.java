@@ -157,7 +157,7 @@ class Analyzer {
         }
         else {
             this.version++;
-            boolean resultFromRight = analyze_(mode, x, planner, op.right, scope);
+            boolean resultFromRight = analyze_(Mode.COPY_OR, x, planner, op.right, scope);
             if (resultFromRight) {
                 op.right = new BooleanValue(true);
             }

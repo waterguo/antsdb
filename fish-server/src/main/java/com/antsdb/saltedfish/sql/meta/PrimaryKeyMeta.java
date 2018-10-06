@@ -38,4 +38,12 @@ public class PrimaryKeyMeta extends RuleMeta<PrimaryKeyMeta> {
         return result;
     }
 
+    public boolean isKeyColumn(ColumnMeta columnMeta) {
+        for (int i:getRuleColumns()) {
+            if (i == columnMeta.getId()) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

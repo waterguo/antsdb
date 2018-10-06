@@ -52,8 +52,10 @@ public final class MinkePage implements Comparable<MinkePage> {
     final static int HEADER_SIZE = 0x20;
     final static int OFFSET_SIG = 0;
     final static int OFFSET_USAGE = 4;
-    final static int OFFSET_PARENT = 8;
+    final static int OFFSET_TABLE_ID = 8;
     final static int OFFSET_RANGE_LIST = 0xc;
+    final static int OFFSET_STATE = 0x10;
+    final static int OFFSET_START_KEY = 0x14;
     final static Logger _log = UberUtil.getThisLogger();
     
     private int size;
@@ -301,7 +303,8 @@ public final class MinkePage implements Comparable<MinkePage> {
         heap = new BluntHeap(addr, this.size);
         heap.alloc(HEADER_SIZE);
         Unsafe.putInt(this.addr + OFFSET_SIG, SIG);
-        Unsafe.putInt(this.addr + OFFSET_PARENT, 0);
+        Unsafe.putInt(this.addr + OFFSET_TABLE_ID, 0);
+        setSavedState(PageState.FREE);
         setUsage(0);
         this.rows = FishSkipList.alloc(heap, KeyBytes.getComparator());
         this.ranges = FishSkipList.alloc(this.heap, KeyBytes.getComparator());
@@ -511,14 +514,30 @@ public final class MinkePage implements Comparable<MinkePage> {
         return this.state.get() & 0x3;
     }
     
-    public int getParent() {
-        return Unsafe.getIntVolatile(this.addr + OFFSET_PARENT);
+    public int getSavedTableId() {
+        return Unsafe.getIntVolatile(this.addr + OFFSET_TABLE_ID);
     }
     
-    public void setParent(int parentPage) {
-        Unsafe.putIntVolatile(this.addr + OFFSET_PARENT, parentPage);
+    private void setSavedTableId(int parentPage) {
+        Unsafe.putIntVolatile(this.addr + OFFSET_TABLE_ID, parentPage);
     }
-
+    
+    private void setSavedState(int value) {
+        Unsafe.putIntVolatile(this.addr + OFFSET_STATE, value);
+    }
+    
+    public int getSavedState() {
+        return Unsafe.getIntVolatile(this.addr + OFFSET_STATE);
+    }
+    
+    private void setSavedStartKey(long pKey) {
+        Unsafe.putIntVolatile(this.addr + OFFSET_START_KEY, (int)(pKey - this.addr));
+    }
+    
+    public long getSavedStartKey() {
+        return this.addr + Unsafe.getIntVolatile(this.addr + OFFSET_START_KEY);
+    }
+    
     private int getState(int value) {
         int result = value & 0x3;
         return result;
@@ -539,6 +558,7 @@ public final class MinkePage implements Comparable<MinkePage> {
             throw new IllegalArgumentException(UberFormatter.hex(this.id));
         }
         this.state.compareAndSet(current, getNewState(currentState, PageState.CARBONFREEZED));
+        setSavedState(PageState.CARBONFREEZED);
         freeze();
         this.mfile.force(this);
     }
@@ -569,6 +589,9 @@ public final class MinkePage implements Comparable<MinkePage> {
         this.keyEnd = endKey;
         this.pEndKey = (endKey == null) ? 0 : endKey.getAddress();
         this.tableId = tableId;
+        setSavedTableId(tableId);
+        setSavedState(PageState.ACTIVE);
+        setSavedStartKey(KeyBytes.alloc(this.pStartKey).getAddress());
         _log.debug("page {} is assigned with {}-{} tableId={}", 
                 hex(this.id), 
                 KeyBytes.toString(this.pStartKey),

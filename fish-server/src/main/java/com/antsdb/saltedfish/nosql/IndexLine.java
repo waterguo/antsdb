@@ -69,5 +69,10 @@ public final class IndexLine {
     public String toString() {
         return String.format("%s:%s", KeyBytes.toString(getKey()), KeyBytes.toString(getRowKey()));
     }
+
+    public int getRawSize() {
+        int result = KeyBytes.getRawSize(getKey()) + KeyBytes.getRawSize(getRowKey()) + 1;
+        return result;
+    }
     
 }

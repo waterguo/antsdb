@@ -128,8 +128,9 @@ final class Helper {
         byte[] misc = new byte[1];
         misc[0] = line.getMisc();
         Put put = new Put(key);
-        put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_INDEXKEY_BYTES, rowKey);
-        put.addColumn(Helper.DATA_COLUMN_FAMILY_BYTES, Helper.SYS_COLUMN_MISC_BYTES, misc);
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_INDEXKEY_BYTES, rowKey);
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_MISC_BYTES, misc);
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(line.getRawSize()));
         return put;
     }
 
@@ -372,6 +373,20 @@ final class Helper {
         return version;
     }
 
+    public static int getSize(Result r) {
+        NavigableMap<byte[], byte[]> f = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
+        byte[] sizeBytes = f.get(SYS_COLUMN_SIZE_BYTES);
+        if (sizeBytes != null) {
+            int size = Bytes.toInt(sizeBytes);
+            return size;
+        }
+        else {
+            byte[] indexKey = r.getRow();
+            byte[] rowKey = f.get(SYS_COLUMN_INDEXKEY_BYTES);
+            return indexKey.length + KeyBytes.HEADER_SIZE + rowKey.length + KeyBytes.HEADER_SIZE + 1;
+        }
+    }
+    
     public static long toRow(Heap heap, Result r, TableMeta table, int tableId) {
         if (r.isEmpty()) {
             return 0;

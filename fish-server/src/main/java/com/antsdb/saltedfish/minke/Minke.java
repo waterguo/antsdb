@@ -19,6 +19,8 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -242,6 +244,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         
         this.pif = PageIndexFile.find(this.home);
         if (this.pif != null) {
+            _log.info("loading pif: {}", this.pif.file);
             this.syncSp = this.pif.load(this, this.tableById);
             this.checkpointSp = this.syncSp;
         }
@@ -326,7 +329,15 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         PageIndexFile old = this.pif;
         this.pif = next;
         if (old != null) {
-            HumpbackUtil.deleteHumpbackFile(old.file);
+            // keep the last 3 pif files
+            List<File> files = Arrays.asList(this.pif.file.getParentFile().listFiles((it)->{
+                return it.getName().endsWith(".pif");
+            }));
+            Collections.sort(files);
+            for (int i=0; i<files.size() - 3; i++) {
+                File file = files.get(i);
+                HumpbackUtil.deleteHumpbackFile(file);
+            }
         }
         
         // done

@@ -32,55 +32,55 @@ import io.netty.handler.codec.MessageToMessageDecoder;
  * @author wgu0
  */
 public class MysqlClient {
-	String host;
-	int port;
-	ChannelFuture future;
-	MysqlClientState state = new MysqlClientState();
-	
-	class StateMonitor extends MessageToMessageDecoder<ByteBuf> {
-		@Override
-		protected void decode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
-			ByteBuf packet = (ByteBuf)msg;
-			packet.retain();
-			getState().notifyReceive(packet);
-			out.add(new MysqlPacket(getState().getPacketType(packet), packet));
-		}
-	}
-	
-	public MysqlClient(String host, int port) {
-		this.host = host;
-		this.port = port;
-	}
-	
-	public void start(EventLoopGroup pool, ChannelHandler handler) throws InterruptedException {
-		Bootstrap b = new Bootstrap();
+    String host;
+    int port;
+    ChannelFuture future;
+    MysqlClientState state = new MysqlClientState();
+    
+    class StateMonitor extends MessageToMessageDecoder<ByteBuf> {
+        @Override
+        protected void decode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
+            ByteBuf packet = (ByteBuf)msg;
+            packet.retain();
+            getState().notifyReceive(packet);
+            out.add(new MysqlPacket(getState().getPacketType(packet), packet));
+        }
+    }
+    
+    public MysqlClient(String host, int port) {
+        this.host = host;
+        this.port = port;
+    }
+    
+    public void start(EventLoopGroup pool, ChannelHandler handler) throws InterruptedException {
+        Bootstrap b = new Bootstrap();
         ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
-			@Override
-			protected void initChannel(SocketChannel ch) throws Exception {
-				ch.pipeline().addLast(new MysqlPacketDecoder(), new StateMonitor(), handler);
-			}
+            @Override
+            protected void initChannel(SocketChannel ch) throws Exception {
+                ch.pipeline().addLast(new MysqlPacketDecoder(), new StateMonitor(), handler);
+            }
         };
-		b.group(pool)
-		 .channel(NioSocketChannel.class)
-		 .option(ChannelOption.TCP_NODELAY, true)
-		 .handler(initializer);
-		this.future = b.connect(this.host, this.port).sync();
-	}
+        b.group(pool)
+         .channel(NioSocketChannel.class)
+         .option(ChannelOption.TCP_NODELAY, true)
+         .handler(initializer);
+        this.future = b.connect(this.host, this.port).sync();
+    }
 
-	public void close() {
-		this.future.channel().close();
-	}
+    public void close() {
+        this.future.channel().close();
+    }
 
-	public void write(ByteBuf packet) {
-		this.state.notifySend(packet);
-		this.future.channel().write(packet);
-	}
+    public void write(ByteBuf packet) {
+        this.state.notifySend(packet);
+        this.future.channel().write(packet);
+    }
 
-	public void flush() {
-		this.future.channel().flush();
-	}
-	
-	public MysqlClientState getState() {
-		return this.state;
-	}
+    public void flush() {
+        this.future.channel().flush();
+    }
+    
+    public MysqlClientState getState() {
+        return this.state;
+    }
 }

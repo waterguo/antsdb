@@ -26,6 +26,7 @@ public class MysqlDialect extends SqlDialect {
     @Override
     public void init(Orca orca) {
         orca.registerSystemView("mysql", "user", new USER(orca));
+        orca.registerSystemView("mysql", "proc", new PROC());
         orca.registerSystemView("information_schema", "SCHEMATA", new SCHEMATA(orca));
         orca.registerSystemView("information_schema", "TABLES", new TABLES(orca));
         orca.registerSystemView("information_schema", "ROUTINES", new ROUTINES(orca));
@@ -44,6 +45,7 @@ public class MysqlDialect extends SqlDialect {
         orca.registerSystemView("information_schema", "PARTITIONS", new PARTITIONS());
         orca.registerSystemView("information_schema", "FILES", new FILES());
         orca.registerSystemView("information_schema", "PARAMETERS", new PARAMETERS());
+        orca.registerSystemView("information_schema", "PROFILING", new PROFILING());
         orca.registerSystemView(Orca.SYSNS, "mysql_slave", new MysqlSlaveView());
     }
 

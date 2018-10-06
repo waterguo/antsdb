@@ -146,6 +146,7 @@ import com.antsdb.saltedfish.sql.vdm.OpNegate;
 import com.antsdb.saltedfish.sql.vdm.OpNot;
 import com.antsdb.saltedfish.sql.vdm.OpOr;
 import com.antsdb.saltedfish.sql.vdm.OpRegexp;
+import com.antsdb.saltedfish.sql.vdm.OpSafeEqual;
 import com.antsdb.saltedfish.sql.vdm.OpSequenceValue;
 import com.antsdb.saltedfish.sql.vdm.OpSingleValueQuery;
 import com.antsdb.saltedfish.sql.vdm.Operator;
@@ -318,6 +319,11 @@ public class ExprGenerator {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
                 return new OpEqualNull(left, right);
+            }
+            else if ("<=>".equals(op)) {
+                Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
+                Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
+                return new OpSafeEqual(left, right);
             }
             else if ("+".equals(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));

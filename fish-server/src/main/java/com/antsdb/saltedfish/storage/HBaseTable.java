@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.storage;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
@@ -50,7 +51,10 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 class HBaseTable implements StorageTable {
     private static Logger _log = UberUtil.getThisLogger();
-    private static ThreadLocal<Heap> _heap = new ThreadLocal<>();
+    private static ThreadLocal<BluntHeap> _heap = ThreadLocal.withInitial(()->{
+        ByteBuffer buf = ByteBuffer.allocateDirect(64*1024);
+        return new BluntHeap(buf);
+    });
 
     private HBaseStorageService hbase;
     private TableName tn;
@@ -189,7 +193,11 @@ class HBaseTable implements StorageTable {
             Table htable = getConnection().getTable(this.tn);
             Get get = new Get(Helper.antsKeyToHBase(pKey));
             Result r = htable.get(get);
-            long pRow = Helper.toRow(getHeap(), r, meta, this.tableId);
+            if (r.isEmpty()) {
+                return 0;
+            }
+            int size = Helper.getSize(r);
+            long pRow = Helper.toRow(getHeap(size), r, meta, this.tableId);
             return pRow;
         }
         catch (IOException x) {
@@ -209,7 +217,11 @@ class HBaseTable implements StorageTable {
             Table htable = getConnection().getTable(this.tn);
             Get get = new Get(Helper.antsKeyToHBase(pKey));
             Result r = htable.get(get);
-            long pLine = Helper.toIndexLine(getHeap(), r);
+            if (r.isEmpty()) {
+                return 0;
+            }
+            int size = Helper.getSize(r);
+            long pLine = Helper.toIndexLine(getHeap(size), r);
             if (pLine == 0) {
                 return 0;
             }
@@ -283,10 +295,10 @@ class HBaseTable implements StorageTable {
         return this.tn.toString();
     }
 
-    private Heap getHeap() {
-        Heap result = _heap.get();
-        if (result == null) {
-            result = new BluntHeap();
+    private Heap getHeap(int size) {
+        BluntHeap result = _heap.get();
+        if (result.capacity() < size) {
+            result = new BluntHeap(ByteBuffer.allocateDirect(size));
             _heap.set(result);
         }
         result.reset(0);

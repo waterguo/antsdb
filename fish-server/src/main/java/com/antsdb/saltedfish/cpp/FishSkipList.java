@@ -31,312 +31,312 @@ import io.netty.util.internal.ThreadLocalRandom;
  * @author wgu0
  */
 public final class FishSkipList implements ConsoleHelper {
-	static final long KEY_NULL = Unsafe.allocateMemory(8);
-	static final int OFFSET_ROOT = 0;
-	static final int OFFSET_HEAD = 4;
-	static final int OP_EQUAL = 0;
-	static final int OP_LT = 1;
-	static final int OP_GT = 2;
-	static final int OP_GE = 3;
-	static final int OP_LE = 4;
-	static final int DELETE_MASK = 1;
+    static final long KEY_NULL = Unsafe.allocateMemory(8);
+    static final int OFFSET_ROOT = 0;
+    static final int OFFSET_HEAD = 4;
+    static final int OP_EQUAL = 0;
+    static final int OP_LT = 1;
+    static final int OP_GT = 2;
+    static final int OP_GE = 3;
+    static final int OP_LE = 4;
+    static final int DELETE_MASK = 1;
 
-	static final Logger _log = UberUtil.getThisLogger();
+    static final Logger _log = UberUtil.getThisLogger();
     static final VariableLengthLongComparator _comp = new VariableLengthLongComparator();
-	
-	private KeyComparator comparator = _comp;
-	long base;
-	BluntHeap heap;
-	private long addr;
-	
-	static {
-		Unsafe.putLong(KEY_NULL, 0);
-		Unsafe.putByte(KEY_NULL, Value.FORMAT_KEY_BYTES);
-	}
-	
-	static class IndexNode {
-		protected final static int OFFSET_RIGHT_OFFSET = 0;
-		protected final static int OFFSET_DOWN_OFFSET = OFFSET_RIGHT_OFFSET + 4;
-		protected final static int OFFSET_NODE_OFFSET = OFFSET_DOWN_OFFSET + 4;
-		protected final static int OFFSET_END = OFFSET_NODE_OFFSET + 4;
-		
-		final static int alloc(BluntHeap heap) {
-			return heap.allocOffset(OFFSET_END);
-		}
-		
-		final static int alloc(BluntHeap heap, int node , int down, int right) {
-			int result = alloc(heap);
+    
+    private KeyComparator comparator = _comp;
+    long base;
+    BluntHeap heap;
+    private long addr;
+    
+    static {
+        Unsafe.putLong(KEY_NULL, 0);
+        Unsafe.putByte(KEY_NULL, Value.FORMAT_KEY_BYTES);
+    }
+    
+    static class IndexNode {
+        protected final static int OFFSET_RIGHT_OFFSET = 0;
+        protected final static int OFFSET_DOWN_OFFSET = OFFSET_RIGHT_OFFSET + 4;
+        protected final static int OFFSET_NODE_OFFSET = OFFSET_DOWN_OFFSET + 4;
+        protected final static int OFFSET_END = OFFSET_NODE_OFFSET + 4;
+        
+        final static int alloc(BluntHeap heap) {
+            return heap.allocOffset(OFFSET_END);
+        }
+        
+        final static int alloc(BluntHeap heap, int node , int down, int right) {
+            int result = alloc(heap);
             if ((result & DELETE_MASK) != 0) {
                 throw new CodingError();
             }
-			heap.putIntVolatile(result + OFFSET_RIGHT_OFFSET, right);
-			heap.putIntVolatile(result + OFFSET_DOWN_OFFSET, down);
-			heap.putIntVolatile(result + OFFSET_NODE_OFFSET, node);
-			return result;
-		}
-		
-		final static int getRight(long base, int oIndexNode) {
+            heap.putIntVolatile(result + OFFSET_RIGHT_OFFSET, right);
+            heap.putIntVolatile(result + OFFSET_DOWN_OFFSET, down);
+            heap.putIntVolatile(result + OFFSET_NODE_OFFSET, node);
+            return result;
+        }
+        
+        final static int getRight(long base, int oIndexNode) {
             oIndexNode = oIndexNode & ~DELETE_MASK;
-			return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_RIGHT_OFFSET);
-		}
-		
-		final static void setRight(long base, int oIndexNode, int right) {
+            return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_RIGHT_OFFSET);
+        }
+        
+        final static void setRight(long base, int oIndexNode, int right) {
             oIndexNode = oIndexNode & ~DELETE_MASK;
-			Unsafe.putIntVolatile(base + oIndexNode + OFFSET_RIGHT_OFFSET, right);
-		}
-		
-		final static boolean casRight(long base, int oIndexNode, int oldRight, int newRight) {
+            Unsafe.putIntVolatile(base + oIndexNode + OFFSET_RIGHT_OFFSET, right);
+        }
+        
+        final static boolean casRight(long base, int oIndexNode, int oldRight, int newRight) {
             oIndexNode = oIndexNode & ~DELETE_MASK;
-			return Unsafe.compareAndSwapInt(base + oIndexNode + OFFSET_RIGHT_OFFSET, oldRight, newRight);
-		}
-		
-		final static int getDown(long base, int oIndexNode) {
-		    oIndexNode = oIndexNode & ~DELETE_MASK;
-			return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_DOWN_OFFSET);
-		}
-		
-		final static int getNode(long base, int oIndexNode) {
+            return Unsafe.compareAndSwapInt(base + oIndexNode + OFFSET_RIGHT_OFFSET, oldRight, newRight);
+        }
+        
+        final static int getDown(long base, int oIndexNode) {
             oIndexNode = oIndexNode & ~DELETE_MASK;
-			return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_NODE_OFFSET);
-		}
+            return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_DOWN_OFFSET);
+        }
+        
+        final static int getNode(long base, int oIndexNode) {
+            oIndexNode = oIndexNode & ~DELETE_MASK;
+            return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_NODE_OFFSET);
+        }
 
-		final static boolean link(long base, int oIndexNode, int oOldRight, int oNewRight) {
+        final static boolean link(long base, int oIndexNode, int oOldRight, int oNewRight) {
             oIndexNode = oIndexNode & ~DELETE_MASK;
-			setRight(base, oNewRight, oOldRight);
-			return casRight(base, oIndexNode, oOldRight, oNewRight);
-		}
+            setRight(base, oNewRight, oOldRight);
+            return casRight(base, oIndexNode, oOldRight, oNewRight);
+        }
 
-		public static Object toString(long base, int offset) {
-			StringBuilder buf = new StringBuilder();
-			buf.append("IN-");
-			buf.append(String.format("%04x", offset));
-			buf.append(" [");
-			buf.append("right:");
-			buf.append(IndexNode.getRight(base, offset));
-			buf.append(" down:");
-			buf.append(IndexNode.getDown(base, offset));
-			buf.append(" node:");
-			buf.append(IndexNode.getNode(base, offset));
-			buf.append(']');
-			return buf.toString();
-		}
-	}
-	
-	final static class HeadIndex extends IndexNode {
-		protected final static int OFFSET_LEVEL_OFFSET = OFFSET_END;
-		
-		final static int alloc(BluntHeap heap, int node, int down, int right, int level) {
-			int result = heap.allocOffset(OFFSET_END + 4);
-			heap.putIntVolatile(result + OFFSET_RIGHT_OFFSET, right);
-			heap.putIntVolatile(result + OFFSET_DOWN_OFFSET, down);
-			heap.putIntVolatile(result + OFFSET_NODE_OFFSET, node);
-			heap.putIntVolatile(result + OFFSET_LEVEL_OFFSET, level);
-			return result;
-		}
-		
-		final static int getLevel(long base, int oIndexNode) {
-			return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_LEVEL_OFFSET);
-		}
+        public static Object toString(long base, int offset) {
+            StringBuilder buf = new StringBuilder();
+            buf.append("IN-");
+            buf.append(String.format("%04x", offset));
+            buf.append(" [");
+            buf.append("right:");
+            buf.append(IndexNode.getRight(base, offset));
+            buf.append(" down:");
+            buf.append(IndexNode.getDown(base, offset));
+            buf.append(" node:");
+            buf.append(IndexNode.getNode(base, offset));
+            buf.append(']');
+            return buf.toString();
+        }
+    }
+    
+    final static class HeadIndex extends IndexNode {
+        protected final static int OFFSET_LEVEL_OFFSET = OFFSET_END;
+        
+        final static int alloc(BluntHeap heap, int node, int down, int right, int level) {
+            int result = heap.allocOffset(OFFSET_END + 4);
+            heap.putIntVolatile(result + OFFSET_RIGHT_OFFSET, right);
+            heap.putIntVolatile(result + OFFSET_DOWN_OFFSET, down);
+            heap.putIntVolatile(result + OFFSET_NODE_OFFSET, node);
+            heap.putIntVolatile(result + OFFSET_LEVEL_OFFSET, level);
+            return result;
+        }
+        
+        final static int getLevel(long base, int oIndexNode) {
+            return Unsafe.getIntVolatile(base + oIndexNode + OFFSET_LEVEL_OFFSET);
+        }
 
-		public static Object toString(long base, int offset) {
-			StringBuilder buf = new StringBuilder();
-			buf.append("HI-");
-			buf.append(String.format("%04x", offset));
-			buf.append(" [");
-			buf.append("level:");
-			buf.append(getLevel(base, offset));
-			buf.append(" right:");
-			buf.append(IndexNode.getRight(base, offset));
-			buf.append(" down:");
-			buf.append(IndexNode.getDown(base, offset));
-			buf.append(" node:");
-			buf.append(IndexNode.getNode(base, offset));
-			buf.append(']');
-			return buf.toString();
-		}
-	}
-	
-	public final static class Entry {
-	    long p;
-	    
-	    public Entry(long p) {
-	        this.p = p;
-	    }
-	    
-	    public long getKeyPointer() {
-	        return Node.getKeyPointer(this.p, 0);
-	    }
-	    
-	    public long getValuePointer() {
-	        return Node.getValuePointer(this.p, 0);
-	    }
-	}
-	
-	public final static class Node {
-		private final static int OFFSET_VALUE_OFFSET = 0;
-		private final static int OFFSET_NEXT_OFFSET = OFFSET_VALUE_OFFSET + 4;
-		private final static int OFFSET_KEY = OFFSET_NEXT_OFFSET + 4;
+        public static Object toString(long base, int offset) {
+            StringBuilder buf = new StringBuilder();
+            buf.append("HI-");
+            buf.append(String.format("%04x", offset));
+            buf.append(" [");
+            buf.append("level:");
+            buf.append(getLevel(base, offset));
+            buf.append(" right:");
+            buf.append(IndexNode.getRight(base, offset));
+            buf.append(" down:");
+            buf.append(IndexNode.getDown(base, offset));
+            buf.append(" node:");
+            buf.append(IndexNode.getNode(base, offset));
+            buf.append(']');
+            return buf.toString();
+        }
+    }
+    
+    public final static class Entry {
+        long p;
+        
+        public Entry(long p) {
+            this.p = p;
+        }
+        
+        public long getKeyPointer() {
+            return Node.getKeyPointer(this.p, 0);
+        }
+        
+        public long getValuePointer() {
+            return Node.getValuePointer(this.p, 0);
+        }
+    }
+    
+    public final static class Node {
+        private final static int OFFSET_VALUE_OFFSET = 0;
+        private final static int OFFSET_NEXT_OFFSET = OFFSET_VALUE_OFFSET + 4;
+        private final static int OFFSET_KEY = OFFSET_NEXT_OFFSET + 4;
 
-		final static int alloc(BluntHeap heap, long pKey, int oNext ) {
-			int size = (pKey != 0) ? KeyBytes.getRawSize(pKey) : 0;
-			int result = heap.allocOffset(OFFSET_KEY + size);
+        final static int alloc(BluntHeap heap, long pKey, int oNext ) {
+            int size = (pKey != 0) ? KeyBytes.getRawSize(pKey) : 0;
+            int result = heap.allocOffset(OFFSET_KEY + size);
             if ((result & DELETE_MASK) != 0) {
                 // make sure result is 4 bytes aligned
                 throw new CodingError();
             }
-			setValue(heap, result, 0);
-			setNext(heap, result, oNext);
-			Unsafe.copyMemory(pKey, heap.getAddress(result + OFFSET_KEY), size);
-			return result;
-		}
-		
-		public final static int getKeyOffset(int oNode) {
-		    oNode = oNode & ~DELETE_MASK;
-			return oNode + OFFSET_KEY;
-		}
-		
-		public final static int getNext(long base, int oNode) {
+            setValue(heap, result, 0);
+            setNext(heap, result, oNext);
+            Unsafe.copyMemory(pKey, heap.getAddress(result + OFFSET_KEY), size);
+            return result;
+        }
+        
+        public final static int getKeyOffset(int oNode) {
             oNode = oNode & ~DELETE_MASK;
-			int result = Unsafe.getIntVolatile(base + oNode + OFFSET_NEXT_OFFSET);
-			return result;
-		}
+            return oNode + OFFSET_KEY;
+        }
+        
+        public final static int getNext(long base, int oNode) {
+            oNode = oNode & ~DELETE_MASK;
+            int result = Unsafe.getIntVolatile(base + oNode + OFFSET_NEXT_OFFSET);
+            return result;
+        }
 
-		public static void setNext(BluntHeap heap, int oNode, int oNext) {
+        public static void setNext(BluntHeap heap, int oNode, int oNext) {
             oNode = oNode & ~DELETE_MASK;
-			heap.putIntVolatile(oNode + OFFSET_NEXT_OFFSET, oNext);
-		}
+            heap.putIntVolatile(oNode + OFFSET_NEXT_OFFSET, oNext);
+        }
 
-		public final static boolean casValue(BluntHeap heap, int oNode, int oldValue, int newValue) {
+        public final static boolean casValue(BluntHeap heap, int oNode, int oldValue, int newValue) {
             oNode = oNode & ~DELETE_MASK;
-			return heap.compareAndSwapInt(oNode + OFFSET_VALUE_OFFSET, oldValue, newValue);
-		}
+            return heap.compareAndSwapInt(oNode + OFFSET_VALUE_OFFSET, oldValue, newValue);
+        }
 
-		final static int getValue(long base, int oNode) {
+        final static int getValue(long base, int oNode) {
             oNode = oNode & ~DELETE_MASK;
-			return Unsafe.getIntVolatile(base + oNode + OFFSET_VALUE_OFFSET);
-		}
-		
-		public final static void setValue(BluntHeap heap, int oNode, int pValue) {
+            return Unsafe.getIntVolatile(base + oNode + OFFSET_VALUE_OFFSET);
+        }
+        
+        public final static void setValue(BluntHeap heap, int oNode, int pValue) {
             oNode = oNode & ~DELETE_MASK;
-			heap.putIntVolatile(oNode + OFFSET_VALUE_OFFSET, pValue);
-		}
+            heap.putIntVolatile(oNode + OFFSET_VALUE_OFFSET, pValue);
+        }
 
-		public final static boolean isDeleted(long base, int oNode) {
+        public final static boolean isDeleted(long base, int oNode) {
             oNode = oNode & ~DELETE_MASK;
             int oNext = getNext(base, oNode);
             return (oNext & DELETE_MASK) != 0;
-		}
+        }
             
-		public final static boolean casNext(BluntHeap heap, int oNode, int oldValue, int newValue) {
+        public final static boolean casNext(BluntHeap heap, int oNode, int oldValue, int newValue) {
             oNode = oNode & ~DELETE_MASK;
-			return heap.compareAndSwapInt(oNode + OFFSET_NEXT_OFFSET, oldValue, newValue);
-		}
+            return heap.compareAndSwapInt(oNode + OFFSET_NEXT_OFFSET, oldValue, newValue);
+        }
 
-		public final static long getKeyPointer(long base, int oNode) {
+        public final static long getKeyPointer(long base, int oNode) {
             oNode = oNode & ~DELETE_MASK;
-			return base + oNode + OFFSET_KEY;
-		}
+            return base + oNode + OFFSET_KEY;
+        }
 
-		public final static int getValueOffset(int oNode) {
+        public final static int getValueOffset(int oNode) {
             oNode = oNode & ~DELETE_MASK;
-			return oNode + OFFSET_VALUE_OFFSET;
-		}
-		
-		public final static long getValuePointer(long base, int oNode) {
+            return oNode + OFFSET_VALUE_OFFSET;
+        }
+        
+        public final static long getValuePointer(long base, int oNode) {
             oNode = oNode & ~DELETE_MASK;
-			long p = base + oNode + OFFSET_VALUE_OFFSET;
-			return p;
-		}
+            long p = base + oNode + OFFSET_VALUE_OFFSET;
+            return p;
+        }
 
-		public static Object toString(long base, int offset) {
-			StringBuilder buf = new StringBuilder();
-			buf.append("ND-");
-			buf.append(String.format("%04x", offset));
-			buf.append(" [");
-			buf.append("value:");
-			buf.append(getValue(base, offset));
-			buf.append(" next:");
-			buf.append(getNext(base, offset));
-			buf.append(" key:");
-			buf.append(KeyBytes.toString(getKeyPointer(base, offset)));
-			buf.append(']');
-			return buf.toString();
-		}
-	}
-	
-	public FishSkipList(long base, int offset, KeyComparator comp) {
-		this.base = base;
-		this.addr = base + offset;
-		if (comp != null) {
-			this.comparator = comp;
-		}
-	}
+        public static Object toString(long base, int offset) {
+            StringBuilder buf = new StringBuilder();
+            buf.append("ND-");
+            buf.append(String.format("%04x", offset));
+            buf.append(" [");
+            buf.append("value:");
+            buf.append(getValue(base, offset));
+            buf.append(" next:");
+            buf.append(getNext(base, offset));
+            buf.append(" key:");
+            buf.append(KeyBytes.toString(getKeyPointer(base, offset)));
+            buf.append(']');
+            return buf.toString();
+        }
+    }
+    
+    public FishSkipList(long base, int offset, KeyComparator comp) {
+        this.base = base;
+        this.addr = base + offset;
+        if (comp != null) {
+            this.comparator = comp;
+        }
+    }
 
-	private FishSkipList() {
-	}
-	
-	public static FishSkipList alloc(BluntHeap heap, KeyComparator comp) {
-		FishSkipList slist = new FishSkipList();
-		slist.base = heap.getAddress(0);
-		slist.heap = heap;
-		if (comp != null) {
-	        slist.comparator = comp;
-		}
-		slist.addr = heap.alloc(8);
+    private FishSkipList() {
+    }
+    
+    public static FishSkipList alloc(BluntHeap heap, KeyComparator comp) {
+        FishSkipList slist = new FishSkipList();
+        slist.base = heap.getAddress(0);
+        slist.heap = heap;
+        if (comp != null) {
+            slist.comparator = comp;
+        }
+        slist.addr = heap.alloc(8);
         slist.setHead(Node.alloc(heap, KEY_NULL, 0));
         slist.setRoot(HeadIndex.alloc(heap, slist.getHead(), 0, 0, 0));
-		return slist;
-	}
-	
-	public long getAddress() {
-	    return this.addr;
-	}
-	
-	int getRoot() {
-		return Unsafe.getIntVolatile(this.addr + OFFSET_ROOT);
-	}
-	
-	private void setRoot(int value) {
-		Unsafe.putIntVolatile(this.addr + OFFSET_ROOT, value);
-	}
-	
-	private boolean casRoot(int cmp, int val) {
-		return Unsafe.compareAndSwapInt(this.addr + OFFSET_ROOT, cmp, val);
-	}
+        return slist;
+    }
     
-	public int getHead() {
-		return Unsafe.getIntVolatile(this.addr + OFFSET_HEAD);
-	}
-	
+    public long getAddress() {
+        return this.addr;
+    }
+    
+    int getRoot() {
+        return Unsafe.getIntVolatile(this.addr + OFFSET_ROOT);
+    }
+    
+    private void setRoot(int value) {
+        Unsafe.putIntVolatile(this.addr + OFFSET_ROOT, value);
+    }
+    
+    private boolean casRoot(int cmp, int val) {
+        return Unsafe.compareAndSwapInt(this.addr + OFFSET_ROOT, cmp, val);
+    }
+    
+    public int getHead() {
+        return Unsafe.getIntVolatile(this.addr + OFFSET_HEAD);
+    }
+    
     private int getHeadNode() {
         int oNext = Node.getNext(this.base, getHead());
         return oNext;
     }
     
-	private void setHead(int value) {
-		Unsafe.putIntVolatile(this.addr + OFFSET_HEAD, value);
-	}
+    private void setHead(int value) {
+        Unsafe.putIntVolatile(this.addr + OFFSET_HEAD, value);
+    }
 
-	/**
-	 * find the value
-	 * 
-	 * @param pKey pointer to the key 
-	 * @return a pointer to a 32 bits value
-	 */
-	public long get(long pKey) {
-		if (pKey == 0) {
-			throw new IllegalArgumentException();
-		}
-		int node = findNode(pKey, true, false, false);
-		if (node == 0) {
-			return 0;
-		}
-		if (Node.isDeleted(this.base, node)) {
-		    return 0;
-		}
-		return Node.getValuePointer(this.base, node);
-	}
-	
+    /**
+     * find the value
+     * 
+     * @param pKey pointer to the key 
+     * @return a pointer to a 32 bits value
+     */
+    public long get(long pKey) {
+        if (pKey == 0) {
+            throw new IllegalArgumentException();
+        }
+        int node = findNode(pKey, true, false, false);
+        if (node == 0) {
+            return 0;
+        }
+        if (Node.isDeleted(this.base, node)) {
+            return 0;
+        }
+        return Node.getValuePointer(this.base, node);
+    }
+    
     public boolean delete(long pKey) {
         // delete the node at bottom
         
@@ -427,19 +427,19 @@ public final class FishSkipList implements ConsoleHelper {
     }
     
     /**
-	 * 
-	 * @param pKey
-	 * @return a pointer to a 32 bits variable
-	 */
-	public long put(long pKey) {
-		if (pKey == 0) {
-			throw new IllegalArgumentException();
-		}
-		return doPut(pKey);
-	}
+     * 
+     * @param pKey
+     * @return a pointer to a 32 bits variable
+     */
+    public long put(long pKey) {
+        if (pKey == 0) {
+            throw new IllegalArgumentException();
+        }
+        return doPut(pKey);
+    }
 
     private long doPut(long pKey) {
-    	int z = 0;
+        int z = 0;
         outer: for (;;) {
             for (int b = findPredecessor(pKey), n = Node.getNext(this.base, b);;) {
                 if (n != 0) {
@@ -469,14 +469,14 @@ public final class FishSkipList implements ConsoleHelper {
             }
         }
     
-    	try {
-    	    buildIndex(pKey, z);
-    	}
-    	catch (OutOfHeapMemory x) {
-    	    // failed to add index node doesnt hurt
-    	}
-	    
-	    return Node.getValuePointer(this.base, z);
+        try {
+            buildIndex(pKey, z);
+        }
+        catch (OutOfHeapMemory x) {
+            // failed to add index node doesnt hurt
+        }
+        
+        return Node.getValuePointer(this.base, z);
     }
     
     private void buildIndex(long pKey, int z) {
@@ -554,27 +554,27 @@ public final class FishSkipList implements ConsoleHelper {
      */
     private int findPredecessor(long pKey) {
         for (;;) {
-        	for (int q = getRoot(), r = IndexNode.getRight(this.base, getRoot()),d;;) {
-        		if (r > DELETE_MASK) {
-        			int oNode = IndexNode.getNode(this.base, r);
-        			if (compare(pKey, Node.getKeyPointer(this.base, oNode)) > 0) {
-        				q = r;
-        				r = IndexNode.getRight(this.base, r);
-        				continue;
-        			}
-        		}
-        		if ((d = IndexNode.getDown(this.base, q)) == 0) {
-        			return IndexNode.getNode(this.base, q);
-        		}
-        		q = d;
-        		r = IndexNode.getRight(this.base, d);
-        	}
+            for (int q = getRoot(), r = IndexNode.getRight(this.base, getRoot()),d;;) {
+                if (r > DELETE_MASK) {
+                    int oNode = IndexNode.getNode(this.base, r);
+                    if (compare(pKey, Node.getKeyPointer(this.base, oNode)) > 0) {
+                        q = r;
+                        r = IndexNode.getRight(this.base, r);
+                        continue;
+                    }
+                }
+                if ((d = IndexNode.getDown(this.base, q)) == 0) {
+                    return IndexNode.getNode(this.base, q);
+                }
+                q = d;
+                r = IndexNode.getRight(this.base, d);
+            }
         }
     }
 
-	private final int compare(long pKeyX, long pKeyY) {
-		return this.comparator.compare(pKeyX, pKeyY);
-	}
+    private final int compare(long pKeyX, long pKeyY) {
+        return this.comparator.compare(pKeyX, pKeyY);
+    }
 
     int findNode(long pKey, boolean inclusive, boolean returnLeft, boolean returnRight) {
         if (inclusive) {
@@ -806,108 +806,108 @@ public final class FishSkipList implements ConsoleHelper {
         return 0;
     }
 
-	@Override
-	public String toString() {
-		StringBuilder buf = new StringBuilder();
-		for (int j=getRoot(); j!=0; j=IndexNode.getDown(this.base, j)) {
-			buf.append(HeadIndex.toString(this.base, j));
-			buf.append('\n');
-			for (int i=IndexNode.getRight(this.base, j); i!=0; i=IndexNode.getRight(this.base, i)) {
-				buf.append(IndexNode.toString(this.base, i));
-				buf.append('\n');
-			}
-		}
-		for (int i=getHead(); i!=0; i=Node.getNext(this.base, i)) {
-			buf.append(Node.toString(this.base, i));
-			buf.append('\n');
-		}
-		return buf.toString();
-	}
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        for (int j=getRoot(); j!=0; j=IndexNode.getDown(this.base, j)) {
+            buf.append(HeadIndex.toString(this.base, j));
+            buf.append('\n');
+            for (int i=IndexNode.getRight(this.base, j); i!=0; i=IndexNode.getRight(this.base, i)) {
+                buf.append(IndexNode.toString(this.base, i));
+                buf.append('\n');
+            }
+        }
+        for (int i=getHead(); i!=0; i=Node.getNext(this.base, i)) {
+            buf.append(Node.toString(this.base, i));
+            buf.append('\n');
+        }
+        return buf.toString();
+    }
 
-	public SkipListScanner scan(
-			long pKeyStart, 
-			boolean includeStart, 
-			long pKeyEnd, 
-			boolean includeEnd) {
-		SkipListScanner scanner = new SkipListScanner();
-		scanner.ascending = true;
-		scanner.list = this;
-		scanner.start = findNode(pKeyStart, includeStart, false, true);
-		if (scanner.start == 0) {
-			return null;
-		}
-		scanner.end = findNode(pKeyEnd, includeEnd, true, false);
-		long pKeyScanStart = Node.getKeyPointer(this.base, scanner.start);
-		long pKeyScanEnd = Node.getKeyPointer(this.base, scanner.end);
-		if (this.comparator.compare(pKeyScanStart, pKeyScanEnd) > 0) {
-			// target range is not found
-			return null;
-		}
-		return scanner;
-	}
+    public SkipListScanner scan(
+            long pKeyStart, 
+            boolean includeStart, 
+            long pKeyEnd, 
+            boolean includeEnd) {
+        SkipListScanner scanner = new SkipListScanner();
+        scanner.ascending = true;
+        scanner.list = this;
+        scanner.start = findNode(pKeyStart, includeStart, false, true);
+        if (scanner.start == 0) {
+            return null;
+        }
+        scanner.end = findNode(pKeyEnd, includeEnd, true, false);
+        long pKeyScanStart = Node.getKeyPointer(this.base, scanner.start);
+        long pKeyScanEnd = Node.getKeyPointer(this.base, scanner.end);
+        if (this.comparator.compare(pKeyScanStart, pKeyScanEnd) > 0) {
+            // target range is not found
+            return null;
+        }
+        return scanner;
+    }
 
-	public SkipListScanner scanReverse(
-			long pKeyStart, 
-			boolean includeStart, 
-			long pKeyEnd, 
-			boolean includeEnd) {
-		SkipListScanner scanner = new SkipListScanner();
-		scanner.ascending = false;
-		scanner.list = this;
-		scanner.start = findNode(pKeyStart, includeStart ? OP_LE : OP_LT);
-		if (scanner.start == 0) {
-			return null;
-		}
-		if (scanner.start == this.getHead()) {
-		    return null;
-		}
-		scanner.end = findNode(pKeyEnd, includeEnd, false, true);
-		if (scanner.end == 0) {
-			return null;
-		}
+    public SkipListScanner scanReverse(
+            long pKeyStart, 
+            boolean includeStart, 
+            long pKeyEnd, 
+            boolean includeEnd) {
+        SkipListScanner scanner = new SkipListScanner();
+        scanner.ascending = false;
+        scanner.list = this;
+        scanner.start = findNode(pKeyStart, includeStart ? OP_LE : OP_LT);
+        if (scanner.start == 0) {
+            return null;
+        }
+        if (scanner.start == this.getHead()) {
+            return null;
+        }
+        scanner.end = findNode(pKeyEnd, includeEnd, false, true);
+        if (scanner.end == 0) {
+            return null;
+        }
         long pKeyScanStart = Node.getKeyPointer(this.base, scanner.start);
         long pKeyScanEnd = Node.getKeyPointer(this.base, scanner.end);
         if (this.comparator.compare(pKeyScanStart, pKeyScanEnd) < 0) {
             // target range is not found
             return null;
         }
-		return scanner;
-	}
-	
-	public int size() {
-		int count = 0;
-		for (int i=getHead(); i!=0; i=Node.getNext(this.base, i)) {
-			count++;
-		}
-		return count-1;
-	}
+        return scanner;
+    }
+    
+    public int size() {
+        int count = 0;
+        for (int i=getHead(); i!=0; i=Node.getNext(this.base, i)) {
+            count++;
+        }
+        return count-1;
+    }
 
-	public boolean isEmpty() {
-		return Node.getNext(this.base, getHead()) == 0;
-	}
-	
-	long test;
-	public void testEscape(VaporizingRow row) {
-		this.test += row.getMaxColumnId();
-	}
+    public boolean isEmpty() {
+        return Node.getNext(this.base, getHead()) == 0;
+    }
+    
+    long test;
+    public void testEscape(VaporizingRow row) {
+        this.test += row.getMaxColumnId();
+    }
 
-	public void dump() {
-		for (int j=getRoot(); j!=0; j=IndexNode.getDown(this.base, j)) {
-			println("%s", HeadIndex.toString(this.base, j));
-			for (int i=IndexNode.getRight(this.base, j); i!=0; i=IndexNode.getRight(this.base, i)) {
-				println("%s", IndexNode.toString(this.base, i));
-			}
-		}
-		for (int i=getHead(); i!=0; i=Node.getNext(this.base, i)) {
-			println("%s", Node.toString(this.base, i));
-		}
-	}
-	
-	public KeyComparator getComparator() {
-		return this.comparator;
-	}
+    public void dump() {
+        for (int j=getRoot(); j!=0; j=IndexNode.getDown(this.base, j)) {
+            println("%s", HeadIndex.toString(this.base, j));
+            for (int i=IndexNode.getRight(this.base, j); i!=0; i=IndexNode.getRight(this.base, i)) {
+                println("%s", IndexNode.toString(this.base, i));
+            }
+        }
+        for (int i=getHead(); i!=0; i=Node.getNext(this.base, i)) {
+            println("%s", Node.toString(this.base, i));
+        }
+    }
+    
+    public KeyComparator getComparator() {
+        return this.comparator;
+    }
 
-	private int getTailNode() {
+    private int getTailNode() {
         for (int i=getRoot();;) {
             int oNext = IndexNode.getRight(this.base, i);
             if (oNext != 0) {
@@ -928,8 +928,8 @@ public final class FishSkipList implements ConsoleHelper {
                 j = oNextNode;
             }
         }
-	}
-	
+    }
+    
     public long getTail() {
         int oTail = getTailNode();
         if (oTail == 0) {

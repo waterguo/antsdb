@@ -16,7 +16,11 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.planner.SortKey;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * most straight forward join by passing record one by one to the right side cursor maker. 
@@ -25,6 +29,8 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
  * @see https://technet.microsoft.com/en-us/library/ms191318(v=sql.105).aspx
  */
 public class NestedJoin extends CursorMaker {
+    final static Logger _log = UberUtil.getThisLogger();
+    
     CursorMaker left;
     CursorMaker right;
     CursorMeta meta;
@@ -136,6 +142,8 @@ public class NestedJoin extends CursorMaker {
         }
 
         long makeJoinedRecord(long pRecordLeft, long pRecordRight) {
+            check(pRecordLeft);
+            check(pRecordRight);
             long pResult = newRecord();
             int nFieldsLeft = Record.size(pRecordLeft);
             for (int i=0; i<nFieldsLeft; i++) {
@@ -149,6 +157,14 @@ public class NestedJoin extends CursorMaker {
                 }
             }
             return pResult;
+        }
+        
+        private void check(long pRecord) {
+            byte format = Value.getFormat(null, pRecord);
+            if (format == Value.FORMAT_RECORD) {
+                return;
+            }
+            _log.warn("check failed format={} count={}", format, this.counter.get());
         }
     }
     

@@ -168,9 +168,13 @@ public class Planner {
         PlannerField rowidField = new PlannerField(node, ROWID);
         node.fields.add(rowidField);
         this.rawMeta.addColumn(rowidField);
+        PrimaryKeyMeta pkmeta = table.getPrimaryKey();
         for (ColumnMeta column : table.getColumns()) {
             PlannerField field = new PlannerField(node, column);
             field.setSourceTable(table.getObjectName());
+            if (pkmeta != null && pkmeta.isKeyColumn(column)) {
+                field.setKeyColumn(true);
+            }
             node.fields.add(field);
             this.rawMeta.addColumn(field);
         }
@@ -313,6 +317,8 @@ public class Planner {
                     field.setSourceTable(pf.getSourceTable());
                     field.setSourceColumnName(pf.getSourceName());
                     field.setTableAlias(pf.getTableAlias());
+                    field.setColumn(pf.column);
+                    field.setKeyColumn(pf.isKeyColumn());
                 }
                 meta.addColumn(field);
             }

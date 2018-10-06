@@ -178,9 +178,9 @@ public abstract class Record {
         if (pRecord == 0) {
             throw new IllegalArgumentException();
         }
-        byte type = Unsafe.getByte(pRecord);
-        if (type != TYPE_RECORD) {
-            throw new IllegalArgumentException(String.valueOf(type));
+        byte format = Value.getFormat(null, pRecord);
+        if (format != TYPE_RECORD) {
+            throw new IllegalArgumentException(String.valueOf(format));
         }
     }
 
