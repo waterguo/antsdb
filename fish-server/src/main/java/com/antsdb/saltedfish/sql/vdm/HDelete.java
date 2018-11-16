@@ -38,7 +38,8 @@ public class HDelete extends Statement {
         int count = 0;
         for (long pRecord = c.next();pRecord != 0;pRecord = c.next()) {
             long pKey = Record.getKey(pRecord);
-            HumpbackError error = this.gtable.delete(ctx.getHumpback().getTrxMan().getNewVersion(), pKey, 0);
+            long version = ctx.getHumpback().getTrxMan().getNewVersion();
+            HumpbackError error = this.gtable.delete(ctx.getHSession(), version, pKey, 0);
             if (error != HumpbackError.SUCCESS) {
                 throw new OrcaException("unable to delete row {} due to {}", KeyBytes.toString(pKey), error); 
             }

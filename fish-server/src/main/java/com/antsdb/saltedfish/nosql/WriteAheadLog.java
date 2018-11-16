@@ -184,41 +184,48 @@ class WriteAheadLog {
         // recover rows and transactions
 
         int[] counts = new int[2];
-        iterate(new WriteAheadLog.Handler() {
-            Set<Integer> ignoredTables = new HashSet<Integer>();
-            
-            void row(Row row) {
-                int tableId = row.tableId;
-                if (this.ignoredTables.contains(tableId)) {
-                    return;
-                }
-                GTable gtable = humpback.getTable(tableId);
-                if (gtable == null) {
-                    _log.warn("table {} not found, all rows from recovery log for the table are ignored", tableId);
-                    this.ignoredTables.add(tableId);
-                    return;
-                }
-                gtable.put(row.getTrxTimestamp(), (SlowRow)null, 0);
-                if (tableId == Humpback.SYSMETA_TABLE_ID) {
-                    try {
-                        humpback.recoverTable();
+        HumpbackSession hsession = humpback.createSession();
+        hsession.open();
+        try {
+            iterate(new WriteAheadLog.Handler() {
+                Set<Integer> ignoredTables = new HashSet<Integer>();
+                
+                void row(Row row) {
+                    int tableId = row.tableId;
+                    if (this.ignoredTables.contains(tableId)) {
+                        return;
                     }
-                    catch (Exception e) {
-                        e.printStackTrace();
+                    GTable gtable = humpback.getTable(tableId);
+                    if (gtable == null) {
+                        _log.warn("table {} not found, all rows from recovery log for the table are ignored", tableId);
+                        this.ignoredTables.add(tableId);
+                        return;
                     }
+                    gtable.put(hsession, row.getTrxTimestamp(), (SlowRow)null, 0);
+                    if (tableId == Humpback.SYSMETA_TABLE_ID) {
+                        try {
+                            humpback.recoverTable();
+                        }
+                        catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    counts[0]++;
                 }
-                counts[0]++;
-            }
-            
-            void commit(long trxid, long trxts) {
-                    humpback.commit(trxid, trxts, 0);
-                counts[1]++;
-            }
-            
-            void rollback(long trxid) {
-                humpback.rollback(trxid, 0);
-            }
-        });
+                
+                void commit(long trxid, long trxts) {
+                    humpback.commit(hsession, trxid, trxts);
+                    counts[1]++;
+                }
+                
+                void rollback(long trxid) {
+                    humpback.rollback(hsession, trxid);
+                }
+            });
+        }
+        finally {
+            humpback.deleteSession(hsession);
+        }
         _log.info("{} rows have been recovered", counts[0]);
         _log.info("{} transactions have been recovered", counts[1]);
         

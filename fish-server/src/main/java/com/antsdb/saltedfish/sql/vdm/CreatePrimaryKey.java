@@ -64,7 +64,7 @@ public class CreatePrimaryKey extends Statement {
         PrimaryKeyMeta pk = new PrimaryKeyMeta(ctx.getOrca(), table);
         List<ColumnMeta> ruleColumns = table.getColumnsByName(this.columns);
         pk.setRuleColumns(ruleColumns);
-        ctx.getMetaService().addRule(ctx.getTransaction(), pk);
+        ctx.getMetaService().addRule(ctx.getHSession(), ctx.getTransaction(), pk);
     }
 
     private void ensureTableEmpty(VdmContext ctx, TableMeta tableMeta) {

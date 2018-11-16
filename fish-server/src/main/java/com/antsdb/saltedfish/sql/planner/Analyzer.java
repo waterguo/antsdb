@@ -144,25 +144,20 @@ class Analyzer {
      * x + (y + z) = x, y, z
      */
     boolean analyze_or(Mode mode, int x, Planner planner, OpOr op, Node scope) {
-        this.version++;
-        boolean resultFromLeft = analyze_(mode, x, planner, op.left, scope);
-        if (resultFromLeft) {
-            op.left = new BooleanValue(true);
-            this.version++;
-            boolean resultFromRight = analyze_(Mode.COPY_OR, x, planner, op.right, scope);
-            if (resultFromRight) {
-                op.right = new BooleanValue(true);
-            }
-            return resultFromRight;
-        }
-        else {
-            this.version++;
-            boolean resultFromRight = analyze_(Mode.COPY_OR, x, planner, op.right, scope);
-            if (resultFromRight) {
-                op.right = new BooleanValue(true);
-            }
+        if (!canPushDown(planner, op, scope)) {
             return false;
         }
+        this.version++;
+        if (!analyze_(mode, x, planner, op.left, scope)) {
+            throw new IllegalArgumentException();
+        }
+        op.left = new BooleanValue(true);
+        this.version++;
+        if (!analyze_(Mode.OR, x, planner, op.right, scope)) {
+            throw new IllegalArgumentException();
+        }
+        op.right = new BooleanValue(true);
+        return true;
     }
 
     private boolean analyze_binary(Mode mode, int set, Planner planner, BinaryOperator op, Node scope) {
@@ -365,4 +360,102 @@ class Analyzer {
             }
         }
     }
+
+    private boolean canPushDown(Planner planner, Operator op, Node scope) {
+        boolean result = false;
+        if (op instanceof OpOr) {
+            result = canPushDown(planner, (OpOr)op, scope);
+        }
+        else if (op instanceof OpAnd) {
+            result = canPushDown(planner, (OpAnd)op, scope);
+        }
+        else if (op instanceof BinaryOperator) {
+            result = canPushDown(planner, (BinaryOperator)op, scope);
+        }
+        else if (op instanceof OpBetween) {
+            result = canPushDown(planner, (OpBetween)op, scope);
+        }
+        else if (op instanceof OpIsNull) {
+            result = canPushDown(planner, (OpIsNull)op, scope);
+        }
+        else if (op instanceof OpMatch) {
+            result = canPushDown(planner, (OpMatch)op, scope);
+        }
+        return result;
+    }
+
+    private boolean canPushDown(Planner planner, OpOr op, Node scope) {
+        return canPushDown(planner, op.left, scope) && canPushDown(planner, op.right, scope);
+    }
+    
+    private boolean canPushDown(Planner planner, OpAnd op, Node scope) {
+        return canPushDown(planner, op.left, scope) && canPushDown(planner, op.right, scope);
+    }
+    
+    private boolean canPushDown(Planner planner, BinaryOperator op, Node scope) {
+        FieldValue fv;
+        
+        // one of the operand must be FieldValue
+        
+        if (op.left instanceof FieldValue) {
+            fv = (FieldValue)op.left;
+        }
+        else if (op.right instanceof FieldValue) {
+            fv = (FieldValue)op.right;
+        }
+        else {
+            return false;
+        }
+        
+        // validate the operator 
+        
+        if (op instanceof OpEqual) {
+        }
+        else if (op instanceof OpEqualNull) {
+        }
+        else if (op instanceof OpLarger) {
+        }
+        else if (op instanceof OpLargerEqual) {
+        }
+        else if (op instanceof OpLess) {
+        }
+        else if (op instanceof OpLessEqual) {
+        }
+        else if (op instanceof OpLike) {
+        }
+        else if (op instanceof OpInSelect) {
+        }
+        else if (op instanceof OpInValues) {
+        }
+        else {
+            return false;
+        }
+        
+        // validate the scope
+        
+        PlannerField pf = fv.getField();
+        Node node = pf.owner;
+        if (node == scope) {
+            return true;
+        }
+        else if ((scope == null) && (planner.nodes.containsValue(node))) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    
+    private boolean canPushDown(Planner planner, OpBetween op, Node scope) {
+        return op.getLeftOperator() instanceof FieldValue;
+    }
+    
+    private boolean canPushDown(Planner planner, OpIsNull op, Node scope) {
+        return op.getUpstream() instanceof FieldValue; 
+    }
+
+    private boolean canPushDown(Planner planner, OpMatch op, Node scope) {
+        return true;
+    }
+
 }

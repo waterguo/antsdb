@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
@@ -41,7 +42,12 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
     }
 
     @Override
-    void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
+    void insert(Heap heap, 
+                HumpbackSession hsession, 
+                Transaction trx, 
+                VaporizingRow row, 
+                int timeout, 
+                boolean isReplace) {
         HashMap<String, AtomicInteger> terms = new HashMap<>();
         for (ColumnMeta i:this.columns) {
             String text = (String)row.get(i.getColumnId());
@@ -65,12 +71,12 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
             long pIndexKey = this.keyMaker.make(heap, frow);
             int count = term.getValue().get();
             byte misc = (byte)((count > 0xff) ? 0xff : count);
-            insert(heap, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace);
+            insert(heap, hsession, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace);
         }
     }
 
     @Override
-    void delete(Heap heap, Transaction trx, Row row, int timeout) {
+    void delete(Heap heap, HumpbackSession hsession, Transaction trx, Row row, int timeout) {
         HashSet<String> terms = new HashSet<>();
         for (ColumnMeta i:this.columns) {
             String text = (String)row.get(i.getColumnId());
@@ -86,14 +92,20 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
         for (String term:terms) {
             frow.set(1, term);
             long pIndexKey = this.keyMaker.make(heap, frow);
-            delete(heap, trx, pIndexKey, timeout);
+            delete(heap, hsession, trx, pIndexKey, timeout);
         }
     }
 
     @Override
-    void update(Heap heap, Transaction trx, Row oldRow, VaporizingRow newRow, boolean force, int timeout) {
-        delete(heap, trx, oldRow, timeout);
-        insert(heap, trx, newRow, timeout, true);
+    void update(Heap heap, 
+                HumpbackSession hsession, 
+                Transaction trx, 
+                Row oldRow, 
+                VaporizingRow newRow, 
+                boolean force, 
+                int timeout) {
+        delete(heap, hsession, trx, oldRow, timeout);
+        insert(heap, hsession, trx, newRow, timeout, true);
     }
 
 }

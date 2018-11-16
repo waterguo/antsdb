@@ -55,7 +55,7 @@ public class HUpdate extends Statement{
                 }
                 VaporizingRow vrow = createVRow(ctx, heap, row);
                 vrow.setVersion(ctx.getHumpback().getTrxMan().getNewVersion());
-                HumpbackError error = this.gtable.update(vrow, row.getVersion(), 0);
+                HumpbackError error = this.gtable.update(ctx.getHSession(), vrow, row.getVersion(), 0);
                 if (error != HumpbackError.SUCCESS) {
                     throw new OrcaException("unable to update row {} due to {}", KeyBytes.toString(pKey), error); 
                 }

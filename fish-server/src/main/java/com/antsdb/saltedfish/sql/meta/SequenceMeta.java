@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.HumpbackError;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.Orca;
@@ -116,38 +117,38 @@ public class SequenceMeta {
         return this.row.getTrxTimestamp();
     }
 
-    public long next(GTable table, TrxMan trxman) {
-        return next(table, trxman, getIncrement());
+    public long next(HumpbackSession hsession, GTable table, TrxMan trxman) {
+        return next(hsession, table, trxman, getIncrement());
     }
 
-    public long next(GTable table, TrxMan trxman, int increment) {
+    public long next(HumpbackSession hsession, GTable table, TrxMan trxman, int increment) {
         long next = this.next.addAndGet(increment);
         long result = next - increment;
         if (next > getLastNumber()) {
-            alloc(table, trxman, result);
+            alloc(hsession, table, trxman, result);
         }
         return result;
     }
     
-    private synchronized void alloc(GTable table, TrxMan trxman, long target) {
+    private synchronized void alloc(HumpbackSession hsession, GTable table, TrxMan trxman, long target) {
         long last = getLastNumber();
         if (target <= last) {
             return;
         }
         setLastNumber(last + 1000);
         long version = trxman.getNewVersion();
-        HumpbackError error = table.update(version, this.row, 0);
+        HumpbackError error = table.update(hsession, version, this.row, 0);
         if (error != HumpbackError.SUCCESS) {
             throw new IllegalArgumentException();
         }
         this.row.setTrxTimestamp(version);
     }
     
-    public synchronized void closeAndUpdate(GTable table, TrxMan trxman) {
+    public synchronized void closeAndUpdate(HumpbackSession hsession, GTable table, TrxMan trxman) {
         AtomicLong temp = this.next;
         this.next = null;
         setLastNumber(temp.get() - 1);
-        table.update(trxman.getNewVersion(), this.row, 0);
+        table.update(hsession, trxman.getNewVersion(), this.row, 0);
     }
 
     public SlowRow getRow() {

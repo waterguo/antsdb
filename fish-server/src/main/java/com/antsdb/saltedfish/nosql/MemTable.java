@@ -459,7 +459,13 @@ public final class MemTable extends ScalableData implements LogSpan {
         this.isClosed = false;
     }
 
-    public HumpbackError insertIndex(long trxid, long pIndexKey, long pRowKey, byte misc, int timeout) {
+    public HumpbackError insertIndex(
+            HumpbackSession hsession, 
+            long trxid, 
+            long pIndexKey, 
+            long pRowKey, 
+            byte misc, 
+            int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
@@ -467,7 +473,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                 continue;
             }
             try {
-                return current.insertIndex(pIndexKey, trxid, pRowKey, this.tablets, misc, timeout);
+                return current.insertIndex(hsession, pIndexKey, trxid, pRowKey, this.tablets, misc, timeout);
             }
             catch (OutOfHeapMemory x) {
                 grow(this.ticket);
@@ -497,7 +503,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
     }
 
-    public HumpbackError insert(VaporizingRow row, int timeout) {
+    public HumpbackError insert(HumpbackSession hsession, VaporizingRow row, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
@@ -505,7 +511,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                 continue;
             }
             try {
-                return current.insert(row, this.tablets, timeout);
+                return current.insert(hsession, row, this.tablets, timeout);
             }
             catch (OutOfHeapMemory x) {
                 grow(this.ticket);
@@ -513,7 +519,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
     }
     
-    public HumpbackError update(VaporizingRow row, long oldVersion, int timeout) {
+    public HumpbackError update(HumpbackSession hsession, VaporizingRow row, long oldVersion, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
@@ -521,7 +527,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                 continue;
             }
             try {
-                return current.update(row, oldVersion, this.tablets, timeout);
+                return current.update(hsession, row, oldVersion, this.tablets, timeout);
             }
             catch (OutOfHeapMemory x) {
                 grow(this.ticket);
@@ -529,7 +535,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
     }
     
-    public HumpbackError delete(long trxid, long pKey, int timeout) {
+    public HumpbackError delete(HumpbackSession hsession, long trxid, long pKey, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
@@ -537,7 +543,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                 continue;
             }
             try {
-                return current.delete(pKey, trxid, this.tablets, timeout);
+                return current.delete(hsession, pKey, trxid, this.tablets, timeout);
             }
             catch (OutOfHeapMemory x) {
                 grow(this.ticket);
@@ -545,7 +551,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
     }
     
-    public HumpbackError deleteRow(long trxid, long pRow, int timeout) {
+    public HumpbackError deleteRow(HumpbackSession hsession, long trxid, long pRow, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
@@ -553,7 +559,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                 continue;
             }
             try {
-                return current.deleteRow(pRow, trxid, this.tablets, timeout);
+                return current.deleteRow(hsession, pRow, trxid, this.tablets, timeout);
             }
             catch (OutOfHeapMemory x) {
                 grow(this.ticket);
@@ -577,7 +583,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
     }
     
-    public HumpbackError put(VaporizingRow row, int timeout) {
+    public HumpbackError put(HumpbackSession hsession, VaporizingRow row, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
@@ -585,7 +591,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                 continue;
             }
             try {
-                return current.put(row, this.tablets, timeout);
+                return current.put(hsession, row, this.tablets, timeout);
             }
             catch (OutOfHeapMemory x) {
                 grow(this.ticket);

@@ -193,6 +193,17 @@ public final class Humpback {
         Runtime.getRuntime().addShutdownHook(this.hook);
         this.isClosed = false;
         _instances.add(this);
+        
+        // start slave replicator
+        
+        if ("true".equals(getConfig(SlaveReplicator.KEY_ENABLED))) {
+            try {
+                startSlave();
+            }
+            catch (Exception x) {
+                _log.error("unable to start job", x);
+            }
+        }
     }
 
     void init(boolean isRecovering) throws Exception {
@@ -348,14 +359,6 @@ public final class Humpback {
         }
         if (this.cacheEvictor != null) {
             this.cacheEvictorFuture = this.jobman.scheduleWithFixedDelay(this.cacheEvictor, 10, TimeUnit.SECONDS);
-        }
-        if ("true".equals(getConfig(SlaveReplicator.KEY_ENABLED))) {
-            try {
-                startSlave();
-            }
-            catch (Exception x) {
-                _log.error("unable to start job", x);
-            }
         }
     }
     
@@ -636,7 +639,7 @@ public final class Humpback {
         }
     }
 
-    public synchronized void createNamespace(String name) throws HumpbackException {
+    public synchronized void createNamespace(HumpbackSession hsession, String name) throws HumpbackException {
         String key = name.toLowerCase();
         if (this.namespaces.get(key) != null) {
             throw new HumpbackException("namespace folder already exists");
@@ -659,17 +662,17 @@ public final class Humpback {
         
         this.namespaces.putIfAbsent(key, name);
         SysNamespaceRow meta = new SysNamespaceRow(name);
-        this.sysns.put(1, meta.row, 0);
+        this.sysns.put(hsession, 1, meta.row, 0);
     }
 
-    public void dropNamespace(String name) throws HumpbackException {
+    public void dropNamespace(HumpbackSession hsession, String name) throws HumpbackException {
         String key = name.toLowerCase();
         String realName = this.namespaces.remove(key);
         if (realName == null) {
             throw new HumpbackException("namespace doesn't exist: " + name);
         }
         for (GTable i : getTables(name)) {
-            dropTable(name, i.getId());
+            dropTable(hsession, name, i.getId());
         }
         File nsfolder = new File(this.data, realName);
         for (File i : nsfolder.listFiles()) {
@@ -683,7 +686,7 @@ public final class Humpback {
         
         // remove it from metadata
         
-        this.sysns.delete(1, KeyMaker.make(key), 0);
+        this.sysns.delete(hsession, 1, KeyMaker.make(key), 0);
     }
 
     public String getNamespace(String ns) {
@@ -694,11 +697,16 @@ public final class Humpback {
         return new ArrayList<String>(this.namespaces.values());
     }
 
-    public synchronized GTable createTable(String ns, String name, int id, TableType type) {
-        return createTable(ns, name, id, true, type);
+    public synchronized GTable createTable(HumpbackSession hsession, String ns, String name, int id, TableType type) {
+        return createTable(hsession, ns, name, id, true, type);
     }
 
-    private synchronized GTable createTable(String ns, String name, int id, boolean createMeta, TableType type) {
+    private synchronized GTable createTable(HumpbackSession hsession,  
+                                            String ns, 
+                                            String name, 
+                                            int id, 
+                                            boolean createMeta, 
+                                            TableType type) {
         // check id rule
         
         if (id == SYSMETA_TABLE_ID) {
@@ -732,7 +740,7 @@ public final class Humpback {
             // update meta data
 
             if (createMeta) {
-                this.sysmeta.put(1, meta.row, 0);
+                this.sysmeta.put(hsession, 1, meta.row, 0);
                 this.storage.syncTable(meta);
             }
 
@@ -743,7 +751,7 @@ public final class Humpback {
         }
     }
 
-    public synchronized void dropTable(String ns, int id) throws HumpbackException {
+    public synchronized void dropTable(HumpbackSession hsession, String ns, int id) throws HumpbackException {
         GTable table = this.tableById.get(id);
         SysMetaRow meta = getTableInfo(id);
         if (table == null || meta == null) {
@@ -760,11 +768,12 @@ public final class Humpback {
         table.drop();
         this.tableById.remove(id);
         meta.setDeleted(true);
-        this.sysmeta.put(1, meta.row, 1000);
+        this.sysmeta.put(hsession, 1, meta.row, 1000);
         this.storage.syncTable(meta);
     }
 
-    public synchronized void truncateTable(int oldTableId, int newTableId) throws HumpbackException {
+    public synchronized void truncateTable(HumpbackSession hsession, int oldTableId, int newTableId) 
+    throws HumpbackException {
         SysMetaRow oldTable = getTableInfo(oldTableId);
         if (oldTable == null) {
             throw new HumpbackException("table is not found: " + oldTableId);
@@ -772,8 +781,8 @@ public final class Humpback {
 
         // create new table
 
-        dropTable(oldTable.getNamespace(), oldTableId);
-        createTable(oldTable.getNamespace(), oldTable.getTableName(), newTableId, TableType.DATA);
+        dropTable(hsession, oldTable.getNamespace(), oldTableId);
+        createTable(hsession, oldTable.getNamespace(), oldTable.getTableName(), newTableId, TableType.DATA);
         
         // copy the columns to the new table
         
@@ -784,7 +793,7 @@ public final class Humpback {
             }
             HColumnRow ii = new HColumnRow(newTableId, i.getColumnPos());
             ii.setColumnName(i.getColumnName());
-            this.syscolumn.put(0, ii.row, 0);
+            this.syscolumn.put(hsession, 0, ii.row, 0);
         }
     }
 
@@ -830,16 +839,16 @@ public final class Humpback {
      *            transaction timestamp, must be unique and incremental. this
      *            value is also used to version the record
      */
-    public void commit(long trxid, long trxts, int sessiondId) {
+    public void commit(HumpbackSession hsession, long trxid, long trxts) {
         if (this.gobbler != null) {
-            this.gobbler.logCommit(trxid, trxts, sessiondId);
+            this.gobbler.logCommit(hsession, trxid, trxts);
         }
         this.trxMan.commit(trxid, trxts);
     }
 
-    public void rollback(long trxid, int sessionId) {
+    public void rollback(HumpbackSession hsession, long trxid) {
         if (this.gobbler != null) {
-            this.gobbler.logRollback(trxid, sessionId);
+            this.gobbler.logRollback(hsession, trxid);
         }
         this.trxMan.rollback(trxid);
     }
@@ -1132,8 +1141,8 @@ public final class Humpback {
         return result;
     }
 
-    public void deleteSession(HumpbackSession session) {
-        this.sessions.remove(session);
+    public void deleteSession(HumpbackSession hsession) {
+        this.sessions.remove(hsession);
     }
 
     /**
@@ -1178,7 +1187,7 @@ public final class Humpback {
         return this.statisticianThread.getReplicable();
     }
 
-    public HColumnRow addColumn(long trxid, int tableId, String name) {
+    public HColumnRow addColumn(HumpbackSession hsession, long trxid, int tableId, String name) {
         if (getTableInfo(tableId) == null) {
             throw new HumpbackException("table {} not found", tableId);
         }
@@ -1194,17 +1203,17 @@ public final class Humpback {
         }
         HColumnRow result = new HColumnRow(tableId, maxColumnPos + 1);
         result.setColumnName(name);
-        this.syscolumn.put(trxid, result.row, 0);
+        this.syscolumn.put(hsession, trxid, result.row, 0);
         return result;
     }
     
-    public void addColumn(long trxid, int tableId, int columnId, String name) {
+    public void addColumn(HumpbackSession hsession, long trxid, int tableId, int columnId, String name) {
         HColumnRow row = new HColumnRow(tableId, columnId);
         row.setColumnName(name);
-        this.syscolumn.put(trxid, row.row, 0);
+        this.syscolumn.put(hsession, trxid, row.row, 0);
     }
 
-    public void deleteColumn(long trxid, int tableId, int columnId) {
+    public void deleteColumn(HumpbackSession hsession, long trxid, int tableId, int columnId) {
         byte[] key = KeyMaker.gen(tableId, columnId);
         Row row = this.syscolumn.getRow(trxid, Long.MAX_VALUE, key);
         if (row == null) {
@@ -1212,7 +1221,7 @@ public final class Humpback {
         }
         HColumnRow column = new HColumnRow(SlowRow.from(row));
         column.setDeleted(true);
-        this.syscolumn.put(trxid, column.row, 0);
+        this.syscolumn.put(hsession, trxid, column.row, 0);
     }
     
     public List<HColumnRow> getColumns(int tableId) {
@@ -1235,11 +1244,11 @@ public final class Humpback {
         return this.slaveThread;
     }
 
-    public void setConfig(String key, String value) {
+    public void setConfig(HumpbackSession hsession, String key, String value) {
         SysConfigRow row = new SysConfigRow(key);
         row.setValue(value);
         row.row.setTrxTimestamp(this.trxMan.getNewVersion());
-        this.sysconfig.put(0, row.row, 0);
+        this.sysconfig.put(hsession, 0, row.row, 0);
     }
     
     public Map<String,String> getAllConfig() {

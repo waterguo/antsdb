@@ -29,7 +29,7 @@ public class FishObject {
             return null;
         }
         Object result = null;
-        int type = Unsafe.getByte(addr);
+        int type = Value.getFormat(null, addr);
         if (type == Value.FORMAT_INT4) {
             result = Int4.get(heap, addr);
         }

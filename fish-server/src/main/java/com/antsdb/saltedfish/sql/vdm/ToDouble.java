@@ -22,10 +22,10 @@ import com.antsdb.saltedfish.util.CodingError;
 
 public class ToDouble extends UnaryOperator {
 
-	public ToDouble(Operator upstream) {
-		super(upstream);
-	}
-	
+    public ToDouble(Operator upstream) {
+        super(upstream);
+    }
+    
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long addrVal = this.upstream.eval(ctx, heap, params, pRecord);
@@ -35,16 +35,28 @@ public class ToDouble extends UnaryOperator {
         else if (val instanceof Double) {
         }
         else if (val instanceof Float) {
-        	val = (double)(Float)val;
+            val = (double)(Float)val;
         }
         else if (val instanceof String) {
-            val = Double.valueOf((String)val);
+            String s = (String)val;
+            // assume STRICT_TRANS_TABLES is not set
+            if (s.isEmpty()) {
+                val = 0;
+            }
+            else {
+                try {
+                    val = Double.valueOf((String)val);
+                }
+                catch (Exception x) {
+                    val = 0;
+                }
+            }
         }
         else if (val instanceof BigDecimal) {
-        	val = ((BigDecimal)val).doubleValue();
+            val = ((BigDecimal)val).doubleValue();
         }
         else if (val instanceof Long) {
-        	val = ((Long)val).doubleValue();
+            val = ((Long)val).doubleValue();
         }
         else {
             throw new CodingError();

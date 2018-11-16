@@ -36,8 +36,7 @@ public class InsertSingleRow extends Statement {
     
     TableMeta table;
     GTable gtable;
-    List<ColumnMeta> fields;
-    List<Operator> values;
+    Operator[] values;
     IndexEntryHandlers indexHandlers;
     boolean ignoreError = false;
     int tableId;
@@ -45,10 +44,9 @@ public class InsertSingleRow extends Statement {
     boolean hasBlob = false;
     GTable blobTable = null;
     
-    public InsertSingleRow(Orca orca, TableMeta table, GTable gtable, List<ColumnMeta> fields, List<Operator> values) {
+    public InsertSingleRow(Orca orca, TableMeta table, GTable gtable, Operator[] values) {
         this.table = table;
         this.gtable = gtable;
-        this.fields = fields;
         this.values = values;
         this.indexHandlers = new IndexEntryHandlers(orca, table);
         this.tableId = table.getId();
@@ -84,7 +82,7 @@ public class InsertSingleRow extends Statement {
             heap.reset(0);
             if (this.ignoreError) {
                 try {
-                    insertRow(ctx, heap, params, this.values);
+                    insertRow(ctx, heap, params, 0);
                     count++;
                     return count;
                 }
@@ -94,23 +92,24 @@ public class InsertSingleRow extends Statement {
                 }
             }
             else {
-                insertRow(ctx, heap, params, this.values);
+                insertRow(ctx, heap, params, 0);
                 count++;
             }
         }
         return count;
     }
 
-    VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params, VaporizingRow blob) {
+    VaporizingRow genRow(VdmContext ctx, Heap heap, Parameters params, VaporizingRow blob, long pRecord) {
         // collect values 
         
         VaporizingRow row = new VaporizingRow(heap, this.table.getMaxColumnId());
         row.set(0, ctx.getOrca().getNextRowid());
-        for (int i=0; i<fields.size(); i++) {
-            ColumnMeta column = this.fields.get(i);
-            Operator expr = values.get(i);
-            long pValue = expr.eval(ctx, heap, params, 0);
-            row.setFieldAddress(column.getColumnId(), pValue);
+        for (int i=0; i<this.values.length; i++) {
+            Operator expr = values[i];
+            if (expr != null) {
+                long pValue = expr.eval(ctx, heap, params, pRecord);
+                row.setFieldAddress(i, pValue);
+            }
         }
         
         // collect key
@@ -122,8 +121,7 @@ public class InsertSingleRow extends Statement {
 
         if (blob != null) {
             blob.setKey(pKey);
-            for (int i=0; i<fields.size(); i++) {
-                ColumnMeta column = this.fields.get(i);
+            for (ColumnMeta column:this.table.getColumns()) {
                 if (column.isBlobClob()) {
                     long pValue = row.getFieldAddress(column.getColumnId());
                     if (pValue != 0) {
@@ -138,7 +136,7 @@ public class InsertSingleRow extends Statement {
         return row;
     }
     
-    void insertRow(VdmContext ctx, Heap heap, Parameters params, List<Operator> values) {
+    void insertRow(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         int timeout = ctx.getSession().getConfig().getLockTimeout();
         Transaction trx = ctx.getTransaction();
         
@@ -149,7 +147,7 @@ public class InsertSingleRow extends Statement {
             int maxBlobColumnId = this.table.getMaxBlobColumnId();
             rowBlob = new VaporizingRow(heap, maxBlobColumnId);
         }
-        VaporizingRow row = genRow(ctx, heap, params, rowBlob);
+        VaporizingRow row = genRow(ctx, heap, params, rowBlob, pRecord);
         
         // collect key
         
@@ -164,15 +162,17 @@ public class InsertSingleRow extends Statement {
             rowBlob.setVersion(row.getVersion());
         }
         for (;;) {
-            HumpbackError error = isReplace ? this.gtable.put(row, timeout) : this.gtable.insert(row, timeout);
+            HumpbackError error = isReplace ? 
+                                  this.gtable.put(ctx.getHSession(), row, timeout) : 
+                                  this.gtable.insert(ctx.getHSession(), row, timeout);
             if (error == HumpbackError.SUCCESS) {
                 if (this.hasBlob) {
-                    error = this.blobTable.insert(rowBlob, timeout);
+                    error = this.blobTable.insert(ctx.getHSession(), rowBlob, timeout);
                     if (error != HumpbackError.SUCCESS) {
                         throw new OrcaException(error, row.getKeySpec(this.tableId));
                     }
                 }
-                this.indexHandlers.insert(heap, trx, row, timeout, isReplace);
+                this.indexHandlers.insert(heap, ctx.getHSession(), trx, row, timeout, isReplace);
                 break;
             }
             else {

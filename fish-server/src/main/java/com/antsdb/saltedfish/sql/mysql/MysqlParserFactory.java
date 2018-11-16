@@ -138,7 +138,7 @@ public class MysqlParserFactory extends SqlParserFactory {
             else {
                 sql = "!!use " + ctx.getSession().getCurrentNamespace() + " ; " + sql;
             }
-            ctx.getHumpback().getGobbler().logMessage(sql);
+            ctx.getHumpback().getGobbler().logMessage(ctx.getHSession(), sql);
         }
     }
 

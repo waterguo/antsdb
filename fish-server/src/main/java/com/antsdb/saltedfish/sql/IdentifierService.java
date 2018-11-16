@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
@@ -32,6 +33,7 @@ public class IdentifierService {
     AtomicLong nextRowid = new AtomicLong();
     volatile long rowidEnd;
     MetadataService meta;
+    HumpbackSession hsession;
 
     IdentifierService(Orca orca) {
         super();
@@ -40,6 +42,7 @@ public class IdentifierService {
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME);
         this.nextRowid.set(seq.getLastNumber());
         this.rowidEnd = this.nextRowid.get();
+        this.hsession = this.orca.getHumpback().createSession();
     }
     
     /**
@@ -72,12 +75,14 @@ public class IdentifierService {
     }
     
     private synchronized void allocRowidBlock() {
-        this.rowidEnd = this.nextRowid.get() + 1000000;
-        SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
-        seq.setLastNumber(rowidEnd);
-        long version = this.orca.getTrxMan().getNewVersion();
-        this.orca.metaService.updateSequence(version, seq);
-        seq.getRow().setTrxTimestamp(version);;
+        try (HumpbackSession foo = this.hsession.open()) {
+            this.rowidEnd = this.nextRowid.get() + 1000000;
+            SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
+            seq.setLastNumber(rowidEnd);
+            long version = this.orca.getTrxMan().getNewVersion();
+            this.orca.metaService.updateSequence(hsession, version, seq);
+            seq.getRow().setTrxTimestamp(version);
+        }
     }
     
     public long getNextGlobalId(int increment) {
@@ -85,16 +90,23 @@ public class IdentifierService {
     }
     
     public long getNextId(ObjectName name) {
-        return this.meta.nextSequence(name);
+        try (HumpbackSession foo = this.hsession.open()) {
+            return this.meta.nextSequence(this.hsession, name);
+        }
     }
     
     public long getNextId(ObjectName name, int increment) {
-        return this.meta.nextSequence(name, increment);
+        try (HumpbackSession foo = this.hsession.open()) {
+            return this.meta.nextSequence(this.hsession, name, increment);
+        }
     }
     
     void close() {
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
         seq.setLastNumber(this.nextRowid.get());
-        this.orca.metaService.updateSequence(this.orca.getTrxMan().getNewVersion(), seq);
+        try (HumpbackSession foo = this.hsession.open()) {
+            this.orca.metaService.updateSequence(this.hsession, this.orca.getTrxMan().getNewVersion(), seq);
+        }
+        this.orca.getHumpback().deleteSession(this.hsession);
     }
 }

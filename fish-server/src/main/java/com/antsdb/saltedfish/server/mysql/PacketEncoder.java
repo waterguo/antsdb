@@ -219,6 +219,7 @@ public final class PacketEncoder {
         else if (meta.getType().getJavaType() == String.class) {
             // char set utf8_general_ci  : 0x21
             buffer.writeInt(getCharSetId(getEncoder()));
+            //buffer.writeInt(8);
             // length
             buffer.writeUB4(meta.getType().getLength() * 3);
             // type code

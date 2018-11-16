@@ -38,7 +38,7 @@ public class AlterUser extends Instruction {
         if (userMeta == null) {
             throw new OrcaException("user {} does not exist", this.user);
         }
-        meta.setPassword(this.user, this.password);
+        meta.setPassword(ctx.getHSession(), this.user, this.password);
         return null;
     }
 

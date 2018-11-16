@@ -41,7 +41,7 @@ public class DropNamespace extends Statement {
         
         // remove the physical namespace
         
-        ctx.getHumpback().dropNamespace(this.name);
+        ctx.getHumpback().dropNamespace(ctx.getHSession(), this.name);
         
         // remove all objects in the schema
         
@@ -49,7 +49,7 @@ public class DropNamespace extends Statement {
         MetadataService metaService = ctx.getMetaService();
         for (String i:metaService.getTables(trx, this.name)) {
             TableMeta table = metaService.getTable(trx, this.name, i);
-            metaService.dropTable(trx, table);
+            metaService.dropTable(ctx.getHSession(), trx, table);
         }
         return null;
     }

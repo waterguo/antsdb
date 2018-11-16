@@ -44,7 +44,7 @@ public class CreateSequence extends Statement {
         seq.setLastNumber(this.seed-1);
         seq.setSeed(this.seed);
         seq.setIncrement(this.increment);
-        metaService.addSequence(trx, seq);
+        metaService.addSequence(ctx.getHSession(), trx, seq);
         return null;
     }
 

@@ -25,6 +25,7 @@ import java.util.Random;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.SequenceMeta;
@@ -49,28 +50,35 @@ class Seed {
     }
     
     void run() {
-        // system tables
-        
-        createSystemTable(TABLEID_SYSSEQUENCE);
-        createSystemTable(TABLEID_SYSTABLE);
-        createSystemTable(TABLEID_SYSCOLUMN);
-        createSystemTable(TABLEID_SYSRULE);
-        createSystemTable(TABLEID_SYSUSER);
-        
-        // system sequence 
-        
-        createSystemSequence(IdentifierService.GLOBAL_SEQUENCE_NAME, 0, 0x100, 1);
-        createSystemSequence(IdentifierService.ROWID_SEQUENCE_NAME, 1, 0, 1);
-        
-        // default config
-        
-        setConfig("databaseType", this.humpback.getConfig().getDefaultDatabaseType());
-        setConfig("antsdb_auth_seed", genSeed());
-        
-        // done
-        
-        if (this.updated) {
-            _log.info("seed upgrade is completed");
+        HumpbackSession hsession = this.humpback.createSession();
+        hsession.open();
+        try {
+            // system tables
+            
+            createSystemTable(hsession, TABLEID_SYSSEQUENCE);
+            createSystemTable(hsession, TABLEID_SYSTABLE);
+            createSystemTable(hsession, TABLEID_SYSCOLUMN);
+            createSystemTable(hsession, TABLEID_SYSRULE);
+            createSystemTable(hsession, TABLEID_SYSUSER);
+            
+            // system sequence 
+            
+            createSystemSequence(hsession, IdentifierService.GLOBAL_SEQUENCE_NAME, 0, 0x100, 1);
+            createSystemSequence(hsession, IdentifierService.ROWID_SEQUENCE_NAME, 1, 0, 1);
+            
+            // default config
+            
+            setConfig(hsession, "databaseType", this.humpback.getConfig().getDefaultDatabaseType());
+            setConfig(hsession, "antsdb_auth_seed", genSeed());
+            
+            // done
+            
+            if (this.updated) {
+                _log.info("seed upgrade is completed");
+            }
+        }
+        finally {
+            this.humpback.deleteSession(hsession);
         }
     }
     
@@ -86,24 +94,24 @@ class Seed {
         return new String(seed);
     }
     
-    private void setConfig(String key, String value) {
+    private void setConfig(HumpbackSession hsession, String key, String value) {
         if (this.humpback.getConfig(key) != null) {
             return;
         }
         key = key.toLowerCase();
         notifyUpgrade();
-        this.humpback.setConfig(key, value);
+        this.humpback.setConfig(hsession, key, value);
     }
 
-    private void createSystemTable(int tableId) {
+    private void createSystemTable(HumpbackSession hsession, int tableId) {
         if (this.humpback.getTable(tableId) != null) {
             return;
         }
         notifyUpgrade();
-        this.humpback.createTable(Orca.SYSNS, String.format("x%x", tableId), tableId, TableType.DATA);
+        this.humpback.createTable(hsession, Orca.SYSNS, String.format("x%x", tableId), tableId, TableType.DATA);
     }
 
-    private void createSystemSequence(ObjectName name, int id, long next, int increment) {
+    private void createSystemSequence(HumpbackSession hsession, ObjectName name, int id, long next, int increment) {
         MetadataService meta = this.orca.getMetaService();
         SequenceMeta seq = meta.getSequence(Transaction.getSeeEverythingTrx(), name);
         if (seq != null) {
@@ -113,7 +121,7 @@ class Seed {
         seq = new SequenceMeta(name, id);
         seq.setLastNumber(next);
         seq.setIncrement(increment);
-        meta.addSequence(Transaction.getSystemTransaction(), seq);
+        meta.addSequence(hsession, Transaction.getSystemTransaction(), seq);
     }
     
     private void notifyUpgrade() {

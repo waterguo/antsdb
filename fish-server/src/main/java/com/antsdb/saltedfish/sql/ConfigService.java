@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang.StringUtils;
 
+import com.antsdb.saltedfish.nosql.HumpbackSession;
+
 public class ConfigService {
     Properties props;
     Orca orca;
@@ -47,8 +49,8 @@ public class ConfigService {
         return this.params.get(key);
     }
     
-    public void set(String key, String value) {
-        this.orca.getHumpback().setConfig(key, value);
+    public void set(HumpbackSession hsession, String key, String value) {
+        this.orca.getHumpback().setConfig(hsession, key, value);
         if (value == null) {
             this.params.remove(key);
         }

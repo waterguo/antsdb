@@ -36,12 +36,12 @@ public class DropIndex extends Statement {
         // drop physical index
         
         Humpback humpback = ctx.getOrca().getHumpback();
-        humpback.dropTable(this.tableName.getNamespace(), index.getIndexTableId());
+        humpback.dropTable(ctx.getHSession(), this.tableName.getNamespace(), index.getIndexTableId());
 
         // drop metadata
         
         MetadataService meta = ctx.getMetaService();
-        meta.deleteRule(ctx.getTransaction(), index);
+        meta.deleteRule(ctx.getHSession(), ctx.getTransaction(), index);
 
         return null;
     }

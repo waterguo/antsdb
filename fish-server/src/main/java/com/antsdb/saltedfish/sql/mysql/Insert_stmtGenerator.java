@@ -29,6 +29,8 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
+import com.antsdb.saltedfish.sql.vdm.FieldMeta;
+import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.InsertOnDuplicate;
 import com.antsdb.saltedfish.sql.vdm.InsertSelect;
@@ -62,88 +64,60 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
             }
         }
         else if (rule.insert_stmt_select() != null) {
-            CursorMaker maker = Select_stmtGenerator.gen(ctx, rule.insert_stmt_select().select_stmt(), null);
-            if (maker.getCursorMeta().getColumnCount() != table.getColumns().size()) {
-                throw new OrcaException("Column count doesn't match value count");
-            }
-            GTable gtable = ctx.getGtable(table.getObjectName());
-            return new InsertSelect(ctx.getOrca(), gtable, table, maker, isReplace, ignoreError);
+            InsertSelect result = gen(ctx, table, rule.insert_stmt_select());
+            result.setIgnoreError(ignoreError);
+            result.setReplace(isReplace);
+            return result;
         }
         else {
             throw new CodingError();
         }
     }
 
-    private List<InsertSingleRow> gen(GeneratorContext ctx,  TableMeta table,  Insert_stmt_valuesContext rule) {
-        // collect column names
-        
-        List<ColumnMeta> fields = new ArrayList<ColumnMeta>();
-        if (rule.insert_stmt_values_columns() != null) {
-            for (Column_nameContext i :rule.insert_stmt_values_columns().column_name()) {
-                String columnName = Utils.getIdentifier(i.identifier());
-                ColumnMeta iii = Checks.columnExist(table, columnName);    
-                fields.add(iii);
-            }
-        }
-        else {
-            fields.addAll(table.getColumns());
-        }
-        
-        // auto increment column
-
-        List<Operator> defaultValues = new ArrayList<>();
-        ColumnMeta autoIncrement = table.findAutoIncrementColumn();
-        int posAutoIncrement = -1;
-        if (autoIncrement != null) {
-            posAutoIncrement = fields.indexOf(autoIncrement);
-            if (posAutoIncrement < 0) {
-                fields.add(autoIncrement);
-                defaultValues.add(new OpIncrementColumnValue(table, null));
-            }
-        }
-        
-        // columns with default value
-        
-        for (ColumnMeta i:table.getColumns()) {
-            if (i.getDefault() == null) {
-                continue;
-            }
-            if (fields.contains(i)) {
-                continue;
-            }
-            Operator expr = ExprGenerator.gen(ctx, null, i.getDefault());
-            fields.add(i);
-            defaultValues.add(expr);
-        }
-        
-        // collect expressions
-        
+    private InsertSelect gen(GeneratorContext ctx,  TableMeta table,  Insert_stmt_selectContext rule) {
+        CursorMaker maker = Select_stmtGenerator.gen(ctx, rule.select_stmt(), null);
         GTable gtable = ctx.getGtable(table.getObjectName());
-        List<InsertSingleRow> result = new ArrayList<>();
-        for (Insert_stmt_values_rowContext i: rule.insert_stmt_values_row()) {
-            List<Operator> values = new ArrayList<>();
-            for (ExprContext j:i.expr()) {
-                Operator jj = ExprGenerator.gen(ctx, null, j);
-                if (values.size() == posAutoIncrement) {
-                    jj = new OpIncrementColumnValue(table, jj);
-                }
-                values.add(jj);
-            }
-            values.addAll(defaultValues);
-            if (fields.size() != values.size()) {
+        List<ColumnMeta> columns = genColumns(table, rule.insert_stmt_values_columns());
+        Operator[] values = new Operator[table.getMaxColumnId() + 1];
+        List<FieldMeta> fields = maker.getCursorMeta().getColumns();
+        if (rule.insert_stmt_values_columns() != null) {
+            if (fields.size() != rule.insert_stmt_values_columns().column_name().size()) {
                 throw new OrcaException("number of columns is not matching number of values");
             }
-
-            // auto casting according to column data type
-            
-            Utils.applyCasting(fields, values);
-            
-            // end
-            
-            InsertSingleRow insert = new InsertSingleRow(ctx.getOrca(), table, gtable, fields, values);
+        }
+        for (int i=0; i<maker.getCursorMeta().getColumnCount(); i++) {
+            FieldMeta ii = maker.getCursorMeta().getColumn(i);
+            Operator value = new FieldValue(ii, i);
+            ColumnMeta column = columns.get(i);
+            value = Utils.autoCast(column, value);
+            values[column.getColumnId()] = value;
+        }
+        return new InsertSelect(ctx.getOrca(), gtable, table, maker, values);
+    }
+    
+    private List<InsertSingleRow> gen(GeneratorContext ctx,  TableMeta table,  Insert_stmt_valuesContext rule) {
+        List<InsertSingleRow> result = new ArrayList<>();
+        List<ColumnMeta> columns = genColumns(table, rule.insert_stmt_values_columns());
+        GTable gtable = ctx.getGtable(table.getObjectName());
+        for (Insert_stmt_values_rowContext i: rule.insert_stmt_values_row()) {
+            Operator[] values = new Operator[table.getMaxColumnId() + 1];
+            List<ExprContext> exprs = i.expr();
+            if (rule.insert_stmt_values_columns() != null) {
+                if (exprs.size() != rule.insert_stmt_values_columns().column_name().size()) {
+                    throw new OrcaException("number of columns is not matching number of values");
+                }
+            }
+            for (int j=0; j<exprs.size(); j++) {
+                ExprContext expr = exprs.get(j);
+                ColumnMeta column = columns.get(j);
+                Operator jj = ExprGenerator.gen(ctx, null, expr);
+                jj = Utils.autoCast(column, jj);
+                values[column.getColumnId()] = jj;
+            }
+            setDefaultValues(ctx, table, values);
+            InsertSingleRow insert = new InsertSingleRow(ctx.getOrca(), table, gtable, values);
             result.add(insert);
         }
-        
         return result;
     }
 
@@ -164,4 +138,37 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
         }
         return result;
     }
+    
+    private List<ColumnMeta> genColumns(TableMeta table, Insert_stmt_values_columnsContext rule) {
+        List<ColumnMeta> fields = new ArrayList<ColumnMeta>();
+        if (rule != null) {
+            for (Column_nameContext i :rule.column_name()) {
+                String columnName = Utils.getIdentifier(i.identifier());
+                ColumnMeta iii = Checks.columnExist(table, columnName);    
+                fields.add(iii);
+            }
+        }
+        else {
+            fields.addAll(table.getColumns());
+        }
+        return fields;
+    }
+
+    private void setDefaultValues(GeneratorContext ctx, TableMeta table, Operator[] values) {
+        List<ColumnMeta> columns = table.getColumns();
+        for (ColumnMeta i:columns) {
+            if (values[i.getColumnId()] != null) {
+                if (i.isAutoIncrement()) {
+                    values[i.getColumnId()] = new OpIncrementColumnValue(table, values[i.getColumnId()]);
+                }
+            }
+            else if (i.getDefault() != null) {
+                values[i.getColumnId()] = ExprGenerator.gen(ctx, null, i.getDefault());
+            }
+            else if (i.isAutoIncrement()) {
+                values[i.getColumnId()] = new OpIncrementColumnValue(table, null);
+            }
+        }
+    }
+    
 }

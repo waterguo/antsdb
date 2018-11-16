@@ -47,7 +47,7 @@ public class CreateTable extends Statement {
         TableMeta tableMeta = new TableMeta(ctx.getOrca(), this.tableName);
         tableMeta.setNamespace(ns);
         tableMeta.setCharset(this.charset);
-        ctx.getOrca().getMetaService().addTable(trx, tableMeta);
+        ctx.getOrca().getMetaService().addTable(ctx.getHSession(), trx, tableMeta);
         
         // find a good non-conflict name
         
@@ -58,6 +58,7 @@ public class CreateTable extends Statement {
         if (Orca.SYSNS.equals(tableName.getNamespace())) {
             if (humpback.getTable(tableName.getNamespace(), tableMeta.getHtableId()) == null) {
                 humpback.createTable(
+                        ctx.getHSession(),
                         tableName.getNamespace(), 
                         tableMeta.getExternalName(), 
                         tableMeta.getHtableId(),
@@ -65,7 +66,8 @@ public class CreateTable extends Statement {
             }
         }
         else {
-            humpback.createTable(tableName.getNamespace(), 
+            humpback.createTable(ctx.getHSession(),
+                                 tableName.getNamespace(), 
                                  tableMeta.getExternalName(), 
                                  tableMeta.getHtableId(),
                                  TableType.DATA);

@@ -93,17 +93,17 @@ final class Range {
             return addFrom(idx, filter, true);
         }
         else if (filter.op == FilterOp.INSELECT) {
-            this.isSelectIn = true;
             if (!addFrom(idx, filter, true)) {
                 return false;
             }
+            this.isSelectIn = true;
             return addTo(idx, filter, true);
         }
         else if (filter.op == FilterOp.INVALUES) {
-            this.isSelectIn = true;
             if (!addFrom(idx, filter, true)) {
                 return false;
             }
+            this.isSelectIn = true;
             return addTo(idx, filter, true);
         }
         else if (filter.op == FilterOp.LIKE) {

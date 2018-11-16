@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.nosql;
 
 import java.io.Closeable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.antsdb.saltedfish.util.UberTime;
 
@@ -22,8 +23,21 @@ import com.antsdb.saltedfish.util.UberTime;
  *  
  * @author *-xguo0<@
  */
-public class HumpbackSession implements Closeable{
+public final class HumpbackSession implements Closeable{
+    static AtomicInteger _nextId = new AtomicInteger(1);
+    
     long ts;
+    int id = 0;
+    
+    public HumpbackSession() {
+        // make sure id > 0
+        for (;this.id <= 0;) {
+            this.id = _nextId.getAndIncrement();
+            if (this.id < 0) {
+                _nextId.compareAndSet(this.id, 1);
+            }
+        }
+    }
     
     public HumpbackSession open() {
         ts = UberTime.getTime();
@@ -37,5 +51,14 @@ public class HumpbackSession implements Closeable{
 
     public long getOpenTime() {
         return this.ts;
+    }
+
+    public int getId() {
+        return this.id;
+    }
+    
+    @Override
+    public String toString() {
+        return "hsession: " + this.id;
     }
 }

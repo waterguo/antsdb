@@ -14,8 +14,7 @@
 package com.antsdb.saltedfish.sql.mysql;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Delete_stmtContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.From_itemContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.Join_itemContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.From_clause_standardContext;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.GeneratorUtil;
@@ -37,32 +36,7 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
     public Instruction gen(GeneratorContext ctx, Delete_stmtContext rule) throws OrcaException {
         Planner planner = new Planner(ctx);
 
-        // from clause
-        
-        if (rule.from_clause() != null) {
-            for (From_itemContext i:rule.from_clause().from_item()) {
-                Select_or_valuesGenerator.addTableToPlanner(ctx, planner, i, null, true, false);
-            }
-        }
-        
-        // joins
-        
-        if (rule.from_clause() != null) {
-            if (rule.from_clause().join_clause() != null) {
-                for (Join_itemContext i:rule.from_clause().join_clause().join_item()) {
-                    boolean outer = false;
-                    if (i.join_operator() != null) {
-                        outer = i.join_operator().K_LEFT() != null;
-                    }
-                    Select_or_valuesGenerator.addTableToPlanner(ctx, 
-                                                                planner, 
-                                                                i.from_item(), 
-                                                                i.join_constraint().expr(),
-                                                                true,
-                                                                outer);
-                }
-            }
-        }
+        Select_or_valuesGenerator.genFrom(ctx, rule.from_clause(), planner);
         
         // find the table to work on
         
@@ -89,7 +63,8 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
             planner.addOutputField(name, new FieldValue(field));
         }
         else {
-            ObjectName name = TableName.parse(ctx, rule.from_clause().from_item(0).from_table().table_name_());
+            From_clause_standardContext fromStandard = rule.from_clause().from_clause_standard();
+            ObjectName name = TableName.parse(ctx, fromStandard.from_item(0).from_table().table_name_());
             table = Checks.tableExist(ctx.getSession(), name);
         }
         

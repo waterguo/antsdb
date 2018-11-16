@@ -24,7 +24,7 @@ public class Drop_database_stmtGenerator extends DdlGenerator<Drop_database_stmt
 
     @Override
     public Instruction gen(GeneratorContext ctx, Drop_database_stmtContext rule) throws OrcaException {
-        String name = rule.any_name().getText();
+        String name = Utils.getIdentifier(rule.identifier());
         boolean ifExists = (rule.K_EXISTS() != null);
         return new DropNamespace(name, ifExists);
     }

@@ -206,7 +206,7 @@ commit_stmt
  ;
  
 create_database_stmt
- : K_CREATE K_DATABASE (K_IF K_NOT K_EXISTS)? identifier (K_DEFAULT? K_CHARACTER K_SET any_name)?  
+ : K_CREATE (K_DATABASE | K_SCHEMA) (K_IF K_NOT K_EXISTS)? identifier (K_DEFAULT? K_CHARACTER K_SET any_name)?  
  ;
  
 create_index_stmt:
@@ -350,7 +350,7 @@ delete_stmt
  : K_DELETE table_name_? from_clause ( K_WHERE expr )? limit_clause?
  ;
 
-drop_database_stmt: K_DROP K_DATABASE (K_IF K_EXISTS)? any_name;
+drop_database_stmt: K_DROP (K_DATABASE | K_SCHEMA) (K_IF K_EXISTS)? identifier;
 
 drop_table_stmt: K_DROP K_TABLE (K_IF K_EXISTS)? table_names_ ;
 
@@ -395,7 +395,7 @@ insert_duplicate_clause
  ;
    
 insert_stmt_select
- : select_stmt
+ : insert_stmt_values_columns? select_stmt
  ;
  
 set_stmt
@@ -453,9 +453,23 @@ select_columns
  ;
  
 from_clause
- : K_FROM from_item ( ',' from_item )* join_clause?
+ : from_clause_standard | from_clause_odbc
+ ;
+ 
+from_clause_standard
+ : K_FROM  from_item ( ',' from_item )* join_clause?
  ;
 
+from_clause_odbc
+ : K_FROM '{' K_OJ from_item_odbc '}'
+ ;
+
+from_item_odbc
+ : from_item
+ | '(' from_item_odbc ')'
+ | from_item_odbc join_operator from_item join_constraint
+ ;
+  
 limit_clause
  : K_LIMIT number_value ( ',' number_value)? (K_OFFSET number_value)?
  ;
@@ -867,7 +881,7 @@ name
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
  | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
- | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION
+ | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION | K_OJ
  ;
  
 identifier
@@ -1071,6 +1085,7 @@ K_NOTNULL : N O T N U L L;
 K_NULL : N U L L;
 K_OF : O F;
 K_OFFSET : O F F S E T;
+K_OJ : O J;
 K_ON : O N;
 K_OPTION : O P T I O N;
 K_OR : O R;
@@ -1099,6 +1114,7 @@ K_ROLLBACK : R O L L B A C K;
 K_ROW : R O W;
 K_ROWNUM : R O W N U M;
 K_SAVEPOINT : S A V E P O I N T;
+K_SCHEMA : S C H E M A;
 K_SELECT : S E L E C T;
 K_SEPARATOR : S E P A R A T O R; 
 K_SEQUENCE: S E Q U E N C E;

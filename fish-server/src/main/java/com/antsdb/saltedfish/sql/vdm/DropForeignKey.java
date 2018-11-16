@@ -22,30 +22,30 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author *-xguo0<@
  */
 public class DropForeignKey extends Statement {
-	
-	private ObjectName tableName;
-	private String name;
+    
+    private ObjectName tableName;
+    private String name;
 
-	public DropForeignKey(ObjectName tableName, String name) {
-		this.tableName = tableName;
-		this.name = name;
-	}
+    public DropForeignKey(ObjectName tableName, String name) {
+        this.tableName = tableName;
+        this.name = name;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params) {
-		TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
-		ForeignKeyMeta rule = null;
-		for (ForeignKeyMeta i:table.getForeignKeys()) {
-			if (i.getName().equalsIgnoreCase(this.name)) {
-				rule = i;
-				break;
-			}
-		}
-		if (rule == null) {
-			throw new OrcaException("foreign key {} is not found", this.name);
-		}
-		ctx.getMetaService().deleteRule(ctx.getTransaction(), rule);
-		return null;
-	}
+    @Override
+    public Object run(VdmContext ctx, Parameters params) {
+        TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
+        ForeignKeyMeta rule = null;
+        for (ForeignKeyMeta i:table.getForeignKeys()) {
+            if (i.getName().equalsIgnoreCase(this.name)) {
+                rule = i;
+                break;
+            }
+        }
+        if (rule == null) {
+            throw new OrcaException("foreign key {} is not found", this.name);
+        }
+        ctx.getMetaService().deleteRule(ctx.getHSession(), ctx.getTransaction(), rule);
+        return null;
+    }
 
 }

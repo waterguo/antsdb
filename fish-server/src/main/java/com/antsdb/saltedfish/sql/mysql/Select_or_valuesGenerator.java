@@ -35,7 +35,11 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Column_name_Context;
 import com.antsdb.saltedfish.lexer.MysqlParser.ExprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_functionContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_function_parametersContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.From_clauseContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.From_clause_odbcContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.From_clause_standardContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.From_itemContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.From_item_odbcContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.IdentifierContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Join_itemContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Join_operatorContext;
@@ -108,30 +112,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             planner.setNoCache(true);
         }
         
-        // from items
-        
-        if (rule.from_clause() != null) {
-            for (From_itemContext i:rule.from_clause().from_item()) {
-                addTableToPlanner(ctx, planner, i, null, true, false);
-            }
-        }
-        
-        // joins
-        
-        if (rule.from_clause() != null) {
-            if (rule.from_clause().join_clause() != null) {
-                for (Join_itemContext i:rule.from_clause().join_clause().join_item()) {
-                    boolean outer = false;
-                    boolean left = true;
-                    if (i.join_operator() != null) {
-                        Join_operatorContext joinop = i.join_operator();
-                        outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
-                        left = joinop.K_RIGHT() == null;
-                    }
-                    addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint().expr(), left, outer);
-                }
-            }
-        }
+        genFrom(ctx, rule.from_clause(), planner);
         
         // prevent null cursor. in case of 'select 1'.
         
@@ -226,6 +207,62 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         return planner;
     }
     
+    public static void genFrom(GeneratorContext ctx, From_clauseContext rule, Planner planner) {
+        if (rule == null) {
+            return;
+        }
+        if (rule.from_clause_standard() != null) {
+            genFrom(ctx, rule.from_clause_standard(), planner);
+        }
+        else {
+            genFrom(ctx, rule.from_clause_odbc(), planner);
+        }
+    }
+
+    private static void genFrom(GeneratorContext ctx, From_clause_odbcContext rule, Planner planner) {
+        genFrom(ctx, rule.from_item_odbc(), planner, true, false);
+    }
+
+    private static 
+    void genFrom(GeneratorContext ctx, From_item_odbcContext rule, Planner planner, boolean left, boolean outer) {
+        if (rule.join_operator() != null) {
+            genFrom(ctx, rule.from_item_odbc(), planner, left, outer);
+            Join_operatorContext joinop = rule.join_operator();
+            outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
+            left = joinop.K_RIGHT() == null;
+            addTableToPlanner(ctx, planner, rule.from_item(), rule.join_constraint().expr(), left, outer);
+        }
+        else if (rule.from_item() != null) {
+            addTableToPlanner(ctx, planner, rule.from_item(), null, left, outer);
+        }
+        else {
+            genFrom(ctx, rule.from_item_odbc(), planner, left, outer);
+        }
+    }
+
+    private static void genFrom(GeneratorContext ctx, From_clause_standardContext rule, Planner planner) {
+        // from items
+        
+        for (From_itemContext i:rule.from_item()) {
+            addTableToPlanner(ctx, planner, i, null, true, false);
+        }
+        
+        // joins
+        
+        if (rule.join_clause() != null) {
+            for (Join_itemContext i:rule.join_clause().join_item()) {
+                boolean outer = false;
+                boolean left = true;
+                if (i.join_operator() != null) {
+                    Join_operatorContext joinop = i.join_operator();
+                    outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
+                    left = joinop.K_RIGHT() == null;
+                }
+                addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint().expr(), left, outer);
+            }
+        }
+    }
+
     private static ExprContext rewriteHaving(GeneratorContext ctx, Planner planner, ExprContext expr) {
         ExprContext rewritten = new ExprContext(expr.getParent(), expr.invokingState);
         for (ParseTree i:expr.children) {

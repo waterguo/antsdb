@@ -160,6 +160,9 @@ public class NestedJoin extends CursorMaker {
         }
         
         private void check(long pRecord) {
+            if (pRecord == 0) {
+                return;
+            }
             byte format = Value.getFormat(null, pRecord);
             if (format == Value.FORMAT_RECORD) {
                 return;

@@ -20,6 +20,7 @@ import java.time.Duration;
 import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -58,6 +59,14 @@ public class FuncCast extends UnaryOperator {
             }
             if (value instanceof Integer) {
                 return FishObject.allocSet(heap, Long.valueOf((Integer)value));
+            }
+        }
+        else if (type.getJavaType() == Double.class) {
+            if (value instanceof Integer) {
+                return Float8.allocSet(heap, (Integer)value);
+            }
+            else if (value instanceof Long) {
+                return Float8.allocSet(heap, (Long)value);
             }
         }
         else if (type.getJavaType() == String.class) {

@@ -49,11 +49,11 @@ public class ModifyColumn extends Statement implements ColumnAttributes {
             column.setDefault(this.defaultValue);
         }
         column.setAutoIncrement(this.autoIncrement);
-        meta.modifyColumn(trx, column);
+        meta.modifyColumn(ctx.getHSession(), trx, column);
         
         // special table for blob data
         
-        CreateColumn.addBlobTableIfNecessary(ctx.getHumpback(), table, column);
+        CreateColumn.addBlobTableIfNecessary(ctx.getHumpback(), ctx.getHSession(), table, column);
         
         // done
         

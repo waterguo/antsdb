@@ -290,7 +290,7 @@ public final class MysqlSession {
         }
         finally {
             if (!success && _log.isDebugEnabled()) {
-                _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 1024));
+                _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 2048));
             }
         }
     }

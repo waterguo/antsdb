@@ -38,7 +38,7 @@ public class CreateNamespace extends Statement {
                 throw new OrcaException("namespace already exist: " + this.name);                
             }
         }
-        ctx.getHumpback().createNamespace(this.name);
+        ctx.getHumpback().createNamespace(ctx.getHSession(), this.name);
         return null;
     }
 

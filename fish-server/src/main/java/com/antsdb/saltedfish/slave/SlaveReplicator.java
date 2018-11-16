@@ -104,7 +104,7 @@ public class SlaveReplicator extends ReplicationHandler implements Replicable {
         String user = this.humpback.getConfig(KEY_USER);
         String password = this.humpback.getConfig(KEY_PASSWORD);
         Class.forName("com.mysql.jdbc.Driver");
-        this.url = String.format("jdbc:mysql://%s:%s", host, port);
+        this.url = String.format("jdbc:mysql://%s:%s?useServerPrepStmts=true", host, port);
         Connection result = DriverManager.getConnection(url, user, password);
         // we don't want mysql AUTO_INCREMENT during replication
         DbUtils.execute(result, "SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'");

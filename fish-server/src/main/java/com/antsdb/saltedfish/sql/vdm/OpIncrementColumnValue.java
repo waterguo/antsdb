@@ -47,7 +47,7 @@ public class OpIncrementColumnValue extends UnaryOperator {
                     SequenceMeta seq = getSequence(ctx);
                     if (val > seq.getLastNumber()) {
                         seq.setLastNumber(val);
-                        ctx.getMetaService().updateSequence(seq.getTransactionTimestamp(), seq);
+                        ctx.getMetaService().updateSequence(ctx.getHSession(), seq.getTransactionTimestamp(), seq);
                     }
                     return pNumber;
                 }

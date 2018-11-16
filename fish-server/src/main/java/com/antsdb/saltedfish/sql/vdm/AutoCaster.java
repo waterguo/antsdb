@@ -21,6 +21,8 @@ import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FastDecimal;
 import com.antsdb.saltedfish.cpp.FishBool;
@@ -51,7 +53,7 @@ import com.google.common.base.Charsets;
 public class AutoCaster {
     static Pattern _ptnDate = Pattern.compile("(\\d+)-(\\d+)-(\\d+)");
     static Pattern _ptnTimestamp = Pattern.compile(
-            "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+)(\\.(\\d{1,6}))?");
+            "(\\d+)[-|/](\\d+)[-|/](\\d+)( (\\d+)[:|/](\\d+)[:|/](\\d+))?(\\.(\\d{1,6}))?");
     static Pattern _ptnTimeDHMS = Pattern.compile(
             "(\\d+) (\\d+):(\\d+):(\\d+)");
     static Pattern _ptnTimeHMS = Pattern.compile(
@@ -361,6 +363,9 @@ public class AutoCaster {
         }
         else if (type == Value.TYPE_STRING) {
             String text = (String)FishObject.get(heap, pValue);
+            if (StringUtils.isBlank(text)) {
+                return 0;
+            }
             result = parseTimestamp(text);
             if (result == null) {
                 Date dt = parseDate(text);
@@ -430,14 +435,16 @@ public class AutoCaster {
             int year = Integer.parseInt(m.group(1));
             int month = Integer.parseInt(m.group(2));
             int day = Integer.parseInt(m.group(3));
-            int hour = Integer.parseInt(m.group(4));
-            int minute = Integer.parseInt(m.group(5));
-            int second = Integer.parseInt(m.group(6));
-            String g8 = m.group(8);
-            int nano = 0;
-            if (g8 != null) {
-                int g7len = g8.length();
-                nano = Integer.parseInt(m.group(7).substring(1)) * TIME_FRACTION_SCALE[g7len - 1];
+            int hour = 0, minute = 0, second = 0, nano = 0;
+            if (m.group(4) != null) {
+                hour = Integer.parseInt(m.group(5));
+                minute = Integer.parseInt(m.group(6));
+                second = Integer.parseInt(m.group(7));
+                String g8 = m.group(9);
+                if (g8 != null) {
+                    int g7len = g8.length();
+                    nano = Integer.parseInt(m.group(8).substring(1)) * TIME_FRACTION_SCALE[g7len - 1];
+                }
             }
             if ((year == 0) && (month == 0) && (day == 0)) {
                 return new Timestamp(Long.MIN_VALUE);

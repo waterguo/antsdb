@@ -19,6 +19,7 @@ import java.util.List;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.Orca;
@@ -31,43 +32,54 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author wgu0
  */
 public final class IndexEntryHandlers {
-	List<IndexEntryHandler> handlers = new ArrayList<>();
-	
-	IndexEntryHandlers(Orca orca, TableMeta table) {
-        	Humpback humpback = orca.getHumpback();
-        	for (IndexMeta i:table.getIndexes()) {
-        		IndexEntryHandler handler;
-        		GTable gindex = humpback.getTable(i.getIndexTableId());
-        		if (i.isFullText()) {
-        			handler = new FullTextIndexEntryHandler(gindex, table, i);
-        		} 
-        		else {
-        			handler = new IndexEntryHandler(gindex, table, i);
-        		}
-        		handlers.add(handler);
-        		handler.keyMaker = i.getKeyMaker();
-        	}
-	}
-	
-	void insert(Heap heap, Transaction trx, VaporizingRow row, int timeout, boolean isReplace) {
-		for (IndexEntryHandler i:this.handlers) {
-			i.insert(heap, trx, row, timeout, isReplace);
-		}
-	}
-	
-	void delete(Heap heap, Transaction trx, Row row, int timeout) {
-		for (IndexEntryHandler i:this.handlers) {
-			i.delete(heap, trx, row, timeout);
-		}
-	}
+    List<IndexEntryHandler> handlers = new ArrayList<>();
+    
+    IndexEntryHandlers(Orca orca, TableMeta table) {
+            Humpback humpback = orca.getHumpback();
+            for (IndexMeta i:table.getIndexes()) {
+                IndexEntryHandler handler;
+                GTable gindex = humpback.getTable(i.getIndexTableId());
+                if (i.isFullText()) {
+                    handler = new FullTextIndexEntryHandler(gindex, table, i);
+                } 
+                else {
+                    handler = new IndexEntryHandler(gindex, table, i);
+                }
+                handlers.add(handler);
+                handler.keyMaker = i.getKeyMaker();
+            }
+    }
+    
+    void insert(Heap heap, 
+                HumpbackSession hsession, 
+                Transaction trx, 
+                VaporizingRow row, 
+                int timeout, 
+                boolean isReplace) {
+        for (IndexEntryHandler i:this.handlers) {
+            i.insert(heap, hsession, trx, row, timeout, isReplace);
+        }
+    }
+    
+    void delete(Heap heap, HumpbackSession hsession, Transaction trx, Row row, int timeout) {
+        for (IndexEntryHandler i:this.handlers) {
+            i.delete(heap, hsession, trx, row, timeout);
+        }
+    }
 
-	void update(Heap heap, Transaction trx, Row oldRow, VaporizingRow newRow, boolean force, int timeout) {
-		for (IndexEntryHandler i:this.handlers) {
-			i.update(heap, trx, oldRow, newRow, force, timeout);
-		}
-	}
-	
-	boolean isEmpty() {
-		return this.handlers.size() == 0;
-	}
+    void update(Heap heap, 
+                HumpbackSession hsession, 
+                Transaction trx, 
+                Row oldRow, 
+                VaporizingRow newRow, 
+                boolean force, 
+                int timeout) {
+        for (IndexEntryHandler i:this.handlers) {
+            i.update(heap, hsession, trx, oldRow, newRow, force, timeout);
+        }
+    }
+    
+    boolean isEmpty() {
+        return this.handlers.size() == 0;
+    }
 }

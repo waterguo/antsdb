@@ -57,7 +57,7 @@ public class DeleteColumn extends Statement {
                     // remove the index column
                     indexColumns.remove(column);
                     index.setRuleColumns(indexColumns);
-                    ctx.getMetaService().updateRule(trx, index);
+                    ctx.getMetaService().updateRule(ctx.getHSession(), trx, index);
                 }
             }
         }
@@ -73,20 +73,20 @@ public class DeleteColumn extends Statement {
                 }
                 if (indexColumns.size() == 1) {
                     // remove the index
-                    ctx.getMetaService().deleteRule(trx, pk);
+                    ctx.getMetaService().deleteRule(ctx.getHSession(), trx, pk);
                 }
                 else {
                     // remove the index column
                     indexColumns.remove(column);
                     pk.setRuleColumns(indexColumns);
-                    ctx.getMetaService().updateRule(trx, pk);
+                    ctx.getMetaService().updateRule(ctx.getHSession(), trx, pk);
                 }
             }
         }
 
         // remove column from meta-data
         
-        ctx.getMetaService().deleteColumn(trx, table, column);
+        ctx.getMetaService().deleteColumn(ctx.getHSession(), trx, table, column);
         
         return null;
     }

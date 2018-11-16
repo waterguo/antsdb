@@ -29,93 +29,93 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author *-xguo0<@
  */
 public class OpMatch extends Operator {
-	
-	private List<FieldValue> columns;
-	private Operator against;
-	private boolean isInWhere = true;
-	private boolean isBooleanMode;
+    
+    private List<FieldValue> columns;
+    private Operator against;
+    private boolean isInWhere = true;
+    private boolean isBooleanMode;
 
-	public OpMatch(List<FieldValue> columns, Operator against, boolean isBooleanMode) {
-		this.columns = columns;
-		this.against = against;
-		this.isBooleanMode = isBooleanMode;
-	}
-	
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		return this.isInWhere ? evalInWhere(ctx, heap, params, pRecord) : evalInAggregator(ctx, heap, params, pRecord);
-	}
+    public OpMatch(List<FieldValue> columns, Operator against, boolean isBooleanMode) {
+        this.columns = columns;
+        this.against = against;
+        this.isBooleanMode = isBooleanMode;
+    }
+    
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        return this.isInWhere ? evalInWhere(ctx, heap, params, pRecord) : evalInAggregator(ctx, heap, params, pRecord);
+    }
 
-	private long evalInAggregator(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		return Float8.allocSet(heap, 0.9999999f);
-	}
+    private long evalInAggregator(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        return Float8.allocSet(heap, 0.9999999f);
+    }
 
-	private long evalInWhere(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		long pQuery = this.against.eval(ctx, heap, params, pRecord);
-		if (pQuery ==0) {
-			return 0;
-		}
-		
-		// tokenize query
-		
-		String query = (String)FishObject.get(heap, AutoCaster.toString(heap, pQuery));
-		HashSet<String> termsToSearch = new HashSet<>();
-		LuceneUtil.tokenize(query, (type, term) -> {
-			termsToSearch.add(term.toLowerCase());
-		});
-		
-		// tokenize content
-		
-		HashSet<String> terms = new HashSet<>();
-		for (FieldValue i:columns) {
-			long pText = i.eval(ctx, heap, params, pRecord);
-			if (pText ==0) {
-				continue;
-			}
-			String text = (String)FishObject.get(heap, AutoCaster.toString(heap, pText));
-			LuceneUtil.tokenize(text, (type, term) -> {
-				terms.add(term.toLowerCase());
-			});
-		}
-		
-		// match
-		
-		for (String term:termsToSearch) {
-			if (terms.contains(term)) {
-				return FishBool.allocSet(heap, true);
-			}
-		}
-		return FishBool.allocSet(heap, false);
-	}
+    private long evalInWhere(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pQuery = this.against.eval(ctx, heap, params, pRecord);
+        if (pQuery ==0) {
+            return 0;
+        }
+        
+        // tokenize query
+        
+        String query = (String)FishObject.get(heap, AutoCaster.toString(heap, pQuery));
+        HashSet<String> termsToSearch = new HashSet<>();
+        LuceneUtil.tokenize(query, (type, term) -> {
+            termsToSearch.add(term.toLowerCase());
+        });
+        
+        // tokenize content
+        
+        HashSet<String> terms = new HashSet<>();
+        for (FieldValue i:columns) {
+            long pText = i.eval(ctx, heap, params, pRecord);
+            if (pText ==0) {
+                continue;
+            }
+            String text = (String)FishObject.get(heap, AutoCaster.toString(heap, pText));
+            LuceneUtil.tokenize(text, (type, term) -> {
+                terms.add(term.toLowerCase());
+            });
+        }
+        
+        // match
+        
+        for (String term:termsToSearch) {
+            if (terms.contains(term)) {
+                return FishBool.allocSet(heap, true);
+            }
+        }
+        return FishBool.allocSet(heap, false);
+    }
 
-	public TableMeta getTable() {
-		return this.columns.get(0).getField().getTable();
-	}
-	
-	public List<FieldValue> getColumns() {
-		return columns;
-	}
+    public TableMeta getTable() {
+        return this.columns.get(0).getField().getTable();
+    }
+    
+    public List<FieldValue> getColumns() {
+        return columns;
+    }
 
-	public Operator getAgainst() {
-		return against;
-	}
+    public Operator getAgainst() {
+        return against;
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return this.isInWhere ? DataType.bool() : DataType.floatType();
-	}
+    @Override
+    public DataType getReturnType() {
+        return this.isInWhere ? DataType.bool() : DataType.floatType();
+    }
 
-	@Override
-	public void visit(Consumer<Operator> visitor) {
-		visitor.accept(this);
-		this.against.visit(visitor);
-	}
+    @Override
+    public void visit(Consumer<Operator> visitor) {
+        visitor.accept(this);
+        this.against.visit(visitor);
+    }
 
-	public void setWhere(boolean value) {
-		this.isInWhere  = value;
-	}
+    public void setWhere(boolean value) {
+        this.isInWhere  = value;
+    }
 
-	public boolean isBooleanMode() {
-	    return this.isBooleanMode;
-	}
+    public boolean isBooleanMode() {
+        return this.isBooleanMode;
+    }
 }

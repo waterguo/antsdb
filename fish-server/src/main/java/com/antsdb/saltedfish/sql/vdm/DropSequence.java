@@ -32,7 +32,7 @@ public class DropSequence extends Statement {
         if (seq == null) {
             throw new OrcaException("sequence not found: " + this.name);
         }
-        metaService.dropSequence(ctx.getTransaction(), seq);
+        metaService.dropSequence(ctx.getHSession(), ctx.getTransaction(), seq);
         return null;
     }
 

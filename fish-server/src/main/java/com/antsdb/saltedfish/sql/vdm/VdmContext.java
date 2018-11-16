@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.Session;
@@ -61,11 +62,11 @@ public class VdmContext {
     
     public Transaction getTransaction() {
         if (this.trx == null) {
-        	return this.session.getTransaction();
+            return this.session.getTransaction();
         }
         else {
-        	// context is frozen. return frozen transaction instead of the one from session 
-        	return this.trx;
+            // context is frozen. return frozen transaction instead of the one from session 
+            return this.trx;
         }
     }
     
@@ -83,32 +84,36 @@ public class VdmContext {
         return table;
     }
 
-	public Object getVariable(int variableId) {
-		return this.variables[variableId];
-	}
-	
-	public void setVariable(int variableId, Object variable) {
-		this.variables[variableId] = variable;
-	}
+    public Object getVariable(int variableId) {
+        return this.variables[variableId];
+    }
+    
+    public void setVariable(int variableId, Object variable) {
+        this.variables[variableId] = variable;
+    }
 
-	public final SpaceManager getSpaceManager() {
-		return getOrca().getHumpback().getSpaceManager();
-	}
+    public final SpaceManager getSpaceManager() {
+        return getOrca().getHumpback().getSpaceManager();
+    }
 
-	public AtomicLong getCursorStats(int makerId) {
-		if (this.cursorStats == null) {
-			this.cursorStats = new ArrayList<>();
-		}
-		while (this.cursorStats.size() <= (makerId+1)) {
-			this.cursorStats.add(new AtomicLong());
-		}
-		return this.cursorStats.get(makerId);
-	}
-	
-	public Integer compare(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
-	    if (this.comp == null) {
-	        this.comp = new VdmComparator(this);
-	    }
-	    return this.comp.comp(heap, params, pRecord, x, y); 
-	}
+    public AtomicLong getCursorStats(int makerId) {
+        if (this.cursorStats == null) {
+            this.cursorStats = new ArrayList<>();
+        }
+        while (this.cursorStats.size() <= (makerId+1)) {
+            this.cursorStats.add(new AtomicLong());
+        }
+        return this.cursorStats.get(makerId);
+    }
+    
+    public Integer compare(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
+        if (this.comp == null) {
+            this.comp = new VdmComparator(this);
+        }
+        return this.comp.comp(heap, params, pRecord, x, y); 
+    }
+
+    public HumpbackSession getHSession() {
+        return this.session.getHSession();
+    }
 }

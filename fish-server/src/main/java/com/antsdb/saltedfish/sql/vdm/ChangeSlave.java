@@ -77,10 +77,10 @@ public class ChangeSlave extends Statement {
         
         // done
         
-        ctx.getHumpback().setConfig(SlaveReplicator.KEY_HOST, host);
-        ctx.getHumpback().setConfig(SlaveReplicator.KEY_PORT, port);
-        ctx.getHumpback().setConfig(SlaveReplicator.KEY_USER, user);
-        ctx.getHumpback().setConfig(SlaveReplicator.KEY_PASSWORD, password);
+        ctx.getHumpback().setConfig(ctx.getHSession(), SlaveReplicator.KEY_HOST, host);
+        ctx.getHumpback().setConfig(ctx.getHSession(), SlaveReplicator.KEY_PORT, port);
+        ctx.getHumpback().setConfig(ctx.getHSession(), SlaveReplicator.KEY_USER, user);
+        ctx.getHumpback().setConfig(ctx.getHSession(), SlaveReplicator.KEY_PASSWORD, password);
         
         return null;
     }

@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
@@ -50,7 +51,7 @@ public class CreateColumn extends Statement implements ColumnAttributes {
 
         // special table for blob data
         
-        addBlobTableIfNecessary(ctx.getHumpback(), table, columnMeta);
+        addBlobTableIfNecessary(ctx.getHumpback(), ctx.getHSession(), table, columnMeta);
 
         // after. if there is after, sequence number of the new column is between the after and after after column
         
@@ -66,7 +67,7 @@ public class CreateColumn extends Statement implements ColumnAttributes {
         
         // done
         
-        ctx.getOrca().getMetaService().addColumn(trx, table, columnMeta);
+        ctx.getOrca().getMetaService().addColumn(ctx.getHSession(), trx, table, columnMeta);
         
         return null;
     }
@@ -138,14 +139,14 @@ public class CreateColumn extends Statement implements ColumnAttributes {
         this.after = after;
     }
 
-    static void addBlobTableIfNecessary(Humpback humpback, TableMeta table, ColumnMeta column) {
+    static void addBlobTableIfNecessary(Humpback humpback, HumpbackSession hsession, TableMeta table, ColumnMeta column) {
         if (!column.isBlobClob()) {
             return;
         }
         int blobTableId = table.getBlobTableId();
         if (humpback.getTable(blobTableId) == null) {
             String name = String.format("%s_blob_", table.getTableName());
-            humpback.createTable(table.getNamespace(), name, blobTableId, TableType.DATA);
+            humpback.createTable(hsession, table.getNamespace(), name, blobTableId, TableType.DATA);
         }
     }
     

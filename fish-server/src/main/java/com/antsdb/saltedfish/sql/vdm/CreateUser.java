@@ -45,7 +45,7 @@ public class CreateUser extends Instruction {
                 throw new OrcaException("user {} already exists", this.user);
             }
         }
-        meta.setPassword(this.user, this.password);
+        meta.setPassword(ctx.getHSession(), this.user, this.password);
         return null;
     }
 

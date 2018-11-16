@@ -46,16 +46,17 @@ abstract class DeleteBase extends Statement {
         try (Heap heap = new BluntHeap()) {
             heap.reset(0);
             Row row = null;
+            long trxid = trx.getGuaranteedTrxId();
             row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
-            HumpbackError error = this.gtable.deleteRow(trx.getGuaranteedTrxId(), row.getAddress(), timeout);
+            HumpbackError error = this.gtable.deleteRow(ctx.getHSession(), trxid, row.getAddress(), timeout);
             if (error == HumpbackError.SUCCESS) {
                 if (this.blobTable != null) {
-                    error = this.blobTable.deleteRow(trx.getGuaranteedTrxId(), row.getAddress(), timeout);
+                    error = this.blobTable.deleteRow(ctx.getHSession(), trxid, row.getAddress(), timeout);
                     if ((error != HumpbackError.SUCCESS) && (error != HumpbackError.MISSING)) {
                         throw new OrcaException(error);
                     }
                 }
-                this.indexHandlers.delete(heap, trx, row, timeout);
+                this.indexHandlers.delete(heap, ctx.getHSession(), trx, row, timeout);
                 return true;
             }
             else if (error == HumpbackError.MISSING) {

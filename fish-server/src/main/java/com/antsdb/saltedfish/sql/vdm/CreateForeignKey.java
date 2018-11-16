@@ -174,7 +174,7 @@ public class CreateForeignKey extends Statement {
         fk.setParentColumns(spec.parentColumns);
         fk.setOnDelete(spec.onDelete);
         fk.setOnUpdate(spec.onUpdate);
-        ctx.getMetaService().addRule(trx, fk);
+        ctx.getMetaService().addRule(ctx.getHSession(), trx, fk);
     }
 
     private boolean isIndexed(TableMeta table, List<String> columns) {

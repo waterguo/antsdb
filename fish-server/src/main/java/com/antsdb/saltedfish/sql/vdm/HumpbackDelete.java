@@ -22,26 +22,27 @@ import com.antsdb.saltedfish.sql.OrcaException;
  * @author wgu0
  */
 public class HumpbackDelete extends Instruction {
-	int tableId;
-	byte[] key;
-	
-	public HumpbackDelete(int tableId, byte[] key) {
-		this.tableId = tableId;
-		this.key = key;
-	}
+    int tableId;
+    byte[] key;
+    
+    public HumpbackDelete(int tableId, byte[] key) {
+        this.tableId = tableId;
+        this.key = key;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		GTable table = ctx.getHumpback().getTable(this.tableId);
-		if (table == null) {
-			throw new OrcaException("table {} is not found", tableId);
-		}
-		long trxid = ctx.getHumpback().getTrxMan().getNewVersion();
-		HumpbackError error = table.delete(trxid, key, ctx.getSession().getConfig().getLockTimeout());
-		if (error != HumpbackError.SUCCESS) {
-			throw new OrcaException(error);
-		}
-		return 1;
-	}
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        GTable table = ctx.getHumpback().getTable(this.tableId);
+        if (table == null) {
+            throw new OrcaException("table {} is not found", tableId);
+        }
+        long trxid = ctx.getHumpback().getTrxMan().getNewVersion();
+        int timeout = ctx.getSession().getConfig().getLockTimeout();
+        HumpbackError error = table.delete(ctx.getHSession(), trxid, key, timeout);
+        if (error != HumpbackError.SUCCESS) {
+            throw new OrcaException(error);
+        }
+        return 1;
+    }
 
 }

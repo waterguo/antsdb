@@ -67,53 +67,53 @@ public class FastDecimal {
             Long.MAX_VALUE/1000000000000000000L // 18
         };
     
-	static final BigInteger MAX_VALUE = BigInteger.valueOf(Long.MAX_VALUE);
-	static final BigInteger MIN_VALUE = BigInteger.valueOf(Long.MIN_VALUE);
-	
-	public final static BigDecimal get(Heap heap, long addr) {
-		int type = Unsafe.getByte(addr);
-		if (type != Value.FORMAT_FAST_DECIMAL) {
-			throw new IllegalArgumentException();
-		}
-		int scale = Unsafe.getByte(addr+1);
-		long unscaled = Unsafe.getLong(addr+2);
-		BigDecimal value = BigDecimal.valueOf(unscaled, scale);
-		return value;
-	}
+    static final BigInteger MAX_VALUE = BigInteger.valueOf(Long.MAX_VALUE);
+    static final BigInteger MIN_VALUE = BigInteger.valueOf(Long.MIN_VALUE);
+    
+    public final static BigDecimal get(Heap heap, long addr) {
+        int type = Unsafe.getByte(addr);
+        if (type != Value.FORMAT_FAST_DECIMAL) {
+            throw new IllegalArgumentException();
+        }
+        int scale = Unsafe.getByte(addr+1);
+        long unscaled = Unsafe.getLong(addr+2);
+        BigDecimal value = BigDecimal.valueOf(unscaled, scale);
+        return value;
+    }
 
-	public final static byte getScale(Heap heap, long addr) {
-		byte scale = Unsafe.getByte(addr+1);
-		return scale;
-	}
-	
-	public final static long getUnscaledLong(Heap heap, long addr) {
-		long unscaled = Unsafe.getLong(addr+2);
-		return unscaled;
-	}
-	
-	public final static long allocSet(Heap heap, BigDecimal value) {
-		BigInteger unscaled = value.unscaledValue();
-		int scale = value.scale();
-		if ((scale > Byte.MAX_VALUE) || (scale < 0)) {
-			throw new ArithmeticException();
-		}
-		if ((unscaled.compareTo(MAX_VALUE) > 0) || (unscaled.compareTo(MIN_VALUE) < 0)) {
-			throw new ArithmeticException();
-		}
-		return allocSet(heap, unscaled.longValue(), (byte)scale);
-	}
+    public final static byte getScale(Heap heap, long addr) {
+        byte scale = Unsafe.getByte(addr+1);
+        return scale;
+    }
+    
+    public final static long getUnscaledLong(Heap heap, long addr) {
+        long unscaled = Unsafe.getLong(addr+2);
+        return unscaled;
+    }
+    
+    public final static long allocSet(Heap heap, BigDecimal value) {
+        BigInteger unscaled = value.unscaledValue();
+        int scale = value.scale();
+        if ((scale > Byte.MAX_VALUE) || (scale < 0)) {
+            throw new ArithmeticException();
+        }
+        if ((unscaled.compareTo(MAX_VALUE) > 0) || (unscaled.compareTo(MIN_VALUE) < 0)) {
+            throw new ArithmeticException();
+        }
+        return allocSet(heap, unscaled.longValue(), (byte)scale);
+    }
 
-	public final static long allocSet(Heap heap, long value, byte scale) {
-		long addr = heap.alloc(10);
-		set(heap, addr, value, scale);
-		return addr;
-	}
+    public final static long allocSet(Heap heap, long value, byte scale) {
+        long addr = heap.alloc(10);
+        set(heap, addr, value, scale);
+        return addr;
+    }
 
-	public final static void set(Heap heap, long addr, long value, byte scale) {
-		Unsafe.putByte(addr, Value.FORMAT_FAST_DECIMAL);
-		Unsafe.putByte(addr+1, scale);
-		Unsafe.putLong(addr+2, value);
-	}
+    public final static void set(Heap heap, long addr, long value, byte scale) {
+        Unsafe.putByte(addr, Value.FORMAT_FAST_DECIMAL);
+        Unsafe.putByte(addr+1, scale);
+        Unsafe.putLong(addr+2, value);
+    }
 
     /*
      * returns INFLATED if oveflow
@@ -157,7 +157,7 @@ public class FastDecimal {
                 return add(heap, scaledX, value2, scale2);
             } 
             else {
-            	return INFLATED;
+                return INFLATED;
             }
         } 
         else {
@@ -167,7 +167,7 @@ public class FastDecimal {
                 return add(heap, value1, scaledY, scale1);
             } 
             else {
-            	return INFLATED;
+                return INFLATED;
             }
         }
     }
@@ -191,67 +191,67 @@ public class FastDecimal {
         return INFLATED;
     }
 
-	final static int compare(long addr1, byte type2, long addr2) {
-		long x_digits = Unsafe.getLong(addr1+2);
-		int x_scale = Unsafe.getByte(addr1+1);
-		long y_digits;
-		int y_scale;
-		switch (type2) {
-		case Value.FORMAT_INT8:
-			y_digits = Int8.get(null, addr2);
-			y_scale = 0;
-			break;
-		case Value.FORMAT_INT4:
-			y_digits = Int4.get(addr2);
-			y_scale = 0;
-			break;
-		default:
-			throw new IllegalArgumentException();
-		}
-		if (x_scale > y_scale) {
-			long factor = 10 ^ (x_scale - y_scale);
-			long result = x_digits * factor;
-			if (result / factor == x_digits) {
-				x_digits = result;
-			}
-			else {
-				return compare_overflow(x_digits, x_scale, y_digits, y_scale);
-			}
-		}
-		else if (x_scale < y_scale) {
-			long factor = 10 ^ (y_scale - x_scale);
-			long result = y_digits * factor;
-			if (result / factor == y_digits) {
-				y_digits = result;
-			}
-			else {
-				return compare_overflow(x_digits, x_scale, y_digits, y_scale);
-			}
-		}
+    final static int compare(long addr1, byte type2, long addr2) {
+        long x_digits = Unsafe.getLong(addr1+2);
+        int x_scale = Unsafe.getByte(addr1+1);
+        long y_digits;
+        int y_scale;
+        switch (type2) {
+        case Value.FORMAT_INT8:
+            y_digits = Int8.get(null, addr2);
+            y_scale = 0;
+            break;
+        case Value.FORMAT_INT4:
+            y_digits = Int4.get(addr2);
+            y_scale = 0;
+            break;
+        default:
+            throw new IllegalArgumentException();
+        }
+        if (x_scale > y_scale) {
+            long factor = 10 ^ (x_scale - y_scale);
+            long result = x_digits * factor;
+            if (result / factor == x_digits) {
+                x_digits = result;
+            }
+            else {
+                return compare_overflow(x_digits, x_scale, y_digits, y_scale);
+            }
+        }
+        else if (x_scale < y_scale) {
+            long factor = 10 ^ (y_scale - x_scale);
+            long result = y_digits * factor;
+            if (result / factor == y_digits) {
+                y_digits = result;
+            }
+            else {
+                return compare_overflow(x_digits, x_scale, y_digits, y_scale);
+            }
+        }
         return x_digits != y_digits ? ((x_digits > y_digits) ? 1 : -1) : 0;
-	}
+    }
 
-	private static int compare_overflow(long x_digits, int x_scale, long y_digits, int y_scale) {
-		long x_signum = (x_digits >> 63) & 1;
-		long y_signum = (y_digits >> 63) & 1;
-		if (x_signum != y_signum) {
-			return x_signum > y_signum ? 1 : -1;
-		}
-		BigDecimal x = BigDecimal.valueOf(x_digits, x_scale);
-		BigDecimal y = BigDecimal.valueOf(y_digits, y_scale);
-		return x.compareTo(y);
-	}
+    private static int compare_overflow(long x_digits, int x_scale, long y_digits, int y_scale) {
+        long x_signum = (x_digits >> 63) & 1;
+        long y_signum = (y_digits >> 63) & 1;
+        if (x_signum != y_signum) {
+            return x_signum > y_signum ? 1 : -1;
+        }
+        BigDecimal x = BigDecimal.valueOf(x_digits, x_scale);
+        BigDecimal y = BigDecimal.valueOf(y_digits, y_scale);
+        return x.compareTo(y);
+    }
 
-	public static long abs(Heap heap, long pValue) {
-		long unscaled = getUnscaledLong(heap, pValue);
-		if (unscaled >= 0) {
-			return pValue;
-		}
-		return allocSet(heap, -unscaled, getScale(heap, pValue));
-	}
+    public static long abs(Heap heap, long pValue) {
+        long unscaled = getUnscaledLong(heap, pValue);
+        if (unscaled >= 0) {
+            return pValue;
+        }
+        return allocSet(heap, -unscaled, getScale(heap, pValue));
+    }
 
-	public static long negate(Heap heap, long pValue) {
-		long unscaled = getUnscaledLong(heap, pValue);
-		return allocSet(heap, -unscaled, getScale(heap, pValue));
-	}
+    public static long negate(Heap heap, long pValue) {
+        long unscaled = getUnscaledLong(heap, pValue);
+        return allocSet(heap, -unscaled, getScale(heap, pValue));
+    }
 }

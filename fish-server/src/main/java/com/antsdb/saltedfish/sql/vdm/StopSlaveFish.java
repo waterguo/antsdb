@@ -26,7 +26,7 @@ public class StopSlaveFish extends Statement {
     public Object run(VdmContext ctx, Parameters params) {
         try {
             ctx.getHumpback().stopSlave();
-            ctx.getHumpback().setConfig(SlaveReplicator.KEY_ENABLED, "true");
+            ctx.getHumpback().setConfig(ctx.getHSession(), SlaveReplicator.KEY_ENABLED, "true");
         }
         catch (Exception x) {
             throw new OrcaException(x);

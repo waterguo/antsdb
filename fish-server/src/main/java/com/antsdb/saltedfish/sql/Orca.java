@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.Replicator;
 import com.antsdb.saltedfish.nosql.SpaceManager;
@@ -297,43 +298,46 @@ public class Orca {
         Map<Integer, GTable> tableById = new HashMap<>();
         Session session = createSystemSession();
         VdmContext ctx = new VdmContext(session, 0);
-        for (String ns:getMetaService().getNamespaces()) {
-            for (String tableName:getMetaService().getTables(session.getTransaction(), ns)) {
-                ObjectName name = new ObjectName(ns, tableName);
-                TableMeta table = getMetaService().getTable(ctx.getTransaction(), name);
-                GTable gtable = this.humpback.getTable(table.getHtableId());
-                
-                // recreate gtable.it could happen cuz humpback creates the physical when flush the content 
-                
-                if (gtable == null) {
-                    gtable = this.humpback.createTable(
-                            name.getNamespace(), 
-                            table.getTableName(), 
-                            table.getHtableId(), 
-                            TableType.DATA);
-                    _log.warn("table {} not found in humpback, created ", name);
-                }
-                else {
-                    Validate validator = new Validate(name);
-                    try {
-                        validator.run(ctx, null);
+        try (HumpbackSession hsession = session.getHSession().open()) {
+            for (String ns:getMetaService().getNamespaces()) {
+                for (String tableName:getMetaService().getTables(session.getTransaction(), ns)) {
+                    ObjectName name = new ObjectName(ns, tableName);
+                    TableMeta table = getMetaService().getTable(ctx.getTransaction(), name);
+                    GTable gtable = this.humpback.getTable(table.getHtableId());
+                    
+                    // recreate gtable.it could happen cuz humpback creates the physical when flush the content 
+                    
+                    if (gtable == null) {
+                        gtable = this.humpback.createTable(
+                                hsession, 
+                                name.getNamespace(), 
+                                table.getTableName(), 
+                                table.getHtableId(), 
+                                TableType.DATA);
+                        _log.warn("table {} not found in humpback, created ", name);
                     }
-                    catch (Exception x) {
-                        _log.warn("failed to verify table: " + tableName, x);
+                    else {
+                        Validate validator = new Validate(name);
+                        try {
+                            validator.run(ctx, null);
+                        }
+                        catch (Exception x) {
+                            _log.warn("failed to verify table: " + tableName, x);
+                        }
                     }
+                    tableById.put(table.getId(), gtable);
                 }
-                tableById.put(table.getId(), gtable);
             }
-        }
-        
-        // verify tables from humpback
-        
-        for (GTable i:this.humpback.getTables()) {
-            String ns = i.getNamespace();
-            int tableId = i.getId();
-            if (tableById.get(tableId) == null) {
-                _log.warn("table exists but not registered: " + i.getId());
-                humpback.dropTable(ns, tableId);
+            
+            // verify tables from humpback
+            
+            for (GTable i:this.humpback.getTables()) {
+                String ns = i.getNamespace();
+                int tableId = i.getId();
+                if (tableById.get(tableId) == null) {
+                    _log.warn("table exists but not registered: " + i.getId());
+                    humpback.dropTable(hsession, ns, tableId);
+                }
             }
         }
     }
@@ -353,7 +357,7 @@ public class Orca {
             }
         }
         String msg = String.format("session %d user %s from %s", session.getId(), user, remoteEndpoint);
-        getHumpback().getGobbler().logMessage(msg);
+        getHumpback().getGobbler().logMessage(session.getHSession(), msg);
         this.sessions.add(session);
         return session;
     }
@@ -362,7 +366,7 @@ public class Orca {
         session.close();
         this.sessions.remove(session);
         String msg = String.format("session %d is closed", session.getId());
-        getHumpback().getGobbler().logMessage(msg);
+        getHumpback().getGobbler().logMessage(session.getHSession(), msg);
         this.deadSessions.add(new DeadSession(session));
         while (this.deadSessions.size() > 200) {
             this.deadSessions.poll();

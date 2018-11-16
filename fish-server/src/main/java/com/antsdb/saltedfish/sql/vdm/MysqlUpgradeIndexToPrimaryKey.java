@@ -26,39 +26,39 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author wgu0
  */
 public class MysqlUpgradeIndexToPrimaryKey extends Statement {
-	ObjectName tableName;
-	String indexName;
-	
-	public MysqlUpgradeIndexToPrimaryKey(ObjectName tableName, String indexName) {
-		super();
-		this.tableName = tableName;
-		this.indexName = indexName;
-	}
+    ObjectName tableName;
+    String indexName;
+    
+    public MysqlUpgradeIndexToPrimaryKey(ObjectName tableName, String indexName) {
+        super();
+        this.tableName = tableName;
+        this.indexName = indexName;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params) {
-		TableMeta table = Checks.tableExist(ctx.getSession(), tableName);
-		IndexMeta index = Checks.indexExist(table, this.indexName);
-		if (table.getPrimaryKey() != null) {
-			return null;
-		}
-		if (!index.isUnique()) {
-			return null;
-		}
-		for (ColumnMeta i:index.getColumns(table)) {
-			if (i.isNullable()) {
-				return null;
-			}
-		}
-		GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
-		if (!gtable.isPureEmpty()) {
-			throw new OrcaException("unable to upgrade unique index to primary key because table is not empty {}", 
-					                this.tableName);
-		}
-		index = index.clone();
-		index.setType(Rule.PrimaryKey);
-		ctx.getMetaService().updateRule(ctx.getTransaction(), index);
-		return null;
-	}
+    @Override
+    public Object run(VdmContext ctx, Parameters params) {
+        TableMeta table = Checks.tableExist(ctx.getSession(), tableName);
+        IndexMeta index = Checks.indexExist(table, this.indexName);
+        if (table.getPrimaryKey() != null) {
+            return null;
+        }
+        if (!index.isUnique()) {
+            return null;
+        }
+        for (ColumnMeta i:index.getColumns(table)) {
+            if (i.isNullable()) {
+                return null;
+            }
+        }
+        GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
+        if (!gtable.isPureEmpty()) {
+            throw new OrcaException("unable to upgrade unique index to primary key because table is not empty {}", 
+                                    this.tableName);
+        }
+        index = index.clone();
+        index.setType(Rule.PrimaryKey);
+        ctx.getMetaService().updateRule(ctx.getHSession(), ctx.getTransaction(), index);
+        return null;
+    }
 
 }

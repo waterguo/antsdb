@@ -59,10 +59,10 @@ public class SyncTableSequence extends Statement {
             seq.setLastNumber(autoIncrement-1);
             seq.setSeed(1);
             seq.setIncrement(1);
-            meta.addSequence(trx, seq);
+            meta.addSequence(ctx.getHSession(), trx, seq);
         }
         else if ((column == null) && (seq != null)) {
-            meta.dropSequence(trx, seq);
+            meta.dropSequence(ctx.getHSession(), trx, seq);
         }
         return null;
     }

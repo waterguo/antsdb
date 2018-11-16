@@ -1048,7 +1048,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
      * @param row null if this is mark-delete
      * @return
      */
-    HumpbackError put(VaporizingRow row, Collection<MemTablet> past, int timeout) {
+    HumpbackError put(HumpbackSession hsession, VaporizingRow row, Collection<MemTablet> past, int timeout) {
         ensureMutable();
         try {
             UberTimer timer = new UberTimer(timeout);
@@ -1068,11 +1068,11 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     }
                     long spRow = 0;
                     if ((rowState == RowState.EXIST) || (rowState == RowState.EXIST_AND_LOCKED)) {
-                        spRow = this.humpback.getGobbler().logUpdate(row, this.tableId);
+                        spRow = this.humpback.getGobbler().logUpdate(hsession, row, this.tableId);
                         node.setSpacePointer(spRow);
                     }
                     else if ((rowState == RowState.NONEXIST) || (rowState == RowState.TOMBSTONE)) {
-                        spRow = this.humpback.getGobbler().logInsert(row, this.tableId);
+                        spRow = this.humpback.getGobbler().logInsert(hsession, row, this.tableId);
                         node.setSpacePointer(spRow);
                     }
                     else {
@@ -1122,7 +1122,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
     }    
     
-    HumpbackError insert(VaporizingRow row, Collection<MemTablet> pastTablets, int timeout) {
+    HumpbackError insert(HumpbackSession hsession, VaporizingRow row, Collection<MemTablet> pastTablets, int timeout) {
         ensureMutable();
         try {
             this.gate.incrementAndGet();
@@ -1144,7 +1144,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         continue;
                     }
                     long spRow = LatencyDetector.run(_log, "logInsert", ()->{
-                        return this.humpback.getGobbler().logInsert(row, this.tableId);
+                        return this.humpback.getGobbler().logInsert(hsession, row, this.tableId);
                     });
                     node.setSpacePointer(spRow);
                     trackTrxId(version, node.getOffset());
@@ -1161,7 +1161,9 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
     }
 
-    HumpbackError insertIndex(long pIndexKey, 
+    HumpbackError insertIndex(
+            HumpbackSession hsession,
+            long pIndexKey, 
             long version, 
             long pRowKey, 
             Collection<MemTablet> pastTablets, 
@@ -1186,7 +1188,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         this.casRetries.incrementAndGet();
                         continue;
                     }
-                    long sp = this.humpback.getGobbler().logIndex(tableId, version, pIndexKey, pRowKey, misc);
+                    long sp = this.humpback.getGobbler().logIndex(hsession, tableId, version, pIndexKey, pRowKey, misc);
                     node.setSpacePointer(sp);
                     trackTrxId(version, node.getOffset());
                     trackSp(sp - Gobbler.IndexEntry.getHeaderSize());
@@ -1276,7 +1278,11 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
     }
     
-    HumpbackError update(VaporizingRow row, long compare, Collection<MemTablet> pastTablets, int timeout) {
+    HumpbackError update(HumpbackSession hsession, 
+                         VaporizingRow row, 
+                         long compare, 
+                         Collection<MemTablet> pastTablets, 
+                         int timeout) {
         try {
             this.gate.incrementAndGet();
             UberTimer timer = new UberTimer(timeout);
@@ -1293,7 +1299,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         this.casRetries.incrementAndGet();
                         continue;
                     }
-                    long spRow = this.humpback.getGobbler().logUpdate(row, this.tableId);
+                    long spRow = this.humpback.getGobbler().logUpdate(hsession, row, this.tableId);
                     node.setSpacePointer(spRow);
                     trackTrxId(version, node.getOffset());
                     trackSp(spRow - Gobbler.UpdateEntry.getHeaderSize());
@@ -1309,7 +1315,11 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
     }    
     
-    HumpbackError delete(long pKey, long trxid, Collection<MemTablet> pastTablets, int timeout) {
+    HumpbackError delete(HumpbackSession hsession, 
+                         long pKey, 
+                         long trxid, 
+                         Collection<MemTablet> pastTablets, 
+                         int timeout) {
         if (trxid == 0) {
             throw new IllegalArgumentException();
         }
@@ -1330,7 +1340,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         continue;
                     }
                     int length = KeyBytes.getRawSize(pKey);
-                    long sprow = this.humpback.getGobbler().logDelete(trxid, this.tableId, pKey, length);
+                    long sprow = this.humpback.getGobbler().logDelete(hsession, trxid, this.tableId, pKey, length);
                     node.setSpacePointer(sprow);
                     trackTrxId(trxid, node.getOffset());
                     trackSp(sprow - Gobbler.DeleteEntry.getHeaderSize());
@@ -1346,7 +1356,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
         }
     }
 
-    public HumpbackError deleteRow(long pRow, long trxid, ConcurrentLinkedList<MemTablet> tablets, int timeout) {
+    public HumpbackError deleteRow(HumpbackSession hsession, long pRow, long trxid, ConcurrentLinkedList<MemTablet> tablets, int timeout) {
         if (trxid == 0) {
             throw new IllegalArgumentException();
         }
@@ -1367,7 +1377,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         this.casRetries.incrementAndGet();
                         continue;
                     }
-                    long sprow = this.humpback.getGobbler().logDeleteRow(trxid, this.tableId, pRow);
+                    long sprow = this.humpback.getGobbler().logDeleteRow(hsession, trxid, this.tableId, pRow);
                     node.setSpacePointer(sprow);
                     trackTrxId(trxid, node.getOffset());
                     trackSp(sprow - Gobbler.DeleteRowEntry.getHeaderSize());

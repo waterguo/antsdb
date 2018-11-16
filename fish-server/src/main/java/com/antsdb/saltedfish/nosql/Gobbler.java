@@ -586,7 +586,7 @@ public class Gobbler {
     public Gobbler(SpaceManager spaceman, boolean enableWriter) throws IOException {
         this.spaceman = spaceman;
         if (!this.spaceman.isReadOnly()) {
-            logMessage("gobbler start at " + LocalDateTime.now());
+            logMessage(null, "gobbler start at " + LocalDateTime.now());
             if (enableWriter) {
                 this.spPersistence.set(spaceman.getAllocationPointer());
                 this.writer = new LogWriter(spaceman, this);
@@ -618,7 +618,7 @@ public class Gobbler {
         updatePersistencePointer(sp);
     }
     
-    public void logMessage(String message) {
+    public void logMessage(HumpbackSession hsession, String message) {
         MessageEntry entry = MessageEntry.alloc(spaceman, message);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
@@ -635,21 +635,21 @@ public class Gobbler {
         updatePersistencePointer(sp);
     }
 
-    public void logCommit(long trxid, long trxts, int sessionId) {
-        CommitEntry entry = new CommitEntry(spaceman, trxid, trxts, sessionId);
+    public void logCommit(HumpbackSession hsession, long trxid, long trxts) {
+        CommitEntry entry = new CommitEntry(spaceman, trxid, trxts, hsession.getId());
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
         logTimestamp();
     }
 
-    void logRollback(long trxid, int sessionId) {
-        RollbackEntry entry = new RollbackEntry(spaceman, trxid, sessionId);
+    void logRollback(HumpbackSession hsession, long trxid) {
+        RollbackEntry entry = new RollbackEntry(spaceman, trxid, hsession.getId());
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
         logTimestamp();
     }
 
-    long logIndex(int tableId, long trxid, long pIndexKey, long pRowKey, byte misc) {
+    long logIndex(HumpbackSession hsession, int tableId, long trxid, long pIndexKey, long pRowKey, byte misc) {
         IndexEntry entry = IndexEntry.alloc(spaceman, tableId, trxid, pIndexKey, pRowKey, misc);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
@@ -657,7 +657,7 @@ public class Gobbler {
         return sp + ENTRY_HEADER_SIZE;
     }
     
-    long logInsert(VaporizingRow row, int tableId) {
+    long logInsert(HumpbackSession hsession, VaporizingRow row, int tableId) {
         long start = UberTime.getTime();
         InsertEntry entry = new InsertEntry(spaceman, row, tableId, start);
         long sp = entry.getSpacePointer();
@@ -666,7 +666,7 @@ public class Gobbler {
         return entry.getRowSpacePointer();
     }
     
-    long logUpdate(VaporizingRow row, int tableId) {
+    long logUpdate(HumpbackSession hsession, VaporizingRow row, int tableId) {
         UpdateEntry entry = new UpdateEntry(spaceman, row, tableId);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
@@ -674,7 +674,7 @@ public class Gobbler {
         return entry.getRowSpacePointer();
     }
     
-    long logPut(VaporizingRow row, int tableId) {
+    long logPut(HumpbackSession hsession, VaporizingRow row, int tableId) {
         PutEntry entry = new PutEntry(spaceman, row, tableId);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
@@ -682,7 +682,7 @@ public class Gobbler {
         return entry.getRowSpacePointer();
     }
     
-    public long logDeleteRow(long trxid, int tableId, long pRow) {
+    public long logDeleteRow(HumpbackSession hsession, long trxid, int tableId, long pRow) {
         DeleteRowEntry entry = new DeleteRowEntry(spaceman, pRow, tableId, trxid);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
@@ -690,7 +690,7 @@ public class Gobbler {
         return entry.getRowSpacePointer();
     }
 
-    public long logDelete(long trxid, int tableId, long pKey, int length) {
+    public long logDelete(HumpbackSession hsession, long trxid, int tableId, long pKey, int length) {
         DeleteEntry entry = new DeleteEntry(spaceman, tableId, trxid, pKey, length);
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);

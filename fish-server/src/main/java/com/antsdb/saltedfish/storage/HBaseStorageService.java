@@ -562,7 +562,7 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         
         // write a bogus rollback so that spNow can be replayed
         
-        this.humpback.getGobbler().logMessage("nothing");
+        this.humpback.getGobbler().logMessage(null, "nothing");
         
         // wait until timeout 
         

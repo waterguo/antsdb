@@ -38,9 +38,11 @@ public class Statistician extends ReplicationHandler implements Replicable {
     ConcurrentHashMap<Integer, TableStats> stats = new ConcurrentHashMap<>();
     long lastSaveTime;
     private long commitedLp;
+    HumpbackSession hsession;
 
     public Statistician(Humpback humpback) {
         this.humpback = humpback;
+        this.hsession = humpback.createSession();
         this.sp = this.humpback.getCheckPoint().getStatisticanLogPointer();
         if (this.sp == 0) {
             this.sp = this.humpback.getGobbler().getStartSp();
@@ -149,16 +151,18 @@ public class Statistician extends ReplicationHandler implements Replicable {
     }
     
     void save() {
-        GTable gtable = this.humpback.getTable(Humpback.SYSSTATS_TABLE_ID);
-        for (TableStats i:this.stats.values()) {
-            if (i.isDirty) {
-                SlowRow row = i.save();
-                gtable.put(1, row, 0);
+        try (HumpbackSession foo = this.hsession.open()) {
+            GTable gtable = this.humpback.getTable(Humpback.SYSSTATS_TABLE_ID);
+            for (TableStats i:this.stats.values()) {
+                if (i.isDirty) {
+                    SlowRow row = i.save();
+                    gtable.put(hsession, 1, row, 0);
+                }
             }
+            this.lastSaveTime = UberTime.getTime();
+            humpback.getCheckPoint().setStatisticanLogPointer(this.sp);
+            this.commitedLp = this.sp;
         }
-        this.lastSaveTime = UberTime.getTime();
-        humpback.getCheckPoint().setStatisticanLogPointer(this.sp);
-        this.commitedLp = this.sp;
     }
 
     void load() {

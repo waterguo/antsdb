@@ -132,16 +132,16 @@ abstract class UpdateBase extends Statement {
                 newRow.setKey(pNewKey);
             }
             if (primaryKeyChange) {
-                error = this.gtable.delete(trx.getTrxId(), pKey, timeout);
+                error = this.gtable.deleteRow(ctx.getHSession(), trx.getTrxId(), oldRow.getAddress(), timeout);
                 if (error != HumpbackError.SUCCESS) {
                     throw new OrcaException(error);
                 }
                 newRow.setVersion(trx.getTrxId());
-                error = this.gtable.insert(newRow, timeout);
+                error = this.gtable.insert(ctx.getHSession(), newRow, timeout);
             }
             else {
                 newRow.setVersion(trx.getTrxId());
-                error = this.gtable.update(newRow, oldRow.getTrxTimestamp(), timeout);
+                error = this.gtable.update(ctx.getHSession(), newRow, oldRow.getTrxTimestamp(), timeout);
             }
             if (error == HumpbackError.SUCCESS) {
                 if (blobRow != null) {
@@ -151,24 +151,27 @@ abstract class UpdateBase extends Statement {
                 // update blob
                 if (blobRow != null) {
                     if (primaryKeyChange) {
-                        error = this.blobTable.delete(trx.getTrxId(), oldRow.getKeyAddress(), timeout);
-                        if (error != HumpbackError.SUCCESS) {
-                            throw new OrcaException(error);
+                        long pOldBlobRow = this.blobTable.get(trx.getTrxId(), trx.getTrxTs(), oldRow.getKeyAddress());
+                        if (pOldBlobRow != 0) {
+                            error = this.blobTable.deleteRow(ctx.getHSession(), trx.getTrxId(), pOldBlobRow, timeout);
+                            if (error != HumpbackError.SUCCESS) {
+                                throw new OrcaException(error);
+                            }
                         }
-                        error = this.blobTable.insert(blobRow, timeout);
+                        error = this.blobTable.insert(ctx.getHSession(), blobRow, timeout);
                         if (error != HumpbackError.SUCCESS) {
                             throw new OrcaException(error);
                         }
                     }
                     else {
-                        error = this.blobTable.put(blobRow, timeout);
+                        error = this.blobTable.put(ctx.getHSession(), blobRow, timeout);
                         if (error != HumpbackError.SUCCESS) {
                             throw new OrcaException(error);
                         }
                     }
                 }
                 // update indexes
-                this.indexHandlers.update(heap, trx, oldRow, newRow, primaryKeyChange, timeout);
+                this.indexHandlers.update(heap, ctx.getHSession(), trx, oldRow, newRow, primaryKeyChange, timeout);
                 success = true;
                 break;
             }

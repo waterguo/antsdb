@@ -41,7 +41,7 @@ public class DropUser extends Instruction {
             }
             throw new OrcaException("user {} does not exist", this.user);
         }
-        meta.dropUser(user);
+        meta.dropUser(ctx.getHSession(), user);
         return null;
     }
 

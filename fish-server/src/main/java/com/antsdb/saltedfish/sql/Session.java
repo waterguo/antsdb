@@ -46,7 +46,7 @@ import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public class Session {
+public final class Session {
     static Logger _log = UberUtil.getThisLogger();
     static AtomicInteger _id = new AtomicInteger();
             
@@ -63,7 +63,6 @@ public class Session {
     private volatile Transaction trx;
     private AtomicBoolean isClosed = new AtomicBoolean(false);
     private long lastInsertId;
-    private int id = _id.incrementAndGet();
     AsynchronousInsert asyncExecutor;
     private HumpbackSession hsession;
     public String remote;
@@ -353,11 +352,11 @@ public class Session {
                     if (success) {
                         trxts = this.orca.getTrxMan().getNewVersion();
                         _log.trace("commit trxid={} trxts={}", trxid, trxts);
-                        this.orca.getHumpback().commit(trxid, trxts, this.id);
+                        this.orca.getHumpback().commit(this.hsession, trxid, trxts);
                     }
                     else {
                         _log.trace("rollback trxid={} trxts={}", trxid);
-                        this.orca.getHumpback().rollback(trxid, this.id);;
+                        this.orca.getHumpback().rollback(this.hsession, trxid);;
                     }
                 }
                 else {
@@ -420,7 +419,7 @@ public class Session {
     }
 
     public int getId() {
-        return this.id;
+        return this.hsession.getId();
     }
 
     public PreparedStatement prepare(String sql) throws SQLException {
@@ -680,5 +679,9 @@ public class Session {
 
     public long getQueryStartTime() {
         return this.hsession.getOpenTime();
+    }
+
+    public HumpbackSession getHSession() {
+        return this.hsession;
     }
 }

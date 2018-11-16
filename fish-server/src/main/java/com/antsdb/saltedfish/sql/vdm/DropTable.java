@@ -76,9 +76,9 @@ public class DropTable extends Statement {
                 // drop physical table
                 
                 Humpback humpback = ctx.getOrca().getHumpback();
-                humpback.dropTable(tblName.getNamespace(), table.getHtableId());
+                humpback.dropTable(ctx.getHSession(), tblName.getNamespace(), table.getHtableId());
                 if (humpback.getTable(table.getBlobTableId()) != null) {
-                    humpback.dropTable(tblName.getNamespace(), table.getBlobTableId());
+                    humpback.dropTable(ctx.getHSession(), tblName.getNamespace(), table.getBlobTableId());
                 }
                 
                 // remove metadata
@@ -87,10 +87,10 @@ public class DropTable extends Statement {
                 if (table.findAutoIncrementColumn() != null) {
                     SequenceMeta seq = meta.getSequence(trx, table.getAutoIncrementSequenceName());
                     if (seq != null) {
-                        meta.dropSequence(trx, seq);
+                        meta.dropSequence(ctx.getHSession(), trx, seq);
                     }
                 }
-                ctx.getOrca().getMetaService().dropTable(trx, table);
+                ctx.getOrca().getMetaService().dropTable(ctx.getHSession(), trx, table);
             }
             finally {
                 ctx.getSession().unlockTable(table.getId());

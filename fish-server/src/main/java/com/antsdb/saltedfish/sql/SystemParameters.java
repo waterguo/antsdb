@@ -27,6 +27,7 @@ import static com.antsdb.saltedfish.util.ParseUtil.*;
 import com.antsdb.saltedfish.charset.Codecs;
 import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 
 /**
  * 
@@ -66,14 +67,14 @@ public class SystemParameters {
         return (this.parent == null) ? null : this.parent.get(key);
     }
 
-    public void setPermanent(String key, String value) {
+    public void setPermanent(HumpbackSession hsession, String key, String value) {
         if (parent != null) {
             // only top level one can set permanently
             throw new IllegalArgumentException();
         }
         key = key.toLowerCase();
         set(key, value);
-        this.humpback.setConfig(key, value);
+        this.humpback.setConfig(hsession, key, value);
     }
     
     public void set(String key, String value) {

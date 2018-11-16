@@ -34,15 +34,15 @@ public class CreateIndex extends Statement {
     List<String> columns;
     boolean isUnique;
     boolean createIfNotExists;
-	private boolean isFullText;
+    private boolean isFullText;
     private boolean rebuild = true;
     
     public CreateIndex(String indexName,
-    		           boolean isFullText,
-    		           boolean isUnique, 
-    		           boolean createIfNotExists, 
-    				   ObjectName tableName, 
-    				   List<String> columns) {
+                       boolean isFullText,
+                       boolean isUnique, 
+                       boolean createIfNotExists, 
+                       ObjectName tableName, 
+                       List<String> columns) {
         super();
         this.indexName = indexName;
         this.tableName = tableName;
@@ -58,7 +58,7 @@ public class CreateIndex extends Statement {
         
         TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
         try {
-        	ctx.session.lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
+            ctx.session.lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
             
             // make the meta data change
             
@@ -66,7 +66,7 @@ public class CreateIndex extends Statement {
             return null;
         }
         finally {
-        	ctx.session.unlockTable(table.getId());
+            ctx.session.unlockTable(table.getId());
         }
     }
 
@@ -75,21 +75,21 @@ public class CreateIndex extends Statement {
         
         // get IndexMeta if already exists
         IndexMeta existingIndexMeta = null;
-    	for (IndexMeta i:table.getIndexes()) {
-    		if (indexName.equals(i.getName())) {
-    			existingIndexMeta = i;
-    			break;
-    		}
-    	}
-    	
-    	// exit or throw exception for existing
+        for (IndexMeta i:table.getIndexes()) {
+            if (indexName.equals(i.getName())) {
+                existingIndexMeta = i;
+                break;
+            }
+        }
+        
+        // exit or throw exception for existing
         if (existingIndexMeta != null) {
-        	if (this.createIfNotExists) {
-        		return;
-        	}
-        	else {
+            if (this.createIfNotExists) {
+                return;
+            }
+            else {
                 throw new OrcaException("Index already exists: " + indexName);
-        	}
+            }
         }
 
         // create new index
@@ -105,14 +105,14 @@ public class CreateIndex extends Statement {
         createIndex(ctx, table, indexName, isFullText, isUnique, columns, this.rebuild);
     }
 
-	static IndexMeta createIndex(
-			VdmContext ctx, 
-			TableMeta table, 
-			String indexName, 
-			boolean isFullText,
-			boolean isUnique, 
-			List<ColumnMeta> columns,
-			boolean rebuild) {
+    static IndexMeta createIndex(
+            VdmContext ctx, 
+            TableMeta table, 
+            String indexName, 
+            boolean isFullText,
+            boolean isUnique, 
+            List<ColumnMeta> columns,
+            boolean rebuild) {
         // create new index
         IndexMeta index = new IndexMeta(ctx.getOrca(), table);
         index.setName(indexName);
@@ -123,16 +123,17 @@ public class CreateIndex extends Statement {
         index.genUniqueExternalName(table, indexName, id);
         index.setFullText(isFullText);
         index.setRuleColumns(columns);
-        ctx.getMetaService().addRule(ctx.getTransaction(), index);
+        ctx.getMetaService().addRule(ctx.getHSession(), ctx.getTransaction(), index);
         
         // create physical table
 
         Humpback humpback = ctx.getOrca().getHumpback();
         humpback.createTable(
-        		table.getNamespace(),
-        		index.getExternalName(),
-        		index.getIndexTableId(),
-        		TableType.INDEX);
+                ctx.getHSession(),
+                table.getNamespace(),
+                index.getExternalName(),
+                index.getIndexTableId(),
+                TableType.INDEX);
         
         // if table is not empty, lots of shit to do
         
@@ -143,23 +144,23 @@ public class CreateIndex extends Statement {
         //
         
         return index;
-	}
-	
-	static void buildIndex(VdmContext ctx, TableMeta table, IndexMeta index) {
-		Transaction trx = ctx.getTransaction();
+    }
+    
+    static void buildIndex(VdmContext ctx, TableMeta table, IndexMeta index) {
+        Transaction trx = ctx.getTransaction();
         GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
         KeyMaker keyMaker = new KeyMaker(index.getColumns(table), index.isUnique());
-		try (BluntHeap heap = new BluntHeap()) {
-			RowIterator scanner = gtable.scan(trx.getTrxId(), trx.getTrxTs(), true);
-			while (scanner.next()) {
-				heap.reset(0);
-				Row row = scanner.getRow();
-				long pIndexKey = keyMaker.make(heap, row);
-				gindex.insertIndex(trx.getTrxId(), pIndexKey, row.getKeyAddress(), (byte)0, 0);
-			}
-		}
-	}
+        try (BluntHeap heap = new BluntHeap()) {
+            RowIterator scanner = gtable.scan(trx.getTrxId(), trx.getTrxTs(), true);
+            while (scanner.next()) {
+                heap.reset(0);
+                Row row = scanner.getRow();
+                long pIndexKey = keyMaker.make(heap, row);
+                gindex.insertIndex(ctx.getHSession(), trx.getTrxId(), pIndexKey, row.getKeyAddress(), (byte)0, 0);
+            }
+        }
+    }
 
     public void setRebuild(boolean value) {
         this.rebuild  = value;
