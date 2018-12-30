@@ -29,6 +29,9 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.beluga.Pod;
+import com.antsdb.saltedfish.beluga.SlaveWarmer;
+import com.antsdb.saltedfish.beluga.SystemViewSlaveWarmerInfo;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
@@ -43,6 +46,7 @@ import com.antsdb.saltedfish.sql.meta.TableId;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.mysql.MysqlDialect;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.sql.vdm.Validate;
@@ -92,6 +96,8 @@ public class Orca {
     private Session sysdefault;
     SystemParameters config;
     ConcurrentLinkedQueue<DeadSession> deadSessions = new ConcurrentLinkedQueue<>();
+    private Pod pod;
+    private volatile boolean isSlave;
     
     static {
         Map<String, String> manifest = ManifestUtil.load(Orca.class);
@@ -143,6 +149,7 @@ public class Orca {
         this.config.set("lower_case_file_system", "NO");
         this.config.set("lower_case_table_names", "1");
         this.config.set("max_allowed_packet", String.valueOf(32 * 1024 * 1024));
+        this.config.set("server_id", String.valueOf(getHumpback().getServerId()));
         this.config.set("sql_mode", "");
         this.config.set("tx_isolation", "READ-COMMITTED");
         this.config.set("version", _version);
@@ -155,6 +162,9 @@ public class Orca {
         // start services
         
         this.idService = new IdentifierService(this);
+        if (UberUtil.between(this.humpback.getServerId(), 0, 1)) {
+            this.idService.setMod(2, (int)this.humpback.getServerId());
+        }
         
         // skipping validation. it no longer applicable.
         // validate();
@@ -202,16 +212,23 @@ public class Orca {
             }
         });
         Runtime.getRuntime().addShutdownHook(new ShutdownThread());
-        if (this.humpback.getStorageEngine().supportReplication()) {
+        if (this.humpback.getStorageEngine().getReplicable() != null) {
             getHBaseStorageService().setMetaService(this.metaService);
-            Replicable replicable = (Replicable)this.humpback.getStorageEngine();
-            this.replicator = new Replicator<>("replicator", this.humpback, replicable);
+            Replicable replicable = this.humpback.getStorageEngine().getReplicable();
+            this.replicator = new Replicator<>("hbase-replicator", this.humpback, replicable, false);
             this.replicator.start();
         }
 
         // system default session. used as the template for the use sessions
         
         this.sysdefault = createSession("system", "default");
+        
+        // load cluster
+        
+        this.pod = new Pod(this);
+        this.pod.open();
+        this.pod.start();
+        this.humpback.addLogDependency(this.pod);
     }
     
     private void initViews() {
@@ -231,17 +248,23 @@ public class Orca {
         registerSystemView(SYSNS, "LOCKS", new SystemViewLocks(this));
         registerSystemView(SYSNS, "CACHE_INFO", new SystemViewCacheInfo(this));
         registerSystemView(SYSNS, "MINKE_INFO", new SystemViewMinkeInfo(this));
-        registerSystemView(SYSNS, "REPLICATOR_INFO", new SystemViewReplicatorInfo(this));
-        registerSystemView(SYSNS, "SLAVE_INFO", new SystemViewSlaveInfo(this));
-        registerSystemView(SYSNS, "SYNCHRONIZER_INFO", new SystemViewSynchronizerInfo(this));
+        registerSystemView(SYSNS, "REPLICATOR_INFO", new SystemViewReplicatorInfo());
+        registerSystemView(SYSNS, "SLAVE_INFO", new SystemViewSlaveInfo());
+        registerSystemView(SYSNS, "SYNCHRONIZER_INFO", new SystemViewSynchronizerInfo());
         registerSystemView(SYSNS, "TABLE_STATS", new SystemViewTableStats(this));
         registerSystemView(SYSNS, "PAGES", new SystemViewPages(this));
         registerSystemView(SYSNS, "x0", new SystemViewHumpbackMeta(this));
         registerSystemView(SYSNS, "x1", new SystemViewHumpbackNamespace(this));
         registerSystemView(SYSNS, "x2", new SystemViewTableStats(this));
         registerSystemView(SYSNS, "x3", new SystemViewHumpbackColumns(this));
-        registerSystemView(SYSNS, "x4", new SystemViewHumpbackConfig(this));
+        registerSystemView(SYSNS, "x4", new SystemViewHumpbackConfig());
         registerSystemView(SYSNS, "SLOW_QUERIES", new SlowQueries());
+        registerSystemView(SYSNS, "CLUSTER_STATUS", new SystemViewClusterStatus());
+        registerSystemView(SYSNS, "LOG_DEPENDENCY", new SystemViewLogDependency());
+        registerSystemView(SYSNS, "HSESSIONS", new SystemViewHSessions());
+        registerSystemView(SYSNS, "MINKE_PAGES", new SystemViewMinkePages());
+        registerSystemView(SYSNS, "MEM_IMMORTAL", new SystemViewMemImmortals());
+        registerSystemView(SYSNS, "SLAVE_WARMER_INFO", new SystemViewSlaveWarmerInfo());
     }
 
     private void verifySystem() {
@@ -346,8 +369,7 @@ public class Orca {
         if (this.isClosed) {
             throw new OrcaException("orca is closed");
         }
-        Session session = new Session(this, getSqlParserFactory(), user);
-        session.remote = remoteEndpoint;
+        Session session = new Session(this, getSqlParserFactory(), user, remoteEndpoint);
         if (this.sysdefault != null) {
             for (Map.Entry<Integer, TableLock> i:this.sysdefault.tableLocks.entrySet()) {
                 int tableId = i.getKey();
@@ -363,6 +385,9 @@ public class Orca {
     }
     
     public void closeSession(Session session) {
+        if (session.isClosed()) {
+            return;
+        }
         session.close();
         this.sessions.remove(session);
         String msg = String.format("session %d is closed", session.getId());
@@ -374,7 +399,7 @@ public class Orca {
     }
     
     public Session createSystemSession() {
-        Session session = new Session(this, getSqlParserFactory(), "__system");
+        Session session = new Session(this, getSqlParserFactory(), "__system", "local");
         session.startTrx();
         return session;
     }
@@ -399,8 +424,22 @@ public class Orca {
 
         // close slave thread
 
-        MysqlSlave.stopIfExists();
+        try {
+            MysqlSlave.stopIfExists();
+        }
+        catch (Exception x) {
+            _log.error("unable to stop slave threads", x);
+        }
 
+        // close cluster threads;
+
+        try {
+            this.pod.close();
+        }
+        catch (Exception x) {
+            _log.error("unable to stop cluster threads", x);
+        }
+        
         // close all sessions
 
         if (this.sessionSweeperFuture != null) {
@@ -429,7 +468,6 @@ public class Orca {
             }
         }
         catch(Exception e) {
-            
         }
 
         // shutdown humpback
@@ -616,6 +654,35 @@ public class Orca {
         }
         else {
             return new NoPasswordAuthPlugin(this);
+        }
+    }
+    public Pod getBelugaPod() {
+        return this.pod;
+    }
+
+    public void setSlaveMode(boolean value) {
+        this.isSlave = value;
+    }
+    
+    public boolean isSlaveMode() {
+        return this.isSlave;
+    }
+
+    public boolean isLeader() {
+        if (!this.pod.isInCluster()) {
+            return true;
+        }
+        return this.pod.isLeader();
+    }
+
+    public boolean isClosed() {
+        return this.isClosed;
+    }
+
+    public void sendToSlaveWarmer(String ns, String sql, Parameters params, Object result) {
+        SlaveWarmer warmer = this.pod.getWarmer();
+        if (warmer != null) {
+            warmer.send(ns, sql, params, result);
         }
     }
 }

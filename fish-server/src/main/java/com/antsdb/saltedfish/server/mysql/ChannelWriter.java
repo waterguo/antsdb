@@ -16,6 +16,9 @@ package com.antsdb.saltedfish.server.mysql;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import com.antsdb.saltedfish.cpp.AllocPoint;
+import com.antsdb.saltedfish.cpp.MemoryManager;
+
 /**
  * 
  * @author *-xguo0<@
@@ -31,7 +34,7 @@ public abstract class ChannelWriter {
     }
     
     ChannelWriter(int cacheSize) {
-        this.buf = ByteBuffer.allocateDirect(cacheSize);
+        this.buf = MemoryManager.allocImmortal(AllocPoint.CHANNEL_WRITER, cacheSize);
     }
     
     public void write(byte[] bytes) {
@@ -79,5 +82,10 @@ public abstract class ChannelWriter {
         catch (IOException x) {
             throw new RuntimeException(x);
         }
+    }
+    
+    public void close() {
+        MemoryManager.freeImmortal(AllocPoint.CHANNEL_WRITER, this.buf);
+        this.buf = null;
     }
 }

@@ -13,22 +13,29 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 
+import com.antsdb.mysql.network.PacketUtil;
+import com.antsdb.saltedfish.charset.Decoder;
+import com.antsdb.saltedfish.cpp.AllocPoint;
+import com.antsdb.saltedfish.cpp.MemoryManager;
+import com.antsdb.saltedfish.sql.CharBufferStream;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.mysql.MysqlParserFactory;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
- * 
+ * improve the import performance by parallelizing the inserts
+ *   
  * @author *-xguo0<@
  */
 public class AsynchronousInsert implements AutoCloseable {
@@ -37,34 +44,58 @@ public class AsynchronousInsert implements AutoCloseable {
     private ThreadPoolExecutor executor;
     private Session session;
     private AtomicReference<Exception> error = new AtomicReference<Exception>(null);
-    private String sql;
+    private String errorSql;
     private Transaction trx;
     private int count;
+    private Decoder decoder;
+    private BlockingQueue<Task> pool;
     
     private class Task implements Runnable {
         
-        CharBuffer cs;
+        ByteBuffer sql;
         
-        public Task(CharBuffer cbuf) {
-            this.cs = cbuf;
+        void assign(ByteBuffer input) {
+            if (this.sql != null) {
+                this.sql.clear();
+            }
+            this.sql = MemoryManager.growImmortal(AllocPoint.ASYNCHRONOUS_INSERT, this.sql, input.remaining());
+            this.sql.put(input);
+            this.sql.flip();
         }
-
+        
+        void close() {
+            MemoryManager.freeImmortal(AllocPoint.ASYNCHRONOUS_INSERT, this.sql);
+            this.sql = null;
+        }
+        
+        @Override
         public void run() {
+            try {
+                run0();
+            }
+            finally {
+                AsynchronousInsert.this.pool.offer(this);
+            }
+        }
+        
+        public void run0() {
             // if something bad has happened, stop
-            
             if (AsynchronousInsert.this.error.get() != null) {
                 return;
             }
             
+            // the heavy lift
+            CharBuffer chars = toCharBuffer(this.sql);
             try {
-                Script script = session.parse(this.cs);
+                MysqlParserFactory parser = (MysqlParserFactory)session.getParserFactory();
+                Script script = parser.parse(session, new CharBufferStream(chars), 1);
                 Instruction step = script.getRoot();
                 VdmContext ctx = new VdmContext(session, script.getVariableCount()); 
                 step.run(ctx, new Parameters(), 0);
             }
             catch (Exception x) {
                 if (AsynchronousInsert.this.error.compareAndSet(null, x)) {
-                    AsynchronousInsert.this.sql = cs.toString();
+                    AsynchronousInsert.this.errorSql = chars.toString();
                 }
             }
         }
@@ -72,29 +103,33 @@ public class AsynchronousInsert implements AutoCloseable {
     
     public AsynchronousInsert(Session session) {
         this.session = session;
+        this.decoder = session.getConfig().getRequestDecoder();
         this.trx = session.getTransaction();
         trx.makeAutonomous();
         int ncpu = this.session.getOrca().getConfig().getAsyncInsertThreads();
-        executor = new ThreadPoolExecutor(0, ncpu, 1, TimeUnit.MINUTES, new SynchronousQueue<>());
-        executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
-            @Override
-            public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
-                try {
-                    if (!executor.isShutdown()) {
-                        executor.getQueue().put(r);
-                    }
-                } 
-                catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new RejectedExecutionException("interrupted", e);
-                }            
-            }
-        });
+        _log.debug("start asynchronous import with {} threads", ncpu);
+        this.pool = new ArrayBlockingQueue<>(ncpu);
+        executor = new ThreadPoolExecutor(ncpu, ncpu, 1, TimeUnit.MINUTES, new ArrayBlockingQueue<>(ncpu));
+        for (int i=0; i<ncpu; i++) {
+            this.pool.add(new Task());
+        }
     }
     
-    public void add(CharBuffer cs) {
+    public Integer submit(ByteBuffer sql) {
+        if (this.error.get() != null) {
+            throw new OrcaException(this.error.get());
+        }
+        Task task;
+        try {
+            task = this.pool.take();
+        }
+        catch (InterruptedException x) {
+            throw new OrcaException(x);
+        }
+        task.assign(sql);
+        this.executor.submit(task);
         this.count++;
-        this.executor.submit(new Task(cs));
+        return 1;
     }
 
     public void waitForCompletion() {
@@ -105,6 +140,13 @@ public class AsynchronousInsert implements AutoCloseable {
     
     @Override
     public void close() {
+        // free memory
+        while (this.pool.peek() != null) {
+            Task task = this.pool.poll();
+            task.close();
+        }
+        
+        // free threads
         this.executor.shutdown();
         try {
             if (!this.executor.awaitTermination(1, TimeUnit.HOURS)) {
@@ -114,12 +156,22 @@ public class AsynchronousInsert implements AutoCloseable {
         catch (InterruptedException e) {
             throw new OrcaException(e);
         }
+        
+        // error handling
         if (getError() != null) {
-            throw new OrcaException(getError(), this.sql);
+            throw new OrcaException(getError(), this.errorSql);
         }
     }
 
-    public Exception getError() {
+    private Exception getError() {
         return this.error.get();
     }
+    
+    private CharBuffer toCharBuffer(ByteBuffer buf) {
+        long pSql = UberUtil.getAddress(buf);
+        CharBuffer result = PacketUtil.readStringAsCharBufWithMysqlExtension(pSql, buf.limit(), this.decoder);
+        result.flip();
+        return result;
+    }
+    
 }

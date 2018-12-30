@@ -18,6 +18,7 @@ import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
@@ -48,6 +49,7 @@ public class SystemInfoView extends View {
         props.put("antsdb.last_sp", this.orca.getHumpback().getLatestSP());
         props.put("antsdb.memory_allocated", MemoryManager.getAllocated());
         props.put("antsdb.memory_pooled", MemoryManager.getPooled());
+        props.put("antsdb.memory_immortal", getImmortalTotal());
         props.put("antsdb.trx_service_size", this.orca.getTrxMan().size());
         props.put("antsdb.trx_service_oldest", this.orca.getTrxMan().getOldest());
         props.put("antsdb.trx_service_last", this.orca.getTrxMan().getNewTrxId());
@@ -76,6 +78,14 @@ public class SystemInfoView extends View {
         // done
         Cursor c = CursorUtil.toCursor(this.meta, props);
         return c;
+    }
+
+    private Long getImmortalTotal() {
+        long total = 0;
+        for (AtomicLong i:MemoryManager.getImmortals()) {
+            total += i.get();
+        }
+        return total;
     }
 
     String getStatisticianLogPointer() {

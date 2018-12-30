@@ -20,26 +20,28 @@ import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.server.mysql.packet.PacketType;
 import com.antsdb.saltedfish.util.UberUtil;
 
-import io.netty.buffer.ByteBuf;
-
 /**
  * 
  * @author wgu0
  */
 public class PacketQuery extends Packet {
-    public PacketQuery(ByteBuf buf) {
-        this(buf.memoryAddress(), buf.readableBytes());
-    }
+    ByteBuffer packet;
     
-    public PacketQuery(long addr, int length) {
+    private PacketQuery(long addr, int length) {
         super(addr, length, PacketType.COM_QUERY);
     }
     
     public PacketQuery(ByteBuffer packet) {
-        this(UberUtil.getAddress(packet), packet.remaining());
+        this(UberUtil.getAddress(packet), packet.limit());
+        this.packet = packet;
     }
 
-    public String getQuery(Decoder decoder) {
+    public ByteBuffer getQuery() {
+        this.packet.position(5);
+        return this.packet.slice();
+    }
+    
+    public String getQueryAsString(Decoder decoder) {
         String sql = getQueryAsCharBuf(decoder).toString();
         return sql;
     }
@@ -52,6 +54,6 @@ public class PacketQuery extends Packet {
     
     @Override
     public String diffDump(int level) {
-        return getQuery(Decoder.UTF8);
+        return getQueryAsString(Decoder.UTF8);
     }
 }

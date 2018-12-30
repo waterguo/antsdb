@@ -16,7 +16,6 @@ package com.antsdb.saltedfish.util;
 import java.lang.management.BufferPoolMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
@@ -89,9 +88,6 @@ public final class MemoryUtil {
         }
         System.out.println(hsdiag.getVMOption("MaxDirectMemorySize"));
         System.out.println(sun.misc.VM.maxDirectMemory());
-        System.out.println(ByteBuffer.allocateDirect(1000000000));
-        System.out.println(ByteBuffer.allocateDirect(1000000000));
-        System.out.println(ByteBuffer.allocateDirect(1000000000));
         System.out.println(getDirectMemoryUsed());
     }
 }

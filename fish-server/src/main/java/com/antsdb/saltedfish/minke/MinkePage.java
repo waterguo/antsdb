@@ -78,6 +78,10 @@ public final class MinkePage implements Comparable<MinkePage> {
     private AtomicInteger state = new AtomicInteger(PageState.FREE);
     /** time when the page is put into garbage bin */
     long garbageTime;
+    /** manage the split concurrency. without this, concurrent split on the same page leads to corrupted 
+     * data structure 
+     */
+    volatile int splitCounter;
     
 
     static enum ScanType {
@@ -299,7 +303,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         if (getState() != PageState.FREE) {
             throw new IllegalArgumentException(UberFormatter.hex(this.id));
         }
-        this.state.addAndGet(0x4);
+        this.state.addAndGet(PageState.FREE);
         heap = new BluntHeap(addr, this.size);
         heap.alloc(HEADER_SIZE);
         Unsafe.putInt(this.addr + OFFSET_SIG, SIG);
@@ -362,6 +366,9 @@ public final class MinkePage implements Comparable<MinkePage> {
 
     private void ensureMutable(long pKey) {
         if (KeyBytes.compare(pKey, getEndKeyPointer()) >= 0) {
+            throw new OutOfPageRange();
+        }
+        if (KeyBytes.compare(pKey, getStartKeyPointer()) < 0) {
             throw new OutOfPageRange();
         }
         if (this.heap == null) {
@@ -446,6 +453,10 @@ public final class MinkePage implements Comparable<MinkePage> {
         return this.addr;
     }
 
+    public String getCoverage() {
+        return KeyBytes.toString(this.pStartKey) + '-' + KeyBytes.toString(this.pEndKey);
+    }
+    
     @Override
     public String toString() {
         return String.format(
@@ -510,10 +521,6 @@ public final class MinkePage implements Comparable<MinkePage> {
         return result;
     }
     
-    public int getState() {
-        return this.state.get() & 0x3;
-    }
-    
     public int getSavedTableId() {
         return Unsafe.getIntVolatile(this.addr + OFFSET_TABLE_ID);
     }
@@ -539,13 +546,32 @@ public final class MinkePage implements Comparable<MinkePage> {
     }
     
     private int getState(int value) {
-        int result = value & 0x3;
+        int result = value & 0x7;
         return result;
     }
     
+    public int getState() {
+        return this.state.get() & 0x7;
+    }
+    
     private int getNewState(int oldState, int newState) {
-        int result = oldState & ~0x3 | newState;
+        int result = oldState & ~0x7 | newState;
         return result;
+    }
+
+    /**
+     * set page state to zombie
+     */
+    public synchronized void zombie() {
+        int current = this.state.get();
+        int currentState = getState(current);
+        if (currentState == PageState.CARBONFREEZED) {
+            this.state.compareAndSet(current, getNewState(currentState, PageState.ZOMBIE));
+            return;
+        }
+        else {
+            throw new IllegalArgumentException(UberFormatter.hex(this.id));
+        }
     }
     
     public synchronized void carbonfreeze() throws IOException {
@@ -993,6 +1019,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         switch (currentState) {
             case PageState.ACTIVE:
             case PageState.CARBONFREEZED:
+            case PageState.ZOMBIE:
                 boolean result = this.state.compareAndSet(current, getNewState(current, PageState.GARBAGE));
                 if (result) {
                     this.garbageTime = UberTime.getTime();
@@ -1153,4 +1180,5 @@ public final class MinkePage implements Comparable<MinkePage> {
     public boolean isFrozen() {
         return getState() != PageState.ACTIVE;
     }
+
 }

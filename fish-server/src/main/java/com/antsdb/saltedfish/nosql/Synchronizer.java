@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
 import com.antsdb.saltedfish.minke.OutOfMinkeSpace;
 import com.antsdb.saltedfish.util.CodingError;
@@ -32,7 +33,6 @@ import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.SizeConstants;
 import com.antsdb.saltedfish.util.Speedometer;
 import com.antsdb.saltedfish.util.UberFormatter;
-import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -47,17 +47,18 @@ public class Synchronizer extends FishServiceThread {
     private long tabletSp;
     private long sp;
     private HumpbackSession session;
-    private long hour;
     private String state = "idling";
     private Speedometer speedometer = new Speedometer();
     private long totalOps = 0;
     private MinkeCache cache = null;
+    private long reservedSize;
     
     Synchronizer(Humpback humpback) {
         super("synchronizer");
+        this.reservedSize = humpback.getConfig().getCacheReservedSize();
         this.humpback = humpback;
         this.cache = getCache();
-        this.session = humpback.createSession();
+        this.session = humpback.createSession("local/synchronizer");
         LongLong span = getStorage().getLogSpan();
         this.sp = (span == null) ? 0 : span.y;
     }
@@ -87,25 +88,6 @@ public class Synchronizer extends FishServiceThread {
         return result;
     }
     
-    private boolean ifTooBig() {
-        LongLong span = this.getStorage().getLogSpan();
-        if (span == null) {
-            return false;
-        }
-        long size = this.humpback.getSpaceManager().minus(this.sp, span.y);
-        return size >= SizeConstants.gb(1);
-    }
-
-    private boolean ifTooLong() {
-        long now = UberTime.getTime();
-        now = now / 1000 / 3600;
-        if (now != this.hour) {
-            this.hour = now;
-            return true;
-        }
-        return false;
-    }
-
     private long countFrozenBytes() {
         AtomicLong result = new AtomicLong();
         TabletUtil.walkAllTablets(this.humpback, tablet -> {
@@ -149,7 +131,7 @@ public class Synchronizer extends FishServiceThread {
             }
              result += sync(tablet);
         }
-        if (checkpoint || ifTooLong() || ifTooBig()) {
+        if (checkpoint) {
             getStorage().checkpoint();
         }
         return result;
@@ -291,6 +273,7 @@ public class Synchronizer extends FishServiceThread {
         }
     }
     
+    @SuppressWarnings("unused")
     private int synchronize(long spEnd) throws IOException {
         int count = 0;
         LongLong span = humpback.getStorageEngine().getLogSpan();
@@ -393,16 +376,18 @@ public class Synchronizer extends FishServiceThread {
             this.session.close();
             if ((spBackup != this.sp) || (tabletSpBackup != this.tabletSp)) {
                 if (success) {
-                    _log.debug("{} is completeled synced with new sp={} count={}", 
+                    _log.debug("{} is completeled synced with new sp={} count={} startlp={} ", 
                             source.toString(), 
                             hex(this.sp),
-                            count);
+                            count,
+                            hex(tabletSpBackup));
                 }
                 else {
-                    _log.debug("{} is partialy synced with new sp={} count={}", 
+                    _log.debug("{} is partialy synced with new sp={} count={} startlp={} ", 
                             source.toString(), 
                             hex(this.tabletSp),
-                            count);
+                            count,
+                            hex(tabletSpBackup));
                 }
             }
         }
@@ -473,12 +458,10 @@ public class Synchronizer extends FishServiceThread {
     
     private boolean isCacheFull() {
         if (this.cache != null) {
-            // dont use up all available space. leave 10% for stuff read from hbase
-            int free = this.cache.getMinke().getFreePageCount();
-            int max = this.cache.getMinke().getMaxPages();
-            if (100 * free / max <= 10) {
-                return true;
-            }
+            // dont use up all available space. leave 1gb for stuff read from hbase
+            Minke minke = this.cache.getMinke();
+            long free = minke.getFreePageCount() * (long)minke.getPageSize();
+            return free < reservedSize;
         }
         return false;
     }

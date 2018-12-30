@@ -23,6 +23,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Duration;
+import java.util.function.Supplier;
 
 import org.apache.commons.codec.Charsets;
 import org.apache.commons.lang.NotImplementedException;
@@ -39,7 +40,9 @@ import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.cpp.Int8;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.server.mysql.packet.MySQLPacket;
+import com.antsdb.saltedfish.server.mysql.packet.PacketType;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.AuthPlugin;
 import com.antsdb.saltedfish.sql.DataType;
@@ -69,10 +72,23 @@ public final class PacketEncoder {
     
     private PacketWriter packet = new PacketWriter();
     int packetSequence = -1;
-    private MysqlSession mysession;
-    
+    private Supplier<Charset> cs;
+
     public PacketEncoder(MysqlSession mysession) {
-        this.mysession = mysession;
+        this(()->{
+            Charset result = null;
+            if (mysession.session != null) {
+                result = mysession.session.getConfig().getResultEncoder(); 
+            }
+            if (result == null) {
+                result = mysession.fish.getOrca().getDefaultSession().getConfig().getResultEncoder();
+            }
+            return result;
+        });
+    }
+    
+    public PacketEncoder(Supplier<Charset> cs) {
+        this.cs = cs;
     }
     
     /**
@@ -956,14 +972,7 @@ public final class PacketEncoder {
     }
     
     private Charset getEncoder() {
-        Charset result = null;
-        if (this.mysession.session != null) {
-            result = this.mysession.session.getConfig().getResultEncoder(); 
-        }
-        if (result == null) {
-            result = this.mysession.fish.getOrca().getDefaultSession().getConfig().getResultEncoder();
-        }
-        return result;
+        return this.cs.get();
     }
 
     /*
@@ -984,5 +993,49 @@ public final class PacketEncoder {
         // message
         buffer.writeLenString(result, Charsets.UTF_8);
    }
+
+    public void writeRow(PacketWriter buffer, Row row) {
+        int len = row.getLength();
+        buffer.writeBytes(row.getAddress(), len);
+    }
+
+    /*
+     * @see https://mariadb.com/kb/en/library/connection/
+     */
+    public void writeLogin(PacketWriter buffer, String user, String password, String dbname) {
+        // int4, capabilities
+        long capabilities = CLIENT_PROTOCOL_41 | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
+        if (dbname != null) {
+            capabilities |= CLIENT_CONNECT_WITH_DB;
+        }
+        buffer.writeLong(capabilities);
+        // int4, max packet size - 16m
+        buffer.writeLong(0xffffff);
+        // int1, charset
+        buffer.writeByte((byte)MYSQL_COLLATION_INDEX_utf8_general_ci);
+        // 19 bytes reserved
+        for (int i=0; i<19; i++) {buffer.writeByte((byte)0);};
+        // int4, extended capabilitis or reserved
+        buffer.writeLong(0);
+        // user name
+        buffer.writeString(user);
+        // password
+        buffer.writeByte((byte)1);
+        buffer.writeByte((byte)1);
+        // dbname
+        if (dbname != null) {
+            buffer.writeString(dbname);
+        }
+        // plugin
+    }
+
+    public void writeBackup(PacketWriter buffer, String fullname) {
+        buffer.writeByte((byte)PacketType.FISH_BACKUP.getId());
+        buffer.writeString(fullname);
+    }
+
+    public void close() {
+        this.packet.close();
+    }
 
 }

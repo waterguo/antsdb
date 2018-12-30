@@ -13,74 +13,140 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.mysql.network;
 
-import java.util.List;
+import java.io.EOFException;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.SocketChannel;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.MessageToMessageDecoder;
+import org.apache.commons.codec.Charsets;
+
+import com.antsdb.saltedfish.cpp.AllocPoint;
+import com.antsdb.saltedfish.cpp.MemoryManager;
+import com.antsdb.saltedfish.server.mysql.ChannelWriterNio;
+import com.antsdb.saltedfish.server.mysql.PacketEncoder;
 
 /**
  * 
- * @author wgu0
+ * @author *-xguo0<@
  */
 public class MysqlClient {
-    String host;
-    int port;
-    ChannelFuture future;
-    MysqlClientState state = new MysqlClientState();
-    
-    class StateMonitor extends MessageToMessageDecoder<ByteBuf> {
-        @Override
-        protected void decode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
-            ByteBuf packet = (ByteBuf)msg;
-            packet.retain();
-            getState().notifyReceive(packet);
-            out.add(new MysqlPacket(getState().getPacketType(packet), packet));
-        }
-    }
+    private String host;
+    private int port;
+    private SocketChannel ch;
+    private PacketEncoder encoder;
+    private ChannelWriterNio out;
+    private ByteBuffer buf = MemoryManager.allocImmortal(AllocPoint.MYSQL_CLIENT, 1024);
     
     public MysqlClient(String host, int port) {
         this.host = host;
         this.port = port;
+        this.buf.order(ByteOrder.LITTLE_ENDIAN);
     }
     
-    public void start(EventLoopGroup pool, ChannelHandler handler) throws InterruptedException {
-        Bootstrap b = new Bootstrap();
-        ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
-            @Override
-            protected void initChannel(SocketChannel ch) throws Exception {
-                ch.pipeline().addLast(new MysqlPacketDecoder(), new StateMonitor(), handler);
-            }
-        };
-        b.group(pool)
-         .channel(NioSocketChannel.class)
-         .option(ChannelOption.TCP_NODELAY, true)
-         .handler(initializer);
-        this.future = b.connect(this.host, this.port).sync();
+    public PacketHandshake connect() throws IOException {
+        this.ch = SocketChannel.open(new InetSocketAddress(host, port));
+        this.out = new ChannelWriterNio(this.ch);
+        this.encoder = new PacketEncoder(()->{ return Charsets.UTF_8;});
+        readPacket();
+        PacketHandshake packet = new PacketHandshake(this.buf);
+        return packet;
     }
-
+    
     public void close() {
-        this.future.channel().close();
-    }
-
-    public void write(ByteBuf packet) {
-        this.state.notifySend(packet);
-        this.future.channel().write(packet);
-    }
-
-    public void flush() {
-        this.future.channel().flush();
+        MemoryManager.freeImmortal(AllocPoint.MYSQL_CLIENT, this.buf);
     }
     
-    public MysqlClientState getState() {
-        return this.state;
+    public void login(String user, String password) throws Exception {
+        this.encoder.writePacket(this.out, (packet)->{
+            this.encoder.writeLogin(packet, user, password, null);
+        });
+        this.out.flush();
+        readPacket();
+        if (isOk(this.buf)) {
+            return;
+        }
+        else {
+            PacketError error = new PacketError(this.buf);
+            throw new Exception(error.getErrorMessage());
+        }
     }
+
+    private boolean isOk(ByteBuffer packet) {
+        return packet.get(4) == 0;
+    }
+
+    public boolean isEof(ByteBuffer packet) {
+        return (packet.get(4) & 0xff) == 0xfe;
+    }
+    
+    public boolean isError(ByteBuffer packet) {
+        return (packet.get(4) & 0xff) == 0xff;
+    }
+    
+    public ByteBuffer readPacket() throws IOException {
+        this.buf.clear();
+        readHeader();
+        readBody();
+        this.buf.flip();
+        return this.buf;
+    }
+    
+    public ByteBuffer readPacketErrorCheck() throws Exception {
+        ByteBuffer packet = readPacket();
+        if (isError(packet)) {
+            PacketError error = new PacketError(this.buf);
+            throw new Exception(error.getErrorMessage());
+        }
+        return packet;
+    }
+    
+    private void readHeader() throws IOException {
+        this.buf.limit(4);
+        for(;;) {
+            int nread = this.ch.read(this.buf);
+            if (nread < 0) {
+                throw new EOFException();
+            }
+            if (this.buf.position() < 4) {
+                // not enough bytes for the header
+                continue;
+            }
+            break;
+        }
+    }
+
+    private void readBody() throws IOException {
+        int size = this.buf.getInt(0) & 0xffffff;
+        if (size == 0) {
+            throw new IllegalArgumentException();
+        }
+        int packetSize = size + 4;
+        if (buf.capacity() < packetSize) {
+            // grow the buffer size
+            this.buf = MemoryManager.growImmortal(AllocPoint.MYSQL_CLIENT, this.buf, packetSize);
+        }
+        buf.limit(packetSize);
+        for(;;) {
+            int nread = this.ch.read(this.buf);
+            if (nread < 0) {
+                // connection closed
+                throw new EOFException();
+            }
+            if (this.buf.position() < size + 4) {
+                // not enough bytes for the body
+                continue;
+            }
+            break;
+        }
+    }
+    
+    public void backup(String fullname) {
+        this.encoder.writePacket(this.out, (packet)->{
+            this.encoder.writeBackup(packet, fullname);
+        });
+        this.out.flush();
+    }
+
 }

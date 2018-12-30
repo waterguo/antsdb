@@ -17,15 +17,14 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.ConfigService;
 import com.antsdb.saltedfish.nosql.LogSpan;
 import com.antsdb.saltedfish.nosql.Replicable;
-import com.antsdb.saltedfish.nosql.ReplicationHandler;
 import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
@@ -36,21 +35,19 @@ import com.antsdb.saltedfish.util.UberFormatter;
  * 
  * @author *-xguo0<@
  */
-public final class MinkeCache implements Closeable, LogSpan, StorageEngine, Replicable {
-
+public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
+    /* an empty range goes from 0 to ff */
+    static final Range EMPTY_RANGE = new Range(KeyBytes.getMinKey(),true, KeyBytes.getMaxKey(), true);
+    
     StorageEngine stoarge;
     Minke minke;
     long cacheMiss = 0;
     ConcurrentMap<Integer, MinkeCacheTable> tableById = new ConcurrentHashMap<>();
     boolean isMutable = true;
-    Replicable replicable;
     private int verificationMode;
     
     public MinkeCache(StorageEngine storage) {
         this.stoarge = storage;
-        if (this.stoarge.supportReplication()) {
-            this.replicable = (Replicable)storage;
-        }
     }
     
     @Override
@@ -89,6 +86,8 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine, Repl
         MinkeTable mtable = (MinkeTable)this.minke.createTable(meta);
         MinkeCacheTable result = new MinkeCacheTable(this, mtable, stable);
         this.tableById.put(meta.getTableId(), result);
+        // set an empty range so following inserts doesn't hit hbase
+        mtable.putRange(EMPTY_RANGE);
         return result;
     }
 
@@ -174,11 +173,7 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine, Repl
     }
 
     public synchronized void checkpointIfNeccessary() throws Exception {
-        // make a checkpoint if zombie pages take over 10% of the cache
-        int zombieRatio = 100 * minke.getZombiePageCount() / minke.getMaxPages();
-        if (zombieRatio >= 10) {
-            checkpoint();
-        }
+        this.minke.checkpointIfNeccessary();
     }
     
     public Map<String, Object> getSummary() {
@@ -217,31 +212,6 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine, Repl
         return this.stoarge;
     }
 
-    @Override
-    public long getReplicateLogPointer() {
-        if (this.replicable != null) {
-            return this.replicable.getReplicateLogPointer();
-        }
-        else {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    @Override
-    public long getCommittedLogPointer() {
-        return this.getReplicateLogPointer();
-    }
-    
-    @Override
-    public ReplicationHandler getReplayHandler() {
-        return this.replicable.getReplayHandler();
-    }
-
-    @Override
-    public boolean supportReplication() {
-        return this.stoarge.supportReplication();
-    }
-
     /**
      * is cache verification enabled ?
      * @return 0:diabled; 1:only after fetch; 2:always
@@ -264,22 +234,12 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine, Repl
     }
 
     @Override
-    public void deletes(int tableId, List<Long> deletes) {
-        this.replicable.deletes(tableId, deletes);
-    }
-
-    @Override
-    public void putRows(int tableId, List<Long> rows) {
-        this.replicable.putRows(tableId, rows);
-    }
-
-    @Override
-    public void putIndexLines(int tableId, List<Long> indexLines) {
-        this.replicable.putIndexLines(tableId, indexLines);
-    }
-
-    @Override
     public boolean exist(int tableId) {
         return this.stoarge.exist(tableId);
+    }
+
+    @Override
+    public Replicable getReplicable() {
+        return this.stoarge.getReplicable();
     }
 }

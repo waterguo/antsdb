@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.antsdb</groupId>
 		<artifactId>fish-root</artifactId>
-		<version>18.11.16</version>
+		<version>18.12.29</version>
 	</parent>
 
 	<modelVersion>4.0.0</modelVersion>
@@ -65,6 +65,14 @@
 								<commandLineArgument>--home</commandLineArgument>
 								<commandLineArgument>$BASEDIR</commandLineArgument>
 							</commandLineArguments>
+						</program>
+						<program>
+							<id>antsdb-backup</id>
+							<mainClass>com.antsdb.saltedfish.backup.JdbcBackupMain</mainClass>
+						</program>
+						<program>
+							<id>antsdb-restore</id>
+							<mainClass>com.antsdb.saltedfish.backup.JdbcRestoreMain</mainClass>
 						</program>
 					</programs>
 					<daemons>

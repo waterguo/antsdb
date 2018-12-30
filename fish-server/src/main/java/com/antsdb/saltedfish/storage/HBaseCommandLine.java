@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
+import java.io.File;
 import java.io.IOException;
 
 import org.apache.commons.cli.CommandLine;
@@ -71,8 +72,16 @@ public abstract class HBaseCommandLine extends CommandLineHelper {
                 this.conf.set("hbase.client.retries.number", "1");
                 this.conf.set("zookeeper.recovery.retry", "1");
             }
+            else if (new File("/etc/hbase/conf/hbase-site.xml").exists()) {
+                this.conf = HBaseConfiguration.create();
+                this.conf = HBaseConfiguration.create();
+                this.conf.addResource(new Path("/etc/hbase/conf/hbase-site.xml"));
+            }
             else {
-                throw new RuntimeException("error: either --server or --config is not specified");
+                this.conf = HBaseConfiguration.create();
+                this.conf.set("hbase.zookeeper.quorum", "localhost");
+                this.conf.set("hbase.client.retries.number", "1");
+                this.conf.set("zookeeper.recovery.retry", "1");
             }
         }
         return this.conf;

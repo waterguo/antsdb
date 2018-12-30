@@ -17,17 +17,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.JumpException;
 import com.antsdb.saltedfish.util.Speedometer;
 import com.antsdb.saltedfish.util.UberFormatter;
@@ -46,7 +54,8 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author *-xguo0<@
  */
 public class Replicator<E extends Replicable> extends Thread {
-    static final int RETRY_WAIT = 20 * 1000;
+    static final Logger _log = UberUtil.getThisLogger();
+    static final int RETRY_WAIT = 30 * 1000;
     
     private Logger log;
     private Humpback humpback;
@@ -60,11 +69,12 @@ public class Replicator<E extends Replicable> extends Thread {
     private Speedometer speedometer = new Speedometer();
     private Stats stats = new Stats();
     private long latency;
-    private String state = "";
+    private ReplicatorState state = ReplicatorState.DISCONNECTED;
     private int retries = 0;
     private int errors = 0;
     private TransactionReplayer trxFilter;
     private BlobReorderReplayer blobReorder;
+    private boolean hasOpened;
 
     static class Stats {
         long inserts;
@@ -127,7 +137,19 @@ public class Replicator<E extends Replicable> extends Thread {
         }
 
         @Override
+        public void insert(InsertEntry2 entry) throws Exception {
+            this.downstream.insert(entry);
+            Replicator.this.stats.inserts++;
+        }
+
+        @Override
         public void update(UpdateEntry entry) throws Exception {
+            this.downstream.update(entry);
+            Replicator.this.stats.updates++;
+        }
+
+        @Override
+        public void update(UpdateEntry2 entry) throws Exception {
             this.downstream.update(entry);
             Replicator.this.stats.updates++;
         }
@@ -139,7 +161,19 @@ public class Replicator<E extends Replicable> extends Thread {
         }
 
         @Override
+        public void put(PutEntry2 entry) throws Exception {
+            this.downstream.put(entry);
+            Replicator.this.stats.puts++;
+        }
+
+        @Override
         public void index(IndexEntry entry) throws Exception {
+            this.downstream.index(entry);
+            Replicator.this.stats.indexops++;
+        }
+
+        @Override
+        public void index(IndexEntry2 entry) throws Exception {
             this.downstream.index(entry);
             Replicator.this.stats.indexops++;
         }
@@ -151,7 +185,19 @@ public class Replicator<E extends Replicable> extends Thread {
         }
 
         @Override
+        public void deleteRow(DeleteRowEntry2 entry) throws Exception {
+            this.downstream.deleteRow(entry);
+            Replicator.this.stats.deletes++;
+        }
+
+        @Override
         public void delete(DeleteEntry entry) throws Exception {
+            this.downstream.delete(entry);
+            Replicator.this.stats.deletes++;
+        }
+
+        @Override
+        public void delete(DeleteEntry2 entry) throws Exception {
             this.downstream.delete(entry);
             Replicator.this.stats.deletes++;
         }
@@ -173,6 +219,11 @@ public class Replicator<E extends Replicable> extends Thread {
         }
 
         @Override
+        public void message(MessageEntry2 entry) throws Exception {
+            this.downstream.message(entry);
+        }
+
+        @Override
         public void transactionWindow(TransactionWindowEntry entry) throws Exception {
             this.downstream.transactionWindow(entry);
         }
@@ -180,45 +231,66 @@ public class Replicator<E extends Replicable> extends Thread {
         @Override
         public void timestamp(TimestampEntry entry) {
             this.timestamp = entry.getTimestamp();
-            Replicator.this.state = "busy";
+            Replicator.this.state = ReplicatorState.BUSY;
             Replicator.this.latency = UberTime.getTime() - Replicator.this.relay.timestamp;
+        }
+
+        @Override
+        public void ddl(DdlEntry entry) throws Exception {
+            this.downstream.ddl(entry);
         }
     }
     
-    public Replicator(String name, Humpback humpback, E replicable) {
+    public Replicator(String name, Humpback humpback, E replicable, boolean needOrderedBlob) {
         this.log = LoggerFactory.getLogger(UberUtil.getThisClassName() + "." + name);
         this.humpback = humpback;
         this.replicable = replicable;
         this.gobbler = this.humpback.getGobbler();
         this.replicationHandler = replicable.getReplayHandler();
-        this.blobReorder = new BlobReorderReplayer(this.replicationHandler);
-        this.trxFilter  = new TransactionReplayer(this.humpback.getGobbler(), this.blobReorder);
-        this.relay = new Relay(trxFilter);
+        ReplayHandler handler = this.replicationHandler;
+        if (needOrderedBlob) {
+            this.blobReorder = new BlobReorderReplayer(this.replicationHandler);
+            handler = this.blobReorder;
+        }
+        this.trxFilter  = new TransactionReplayer(this.humpback.getGobbler(), handler);
+        handler = this.trxFilter;
+        this.relay = new Relay(handler);
         setName(name + "-" + getId());
         setDaemon(true);
     }
 
     @Override
     public void run() {
-        log.info("{} started {} ...", getName(), this.replicable.getReplicateLogPointer());
         for (;;) {
 
             // sanity check
             
             if (this.isClosed) {
-                this.state = "closed";
+                this.state = ReplicatorState.STOPPED;
                 break;
             }
             if (this.isPaused) {
-                this.state = "stopped";
+                this.state = ReplicatorState.STOPPED;
                 UberUtil.sleep(10000);
                 continue;
             }
             
             // replay the log
             
-            long startSp = this.replicable.getReplicateLogPointer();
+            long startSp = -1;
             try {
+                // open
+                
+                this.replicable.connect();
+                if (!this.hasOpened) {
+                    this.hasOpened = true;
+                    _log.info("start replicating from 0x{}", 
+                              Long.toHexString(this.replicable.getReplicateLogPointer())); 
+                }
+                
+                // replay
+                
+                startSp = this.replicable.getReplicateLogPointer();
                 if (this.error != null) {
                     this.retries++;
                 }
@@ -247,14 +319,14 @@ public class Replicator<E extends Replicable> extends Thread {
                             hex(this.replicable.getReplicateLogPointer()),
                             x);
                 }
-                this.state = "error";
+                this.state = ReplicatorState.ERROR;
                 this.error = x;
                 this.errors++;
                 UberUtil.sleep(RETRY_WAIT);
                 continue;
             }
             
-            // flush to target storage
+            // flush to the storage, we still want to do a partial flush even if replay has errors
             
             try {
                 this.replicationHandler.flush();
@@ -267,7 +339,7 @@ public class Replicator<E extends Replicable> extends Thread {
                     }
                 }
                 else {
-                    this.state = "idling";
+                    this.state = ReplicatorState.IDLE;
                     this.latency = 0;
                     UberUtil.sleep(500);
                 }
@@ -288,7 +360,7 @@ public class Replicator<E extends Replicable> extends Thread {
                 else {
                     this.retries++;
                 }
-                this.state = "error";
+                this.state = ReplicatorState.ERROR;
                 this.error = x;
                 UberUtil.sleep(RETRY_WAIT);
                 continue;
@@ -349,11 +421,18 @@ public class Replicator<E extends Replicable> extends Thread {
     }
     
     public long getLogPointer() {
-        long result = Math.min(this.replicable.getReplicateLogPointer(), this.blobReorder.getLogPointer());
+        long result = this.replicable.getReplicateLogPointer();
+        if (this.blobReorder != null) {
+            result = Math.min(result, this.blobReorder.getLogPointer());
+        }
         return result;
     }
     
     public E getReplicable() {
         return this.replicable;
+    }
+    
+    public Exception getError() {
+        return this.error;
     }
 }

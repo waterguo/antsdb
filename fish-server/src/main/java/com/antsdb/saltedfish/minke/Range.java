@@ -35,6 +35,13 @@ final class Range {
         this.endMark = (incEnd) ? BoundaryMark.NONE : BoundaryMark.MINUS;
     }
     
+    public Range(long pStartKey, int startMark, long pEndKey, int endMark) {
+        this.pKeyStart = (pStartKey == 0) ? KeyBytes.getMinKey() : pStartKey;
+        this.startMark = startMark;
+        this.pKeyEnd = (pEndKey == 0) ? KeyBytes.getMaxKey() : pEndKey;
+        this.endMark = endMark;
+    }
+    
     Boundary getStart() {
         Boundary result = new Boundary();
         result.pKey = this.pKeyStart;

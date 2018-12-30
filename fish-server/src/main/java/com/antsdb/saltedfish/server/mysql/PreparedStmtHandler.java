@@ -144,7 +144,7 @@ public class PreparedStmtHandler {
         }
         finally {
             if (!success) {
-                _log.error("statement parameters:\n{}", row);
+                _log.debug("statement parameters:\n{}", row);
             }
             pstmt.clear();
         }

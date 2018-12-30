@@ -92,8 +92,9 @@ public class BluntHeap extends Heap implements AutoCloseable {
             return result;
         }
         // out of heap
+        int pos = this.pos.get();
         freeze();
-        throw new OutOfHeapMemory();
+        throw new OutOfHeapMemory(this.capacity + " " + pos + " " + size);
     }
 
     public long write(ByteBuffer bytes) {
@@ -224,4 +225,7 @@ public class BluntHeap extends Heap implements AutoCloseable {
         return result;
     }
 
+    public ByteBuffer getBuffer() {
+        return this.buf;
+    }
 }

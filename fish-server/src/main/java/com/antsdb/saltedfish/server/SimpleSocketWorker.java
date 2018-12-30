@@ -22,10 +22,12 @@ import java.nio.channels.SocketChannel;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.AllocPoint;
 import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.server.mysql.ChannelWriterNio;
 import com.antsdb.saltedfish.server.mysql.MysqlSession;
 import com.antsdb.saltedfish.sql.vdm.ShutdownException;
+import com.antsdb.saltedfish.storage.HBaseTable;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -38,7 +40,7 @@ public class SimpleSocketWorker implements Runnable {
     private SocketChannel channel;
     private MysqlSession mysession;
     private ChannelWriterNio out;
-    private ByteBuffer buf = ByteBuffer.allocateDirect(1024 * 16);
+    private ByteBuffer buf = MemoryManager.allocImmortal(AllocPoint.LISTENER, 1024 * 16);
     
     public SimpleSocketWorker(SaltedFish fish, SocketChannel channel) {
         this.buf.order(ByteOrder.LITTLE_ENDIAN);
@@ -73,6 +75,9 @@ public class SimpleSocketWorker implements Runnable {
         }
         finally {
             this.mysession.close();
+            this.out.close();
+            HBaseTable.freeMemory();
+            MemoryManager.freeImmortal(AllocPoint.LISTENER, this.buf);
             MemoryManager.threadEnd();
         }
     }
@@ -106,7 +111,7 @@ public class SimpleSocketWorker implements Runnable {
         int packetSize = size + 4;
         if (buf.capacity() < packetSize) {
             // grow the buffer size
-            grow(packetSize);
+            this.buf = MemoryManager.growImmortal(AllocPoint.LISTENER,  this.buf, packetSize);
         }
         buf.limit(packetSize);
         for(;;) {
@@ -140,13 +145,4 @@ public class SimpleSocketWorker implements Runnable {
             break;
         }
     }
-
-    private void grow(int packetSize) {
-        ByteBuffer newbuf = ByteBuffer.allocateDirect(packetSize);
-        newbuf.order(ByteOrder.LITTLE_ENDIAN);
-        this.buf.flip();
-        newbuf.put(this.buf);
-        this.buf = newbuf;
-    }
-
 }

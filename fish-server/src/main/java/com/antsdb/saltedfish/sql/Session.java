@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql;
 
+import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -30,9 +31,13 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.InputMismatchException;
 import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.apache.commons.codec.Charsets;
 import org.slf4j.Logger;
 
+import com.antsdb.mysql.network.PacketUtil;
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
+import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 import com.antsdb.saltedfish.sql.command.FishParserFactory;
 import com.antsdb.saltedfish.sql.vdm.AsynchronousInsert;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
@@ -46,7 +51,7 @@ import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public final class Session {
+public final class Session implements AutoCloseable {
     static Logger _log = UberUtil.getThisLogger();
     static AtomicInteger _id = new AtomicInteger();
             
@@ -71,11 +76,11 @@ public final class Session {
     private Object sql;
     ConcurrentSkipListMap<Long, Execution> slowOnes = new ConcurrentSkipListMap<>();
     
-    public Session(Orca orca, SqlParserFactory fac, String user) {
+    public Session(Orca orca, SqlParserFactory fac, String user, String endpoint) {
         this.orca = orca;
         this.fac = fac;
         this.user = user;
-        this.hsession = orca.getHumpback().createSession();
+        this.hsession = orca.getHumpback().createSession(endpoint + "/" + user);
         this.config = new SystemParameters(orca.config);
     }
     
@@ -84,56 +89,83 @@ public final class Session {
     }
     
     public Object run(String sql, Parameters params) throws SQLException {
-        return run(CharBuffer.wrap(sql), params, null);
+        return run(sql, params, null);
     }
     
     public Object run(String sql, Parameters params, Consumer<Object> callback) throws SQLException {
-        return run(CharBuffer.wrap(sql), params, callback);
+        byte[] bytes = sql.getBytes(Charsets.UTF_8);
+        ByteBuffer buf = ByteBuffer.allocateDirect(bytes.length);
+        buf.put(bytes);
+        buf.flip();
+        return run(buf, params, callback);
     }
     
-    public Object run(CharBuffer cbuf, Parameters params, Consumer<Object> callback) throws SQLException {
-        long startTime = UberTime.getTime();
-        try {
-            this.sql = cbuf;
-            this.thread = Thread.currentThread();
-            if (this.isClosed.get()) {
-                throw new OrcaException("session is closed");
+    public Object run(ByteBuffer cbuf, Parameters params, Consumer<Object> callback) throws SQLException {
+        if (this.isClosed.get()) {
+            throw new OrcaException("session is closed");
+        }
+        if ((this.asyncExecutor != null) && isInsert(cbuf)) {
+            // import 
+            if (getTransaction().getTrxId() == 0) {
+                this.trx.getGuaranteedTrxId();
             }
-                
-            Object result = null;
-            if ((this.asyncExecutor != null) && isInsert(cbuf)) {
-                // import 
-                if (getTransaction().getTrxId() == 0) {
-                    this.trx.getGuaranteedTrxId();
-                }
-                result = asyncInsert(cbuf);
-            }
-            else {
-                // main stuff
-                startTrx();
-                Script script = LatencyDetector.run(_log, "parse", ()->{
-                    return parse0(cbuf);
-                });
-                VdmContext ctx = new VdmContext(this, script.getVariableCount());
-                result = script.run(ctx, params, 0);
-                if (result instanceof Cursor) {
-                    result = new FinalCursor(script, params, (Cursor)result);
-                }
-            }
-            
-            // write result back
-            
+            Integer result = this.asyncExecutor.submit(cbuf);
             if (callback != null) {
                 callback.accept(result);
             }
             return result;
         }
+        return run0(cbuf, params, callback);
+    }
+    
+    private CharBuffer toCharBuffer(ByteBuffer buf) {
+        long pSql = UberUtil.getAddress(buf);
+        Decoder decoder = getConfig().getRequestDecoder();
+        CharBuffer result = PacketUtil.readStringAsCharBufWithMysqlExtension(pSql, buf.limit(), decoder);
+        result.flip();
+        return result;
+    }
+    
+    private Object run0(ByteBuffer buf, Parameters params, Consumer<Object> callback) throws SQLException {
+        CharBuffer sql = toCharBuffer(buf);
+        long startTime = UberTime.getTime();
+        try {
+            return run1(sql, params, callback);
+        }
         finally {
             this.sql = null;
             this.thread = null;
             long time = UberTime.getTime() - startTime;
-            trackQueryTime(cbuf, null, time);
+            trackQueryTime(sql, null, time);
         }
+    }
+    
+    private Object run1(CharBuffer cbuf, Parameters params, Consumer<Object> callback) throws SQLException {
+        this.sql = cbuf;
+        this.thread = Thread.currentThread();
+            
+        Object result = null;
+        // main stuff
+        startTrx();
+        Script script = LatencyDetector.run(_log, "parse", ()->{
+            return parse0(cbuf);
+        });
+        VdmContext ctx = new VdmContext(this, script.getVariableCount());
+        result = script.run(ctx, params, 0);
+        if (result instanceof Cursor) {
+            result = new FinalCursor(script, params, (Cursor)result);
+            if (this.getId() >= 0) {
+                this.orca.sendToSlaveWarmer(this.currentNameSpace, script.sql, params, result);
+            }
+        }
+        
+        // write result back
+        
+        if (callback != null) {
+            callback.accept(result);
+        }
+        
+        return result;
     }
     
     public Object run(PreparedStatement stmt, Parameters params, Consumer<Object> consumer) {
@@ -162,19 +194,11 @@ public final class Session {
         }
     }
     
-    private Integer asyncInsert(CharBuffer cs) {
-        if (this.asyncExecutor.getError() != null) {
-            throw new OrcaException(this.asyncExecutor.getError());
-        }
-        this.asyncExecutor.add(cs);
-        return 1;
-    }
-
-    private boolean isInsert(CharBuffer cs) {
+    private boolean isInsert(ByteBuffer cs) {
         return beginWith(cs, "INSERT INTO ");
     }
 
-    private boolean beginWith(CharBuffer cs, String s) {
+    private boolean beginWith(ByteBuffer cs, String s) {
         int idx = cs.position();
         for (int i=0; i<s.length(); i++) {
             if (cs.get(idx + i) != s.charAt(i)) {
@@ -302,6 +326,7 @@ public final class Session {
         endTransaction(false);
     }
 
+    @Override
     public void close() {
         for (;;) {
             // already closed return
@@ -551,6 +576,9 @@ public final class Session {
     }
     
     public boolean lockTable(int tableId, int lockLevel, boolean transactional) {
+        if (this.orca.isSlaveMode()) {
+            throw new ErrorMessage(8000, "database is in slave mode");
+        }
         return lockTable(getId(), tableId, lockLevel, transactional);
     }
 

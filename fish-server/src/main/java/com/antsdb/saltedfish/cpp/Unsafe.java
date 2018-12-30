@@ -14,7 +14,7 @@
 package com.antsdb.saltedfish.cpp;
 
 import java.lang.reflect.Field;
-import java.nio.MappedByteBuffer;
+import java.nio.ByteBuffer;
 
 import org.slf4j.Logger;
 
@@ -198,11 +198,16 @@ public final class Unsafe {
         unsafe.freeMemory(p);
     }
 
-    public static void unmap(MappedByteBuffer buf) {
-        if (buf instanceof sun.nio.ch.DirectBuffer) {
-            sun.misc.Cleaner cleaner = ((sun.nio.ch.DirectBuffer)buf).cleaner();
-            cleaner.clean();
+    public static void free(ByteBuffer buf) {
+        if (!(buf instanceof sun.nio.ch.DirectBuffer)) {
+            throw new IllegalArgumentException();
         }
+        sun.misc.Cleaner cleaner = ((sun.nio.ch.DirectBuffer)buf).cleaner();
+        cleaner.clean();
+    }
+    
+    public static void unmap(ByteBuffer buf) {
+        free(buf);
     }
 
     public final static void putFloat(long addr, float value) {

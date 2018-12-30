@@ -16,6 +16,8 @@ package com.antsdb.mysql.network;
 import java.nio.ByteBuffer;
 
 import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.server.fishnet.PacketFishBackup;
+import com.antsdb.saltedfish.server.fishnet.PacketFishRestore;
 import com.antsdb.saltedfish.server.mysql.packet.PacketType;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -26,9 +28,9 @@ import io.netty.buffer.ByteBuf;
  * @author wgu0
  */
 public abstract class Packet {
-    long addr;
-    int length;
-    PacketType type;
+    protected long addr;
+    protected int length;
+    protected PacketType type;
     
     public Packet(long addr, int length, PacketType type) {
         this.addr = addr;
@@ -52,18 +54,18 @@ public abstract class Packet {
     public static Packet createPacket(PacketType type, ByteBuf buf) {
         long addr = buf.memoryAddress();
         int length = buf.readableBytes();
-        return createPacket(type, addr, length);
+        return createPacket(buf.nioBuffer(), type, addr, length);
     }
 
     public static Packet createPacket(PacketType type, ByteBuffer buf) {
         long addr = UberUtil.getAddress(buf);
         int length = buf.remaining();
-        return createPacket(type, addr, length);
+        return createPacket(buf, type, addr, length);
     }
     
-    private static Packet createPacket(PacketType type, long addr, int length) {
+    private static Packet createPacket(ByteBuffer buf, PacketType type, long addr, int length) {
         if (type == PacketType.COM_QUERY) {
-            return new PacketQuery(addr, length);
+            return new PacketQuery(buf);
         }
         else if (type == PacketType.FISH_RESULT_SET_COLUMN) {
             return new PacketResultSetColumn(addr, length);
@@ -116,6 +118,18 @@ public abstract class Packet {
         else if (type == PacketType.COM_STMT_SEND_LONG_DATA) {
             return new PacketLongData(addr, length);
         }
+        else if (type == PacketType.FISH_BACKUP) {
+            return new PacketFishBackup(addr, length);
+        }
+        else if (type == PacketType.FISH_RESTORE_START) {
+            return new PacketFishRestoreStart(addr, length);
+        }
+        else if (type == PacketType.FISH_RESTORE) {
+            return new PacketFishRestore(addr, length);
+        }
+        else if (type == PacketType.FISH_RESTORE_END) {
+            return new PacketFishRestoreEnd(addr, length);
+        }
         else {
             return new PacketUnknown(addr, length);
         }
@@ -129,10 +143,16 @@ public abstract class Packet {
     }
 
     public static Packet from(ByteBuffer buf) {
+        if (buf.position() != 0) {
+            throw new IllegalArgumentException();
+        }
         long addr = UberUtil.getAddress(buf) + buf.position();
         int size = buf.limit() - 4;
         byte cmd = PacketUtil.readByte(addr + 4);
-        return createPacket(PacketType.valueOf(cmd), addr, size);
+        return createPacket(buf, PacketType.valueOf(cmd & 0xff), addr, size);
     }
-    
+
+    public long getAddress() {
+        return this.addr;
+    }
 }

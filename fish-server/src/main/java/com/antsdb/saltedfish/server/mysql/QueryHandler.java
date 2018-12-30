@@ -13,16 +13,16 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
-import java.nio.CharBuffer;
+import java.nio.ByteBuffer;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.server.mysql.packet.QueryPacket;
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.server.mysql.util.MysqlErrorCode;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
- * @author roger
+ * @author xgu0
  */
 public class QueryHandler {
 
@@ -33,12 +33,15 @@ public class QueryHandler {
         this.mysession = mysession;
     }
 
-    public void query(QueryPacket packet) throws Exception {
-        CharBuffer sql= packet.getSql();
-        query(sql);
+    public void query(String sql) throws Exception {
+        byte[] bytes = sql.getBytes();
+        ByteBuffer buf = ByteBuffer.allocateDirect(bytes.length);
+        buf.put(bytes);
+        buf.flip();
+        query(buf, Decoder.UTF8);
     }
     
-    public void query(CharBuffer sql) throws Exception {
+    public void query(ByteBuffer sql, Decoder decoder) throws Exception {
         if (sql == null) {
             throw new ErrorMessage(MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Empty query.");
         } 

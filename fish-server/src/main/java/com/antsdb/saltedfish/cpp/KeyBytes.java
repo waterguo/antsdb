@@ -97,6 +97,12 @@ public final class KeyBytes {
         if (pKey == 0) {
             return null;
         }
+        if (pKey == KEY_MIN.addr) {
+            return KEY_MIN;
+        }
+        if (pKey == KEY_MAX.addr) {
+            return KEY_MAX;
+        }
         if (Unsafe.getByte(pKey) != Value.FORMAT_KEY_BYTES) {
             throw new IllegalMemoryException(pKey);
         }

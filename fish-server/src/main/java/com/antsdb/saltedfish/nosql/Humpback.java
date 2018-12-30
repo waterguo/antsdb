@@ -17,6 +17,8 @@ import static com.antsdb.saltedfish.util.UberFormatter.hex;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,6 +38,7 @@ import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
 import com.antsdb.saltedfish.minke.Warmer;
+import com.antsdb.saltedfish.slave.JdbcReplicator;
 import com.antsdb.saltedfish.slave.SlaveReplicator;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
@@ -119,7 +122,9 @@ public final class Humpback {
     private Set<HumpbackSession> sessions = ConcurrentHashMap.newKeySet();
     private int tabletSize = 64 * 1024 * 1024;
     private Replicator<Statistician> statisticianThread;
-    private Replicator<SlaveReplicator> slaveThread;
+    private Replicator<JdbcReplicator> slaveThread;
+    private TotalLogDependency logDependency = new TotalLogDependency();
+    private long serverId;
 
     class ShutdownThread extends Thread {
         @Override
@@ -180,7 +185,8 @@ public final class Humpback {
 
         this.cp = new CheckPoint(new File(this.data, "checkpoint.bin"), this.isMutable);
         this.cp.open();
-        _log.info("server id: {}", this.cp.getServerId());
+        this.serverId = this.config.getServerId() >= 0 ? this.config.getServerId() : this.cp.getServerId();
+        _log.info("server id: {}", this.serverId);
         boolean isRecovering = false;
         if (this.isMutable) {
             isRecovering = this.cp.isDatabaseOpen();
@@ -204,6 +210,12 @@ public final class Humpback {
                 _log.error("unable to start job", x);
             }
         }
+        
+        // misc.
+        
+        addLogDependency(new TabletLogDependency(this));
+        addLogDependency(new StorageLogDependency(this));
+        addLogDependency(new SlaveLogDependency(this));
     }
 
     void init(boolean isRecovering) throws Exception {
@@ -309,7 +321,7 @@ public final class Humpback {
         
         // start statistician
         
-        this.statisticianThread = new Replicator<>("statistician", this, new Statistician(this));
+        this.statisticianThread = new Replicator<>("statistician", this, new Statistician(this), false);
         this.statisticianThread.start();
         
         // start synchronizer
@@ -886,8 +898,8 @@ public final class Humpback {
             return;
         }
         long lp = getStatistician().getReplicateLogPointer();
-        if (this.storage.supportReplication()) {
-            lp = Math.min(lp, ((Replicable)this.storage).getReplicateLogPointer());
+        if (this.storage.getReplicable() != null) {
+            lp = Math.min(lp, this.storage.getReplicable().getReplicateLogPointer());
         }
         if (lp == 0) {
             return;
@@ -1007,7 +1019,7 @@ public final class Humpback {
     };
 
     public long getServerId() {
-        return this.cp.getServerId();
+        return this.serverId;
     }
 
     public SysMetaRow getTableInfo(int tableId) {
@@ -1069,21 +1081,6 @@ public final class Humpback {
         gc(UberTime.getTime());
     }
     
-    @SuppressWarnings("unchecked")
-    long findMinObsoleteLogPointer() {
-        LongLong span = LogSpan.union((Collection<LogSpan>) (Collection<?>) this.tableById.values());
-        long result = (span != null) ? span.x - 1 : 0;
-        LongLong storageSpan = this.storage.getLogSpan();
-        if (storageSpan != null) {
-            result = Math.min(result, storageSpan.y);
-        }
-        if (getSlave() != null) {
-            result = Math.min(result, getSlave().getCommittedLogPointer());
-        }
-        result = Math.min(result, this.statisticianThread.getLogPointer());
-        return result;
-    }
-    
     /**
      * free unused resource
      */
@@ -1100,7 +1097,7 @@ public final class Humpback {
 
         // free logs
 
-        long sp = findMinObsoleteLogPointer();
+        long sp = this.logDependency.getLogPointer();
         _log.trace("start log space recycling with sp={}", hex(sp));
         this.spaceman.gc(this.gc, sp);
         _log.trace("log space recycling is finished");
@@ -1135,8 +1132,8 @@ public final class Humpback {
         return this.cacheEvictor;
     }
 
-    public HumpbackSession createSession() {
-        HumpbackSession result = new HumpbackSession();
+    public HumpbackSession createSession(String endpoint) {
+        HumpbackSession result = new HumpbackSession(endpoint);
         this.sessions.add(result);
         return result;
     }
@@ -1145,6 +1142,10 @@ public final class Humpback {
         this.sessions.remove(hsession);
     }
 
+    public Collection<HumpbackSession> getSessions() {
+        return this.sessions;
+    }
+    
     /**
      * get the oldest timestamp of all queries executed in all sessions
      * 
@@ -1240,15 +1241,19 @@ public final class Humpback {
         return result;
     }
     
-    public Replicator<SlaveReplicator> getSlaveReplicator() {
+    public Replicator<JdbcReplicator> getSlaveReplicator() {
         return this.slaveThread;
     }
 
-    public void setConfig(HumpbackSession hsession, String key, String value) {
+    public void setConfig(HumpbackSession hsession, String key, Object value) {
         SysConfigRow row = new SysConfigRow(key);
-        row.setValue(value);
+        if (value == null) {
+            this.sysconfig.delete(hsession, 1, row.row.getKey(), 0);
+            return;
+        }
+        row.setValue(value.toString());
         row.row.setTrxTimestamp(this.trxMan.getNewVersion());
-        this.sysconfig.put(hsession, 0, row.row, 0);
+        this.sysconfig.put(hsession, 1, row.row, 0);
     }
     
     public Map<String,String> getAllConfig() {
@@ -1270,7 +1275,7 @@ public final class Humpback {
         return result.getVale();
     }
     
-    public SlaveReplicator getSlave() {
+    public JdbcReplicator getSlave() {
         return this.slaveThread != null ? this.slaveThread.getReplicable() : null;
     }
     
@@ -1281,7 +1286,7 @@ public final class Humpback {
         if (this.slaveThread != null) {
             throw new HumpbackException("slave already started");
         }
-        this.slaveThread = new Replicator<>("slave", this, new SlaveReplicator(this));
+        this.slaveThread = new Replicator<>("slave", this, new SlaveReplicator(this), true);
         this.slaveThread.start();
     }
     
@@ -1292,4 +1297,35 @@ public final class Humpback {
         this.slaveThread.close();
         this.slaveThread = null;
     }
+
+    public Long getConfigAsLong(String key, long defaultValue) {
+        String value = getConfig(key);
+        return (value != null) ? Long.parseLong(value) : defaultValue;
+    }
+    
+    public boolean getConfigAsBoolean(String key, boolean defaultValue) {
+        String value = getConfig(key);
+        return (value != null) ? Boolean.parseBoolean(value) : defaultValue;
+    }
+    
+    public void addLogDependency(LogDependency value) {
+        this.logDependency.logDependency.add(value);
+    }
+    
+    public LogDependency getLogDependency() {
+        return this.logDependency;
+    }
+
+    public String getEndpoint() {
+        try {
+            String port = getConfig().getProperty("fish.port", "3306");
+            String endpoint;
+            endpoint = InetAddress.getLocalHost().getHostName() + ":" + port;
+            return endpoint;
+        }
+        catch (UnknownHostException e) {
+            return "";
+        }
+    }
+
 }

@@ -16,23 +16,17 @@ package com.antsdb.saltedfish.sql;
 import java.util.Map;
 
 import com.antsdb.saltedfish.nosql.Replicator;
-import com.antsdb.saltedfish.slave.SlaveReplicator;
+import com.antsdb.saltedfish.slave.JdbcReplicator;
+import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 /**
  * 
  * @author *-xguo0<@
  */
 public class SystemViewSlaveInfo extends PropertyBasedView {
-
-    private Orca orca;
-
-    public SystemViewSlaveInfo(Orca orca) {
-        this.orca = orca;
-    }
-
     @Override
-    public Map<String, Object> getProperties() {
-        Replicator<SlaveReplicator> replicator = this.orca.getHumpback().getSlaveReplicator();
+    public Map<String, Object> getProperties(VdmContext ctx) {
+        Replicator<JdbcReplicator> replicator = ctx.getOrca().getHumpback().getSlaveReplicator();
         if (replicator != null) {
             return replicator.getSummary();
         }

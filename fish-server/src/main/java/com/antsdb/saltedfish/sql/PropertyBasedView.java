@@ -28,7 +28,7 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * @author *-xguo0<@
  */
 public abstract class PropertyBasedView extends View {
-    public abstract Map<String, Object> getProperties();
+    public abstract Map<String, Object> getProperties(VdmContext ctx);
     
     public PropertyBasedView() {
         super(CursorUtil.toMeta(Properties.class));
@@ -36,7 +36,7 @@ public abstract class PropertyBasedView extends View {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        Map<String, Object> props = getProperties();
+        Map<String, Object> props = getProperties(ctx);
         Cursor c;
         if (props != null) {
             c = CursorUtil.toCursor(meta, props);

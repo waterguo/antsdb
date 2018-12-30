@@ -17,11 +17,11 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 
@@ -42,7 +42,14 @@ public final class MemoryManager {
     static boolean _isTraceEnabled = false;
     static boolean _isDebugEnabled = true;
     static ThreadLocal<ThreadData> _local = ThreadLocal.withInitial(() ->{ return new ThreadData();});
+    static AtomicLong[] _immotal = new AtomicLong[AllocPoint.END];
 
+    static {
+        for (int i=0; i<_immotal.length; i++) {
+            _immotal[i] = new AtomicLong();
+        }
+    }
+    
     static class ThreadData {
         @SuppressWarnings("unchecked")
         Deque<ByteBuffer>[] buffers = new ArrayDeque[32 - Integer.numberOfLeadingZeros(MAX_CACHE_BLOCK_SIZE-1) + 1];
@@ -67,6 +74,7 @@ public final class MemoryManager {
     }
     
     public static ByteBuffer alloc(int size) {
+        _log.trace("alloc {}", size);
         ByteBuffer result = LatencyDetector.run(_log, "alloc0", ()->{
             return alloc0(size); 
         });
@@ -92,6 +100,7 @@ public final class MemoryManager {
         
         if (result == null) {
             int roundedSize = 1 << index;
+            _log.trace("ByteBuffer.allocateDirect {}", roundedSize);
             result = ByteBuffer.allocateDirect(roundedSize);
             result.order(ByteOrder.nativeOrder());
         }
@@ -135,7 +144,8 @@ public final class MemoryManager {
             }
         }
         if (buf != null) {
-            Unsafe.unmap((MappedByteBuffer) buf);
+            _log.trace("ByteBuffer free {}", buf.capacity());
+            Unsafe.free(buf);
         }
     }
 
@@ -207,5 +217,41 @@ public final class MemoryManager {
     
     public static Map<Long, Exception> getTrace() {
         return getThreadData().traces;
+    }
+    
+    public static ByteBuffer allocImmortal(int point, int size) {
+        _log.trace("allocImmortal {}", size);
+        ByteBuffer result = ByteBuffer.allocateDirect(size);
+        AtomicLong counter = _immotal[point];
+        counter.addAndGet(size);
+        return result;
+    }
+    
+    public static ByteBuffer growImmortal(int point, ByteBuffer old, int size) {
+        if ((old != null) && old.capacity() >= size) {
+            return old;
+        }
+        ByteBuffer result = allocImmortal(point, size);
+        if (old != null) {
+            old.flip();
+            result.put(old);
+            freeImmortal(point, old);
+            result.order(old.order());
+        }
+        return result;
+    }
+    
+    public static void freeImmortal(int point, ByteBuffer buffer) {
+        if (buffer == null) {
+            return;
+        }
+        AtomicLong counter = _immotal[point];
+        counter.addAndGet(-buffer.capacity());
+        _log.trace("freeImmortal {}", buffer.capacity());
+        Unsafe.free(buffer);
+    }
+
+    public static AtomicLong[] getImmortals() {
+        return _immotal;
     }
 }

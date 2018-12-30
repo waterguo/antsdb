@@ -18,31 +18,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Heap2 {
-	List<ByteBuffer> buffers = new ArrayList<>();
-	int current = 0;
-	
-	public Heap2() {
-		buffers.add(ByteBuffer.allocateDirect(FlexibleHeap.DEFAULT_SIZE));
-	}
-	/**
-	 * 
-	 * @param size
-	 * @return address/pointer of the allocated address
-	 */
-	public final long alloc(int size) {
-		if (this.getCurrent().remaining() < (size)) {
-			buffers.add(ByteBuffer.allocateDirect(FlexibleHeap.DEFAULT_SIZE));
-			this.current++;
-		}
-		ByteBuffer buf = getCurrent();
-		int pos = buf.position();
-		long address = ((long)this.current) << 32;
-		address += pos;
-		buf.position(pos + size);
-		return address;
-	}
+    List<ByteBuffer> buffers = new ArrayList<>();
+    int current = 0;
+    
+    public Heap2() {
+        buffers.add(MemoryManager.alloc(FlexibleHeap.DEFAULT_SIZE));
+    }
+    /**
+     * 
+     * @param size
+     * @return address/pointer of the allocated address
+     */
+    public final long alloc(int size) {
+        if (this.getCurrent().remaining() < (size)) {
+            buffers.add(MemoryManager.alloc(FlexibleHeap.DEFAULT_SIZE));
+            this.current++;
+        }
+        ByteBuffer buf = getCurrent();
+        int pos = buf.position();
+        long address = ((long)this.current) << 32;
+        address += pos;
+        buf.position(pos + size);
+        return address;
+    }
 
-	private ByteBuffer getCurrent() {
-		return buffers.get(this.current);
-	}
+    private ByteBuffer getCurrent() {
+        return buffers.get(this.current);
+    }
 }

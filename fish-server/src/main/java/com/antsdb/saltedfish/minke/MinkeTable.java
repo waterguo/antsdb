@@ -276,6 +276,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
                 continue;
             }
+            int counter = page.splitCounter;
             try {
                 page.put(row);
                 return;
@@ -284,7 +285,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
             }
             catch (OutOfHeapMemory x) {
-                split1(page, pKey, size, row);
+                split1(counter, page, pKey, size, row);
                 return;
             }
         }
@@ -336,43 +337,48 @@ public class MinkeTable implements StorageTable, Recycable {
         }
     }
     
-    private void split1(MinkePage page, Range range) {
-        split1(page, range.pKeyStart, 0, (MergeStream ms)-> {
+    private void split1(int counter, MinkePage page, Range range) {
+        split1(counter, page, range.pKeyStart, 0, (MergeStream ms)-> {
             ms.setMergeRange(range);
         });
     }
 
-    private long split1(MinkePage page, long pIncomingKey, int incomingSize, long pRowKey, byte misc) {
-        return split1(page, pIncomingKey, incomingSize, (MergeStream ms)-> {
+    private long split1(int counter, MinkePage page, long pIncomingKey, int incomingSize, long pRowKey, byte misc) {
+        return split1(counter, page, pIncomingKey, incomingSize, (MergeStream ms)-> {
             ms.setMergeIndexData(pIncomingKey, pRowKey, misc);
         });
     }
 
-    private void split1(MinkePage page, long pIncomingKey, int incomingSize, VaporizingRow row) {
-        split1(page, pIncomingKey, incomingSize, (MergeStream ms)-> {
+    private void split1(int counter, MinkePage page, long pIncomingKey, int incomingSize, VaporizingRow row) {
+        split1(counter, page, pIncomingKey, incomingSize, (MergeStream ms)-> {
             ms.setMergeData(row);
         });
     }
 
-    private void split1(MinkePage page, long pIncomingKey, int incomingSize, long pRow) {
-        split1(page, pIncomingKey, incomingSize, (MergeStream ms)-> {
+    private void split1(int counter, MinkePage page, long pIncomingKey, int incomingSize, long pRow) {
+        split1(counter, page, pIncomingKey, incomingSize, (MergeStream ms)-> {
             ms.setMergeData(pIncomingKey, pRow);
         });
     }
 
-    private long split1(MinkePage page, long pIncomingKey, int incomingSize, Consumer<MergeStream> cb) {
+    private synchronized 
+    long split1(int counter, MinkePage page, long pIncomingKey, int incomingSize, Consumer<MergeStream> cb) {
         long result = 0;
+        
+        // prevents concurrent page splits
+        if (counter != page.splitCounter) {
+            return result;
+        }
+        page.splitCounter++;
+        
         try {
             // freeze the page
-            
             page.freeze();
             
             // wait for any active operations to end
-            
             while (page.gate.get() != 0) {}
             
             // if original page is not filled up. we do a copy on write
-            
             double newUsageRatio = (page.getUsage() + (double)incomingSize) / this.minke.pageSize;
             if (newUsageRatio < 0.9) {
                 copyOnWrite1(page, pIncomingKey, cb);
@@ -380,7 +386,6 @@ public class MinkeTable implements StorageTable, Recycable {
             }
             
             // if incoming key is greater than any keys in original page, we do an append
-            
             long pKeyTail = page.getTailKeyPointer();
             if (pKeyTail == 0) {
                 throw new CodingError();
@@ -392,7 +397,6 @@ public class MinkeTable implements StorageTable, Recycable {
             }
             
             // at last we do half split
-            
             result = mergeSplit1(page, 0.8f, cb);
             return result;
         }
@@ -411,11 +415,13 @@ public class MinkeTable implements StorageTable, Recycable {
         // copy ranges that is beyond the incoming key to the new page
         
         MinkePage target = this.minke.alloc(this.tableId, pIncomingKey, page.getEndKeyPointer());
+        Range targetRange = target.getRange();
         while (stream.next()) {
             if (stream.isResultRange()) {
                 Range range = stream.getRange();
-                if (KeyBytes.compare(range.pKeyStart, pIncomingKey) >= 0) {
-                    target.putRange(range);
+                if (range.hasIntersection(targetRange)) {
+                    Range fixedRange = range.intersect(targetRange);
+                    target.putRange(fixedRange);
                 }
             }
             else if (stream.getKey() == pIncomingKey) {
@@ -427,10 +433,8 @@ public class MinkeTable implements StorageTable, Recycable {
         
         MinkePage deleted = this.pages.put(target);
         if (deleted != null) {
-            _log.warn("page leak {} tail={}", 
-                    hex(deleted.id), 
-                    KeyBytes.toString(page.getTailKeyPointer()), 
-                    new Exception());
+            // this could happen when incoming key is from a Range
+            this.minke.freePage(deleted);
         }
         page.setEndKey(pIncomingKey);
         _log.debug("append split: {} -> {} tableId={}", hex(page.id), hex(target.id), this.tableId);
@@ -560,6 +564,7 @@ public class MinkeTable implements StorageTable, Recycable {
         mergeSplit(page, 0.9f, pMergeKey, isRange, callback);
     }
 
+    @SuppressWarnings("unused")
     private synchronized void halfSplit(MinkePage page) throws IOException{
         MinkePage.Scanner scanner = page.scanAll();
         MinkePage newpage = null;
@@ -651,10 +656,7 @@ public class MinkeTable implements StorageTable, Recycable {
         callback.apply(newpage);
         MinkePage deleted = this.pages.put(newpage);
         if (deleted != null) {
-            _log.warn("page leak {} tail={}", 
-                    hex(deleted.id), 
-                    KeyBytes.toString(page.getTailKeyPointer()), 
-                    new Exception());
+            this.minke.freePage(deleted);
         }
         page.setEndKey(pIncomingKey);
         _log.debug("append split: {} -> {} tableId={}", hex(page.id), hex(newpage.id), this.tableId);
@@ -679,6 +681,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
                 continue;
             }
+            int counter = page.splitCounter;
             try {
                 page.put(row);
                 return;
@@ -687,7 +690,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
             }
             catch (OutOfHeapMemory x) {
-                split1(page, pKey, size, row.getAddress());
+                split1(counter, page, pKey, size, row.getAddress());
                 return;
             }
         }
@@ -729,6 +732,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
                 continue;
             }
+            int counter = page.splitCounter;
             try {
                 page.putDeleteMark(pKey);
                 return;
@@ -737,7 +741,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
             }
             catch (OutOfHeapMemory x) {
-                split1(page, pKey, 0, Row.DELETE_MARK);
+                split1(counter, page, pKey, 0, Row.DELETE_MARK);
                 return;
             }
         }
@@ -762,6 +766,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pIndexKey);
                 continue;
             }
+            int counter = page.splitCounter;
             try {
                 return page.putIndex(pIndexKey, pRowKey, misc);
             }
@@ -770,7 +775,7 @@ public class MinkeTable implements StorageTable, Recycable {
             }
             catch (OutOfHeapMemory x) {
                 int size = KeyBytes.getRawSize(pIndexKey) + KeyBytes.getRawSize(pRowKey) + 1;
-                 return split1(page, pIndexKey, size, pRowKey, misc);
+                 return split1(counter, page, pIndexKey, size, pRowKey, misc);
             }
         }
     }
@@ -789,6 +794,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
                 continue;
             }
+            int counter = page.splitCounter;
             try {
                 page.delete(pKey);
                 return;
@@ -797,7 +803,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(pKey);
             }
             catch (OutOfHeapMemory x) {
-                split1(page, pKey, 0, 0);
+                split1(counter, page, pKey, 0, 0);
                 return;
             }
         }
@@ -974,6 +980,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(range.getStart().pKey);
                 continue;
             }
+            int counter = page.splitCounter;
             Range pageRange = page.getRange();
             if (!pageRange.contains(range.getStart())) {
                 grow(range.getStart().pKey);
@@ -987,7 +994,7 @@ public class MinkeTable implements StorageTable, Recycable {
                 grow(range.getStart().pKey);
             }
             catch (OutOfHeapMemory x) {
-                split1(page, localRange);
+                split1(counter, page, localRange);
             }
             if (range.equals(localRange)) {
                 // input range is contained in single page, end it
@@ -1106,6 +1113,7 @@ public class MinkeTable implements StorageTable, Recycable {
         for (MinkePage i:getPages()) {
             this.minke.freePage(i);
         }
+        this.pages.clear();
     }
     
     @Override

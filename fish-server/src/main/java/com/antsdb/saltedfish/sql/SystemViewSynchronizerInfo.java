@@ -16,22 +16,16 @@ package com.antsdb.saltedfish.sql;
 import java.util.Map;
 
 import com.antsdb.saltedfish.nosql.Synchronizer;
+import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 /**
  * 
  * @author *-xguo0<@
  */
 public class SystemViewSynchronizerInfo extends PropertyBasedView {
-
-    private Orca orca;
-
-    public SystemViewSynchronizerInfo(Orca orca) {
-        this.orca = orca;
-    }
-
     @Override
-    public Map<String, Object> getProperties() {
-        Synchronizer synchronizer = this.orca.getHumpback().getSynchronizer();
+    public Map<String, Object> getProperties(VdmContext ctx) {
+        Synchronizer synchronizer = ctx.getOrca().getHumpback().getSynchronizer();
         return synchronizer!=null ? synchronizer.getSummary() : null;
     }
 

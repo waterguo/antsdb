@@ -18,8 +18,11 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
+import org.apache.log4j.Appender;
+import org.apache.log4j.BasicConfigurator;
+import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
-import org.apache.log4j.varia.NullAppender;
+import org.apache.log4j.PatternLayout;
 
 import com.antsdb.saltedfish.util.ConsoleHelper;
 import com.antsdb.saltedfish.util.ParseUtil;
@@ -32,9 +35,11 @@ public abstract class BetterCommandLine implements ConsoleHelper {
     protected String[] args;
     protected CommandLine cmdline;
     
-    static {
-        LogManager.getRootLogger().removeAllAppenders();
-        LogManager.getRootLogger().addAppender(new NullAppender());
+    public BetterCommandLine() {
+        BasicConfigurator.configure();
+        LogManager.getRootLogger().setLevel(Level.OFF);
+        Appender appender = (Appender)LogManager.getRootLogger().getAllAppenders().nextElement();
+        appender.setLayout(new PatternLayout("%d{HH:mm:ss,SSS} [%t] %-5p %c{2} - %m%n"));
     }
     
     protected String getCommandName() {
@@ -52,11 +57,16 @@ public abstract class BetterCommandLine implements ConsoleHelper {
         Options options = new Options();
         buildOptions(options);
         options.addOption("h", "help", false, "help");
+        options.addOption(null, "log-level", true, "ALL, ERROR, WARN, INFO, DEBUG or TRACE. default is OFF");
         cmdline = parser.parse(options, args);
         if (cmdline.hasOption('h')) {
             HelpFormatter formatter = new HelpFormatter();
             formatter.printHelp(getCommandName(), options);
             System.exit(0);
+        }
+        if (cmdline.hasOption("log-level")) {
+            Level level = Level.toLevel(cmdline.getOptionValue("log-level"));
+            LogManager.getRootLogger().setLevel(level);
         }
         run();
     }

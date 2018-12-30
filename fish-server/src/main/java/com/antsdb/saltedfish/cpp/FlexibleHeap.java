@@ -30,16 +30,10 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
     Node head;
     Node current;
     int blockSize;
-    private boolean useMemoryManager = true;
     
     private class Node {
         Node(int blockSize) {
-            if (useMemoryManager) {
-                this.buffer = MemoryManager.alloc(blockSize);
-            }
-            else {
-                this.buffer = ByteBuffer.allocateDirect(blockSize);
-            }
+            this.buffer = MemoryManager.alloc(blockSize);
             this.address = UberUtil.getAddress(this.buffer);
         }
         
@@ -164,19 +158,5 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
     @Override
     public void close() {
         free();
-    }
-
-    /**
-     * memory allocated using memory manager must be freed manually. setting this flag to false will make the heap
-     * use java GC to collect unused memory 
-     * 
-     * @param b
-     */
-    public void setUserMemoryManager(boolean b) {
-        if (head != null) {
-            // must be empty when setting this flag
-            throw new IllegalArgumentException();
-        }
-        this.useMemoryManager = b;
     }
 }

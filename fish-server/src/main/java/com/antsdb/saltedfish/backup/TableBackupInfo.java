@@ -11,24 +11,20 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.server.mysql;
-
-import java.nio.ByteBuffer;
+package com.antsdb.saltedfish.backup;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public abstract class BufferWriter {
-    public abstract Object getWrapped();
-    public abstract void writeBytes(byte[] bytes);
-    public abstract void writeBytes(ByteBuffer bytes);
-    public abstract int position();
-    public abstract void position(int pos);
-    public abstract void readBytes(int start, byte[] bytes);
-    public abstract void writeLong(long value);
-    public abstract void writeByte(byte value);
-    public abstract void writeShort(short value);
-    public abstract void writeInt(int value);
-    public abstract void writeBytes(long pValue, int len);
+public class TableBackupInfo {
+    public String catalog;
+    public String schema;
+    public String table;
+    public String create;
+    public ColumnBackupInfo[] columns;
+    
+    public String getFullName() {
+        return this.catalog + "." + this.table;
+    }
 }

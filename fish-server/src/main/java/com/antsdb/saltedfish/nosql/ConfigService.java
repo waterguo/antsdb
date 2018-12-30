@@ -18,6 +18,8 @@ import java.io.FileInputStream;
 import java.util.Properties;
 
 import com.antsdb.saltedfish.util.Size;
+import com.antsdb.saltedfish.util.SizeConstants;
+import com.antsdb.saltedfish.util.TimeParser;
 
 /**
  * 
@@ -126,6 +128,11 @@ public class ConfigService {
         return Size.parse(this.props.getProperty("cache.size"), "100g");
     }
 
+    private long getSeconds(String value, String defecto) {
+        return TimeParser.parseSeconds(value, defecto);
+    }
+    
+    @SuppressWarnings("unused")
     private long getLong(String key, long defaultValue) {
         long value = defaultValue;
         String s = this.props.getProperty(key);
@@ -164,7 +171,7 @@ public class ConfigService {
      * @return
      */
     public boolean isFakeDeletetionEnabled() {
-        return getBoolean("minke.fake-deletion", false);
+        return getBoolean("humpback.fake-deletion", false);
     }
 
     public Properties getProperties() {
@@ -212,18 +219,17 @@ public class ConfigService {
     public LogRetentionStrategy getLogRetentionStrategy() {
         String value = props.getProperty("humpback.log-retention", "").toLowerCase();
         if ("time".equals(value)) {
-            long time = getLong("humpback.log-retention.time", 60 * 10);
+            // default retain log for 7 days
+            long time = getSeconds("humpback.log-retention.time", "1w");
             return new LogRetentionByTime(time);
         }
         else if ("size".equals(value)) {
-            long bytes = Size.parse(this.props.getProperty("humpback.log-retention.size"), "256m");
+            long bytes = Size.parse(this.props.getProperty("humpback.log-retention.size"), "1g");
             return new LogRetentionBySize(bytes);
         }
-        else if (value.isEmpty()) {
-            return new LogRetentionStrategy();
-        }
         else {
-            return new LogRetentionStrategy();
+            // default retain log for 1 gb
+            return new LogRetentionBySize(1024 * 1024 * 1024);
         }
     }
     
@@ -262,5 +268,22 @@ public class ConfigService {
             catch (Exception ignored) {}
         }
         return 0;
+    }
+
+    public String getZookeeperConnectionString() {
+        return "baozi:2181";
+    }
+
+    /**
+     * reserved space for stuff read from hbase. 
+     * 
+     * @return
+     */
+    public long getCacheReservedSize() {
+        return getLong("cache.reserved-size", SizeConstants.gb(1));
+    }
+    
+    public long getServerId() {
+        return getLong("server-id", -1);
     }
 }

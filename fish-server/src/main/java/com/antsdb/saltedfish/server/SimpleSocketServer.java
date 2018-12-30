@@ -17,13 +17,17 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
+import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -35,7 +39,20 @@ public class SimpleSocketServer extends TcpServer implements Runnable {
 
     private ServerSocketChannel serverChannel;
     private SaltedFish fish;
-    private ExecutorService pool = Executors.newCachedThreadPool();
+    private ExecutorService pool = Executors.newCachedThreadPool(new MyThreadFactory());
+    
+    private static class MyThreadFactory implements ThreadFactory {
+        private final static AtomicInteger _threadNumber = new AtomicInteger(1);
+        
+        @Override
+        public Thread newThread(Runnable r) {
+            String name = "listener-" + _threadNumber.getAndIncrement();
+            Thread t = new Thread(r, name);
+            t.setDaemon(true);
+            t.setPriority(Thread.NORM_PRIORITY);
+            return t;
+        }
+    }
     
     public SimpleSocketServer(SaltedFish fish) {
         this.fish = fish;
@@ -58,20 +75,30 @@ public class SimpleSocketServer extends TcpServer implements Runnable {
             for (;;) {
                 SocketChannel channel = this.serverChannel.accept();
                 channel.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
-                if (this.fish.getOrca() == null) {
+                Orca orca = this.fish.getOrca();
+                if (orca == null) {
+                    channel.close();
+                    continue;
+                }
+                if (orca.isClosed()) {
                     channel.close();
                     continue;
                 }
                 this.pool.execute(new SimpleSocketWorker(this.fish, channel));
             }
         }
+        catch (AsynchronousCloseException ignored) {}
         catch (Exception x) {
             _log.warn("", x);
         }
     }
 
     @Override
-    public void shutdown() throws Exception {
+    public void shutdown() {
+        try {
+            this.serverChannel.close();
+        }
+        catch (IOException ignored) {}
         this.pool.shutdown();
     }
 

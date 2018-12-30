@@ -17,22 +17,16 @@ import java.util.Map;
 
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.Replicator;
+import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 /**
  * 
  * @author *-xguo0<@
  */
 public class SystemViewReplicatorInfo extends PropertyBasedView {
-
-    private Orca orca;
-
-    public SystemViewReplicatorInfo(Orca orca) {
-        this.orca = orca;
-    }
-
     @Override
-    public Map<String, Object> getProperties() {
-        Replicator<Replicable> replicator = this.orca.getReplicator();
+    public Map<String, Object> getProperties(VdmContext ctx) {
+        Replicator<Replicable> replicator = ctx.getOrca().getReplicator();
         if (replicator != null) {
             return replicator.getSummary();
         }

@@ -15,6 +15,9 @@ package com.antsdb.saltedfish.server.mysql;
 
 import java.nio.ByteBuffer;
 
+import com.antsdb.saltedfish.cpp.AllocPoint;
+import com.antsdb.saltedfish.cpp.MemoryManager;
+
 /**
  * 
  * @author *-xguo0<@
@@ -51,10 +54,8 @@ public class ChannelWriterMemory extends ChannelWriter {
         if (this.buf.remaining() > size) {
             return;
         }
-        this.buf.flip();
-        ByteBuffer newone = ByteBuffer.allocate((this.buf.remaining() + size) * 3 / 2);
-        newone.put(this.buf);
-        this.buf = newone;
+        int newBufferSize = (this.buf.remaining() + size) * 3 / 2; 
+        this.buf = MemoryManager.growImmortal(AllocPoint.CHANNEL_WRITER, this.buf, newBufferSize);
     }
     
     public ByteBuffer getWrapped() {

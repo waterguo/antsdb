@@ -15,7 +15,7 @@ package com.antsdb.saltedfish.server.mysql;
 
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -29,6 +29,8 @@ import com.antsdb.mysql.network.Packet;
 import com.antsdb.mysql.network.PacketDbInit;
 import com.antsdb.mysql.network.PacketExecute;
 import com.antsdb.mysql.network.PacketFieldList;
+import com.antsdb.mysql.network.PacketFishRestoreEnd;
+import com.antsdb.mysql.network.PacketFishRestoreStart;
 import com.antsdb.mysql.network.PacketLongData;
 import com.antsdb.mysql.network.PacketPing;
 import com.antsdb.mysql.network.PacketPrepare;
@@ -37,13 +39,22 @@ import com.antsdb.mysql.network.PacketQuit;
 import com.antsdb.mysql.network.PacketSetOption;
 import com.antsdb.mysql.network.PacketStmtClose;
 import com.antsdb.saltedfish.charset.Decoder;
+import com.antsdb.saltedfish.cpp.AllocPoint;
 import com.antsdb.saltedfish.cpp.MemoryManager;
+import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.server.SaltedFish;
+import com.antsdb.saltedfish.server.fishnet.PacketFishBackup;
+import com.antsdb.saltedfish.server.fishnet.PacketFishRestore;
 import com.antsdb.saltedfish.server.mysql.packet.AuthPacket;
 import com.antsdb.saltedfish.sql.AuthPlugin;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.vdm.Checks;
+import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.ShutdownException;
 import com.antsdb.saltedfish.sql.vdm.Use;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
@@ -81,6 +92,7 @@ public final class MysqlSession {
     private QueryHandler queryHandler;
     Map<Integer, MysqlPreparedStatement> prepared = new HashMap<>();
     private ByteBuffer bigPacket;
+    private RestoreHandler restoreHandler;
     
     public MysqlSession(SaltedFish fish, ChannelWriter out, SocketAddress remote) {
         this.out = out;
@@ -126,7 +138,7 @@ public final class MysqlSession {
         catch (ErrorMessage x) {
             writeErrMessage(x.getError(), x.toString());
         }
-        catch (Exception x) {
+        catch (Throwable x) {
             _log.debug("error", x);
             if (x.getMessage() != null) {
                 writeErrMessage(ERR_FOUND_EXCEPION, x.getMessage());
@@ -147,69 +159,111 @@ public final class MysqlSession {
         }
         else {
             if (this.session.isClosed()) {
-                throw new OrcaException("session is closed");
+                throw new ErrorMessage(ER_ERROR_WHEN_EXECUTING_COMMAND, "session is closed");
             }
+            ByteBuffer buf = null;
             try {
                 this.session.notifyStartQuery();
-                ByteBuffer buf = handleBigPacket(input); 
+                buf = handleBigPacket(input); 
                 if (buf == null) {
                     return 1;
                 }
-                int pos = buf.position();
                 int sequence = buf.get(3);
                 this.encoder.packetSequence = sequence;
                 Packet packet = Packet.from(buf);
-                if (packet instanceof PacketPing) {
-                    ping((PacketPing)packet);
-                    return 1;
-                }
-                else if (packet instanceof PacketDbInit) {
-                    init((PacketDbInit)packet);
-                    return 1;
-                }
-                else if (packet instanceof PacketQuery) {
-                    query((PacketQuery)packet, getDecoder());
-                    return 1;
-                }
-                else if (packet instanceof PacketQuit) {
-                    quit();
-                    return -2;
-                }
-                else if (packet instanceof PacketPrepare) {
-                    prepare((PacketPrepare)packet);
-                    return 1;
-                }
-                else if (packet instanceof PacketStmtClose) {
-                    closeStatement((PacketStmtClose)packet);
-                    return 1;
-                }
-                else if (packet instanceof PacketExecute) {
-                    buf.position(pos + 5);
-                    execute((PacketExecute)packet, buf);
-                    return 1;
-                }
-                else if (packet instanceof PacketFieldList) {
-                    fieldList((PacketFieldList)packet);
-                    return 1;
-                }
-                else if (packet instanceof PacketSetOption) {
-                    setOption((PacketSetOption)packet);
-                    return 1;
-                }
-                else if (packet instanceof PacketLongData) {
-                    setLongData((PacketLongData)packet);
-                    return 1;
-                }
-                else {
-                    int cmd = buf.get(4);
-                    _log.error("unknown command {}", cmd);
-                    writeErrMessage(ER_ERROR_WHEN_EXECUTING_COMMAND, "unknown command " + cmd);
-                    return 0;
-                }
+                return run1(buf, packet);
             }
             finally {
                 this.session.notifyEndQuery();
+                if ((this.bigPacket != null) && (buf == this.bigPacket)) {
+                    MemoryManager.freeImmortal(AllocPoint.BIG_PACKET, this.bigPacket);
+                    this.bigPacket = null;
+                }
             }
+        }
+    }
+
+    private int run1(ByteBuffer buf, Packet packet) throws Exception {
+        long preMemory = MemoryManager.getThreadAllocation();
+        try {
+            return run2(buf, packet);
+        }
+        finally {
+            long postMemory = MemoryManager.getThreadAllocation();
+            if (preMemory != postMemory) {
+                _log.warn("memory leak {}-{}: {}", preMemory, postMemory, StringUtils.left(packet.toString(), 200));
+                /* for debug
+                for (Exception i:MemoryManager.getTrace().values()) {
+                    i.printStackTrace();
+                }
+                */
+            }
+        }
+    }
+    
+    private int run2(ByteBuffer buf, Packet packet) throws Exception {
+        if (packet instanceof PacketPing) {
+            ping((PacketPing)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketDbInit) {
+            init((PacketDbInit)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketQuery) {
+            query((PacketQuery)packet, getDecoder());
+            return 1;
+        }
+        else if (packet instanceof PacketQuit) {
+            quit();
+            return -2;
+        }
+        else if (packet instanceof PacketPrepare) {
+            prepare((PacketPrepare)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketStmtClose) {
+            closeStatement((PacketStmtClose)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketExecute) {
+            buf.position(5);
+            execute((PacketExecute)packet, buf);
+            return 1;
+        }
+        else if (packet instanceof PacketFieldList) {
+            fieldList((PacketFieldList)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketSetOption) {
+            setOption((PacketSetOption)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketLongData) {
+            setLongData((PacketLongData)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketFishBackup) {
+            backup((PacketFishBackup)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketFishRestore) {
+            restore((PacketFishRestore)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketFishRestoreStart) {
+            restoreStart((PacketFishRestoreStart)packet);
+            return 1;
+        }
+        else if (packet instanceof PacketFishRestoreEnd) {
+            restoreEnd((PacketFishRestoreEnd)packet);
+            return 1;
+        }
+        else {
+            int cmd = buf.get(4) & 0xff;
+            _log.error("unknown command {}", cmd);
+            writeErrMessage(ER_ERROR_WHEN_EXECUTING_COMMAND, "unknown command " + cmd);
+            return 0;
         }
     }
 
@@ -225,36 +279,33 @@ public final class MysqlSession {
         }
         ByteBuffer result = null;
         if (this.bigPacket != null) {
-            this.bigPacket = grow(this.bigPacket, this.bigPacket.position() + size);
+            this.bigPacket = MemoryManager.growImmortal(
+                    AllocPoint.BIG_PACKET, 
+                    this.bigPacket, 
+                    this.bigPacket.position() + size);
             buf.getInt();
             this.bigPacket.put(buf);
             if (size != MAX_PACKET_SIZE) {
-                // end of the big packet
+                // end of the big packet.  
                 result = this.bigPacket;
                 result.flip();
+                // update the sequene from the last big packet
+                int sequence = buf.get(0x3) &  0xff;
+                result.put(0x3, (byte)sequence);
                 this.bigPacket = null;
             }
         }
         else {
             if (size == MAX_PACKET_SIZE) {
                 // start of the big packet
-                this.bigPacket = ByteBuffer.allocateDirect(size + 4);
+                this.bigPacket = MemoryManager.allocImmortal(AllocPoint.BIG_PACKET, size + 4);
+                this.bigPacket.order(ByteOrder.LITTLE_ENDIAN);
                 this.bigPacket.put(buf);
             }
             else {
                 result = buf;
             }
         }
-        return result;
-    }
-
-    private ByteBuffer grow(ByteBuffer buf, int size) {
-        if (buf.capacity() >= size) {
-            return buf;
-        }
-        ByteBuffer result = ByteBuffer.allocateDirect(size);
-        buf.flip();
-        result.put(buf);
         return result;
     }
 
@@ -301,7 +352,7 @@ public final class MysqlSession {
 
     private void query(PacketQuery packet, Decoder decoder) throws Exception {
         boolean success = false;
-        CharBuffer sql = packet.getQueryAsCharBuf(decoder);
+        ByteBuffer sql = packet.getQuery();
         /* for debug
         if (FakeResponse.fake(sql, this.out)) {
             return;
@@ -311,21 +362,12 @@ public final class MysqlSession {
          * MemoryManager.setTrace(true);
          */
         try {
-            queryHandler.query(sql);
+            queryHandler.query(sql, decoder);
             success = true;
         }
         finally {
             if (!success && _log.isDebugEnabled()) {
-                _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 1024));
-            }
-            long alloc = MemoryManager.getThreadAllocation();
-            if (alloc != 0) {
-                _log.warn("memory leak {}: {}", alloc, sql.toString());
-                /* for debug
-                for (Exception i:MemoryManager.getTrace().values()) {
-                    i.printStackTrace();
-                }
-                */
+                _log.debug("broken sql: {}", StringUtils.left(packet.getQueryAsString(getDecoder()), 1024));
             }
         }
     }
@@ -403,10 +445,11 @@ public final class MysqlSession {
     }
 
     public void writeErrMessage(int errno, String msg) {
+        ByteBuffer buf = Charset.defaultCharset().encode(msg);
         this.encoder.writePacket(this.out, (packet) -> this.encoder.writeErrorBody(
                 packet, 
                 errno, 
-                Charset.defaultCharset().encode(msg)));
+                buf));
     }
 
     public Map<Integer, MysqlPreparedStatement> getPrepared() {
@@ -414,6 +457,9 @@ public final class MysqlSession {
     }
 
     public void close() {
+        if (this.encoder != null) {
+            this.encoder.close();
+        }
         if (this.session != null) {
             for (MysqlPreparedStatement i:this.prepared.values()) {
                 i.close();
@@ -430,4 +476,47 @@ public final class MysqlSession {
             return this.session.getConfig().getRequestDecoder();
         }
     }
+    
+    private void backup(PacketFishBackup request) {
+        ObjectName name = ObjectName.parse(request.getFullTableName());
+        TableMeta table = Checks.tableExist(this.session, name);
+        GTable gtable = this.session.getOrca().getHumpback().getTable(table.getId());
+        long trxts = this.session.getOrca().getTrxMan().getNewVersion();
+        for (RowIterator i = gtable.scan(0, trxts, true);;) {
+            if (!i.next()) {
+                break;
+            }
+            Row row = i.getRow();
+            this.encoder.writePacket(out, (packet)->{
+                this.encoder.writeRow(packet, row);
+            });
+        }
+        this.encoder.writePacket(out, (packet)->{
+            this.encoder.writeEOFBody(packet, session);
+        });
+    }
+
+    private void restore(PacketFishRestore packet) {
+        if (this.restoreHandler == null) {
+            throw new OrcaException("no restore is in proceed");
+        }
+        this.restoreHandler.restore(packet);
+    }
+    
+    private void restoreEnd(PacketFishRestoreEnd packet) {
+        if (this.restoreHandler == null) {
+            throw new OrcaException("no restore is in proceed");
+        }
+        this.restoreHandler = null;
+        this.restoreHandler.end(packet);
+    }
+
+    private void restoreStart(PacketFishRestoreStart packet) {
+        if (this.restoreHandler != null) {
+            throw new OrcaException("restore is already in proceed");
+        }
+        this.restoreHandler = new RestoreHandler(this.session);
+        this.restoreHandler.prepare(packet);
+    }
+
 }

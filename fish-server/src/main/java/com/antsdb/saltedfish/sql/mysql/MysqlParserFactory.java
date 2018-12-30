@@ -17,7 +17,10 @@ import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.atn.LexerATNSimulator;
+import org.antlr.v4.runtime.atn.PredictionContextCache;
 import org.antlr.v4.runtime.atn.PredictionMode;
+import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.lang.StringUtils;
@@ -49,9 +52,32 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class MysqlParserFactory extends SqlParserFactory {
     static Logger _log = UberUtil.getThisLogger();
     
+    /*
+     * default lexer from antlr synchronize on _decisionToDFA field which causes a perofrmance problem in
+     * a multi-threaded environment. this is a work around
+     */
+    static class FuckedLexer extends MysqlLexer {
+        public FuckedLexer(CharStream input) {
+            super(input);
+            setInterpreter(new LexerATNSimulator(this, _ATN, getDFA(), new PredictionContextCache()));
+        }
+        
+        private DFA[] getDFA() {
+            DFA[] result = new DFA[_ATN.getNumberOfDecisions()];
+            for (int i = 0; i < _ATN.getNumberOfDecisions(); i++) {
+                result[i] = new DFA(_ATN.getDecisionState(i), i);
+            }
+            return result;
+        }
+    }
+    
     @Override
     public Script parse(Session session, CharStream cs) {
-        ScriptContext scriptCtx = parse(cs);
+        return parse(session, cs, 0);
+    }
+    
+    public Script parse(Session session, CharStream cs, int options) {
+        ScriptContext scriptCtx = parse(cs, options);
         GeneratorContext ctx = new GeneratorContext(session);
         InstructionGenerator.scan(ctx, scriptCtx);
         Instruction code = (Instruction)InstructionGenerator.generate(ctx, scriptCtx);
@@ -104,12 +130,16 @@ public class MysqlParserFactory extends SqlParserFactory {
         }
     }
 
-    static MysqlParser.ScriptContext parse(String sql) {
+    public static MysqlParser.ScriptContext parse(String sql) {
         return parse(new ANTLRInputStream(sql));
     }
     
-    static MysqlParser.ScriptContext parse(CharStream cs) {
-        MysqlLexer lexer = new MysqlLexer(cs);
+    public static MysqlParser.ScriptContext parse(CharStream cs) {
+        return parse(cs, 0);
+    }
+    
+    public static MysqlParser.ScriptContext parse(CharStream cs, int options) {
+        MysqlLexer lexer = (options==1) ? new FuckedLexer(cs) : new MysqlLexer(cs);
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         tokens.setTokenSource(lexer);
         MysqlParser parser = new MysqlParser(tokens);
@@ -132,13 +162,10 @@ public class MysqlParserFactory extends SqlParserFactory {
         if (isLoggableDdl(rule.getChild(0))) {
             String sql = toSql(rule.getChild(0));
             String namespace = ctx.getSession().getCurrentNamespace();
-            if (StringUtils.isEmpty(namespace)) {
-                sql = "!!" + sql;
+            if (!StringUtils.isEmpty(namespace)) {
+                sql = "use " + ctx.getSession().getCurrentNamespace() + " ; " + sql;
             }
-            else {
-                sql = "!!use " + ctx.getSession().getCurrentNamespace() + " ; " + sql;
-            }
-            ctx.getHumpback().getGobbler().logMessage(ctx.getHSession(), sql);
+            ctx.getHumpback().getGobbler().logDdl(ctx.getHSession(), sql);
         }
     }
 

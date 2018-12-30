@@ -14,7 +14,7 @@
 package com.antsdb.saltedfish.sql.meta;
 
 public enum ColumnId {
-	/* systable */
+    /* systable */
     systable_id(1),
     systable_namespace(2),
     systable_table_name(3),
@@ -22,7 +22,8 @@ public enum ColumnId {
     systable_ext_name(5),
     systable_htable_id(6),
     systable_charset(7),
-    systable_end_of_columns(8),
+    systable_engine(8),
+    systable_end_of_columns(9),
     /* syscolumn */
     syscolumn_id(1),
     syscolumn_column_id(2),
@@ -67,7 +68,8 @@ public enum ColumnId {
     sysrule_parent_column_names(14),
     sysrule_on_delete(15),
     sysrule_on_update(16),
-    sysrule_end_of_columns(17),
+    sysrule_index_prefix(17),
+    sysrule_end_of_columns(18),
     /* sysuser */
     sysuser_id(1),
     sysuser_name(2),
@@ -77,16 +79,16 @@ public enum ColumnId {
     sysuser_end_of_columns(6),
     ;
     
-	private final int id;
-	
-	private ColumnId(int id) {
-		this.id = id;
-	}
-	
-	public int getId() {
-		return this.id;
-	}
-	
+    private final int id;
+    
+    private ColumnId(int id) {
+        this.id = id;
+    }
+    
+    public int getId() {
+        return this.id;
+    }
+    
     public static ColumnId valueOf(String table, int id) {
         for (ColumnId i:ColumnId.values()) {
             if (i.toString().startsWith(table) && (i.id == id)) {

@@ -18,7 +18,9 @@ import java.nio.charset.Charset;
 import java.sql.Timestamp;
 import java.util.Calendar;
 
+import com.antsdb.saltedfish.cpp.AllocPoint;
 import com.antsdb.saltedfish.cpp.FishUtf8;
+import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -32,7 +34,7 @@ public final class PacketWriter {
     long addr;
 
     public PacketWriter() {
-        this.buf = ByteBuffer.allocateDirect(4096);
+        this.buf = MemoryManager.allocImmortal(AllocPoint.PACKET_WRITER, 4096);
         this.addr = UberUtil.getAddress(this.buf);
     }
 
@@ -89,10 +91,7 @@ public final class PacketWriter {
             return;
         }
         int newsize = (this.buf.position() + nbytes) * 3 / 2;
-        ByteBuffer newone = ByteBuffer.allocateDirect(newsize);
-        this.buf.flip();
-        newone.put(this.buf);
-        this.buf = newone;
+        this.buf = MemoryManager.growImmortal(AllocPoint.PACKET_WRITER, this.buf, newsize);
     }
 
     public void writeBytes(long pValue, int len) {
@@ -248,4 +247,8 @@ public final class PacketWriter {
         out.write(this.buf);
     }
 
+    public void close() {
+        MemoryManager.freeImmortal(AllocPoint.PACKET_WRITER, this.buf);
+        this.buf = null;
+    }
 }

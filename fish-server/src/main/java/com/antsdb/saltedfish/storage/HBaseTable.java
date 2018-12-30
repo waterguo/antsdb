@@ -27,11 +27,14 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.AllocPoint;
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.cpp.MemoryManager;
+import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.InterruptException;
 import com.antsdb.saltedfish.nosql.Row;
@@ -43,16 +46,17 @@ import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
+import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-class HBaseTable implements StorageTable {
+public class HBaseTable implements StorageTable {
     private static Logger _log = UberUtil.getThisLogger();
     private static ThreadLocal<BluntHeap> _heap = ThreadLocal.withInitial(()->{
-        ByteBuffer buf = ByteBuffer.allocateDirect(64*1024);
+        ByteBuffer buf = MemoryManager.allocImmortal(AllocPoint.HBASE_READ_BUFFER, 64*1024);
         return new BluntHeap(buf);
     });
 
@@ -60,11 +64,13 @@ class HBaseTable implements StorageTable {
     private TableName tn;
     private int tableId;
     SysMetaRow meta;
+    private boolean isBlobTable;
 
     static class MyScanResult extends ScanResult {
 
         private ResultScanner rs;
         private long pRow;
+        @SuppressWarnings("unused")
         private int rowScanned;
         private Heap heap;
         private boolean eof = false;
@@ -175,6 +181,7 @@ class HBaseTable implements StorageTable {
         this.meta = meta;
         this.tableId = meta.getTableId();
         this.hbase = hbase;
+        this.isBlobTable = meta.getTableName().endsWith("_blob_");
         String ns = meta.getNamespace();
         ns = (ns.equals(Orca.SYSNS)) ? hbase.getSystemNamespace() : ns;
         this.tn = TableName.valueOf(ns, meta.getTableName());
@@ -189,16 +196,23 @@ class HBaseTable implements StorageTable {
             throw new InterruptException();
         }
         try {
-            TableMeta meta = this.hbase.getTableMeta(this.tableId);
             Table htable = getConnection().getTable(this.tn);
             Get get = new Get(Helper.antsKeyToHBase(pKey));
             Result r = htable.get(get);
             if (r.isEmpty()) {
+                // 4:config 51:syssequence
+                if (this.tableId < 0x100 && this.tableId != 4 && this.tableId != 0x51) {
+                    _log.warn("fml missing reads tableId={} key={}", this.tableId, BytesUtil.toHex(get.getRow()));
+                }
                 return 0;
             }
             int size = Helper.getSize(r);
-            long pRow = Helper.toRow(getHeap(size), r, meta, this.tableId);
+            long pRow = Helper.toRow(getHeap(size * 2 + 0x100), r, getTableMeta(), this.tableId);
             return pRow;
+        }
+        catch (OutOfHeapMemory x) {
+            _log.error("error table={} key={}", this.tableId, KeyBytes.toString(pKey));
+            throw x;
         }
         catch (IOException x) {
             throw new OrcaHBaseException(x);
@@ -221,7 +235,7 @@ class HBaseTable implements StorageTable {
                 return 0;
             }
             int size = Helper.getSize(r);
-            long pLine = Helper.toIndexLine(getHeap(size), r);
+            long pLine = Helper.toIndexLine(getHeap(size * 2 + 0x100), r);
             if (pLine == 0) {
                 return 0;
             }
@@ -268,11 +282,10 @@ class HBaseTable implements StorageTable {
             scan.setReversed(!isAscending);
             Table htable = getConnection().getTable(this.tn);
             ResultScanner rs = htable.getScanner(scan);
-            TableMeta meta = this.hbase.getTableMeta(this.tableId);
             if (!isAscending && !incStart && (start != null)) {
                 rs = new HBaseReverseScanBugStomper(rs, start);
             }
-            ScanResult result = new MyScanResult(meta, rs, this.tableId, this.meta.getType());
+            ScanResult result = new MyScanResult(getTableMeta(), rs, this.tableId, this.meta.getType());
             return result;
         }
         catch (IOException x) {
@@ -298,7 +311,9 @@ class HBaseTable implements StorageTable {
     private Heap getHeap(int size) {
         BluntHeap result = _heap.get();
         if (result.capacity() < size) {
-            result = new BluntHeap(ByteBuffer.allocateDirect(size));
+            ByteBuffer buf = (result != null) ? result.getBuffer() : null; 
+            buf = MemoryManager.growImmortal(AllocPoint.HBASE_READ_BUFFER, buf, size);
+            result = new BluntHeap(buf);
             _heap.set(result);
         }
         result.reset(0);
@@ -333,5 +348,18 @@ class HBaseTable implements StorageTable {
     @Override
     public boolean traceIo(long pKey, List<FileOffset> lines) {
         return false;
+    }
+    
+    private TableMeta getTableMeta() {
+        TableMeta meta = this.hbase.getTableMeta(this.isBlobTable ? this.tableId-1 : this.tableId);
+        return meta;
+    }
+    
+    public static void freeMemory() {
+        BluntHeap heap = _heap.get();
+        if (heap != null) {
+            MemoryManager.freeImmortal(AllocPoint.HBASE_READ_BUFFER, heap.getBuffer());
+            _heap.remove();
+        }
     }
 }

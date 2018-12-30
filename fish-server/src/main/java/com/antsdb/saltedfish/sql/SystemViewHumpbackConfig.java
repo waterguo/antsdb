@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.nosql.SysConfigRow;
+import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 /**
  * 
@@ -28,16 +29,10 @@ import com.antsdb.saltedfish.nosql.SysConfigRow;
  */
 public class SystemViewHumpbackConfig extends PropertyBasedView {
 
-    private Orca orca;
-
-    public SystemViewHumpbackConfig(Orca orca) {
-        this.orca = orca;
-    }
-    
     @Override
-    public Map<String, Object> getProperties() {
+    public Map<String, Object> getProperties(VdmContext ctx) {
         Map<String, Object> result = new HashMap<>();
-        GTable sysconfig = this.orca.getHumpback().getTable(Humpback.SYSCONFIG_TABLE_ID);
+        GTable sysconfig = ctx.getOrca().getHumpback().getTable(Humpback.SYSCONFIG_TABLE_ID);
         for (RowIterator i=sysconfig.scan(0, Long.MAX_VALUE, true);i.next();) {
             SysConfigRow row = new SysConfigRow(SlowRow.from(i.getRow()));
             String key = row.getKey();
