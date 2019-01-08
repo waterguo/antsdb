@@ -41,7 +41,7 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.antlr</groupId>
+                <groupId>com.tunnelvisionlabs</groupId>
                 <artifactId>antlr4-maven-plugin</artifactId>
                 <version>4.5</version>
                 <executions>
@@ -155,7 +155,7 @@
                             <pluginExecutions>
                                 <pluginExecution>
                                     <pluginExecutionFilter>
-                                        <groupId>org.antlr</groupId>
+                                        <groupId>com.tunnelvisionlabs</groupId>
                                         <artifactId>
                                             antlr4-maven-plugin
                                         </artifactId>
@@ -200,7 +200,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.antlr</groupId>
+            <groupId>com.tunnelvisionlabs</groupId>
             <artifactId>antlr4-runtime</artifactId>
             <version>4.5</version>
         </dependency>
