@@ -60,7 +60,7 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
     throws OrcaException {
         Flow flow = new Flow();
         ObjectName tableName = TableName.parse(ctx, rule.table_name_());
-        List<Alter_table_optionsContext> options = rule.alter_table_options();
+        List<? extends Alter_table_optionsContext> options = rule.alter_table_options();
         options.forEach(
             it -> 
             {
@@ -255,7 +255,7 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
         return result;
     }
 
-    static String getOnAction(boolean isDelete, List<Cascade_optionContext> options) {
+    static String getOnAction(boolean isDelete, List<? extends Cascade_optionContext> options) {
         if (options == null) {
             return null;
         }

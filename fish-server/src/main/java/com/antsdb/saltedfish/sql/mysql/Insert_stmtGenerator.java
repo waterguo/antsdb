@@ -103,7 +103,7 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
         GTable gtable = ctx.getGtable(table.getObjectName());
         for (Insert_stmt_values_rowContext i: rule.insert_stmt_values_row()) {
             Operator[] values = new Operator[table.getMaxColumnId() + 1];
-            List<ExprContext> exprs = i.expr();
+            List<? extends ExprContext> exprs = i.expr();
             if (exprs.size() != columns.size()) {
                 throw new OrcaException("column count doesn't match value count");
             }

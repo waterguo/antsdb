@@ -24,12 +24,12 @@ import com.antsdb.saltedfish.util.CodingError;
 
 class TableName {
 
-    public static ObjectName parse(GeneratorContext ctx, List<IdentifierContext> rules) {
+    public static ObjectName parse(GeneratorContext ctx, List<? extends IdentifierContext> rules) {
         if ((rules == null) || (rules.size() == 0)) {
             return null;
         }
         ObjectName tableName = new ObjectName();
-        List<IdentifierContext> names = rules;
+        List<? extends IdentifierContext> names = rules;
         if (rules.size() == 1) {
             tableName.catalog = ctx.getSession().getCurrentCatalog();
             tableName.schema = ctx.getSession().getCurrentSchema();
@@ -56,7 +56,7 @@ class TableName {
             return null;
         }
         ObjectName tableName = new ObjectName();
-        List<IdentifierContext> names = rule.identifier();
+        List<? extends IdentifierContext> names = rule.identifier();
         if (names.size() == 1) {
             tableName.catalog = ctx.getSession().getCurrentCatalog();
             tableName.schema = ctx.getSession().getCurrentSchema();
