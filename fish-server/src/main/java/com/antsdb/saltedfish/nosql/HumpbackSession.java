@@ -26,13 +26,18 @@ import com.antsdb.saltedfish.util.UberTime;
 public final class HumpbackSession implements Closeable{
     static AtomicInteger _nextId = new AtomicInteger(1);
     
+    String endpoint;
     long ts;
     int id = 0;
     
-    public HumpbackSession() {
+    public HumpbackSession(String endpoint) {
+        this.endpoint = endpoint;
         // make sure id > 0
-        for (;this.id <= 0;) {
+        for (;;) {
             this.id = _nextId.getAndIncrement();
+            if (this.id > 0) {
+                break;
+            }
             if (this.id < 0) {
                 _nextId.compareAndSet(this.id, 1);
             }
@@ -56,9 +61,17 @@ public final class HumpbackSession implements Closeable{
     public int getId() {
         return this.id;
     }
+
+    public String getEndpoint() {
+        return this.endpoint;
+    }
     
     @Override
     public String toString() {
         return "hsession: " + this.id;
+    }
+
+    public void negateId() {
+        this.id = -this.id;
     }
 }

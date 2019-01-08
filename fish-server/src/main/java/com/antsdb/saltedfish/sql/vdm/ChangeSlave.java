@@ -15,12 +15,11 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.util.Map;
+import java.util.Properties;
 
 import org.apache.commons.lang.StringUtils;
 
-import com.antsdb.saltedfish.slave.DbUtils;
+import com.antsdb.saltedfish.slave.JdbcReplicator;
 import com.antsdb.saltedfish.slave.SlaveReplicator;
 import com.antsdb.saltedfish.sql.OrcaException;
 
@@ -30,19 +29,19 @@ import com.antsdb.saltedfish.sql.OrcaException;
  */
 public class ChangeSlave extends Statement {
 
-    private Map<String, String> props;
+    private Properties props;
 
-    public ChangeSlave(Map<String, String> props) {
+    public ChangeSlave(Properties props) {
         this.props = props;
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        String host = props.get("host");
-        String port = props.get("port");
-        String user = props.get("user");
-        String password = props.get("password");
-        String pos = props.get("pos");
+        String host = props.getProperty("host");
+        String port = props.getProperty("port", "3306");
+        String user = props.getProperty("user");
+        String password = props.getProperty("password");
+        String pos = props.getProperty("pos");
         
         // check slave replicator
         
@@ -68,7 +67,7 @@ public class ChangeSlave extends Statement {
         try {
             Class.forName("com.mysql.jdbc.Driver");
             Connection conn = DriverManager.getConnection(url, user, password);
-            setup(conn, pos);
+            JdbcReplicator.setup(conn, ctx.getHumpback().getServerId(), Long.parseLong(pos));
             conn.close();
         }
         catch (Exception x) {
@@ -84,13 +83,4 @@ public class ChangeSlave extends Statement {
         
         return null;
     }
-
-    private void setup(Connection conn, String pos) throws SQLException {
-        DbUtils.execute(conn, "CREATE DATABASE IF NOT EXISTS antsdb_");
-        DbUtils.execute(conn, "CREATE TABLE IF NOT EXISTS antsdb_.antsdb_slave (" + 
-                "name varchar(100) NOT NULL PRIMARY KEY," +
-                "value varchar(300) DEFAULT NULL) ENGINE=InnoDB;");
-        DbUtils.executeUpdate(conn, "REPLACE INTO antsdb_.antsdb_slave (name,value) VALUES (?,?)", "sp", pos);
-    }
-
 }

@@ -19,6 +19,7 @@ import java.lang.management.RuntimeMXBean;
 import java.util.List;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
+import com.sun.management.OperatingSystemMXBean;
 import com.sun.management.VMOption;
 
 /**
@@ -67,6 +68,23 @@ public final class MemoryUtil {
     public static long getMaxDirectMemory() {
         long result = sun.misc.VM.maxDirectMemory();
         return result;
+    }
+    
+    public static OperatingSystemMXBean getOperatingSystemMXBean() {
+        OperatingSystemMXBean bean = (OperatingSystemMXBean)ManagementFactory.getOperatingSystemMXBean();
+        return bean;
+    }
+    
+    public static long getTotalPhysicalMemorySize() {
+        return getOperatingSystemMXBean().getTotalPhysicalMemorySize();
+    }
+    
+    public static long getTotalSwapSpaceSize() {
+        return getOperatingSystemMXBean().getTotalSwapSpaceSize();
+    }
+    
+    public static long getCommittedVirtualMemorySize() {
+        return getOperatingSystemMXBean().getCommittedVirtualMemorySize();
     }
     
     public static void main(String[] args) {

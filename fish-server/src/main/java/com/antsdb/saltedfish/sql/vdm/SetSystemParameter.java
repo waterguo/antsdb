@@ -18,6 +18,8 @@ import java.util.List;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.SystemParameters;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -70,6 +72,25 @@ public class SetSystemParameter extends Statement {
         else {
             value = this.constant;
         }
+        
+        // replication mode
+        
+        if (name.equalsIgnoreCase("antsdb_slave_replication_session")) {
+            if (this.scope != Scope.SESSION) {
+                throw new OrcaException("parameter is session only");
+            }
+            if (!"true".equalsIgnoreCase(value.toString())) {
+                throw new OrcaException("invalid value");
+            }
+            if (ctx.getHSession().getId() > 0) {
+                ctx.getHSession().negateId();
+            }
+            SystemParameters config = ctx.getSession().getConfig();
+            config.set(this.name, "true");
+        }
+         
+        // other settings
+        
         if (this.scope == Scope.GLOBAL) {
             if (this.permanent) {
                 ctx.getOrca().getConfig().setPermanent(ctx.getHSession(), 

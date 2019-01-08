@@ -1,6 +1,7 @@
 .idea
 /target/
 /log/
+/logs
 saltedfish.iml
 sonar-project.properties
 sonar.dump
@@ -16,3 +17,4 @@ db
 /mysql-slave/
 /mysql-cluster-node1
 /mysql-cluster-node2
+/.apt_generated/

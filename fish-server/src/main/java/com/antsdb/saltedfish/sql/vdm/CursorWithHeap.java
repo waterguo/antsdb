@@ -33,13 +33,6 @@ public abstract class CursorWithHeap extends Cursor {
         this.heapMark = this.heap.position();
     }
 
-    public CursorWithHeap(CursorMaker maker) {
-        super(maker);
-        this.heap = new FlexibleHeap();
-        this.pRecord = Record.alloc(heap, meta.getColumnCount());
-        this.heapMark = this.heap.position();
-    }
-
     @Override
     public void close() {
         if (this.heap != null) {

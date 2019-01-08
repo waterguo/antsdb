@@ -46,9 +46,7 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.ConfigService;
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Replicable;
-import com.antsdb.saltedfish.nosql.ReplicationHandler;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.nosql.StorageEngine;
@@ -64,7 +62,7 @@ import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberTimer;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public class HBaseStorageService implements StorageEngine, Replicable {
+public class HBaseStorageService implements StorageEngine {
     static Logger _log = UberUtil.getThisLogger();
     final static String TABLE_SYNC_PARAM = "SYNCPARAM";
     
@@ -81,22 +79,24 @@ public class HBaseStorageService implements StorageEngine, Replicable {
 
     HBaseReplicationHandler replicationHandler;
     ConcurrentMap<Integer, HBaseTable> tableById = new ConcurrentHashMap<>();
-    private boolean isMutable;
+    boolean isMutable;
     private String sysns;
     private TableName tnCheckpoint;
+    private volatile boolean isClosed;
 
     public HBaseStorageService(Humpback humpback) throws Exception {
         this.humpback = humpback;
     }
 
     public void shutdown() throws IOException {
-        if (this.hbaseConnection == null) {
+        if (this.isClosed) {
             return;
         }
+        this.isClosed = true;
         
         // save current SP to hBase
         this.cp.setActive(false);
-        this.cp.updateHBase();
+        this.cp.updateHBase(getConnection());
         
         // HBase connection
         this.hbaseConnection.close();
@@ -115,11 +115,18 @@ public class HBaseStorageService implements StorageEngine, Replicable {
     }
     
     public void updateLogPointer(long currentSP) throws IOException {
-        this.cp.updateLogPointer(currentSP);
+        this.cp.updateLogPointer(getConnection(), currentSP);
     }
 
     public int getConfigBufferSize() {
         return this.bufferSize;
+    }
+
+    Connection getConnection() throws IOException {
+        if ((this.hbaseConnection == null) && !this.isClosed) {
+            this.hbaseConnection = createConnection();
+        }
+        return this.hbaseConnection;
     }
     
     @Override
@@ -137,10 +144,9 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         
         // Configuration object, first try to find hbase-site.xml, then the embedded hbase/zookeeper settings
         
-        this.hbaseConfig = getHBaseConfig(antsdbConfig);
-        this.hbaseConnection = getConnection(this.hbaseConfig); 
-        
         try {
+            this.hbaseConfig = getHBaseConfig(antsdbConfig);
+            getConnection();
             _log.info("HBase is connected ");
 
             // Initialize HBase database for antsdb
@@ -152,7 +158,19 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         }
     }
 
-    static Connection getConnection(Configuration config) throws IOException {
+    Connection createConnection() throws IOException {
+        return createConnection(this.hbaseConfig);
+    }
+    
+    static Connection createConnection(Configuration config) throws IOException {
+        // we want the hbase client to throw error right away instead of waiting infinitely when the hbase
+        // cluster is down
+        
+        config.set("hbase.client.retries.number", "2");
+        config.set("hbase.client.operation.timeout", "10000");
+        
+        // continue
+        
         Connection result;
         if (User.isHBaseSecurityEnabled(config)) {
             
@@ -203,7 +221,8 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         
         // load checkpoint
         
-        this.cp = new CheckPoint(this.hbaseConnection, TableName.valueOf(this.sysns, TABLE_SYNC_PARAM), this.isMutable);
+        this.cp = new CheckPoint(TableName.valueOf(this.sysns, TABLE_SYNC_PARAM), this.isMutable);
+        this.cp.readFromHBase(getConnection());
         
         // load system tables
         
@@ -236,8 +255,12 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         
         if (this.isMutable) {
             this.cp.setActive(true);
-            this.cp.updateHBase();
+            this.cp.updateHBase(getConnection());
         }
+        
+        // misc
+        
+        this.replicationHandler = new HBaseReplicationHandler(this.humpback, this);
     }
     
     private void setup() throws Exception {
@@ -251,9 +274,9 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         if (!Helper.existsTable(this.hbaseConnection, this.tnCheckpoint)) {
             _log.info("checkpoint table {} is not found in HBase, creating ...", this.tnCheckpoint);
             createTable(this.sysns, TABLE_SYNC_PARAM);
-            CheckPoint cp = new CheckPoint(this.hbaseConnection, this.tnCheckpoint, isMutable);
+            CheckPoint cp = new CheckPoint(this.tnCheckpoint, isMutable);
             cp.setServerId(this.humpback.getServerId());
-            cp.updateHBase();
+            cp.updateHBase(getConnection());
         }
     }
 
@@ -619,24 +642,6 @@ public class HBaseStorageService implements StorageEngine, Replicable {
     }
 
     @Override
-    public boolean supportReplication() {
-        return true;
-    }
-
-    @Override
-    public long getReplicateLogPointer() {
-        return this.cp.getCurrentSp();
-    }
-
-    @Override
-    public ReplicationHandler getReplayHandler() {
-        if (this.replicationHandler == null) {
-            this.replicationHandler = new HBaseReplicationHandler(humpback, this);
-        }
-        return this.replicationHandler;
-    }
-
-    @Override
     public void syncTable(SysMetaRow meta) {
         if (this.tableById.get(meta.getTableId()) != null) {
             return;
@@ -644,93 +649,6 @@ public class HBaseStorageService implements StorageEngine, Replicable {
         HBaseTable table = new HBaseTable(this, meta);
         this.tableById.put(meta.getTableId(), table);
     }
-
-    @Override
-    public synchronized void deletes(int tableId, List<Long> keys) {
-        if (!this.isMutable) {
-            throw new OrcaHBaseException("hbase storage is in read-only mode");
-        }
-        try {
-            this.tableById.get(tableId);
-            TableName tableName = getTableName(tableId);
-            
-            // skip data from already dropped table     
-            if (tableName == null) {
-                return;
-            }
-            Table htable = this.hbaseConnection.getTable(tableName);
-            List<Delete> deletes = new ArrayList<>();
-            for (Long pkey:keys) {
-                byte[] key = Helper.antsKeyToHBase(pkey);
-                Delete delete = new Delete(key);
-                deletes.add(delete);
-           }
-           htable.delete(deletes);
-        }
-        catch (IOException x) {
-            throw new OrcaHBaseException(x);
-        }
-   }
-
-    @Override
-    public synchronized void putRows(int tableId, List<Long> rows) {
-        if (!this.isMutable) {
-            throw new OrcaHBaseException("hbase storage is in read-only mode");
-        }
-        try {
-            SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
-            if (tableInfo == null) {
-                throw new OrcaHBaseException("metadata of table {} is not found", tableId);
-            }
-            if (tableInfo.isDeleted()) {
-                return;
-            }
-            Mapping mapping = getMapping(tableId);
-            List<Put> puts = new ArrayList<>();
-            for (Long pRow:rows) {
-                Row row = Row.fromMemoryPointer(pRow, 0);
-                Put put = Helper.toPut(mapping, row);
-                puts.add(put);
-            }
-            if (puts.size() > 0) {
-                Table htable = this.hbaseConnection.getTable(mapping.getTableName());
-                htable.put(puts);
-            }
-        }
-        catch (IOException x) {
-            throw new OrcaHBaseException(x);
-        }
-    }
-
-    @Override
-    public synchronized void putIndexLines(int tableId, List<Long> indexLines) {
-        if (!this.isMutable) {
-            throw new OrcaHBaseException("hbase storage is in read-only mode");
-        }
-        try {
-            SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
-            if (tableInfo == null) {
-                throw new OrcaHBaseException("metadata of table {} is not found", tableId);
-            }
-            if (tableInfo.isDeleted()) {
-                return;
-            }
-            TableName tn = getTableName(tableId);
-            List<Put> puts = new ArrayList<>();
-            for (Long pLine:indexLines) {
-                IndexLine line = IndexLine.from(pLine);
-                Put put = Helper.toPut(line);
-                puts.add(put);
-            }
-            if (puts.size() > 0) {
-                Table htable = this.hbaseConnection.getTable(tn);
-                htable.put(puts);
-            }
-        }
-        catch (IOException x) {
-            throw new OrcaHBaseException(x);
-        }
-   }
 
     @Override
     public boolean exist(int tableId) {
@@ -743,7 +661,7 @@ public class HBaseStorageService implements StorageEngine, Replicable {
     }
 
     @Override
-    public long getCommittedLogPointer() {
-        return this.cp.getCurrentSp();
+    public Replicable getReplicable() {
+        return this.replicationHandler;
     }
 }

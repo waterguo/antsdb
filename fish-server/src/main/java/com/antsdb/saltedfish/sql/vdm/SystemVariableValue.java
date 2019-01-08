@@ -43,13 +43,13 @@ public class SystemVariableValue extends Operator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        	Object value;
-        	if (this.isGlobal) {
-        	    value = ctx.getOrca().getConfig().get(name);
-        	}
-        	else {
+        Object value;
+        if (this.isGlobal) {
+            value = ctx.getOrca().getConfig().get(name);
+        }
+        else {
             value = ctx.getSession().getConfig().get(name);
-        	}
+        }
         return FishObject.allocSet(heap, value);
     }
 

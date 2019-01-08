@@ -32,6 +32,7 @@ import com.antsdb.saltedfish.sql.vdm.CreateTable;
 import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.util.Pair;
 
 /**
  * 
@@ -86,9 +87,9 @@ public class Create_table_like_stmtGenerator extends Generator<Create_table_like
 
     private void createIndexes(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {
         for (IndexMeta index:table.getIndexes()) {
-            List<String> columns = new ArrayList<>();
+            List<Pair<String, Integer>> columns = new ArrayList<>();
             for (ColumnMeta column:index.getColumns(table)) {
-                columns.add(column.getColumnName());
+                columns.add(new Pair<>(column.getColumnName(), null));
             }
             CreateIndex ci = new CreateIndex(
                     index.getName(), 

@@ -72,7 +72,7 @@ public class MysqlClientHandler extends ChannelInboundHandlerAdapter
         masterPassword = getConfig().getSlavePassword();
         masterBinlog = getCheckPoint().getSlaveLogFile();
         masterLogPos = getCheckPoint().getSlaveLogPosition();
-        packetEncoder = new PacketEncoder(null);
+        packetEncoder = new PacketEncoder((MysqlSession)null);
     }
 
     @Override

@@ -84,7 +84,7 @@ public class FishObject {
             result = new BlobReference(addr);
         }
         else {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(String.valueOf(type));
         }
         return result;
     }

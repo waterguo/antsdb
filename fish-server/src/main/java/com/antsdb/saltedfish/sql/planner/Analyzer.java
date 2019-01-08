@@ -73,7 +73,7 @@ class Analyzer {
         return analyze_(Mode.AND, set, planner, expr, scope);
     }
     
-    boolean analyze_(Mode mode, int set, Planner planner, Operator expr, Node scope) {
+    private boolean analyze_(Mode mode, int set, Planner planner, Operator expr, Node scope) {
         if (expr instanceof OpAnd) {
             return analyze_and(mode, set, planner, (OpAnd) expr, scope);
         }
@@ -143,7 +143,7 @@ class Analyzer {
      * x * (y + z) = x * y + x * z = x * y, x * z
      * x + (y + z) = x, y, z
      */
-    boolean analyze_or(Mode mode, int x, Planner planner, OpOr op, Node scope) {
+    private boolean analyze_or(Mode mode, int x, Planner planner, OpOr op, Node scope) {
         if (!canPushDown(planner, op, scope)) {
             return false;
         }
@@ -153,7 +153,7 @@ class Analyzer {
         }
         op.left = new BooleanValue(true);
         this.version++;
-        if (!analyze_(Mode.OR, x, planner, op.right, scope)) {
+        if (!analyze_(Mode.COPY_OR, x, planner, op.right, scope)) {
             throw new IllegalArgumentException();
         }
         op.right = new BooleanValue(true);
@@ -385,6 +385,12 @@ class Analyzer {
     }
 
     private boolean canPushDown(Planner planner, OpOr op, Node scope) {
+        if (hasJoin(op)) {
+            // can push down the expression if OR implies a join. for example
+            // SELECT * FROM x, y WHERE x.id=1 OR y.id=2
+            // the result should be the super set of x(x.id=1) -> y  +  x->y(y.id=2)
+            return false;
+        }
         return canPushDown(planner, op.left, scope) && canPushDown(planner, op.right, scope);
     }
     
@@ -456,6 +462,31 @@ class Analyzer {
 
     private boolean canPushDown(Planner planner, OpMatch op, Node scope) {
         return true;
+    }
+
+    private boolean hasJoin(OpOr op) {
+        AtomicBoolean foundJoin = new AtomicBoolean(false);
+        Consumer<Operator> call = new Consumer<Operator>() {
+            Node found;
+            @Override
+            public void accept(Operator it) {
+                if (foundJoin.get()) {
+                    return;
+                }
+                if (it instanceof FieldValue) {
+                    FieldValue fv = (FieldValue)it;
+                    Node owner = fv.getField().owner;
+                    if (found == null) {
+                        found = owner;
+                    }
+                    else if (found != owner) {
+                        foundJoin.set(true);
+                    }
+                }
+            }
+        };
+        op.visit(call);
+        return foundJoin.get();
     }
 
 }

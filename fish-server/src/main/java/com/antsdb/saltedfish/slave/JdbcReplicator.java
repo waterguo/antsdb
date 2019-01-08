@@ -319,6 +319,9 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     
     @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+        // we want to flush here so that upstream handler can release resources used to track transaction.
+        // such as TransactionalReplayer and BoblReorderReplayer
+        flush();
         this.lp = entry.getSpacePointer();
     }
     

@@ -72,37 +72,37 @@ public final class KeyMaker {
         long getValue(int index, KeyField field);
     }
     
-	public static abstract class KeyField {
-		int columnId;
-		
-		KeyField(int columnId) {
-			this.columnId = columnId;
-		}
-		
-		KeyField(ColumnMeta column) {
-			this.columnId = column.getColumnId();
-		}
-		
-		int getColumndId() {
-			return this.columnId;
-		}
-		
-		abstract int writeValue(Heap heap, long pTarget, long pEnd, long pValue);
-		abstract int writeMaxValue(Heap heap, long pTarget, long pEnd);
-		abstract int writeMinValue(Heap heap, long pTarget, long pEnd);
-		abstract int getMaxSize();
-	}
-	
-	static class VariableLengthIntegerField extends KeyField {
-		int length;
-		
-		VariableLengthIntegerField(int columnId) {
-			super(columnId);
-		}
-		
-		VariableLengthIntegerField(ColumnMeta column) {
-			super(column);
-		}
+    public static abstract class KeyField {
+        int columnId;
+        
+        KeyField(int columnId) {
+            this.columnId = columnId;
+        }
+        
+        KeyField(ColumnMeta column) {
+            this.columnId = column.getColumnId();
+        }
+        
+        int getColumndId() {
+            return this.columnId;
+        }
+        
+        abstract int writeValue(Heap heap, long pTarget, long pEnd, long pValue);
+        abstract int writeMaxValue(Heap heap, long pTarget, long pEnd);
+        abstract int writeMinValue(Heap heap, long pTarget, long pEnd);
+        abstract int getMaxSize();
+    }
+    
+    static class VariableLengthIntegerField extends KeyField {
+        int length;
+        
+        VariableLengthIntegerField(int columnId) {
+            super(columnId);
+        }
+        
+        VariableLengthIntegerField(ColumnMeta column) {
+            super(column);
+        }
 
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
@@ -234,17 +234,17 @@ public final class KeyMaker {
         @Override
         int writeMinValue(Heap heap, long pTarget, long pEnd) {
             ensureCapacity(pTarget, pEnd, 1);
-			UnsafeBigEndian.putByte(pTarget, (byte)0);
-			return 1;
-		}
+            UnsafeBigEndian.putByte(pTarget, (byte)0);
+            return 1;
+        }
 
         @Override
         int getMaxSize() {
             return 9;
         }
-	}
-	
-	static class RowidField extends VariableLengthIntegerField {
+    }
+    
+    static class RowidField extends VariableLengthIntegerField {
 
         RowidField() {
             super(0);
@@ -296,17 +296,17 @@ public final class KeyMaker {
         @Override
         int writeMinValue(Heap heap, long pTarget, long pEnd) {
             ensureCapacity(pTarget, pEnd, 8);
-			UnsafeBigEndian.putLong(pTarget, 1);
-			return 0;
-		}
+            UnsafeBigEndian.putLong(pTarget, 1);
+            return 0;
+        }
 
         @Override
         int getMaxSize() {
             return 8;
         }
-	}
-	
-	static class TimestampField extends KeyField {
+    }
+    
+    static class TimestampField extends KeyField {
 
         TimestampField(ColumnMeta column) {
             super(column);
@@ -338,37 +338,37 @@ public final class KeyMaker {
         @Override
         int writeMinValue(Heap heap, long pTarget, long pEnd) {
             ensureCapacity(pTarget, pEnd, 8);
-			UnsafeBigEndian.putLong(pTarget, Long.MIN_VALUE);
-			return 0;
-		}
-		
+            UnsafeBigEndian.putLong(pTarget, Long.MIN_VALUE);
+            return 0;
+        }
+        
         @Override
         int getMaxSize() {
             return 8;
         }
-		
-	}
-	
-	static class FloatField extends KeyField {
-		FloatField(ColumnMeta column) {
-			super(column);
-		}
-		
-		@Override
-		int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
-			if (pValue == 0) {
-	            ensureCapacity(pTarget, pEnd, 8);
-				UnsafeBigEndian.putFloat(pTarget, Float.NaN);
-				return -8;
-			}
-			else {
-				pValue = FishObject.toFloat(heap, pValue);
-				double value = Float8.get(null, pValue);
-	            ensureCapacity(pTarget, pEnd, 8);
-				UnsafeBigEndian.putDouble(pTarget, value);
-				return 8;
-			}
-		}
+        
+    }
+    
+    static class FloatField extends KeyField {
+        FloatField(ColumnMeta column) {
+            super(column);
+        }
+        
+        @Override
+        int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
+            if (pValue == 0) {
+                ensureCapacity(pTarget, pEnd, 8);
+                UnsafeBigEndian.putFloat(pTarget, Float.NaN);
+                return -8;
+            }
+            else {
+                pValue = FishObject.toFloat(heap, pValue);
+                double value = Float8.get(null, pValue);
+                ensureCapacity(pTarget, pEnd, 8);
+                UnsafeBigEndian.putDouble(pTarget, value);
+                return 8;
+            }
+        }
 
         @Override
         int writeMaxValue(Heap heap, long pTarget, long pEnd) {
@@ -380,16 +380,16 @@ public final class KeyMaker {
         @Override
         int writeMinValue(Heap heap, long pTarget, long pEnd) {
             ensureCapacity(pTarget, pEnd, 8);
-			UnsafeBigEndian.putFloat(pTarget, Float.NEGATIVE_INFINITY);
-			return 0;
-		}
+            UnsafeBigEndian.putFloat(pTarget, Float.NEGATIVE_INFINITY);
+            return 0;
+        }
 
-		@Override
+        @Override
         int getMaxSize() {
             return 8;
         }
-	}
-	
+    }
+    
     static final class VariablLengthBinaryField extends KeyField {
 
         VariablLengthBinaryField(ColumnMeta column) {
@@ -522,49 +522,49 @@ public final class KeyMaker {
         @Override
         int writeMinValue(Heap heap, long pTarget, long pEnd) {
             ensureCapacity(pTarget, pEnd, 1);
-			UnsafeBigEndian.putByte(pTarget, (byte)0);
-			return 1;
-		}
-		
+            UnsafeBigEndian.putByte(pTarget, (byte)0);
+            return 1;
+        }
+        
         @Override
         int getMaxSize() {
             return 1024;
         }
-	}
-	
+    }
+    
     private KeyMaker(KeyField field) {
         this(new KeyField[] {field});
     }
     
     private KeyMaker(KeyField ... fields) {
-        	this.isUnique = false;
-        	for (KeyField field:fields) {
-        		this.keyFields.add(field);
-        	}
+            this.isUnique = false;
+            for (KeyField field:fields) {
+                this.keyFields.add(field);
+            }
         calculateMaxLength();
     }
     
     public KeyMaker(List<ColumnMeta> columns, boolean isUnique) {
-        	this.columns = columns;
-        	this.isUnique = isUnique;
-        	if (columns.size() == 0) {
-        		KeyField field = new RowidField();
-        		this.keyFields.add(field);
-        	}
-        	else {
-            	for (ColumnMeta i:columns) {
-            		KeyField field = createKeyField(i);
-            		this.keyFields.add(field);
-            	}
-            	
-            	// append rowid if the index is not unique
-        	
-        		if (!isUnique) {
-        			KeyField field = new RowidField();
-            		    this.keyFields.add(field);
-        		}
-        	}
-		calculateMaxLength();
+            this.columns = columns;
+            this.isUnique = isUnique;
+            if (columns.size() == 0) {
+                KeyField field = new RowidField();
+                this.keyFields.add(field);
+            }
+            else {
+                for (ColumnMeta i:columns) {
+                    KeyField field = createKeyField(i);
+                    this.keyFields.add(field);
+                }
+                
+                // append rowid if the index is not unique
+            
+                if (!isUnique) {
+                    KeyField field = new RowidField();
+                        this.keyFields.add(field);
+                }
+            }
+        calculateMaxLength();
     }
 
     private void calculateMaxLength() {
@@ -576,127 +576,127 @@ public final class KeyMaker {
         this.maxSize = size;
     }
     
-	private KeyField createKeyField(ColumnMeta i) {
-		DataType type = i.getDataType();
-		if (type.getJavaType() == Integer.class) {
-			return new VariableLengthIntegerField(i);
-		}
-		else if (type.getJavaType() == Long.class) {
-			return new VariableLengthIntegerField(i);
-		}
-		else if (type.getJavaType() == String.class) {
-			return new VariablLengthStringField(i);
-		}
-		else if (type.getJavaType() == BigDecimal.class) {
-			if ((type.getScale() != 0) || (type.getLength() > 19)) {
-				throw new NotImplementedException();
-			}
-			return new VariableLengthIntegerField(i);
-		}
-		else if (type.getJavaType() == Date.class) {
-			return new DateField(i);
-		}
-		else if (type.getJavaType() == Timestamp.class) {
-			return new TimestampField(i);
-		}
-		else if (type.getJavaType() == Float.class) {
-			return new FloatField(i);
-		}
-		else if (type.getJavaType() == Double.class) {
-			return new FloatField(i);
-		}
-		else if (type.getJavaType() == byte[].class) {
-			return new VariablLengthBinaryField(i);
-		}
-		else {
-			throw new NotImplementedException();
-		}
-	}
-	
-	public long make(Heap heap, int nFields, long pRowid, boolean fillMax, boolean fillMin, Callback callback) {
-		KeyBytes key = KeyBytes.alloc(heap, this.maxSize);
-		long pStart = key.getAddress() + 4;
-		long pEnd = pStart + this.maxSize;
-		long p = pStart;
-		boolean hasNull = false;
-		
-		// key fields
-		
-		int posRowid = 0;
-		int sizeRowid = 0;
-		for (int i=0; i<nFields; i++) {
-			KeyField ii = this.keyFields.get(i);
-			long pValue = callback.getValue(i, ii);
-			if (pValue == 1) {
-			    // value is null and caller doesnt want key
-			    return 0;
-			}
-			int nBytes = ii.writeValue(heap, p, pEnd, pValue);
-			if (nBytes == 0) {
-				// callback wants to exit
-				return 0;
-			}
-			if (!this.isUnique && (i == nFields-1) && (ii instanceof RowidField)) {
-				posRowid = (int)(p - pStart);
-				sizeRowid = nBytes;
-			}
-			if (nBytes < 0) {
-				// meaning it is null
-				hasNull = true;
-				nBytes = -nBytes;
-			}
-			p += nBytes;
-		}
-		
-		// fillers
-		
-		if (nFields < this.keyFields.size()) {
-			if (fillMax || fillMin) {
-				for (int i=nFields; i<this.keyFields.size(); i++) {
-					KeyField ii = this.keyFields.get(i);
-					int nBytes = 0;
-					if (fillMax) {
-						nBytes = ii.writeMaxValue(heap, p, pEnd);
-					}
-					else if (fillMin) {
-						nBytes = ii.writeMinValue(heap, p, pEnd);
-					}
-					p += nBytes;
-				}
-			}
-		}
-		else {
-			// append rowid if an unique index has null value on one of its fields
-			
-			if (this.isUnique && hasNull) {
-				// 0 means this is part of expression, it is generating the key value for a row. append rowid
-				if (pRowid != 0) {
-					long rowid = FishObject.toLong(heap, pRowid);
-					UnsafeBigEndian.putLong(p, rowid);
-					p += 8;
-				}
-				// for max search range, considering we have appended rowid, we need to pad an additional 0xff 
-				// at the end
-				if (fillMax) {
-					UnsafeBigEndian.putByte(p, (byte)0xff);
-					p += 1;
-				}
-			}
-		}
-		
-		// 8 bytes alignment
-		
-		int length = (int)(p - pStart);
-		int mod = length % 8;
-		if (mod != 0) {
-			int delta = 8 - mod;
-			Unsafe.setMemory(p, delta, (byte)0);
-			length += delta;
-		}
-		
-		// flip to little endian
-		
-		flipEndian(key.getAddress() + 4, length);
+    private KeyField createKeyField(ColumnMeta i) {
+        DataType type = i.getDataType();
+        if (type.getJavaType() == Integer.class) {
+            return new VariableLengthIntegerField(i);
+        }
+        else if (type.getJavaType() == Long.class) {
+            return new VariableLengthIntegerField(i);
+        }
+        else if (type.getJavaType() == String.class) {
+            return new VariablLengthStringField(i);
+        }
+        else if (type.getJavaType() == BigDecimal.class) {
+            if ((type.getScale() != 0) || (type.getLength() > 19)) {
+                throw new NotImplementedException();
+            }
+            return new VariableLengthIntegerField(i);
+        }
+        else if (type.getJavaType() == Date.class) {
+            return new DateField(i);
+        }
+        else if (type.getJavaType() == Timestamp.class) {
+            return new TimestampField(i);
+        }
+        else if (type.getJavaType() == Float.class) {
+            return new FloatField(i);
+        }
+        else if (type.getJavaType() == Double.class) {
+            return new FloatField(i);
+        }
+        else if (type.getJavaType() == byte[].class) {
+            return new VariablLengthBinaryField(i);
+        }
+        else {
+            throw new NotImplementedException();
+        }
+    }
+    
+    public long make(Heap heap, int nFields, long pRowid, boolean fillMax, boolean fillMin, Callback callback) {
+        KeyBytes key = KeyBytes.alloc(heap, this.maxSize);
+        long pStart = key.getAddress() + 4;
+        long pEnd = pStart + this.maxSize;
+        long p = pStart;
+        boolean hasNull = false;
+        
+        // key fields
+        
+        int posRowid = 0;
+        int sizeRowid = 0;
+        for (int i=0; i<nFields; i++) {
+            KeyField ii = this.keyFields.get(i);
+            long pValue = callback.getValue(i, ii);
+            if (pValue == 1) {
+                // value is null and caller doesnt want key
+                return 0;
+            }
+            int nBytes = ii.writeValue(heap, p, pEnd, pValue);
+            if (nBytes == 0) {
+                // callback wants to exit
+                return 0;
+            }
+            if (!this.isUnique && (i == nFields-1) && (ii instanceof RowidField)) {
+                posRowid = (int)(p - pStart);
+                sizeRowid = nBytes;
+            }
+            if (nBytes < 0) {
+                // meaning it is null
+                hasNull = true;
+                nBytes = -nBytes;
+            }
+            p += nBytes;
+        }
+        
+        // fillers
+        
+        if (nFields < this.keyFields.size()) {
+            if (fillMax || fillMin) {
+                for (int i=nFields; i<this.keyFields.size(); i++) {
+                    KeyField ii = this.keyFields.get(i);
+                    int nBytes = 0;
+                    if (fillMax) {
+                        nBytes = ii.writeMaxValue(heap, p, pEnd);
+                    }
+                    else if (fillMin) {
+                        nBytes = ii.writeMinValue(heap, p, pEnd);
+                    }
+                    p += nBytes;
+                }
+            }
+        }
+        else {
+            // append rowid if an unique index has null value on one of its fields
+            
+            if (this.isUnique && hasNull) {
+                // 0 means this is part of expression, it is generating the key value for a row. append rowid
+                if (pRowid != 0) {
+                    long rowid = FishObject.toLong(heap, pRowid);
+                    UnsafeBigEndian.putLong(p, rowid);
+                    p += 8;
+                }
+                // for max search range, considering we have appended rowid, we need to pad an additional 0xff 
+                // at the end
+                if (fillMax) {
+                    UnsafeBigEndian.putByte(p, (byte)0xff);
+                    p += 1;
+                }
+            }
+        }
+        
+        // 8 bytes alignment
+        
+        int length = (int)(p - pStart);
+        int mod = length % 8;
+        if (mod != 0) {
+            int delta = 8 - mod;
+            Unsafe.setMemory(p, delta, (byte)0);
+            length += delta;
+        }
+        
+        // flip to little endian
+        
+        flipEndian(key.getAddress() + 4, length);
 
         // tell the keybytes position of rowid suffix
         

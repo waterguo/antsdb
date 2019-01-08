@@ -24,35 +24,50 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.concurrent.Callable;
 
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
- * warms up the cache 
+ * warms up the page cache 
  *  
  * @author *-xguo0<@
  */
-public class Warmer implements Callable<Integer> {
+public class PageCacheWarmer implements Runnable {
     final static Logger _log = UberUtil.getThisLogger();
     
     private Minke minke;
     boolean first = true;
     ByteBuffer buf;
     private long target;
+    private long lastWarmTime;
+    private long lastElapsed;
+    private long lastBytesWarmed;
+    private long count = 0;
     
-    public Warmer(Minke minke, long size) {
+    public PageCacheWarmer(Minke minke, long size) {
         this.minke = minke;
         this.target = size;
     }
     
     @Override
-    public Integer call() throws Exception {
-        warm();
-        return null;
+    public void run() {
+        try {
+            // invoke warm() the first time or whenever the process load is less than 0.1
+            if (count == 0) {
+                warm();
+            }
+            else if (UberUtil.getProcessCpuLoad() < 0.1) {
+                warm();
+            }
+        }
+        catch (Exception x) {
+            _log.error("error", x);
+        }
+        this.count++;
     }
     
     private List<MinkeFile> getFiles() {
@@ -110,6 +125,7 @@ public class Warmer implements Callable<Integer> {
         // find the first x pages ordered by last access time
         
         _log.debug("starting warmer ...");
+        this.lastWarmTime = UberTime.getTime();
         int size = (int)(this.target / this.minke.getPageSize());
         PriorityQueue<MinkePage> candidates = new PriorityQueue<>(size + 1, new Comparator<MinkePage>() {
             @Override
@@ -147,6 +163,8 @@ public class Warmer implements Callable<Integer> {
             warm(mpage, nul);
             warmed += mpage.getUsage();
         }
+        this.lastElapsed = UberTime.getTime() - this.lastWarmTime;
+        this.lastBytesWarmed = warmed;
         _log.debug("{} bytes have been warmed", warmed);
     }
 
@@ -170,5 +188,25 @@ public class Warmer implements Callable<Integer> {
     
     private FileChannel openNull() throws IOException {
         return FileChannel.open(new File("/dev/null").toPath(), StandardOpenOption.WRITE);
+    }
+    
+    public long getLastWarmTime() {
+        return this.lastWarmTime;
+    }
+    
+    public long getTargetSize() {
+        return this.target;
+    }
+    
+    public long getLastElapsed() {
+        return this.lastElapsed;
+    }
+    
+    public long getBytesLastWarmed() {
+        return this.lastBytesWarmed;
+    }
+    
+    public long getCount() {
+        return this.count;
     }
 }

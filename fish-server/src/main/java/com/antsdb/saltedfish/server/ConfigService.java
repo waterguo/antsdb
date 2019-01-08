@@ -46,7 +46,7 @@ public class ConfigService {
     }
 
     public String getAuthPlugin() {
-    	    return props.getProperty("fish.auth_plugin");
+        return props.getProperty("fish.auth_plugin");
     }
     
     public boolean isKerberosEnable() {

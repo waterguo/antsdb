@@ -53,6 +53,10 @@ public class LRUEvictor {
         }
         EvictionBucket bucket = new EvictionBucket(bucketSize);
         for (MinkeTable mtable:this.cache.minke.tableById.values()) {
+            if (mtable.tableId < 0x100) {
+                // we don't want to evict system tables
+                continue;
+            }
             for (MinkePage page:mtable.getPages()) {
                 bucket.add(mtable, page);
             }

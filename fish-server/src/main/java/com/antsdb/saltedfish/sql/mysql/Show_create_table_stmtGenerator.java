@@ -13,8 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Show_create_table_stmtContext;
 import com.antsdb.saltedfish.sql.Generator;
@@ -82,7 +84,14 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
             buf.append("`");
             buf.append(column.getColumnName());
             buf.append("` ");
-            buf.append(column.getDataType().toString());
+            if (column.getDataType().getName().equalsIgnoreCase("enum")) {
+                buf.append("enum(");
+                buf.append(column.getEnumValues());
+                buf.append(")");
+            }
+            else {
+                buf.append(column.getDataType().toString());
+            }
             if (!column.isNullable()) {
                 buf.append(" NOT NULL");
             }
@@ -90,8 +99,15 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
                 buf.append(" DEFAULT ");
                 buf.append(column.getDefault());
             }
-            else if (column.isNullable()){
-                buf.append(" DEFAULT NULL");
+            else if (column.isNullable()) {
+                // fucking weird, TEXT and BLOB types doesn't need to append NULL
+                int sqlType = column.getDataType().getSqlType();
+                if ((sqlType != Types.CLOB) && (sqlType != Types.BLOB)) {
+                    buf.append(" NULL");
+                }
+            }
+            if (column.isAutoIncrement()) {
+                buf.append(" AUTO_INCREMENT");
             }
             buf.append(",\n");
         }
@@ -104,8 +120,10 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
         }
         buf.deleteCharAt(buf.length()-1);
         buf.deleteCharAt(buf.length()-1);
-        buf.append("\n) ENGINE=InnoDB ");
-        buf.append("DEFAULT CHARSET=");
+        buf.append("\n) ENGINE=");
+        String engine = table.getEngine();
+        buf.append(engine != null ? engine : "InnoDB");
+        buf.append(" DEFAULT CHARSET=");
         buf.append(table.getCharset() != null ? table.getCharset() : "utf8");
         return buf.toString();
     }
@@ -151,31 +169,59 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
         if (rule == null) {
             return;
         }
+        else if (rule instanceof IndexMeta) {
+            appendIndex(buf, table, (IndexMeta)rule);
+            return;
+        }
         if (rule instanceof PrimaryKeyMeta) {
             buf.append("  ");
             buf.append("PRIMARY KEY ");
-        }
-        else if (rule instanceof IndexMeta) {
-            if (isForeignKeyIndex(table, (IndexMeta)rule)) {
-                return;
-            }
-            buf.append("  ");
-            if (((IndexMeta) rule).isUnique()) {
-                buf.append("UNIQUE KEY ");
-            }
-            else {
-                buf.append("KEY ");
-            }
-            buf.append("`");
-            buf.append(rule.getName());
-            buf.append("`");
-            buf.append(" ");
         }
         buf.append("(");
         for (ColumnMeta column:rule.getColumns(table)) {
             buf.append("`");
             buf.append(column.getColumnName());
             buf.append("`");
+            buf.append(",");
+        }
+        buf.deleteCharAt(buf.length()-1);
+        buf.append(")");
+        buf.append(",\n");
+    }
+
+    private void appendIndex(StringBuilder buf, TableMeta table, IndexMeta rule) {
+        if (isForeignKeyIndex(table, (IndexMeta)rule)) {
+            return;
+        }
+        buf.append("  ");
+        if (rule.isUnique()) {
+            buf.append("UNIQUE KEY ");
+        }
+        else if (rule.isFullText()) {
+            buf.append("FULLTEXT KEY ");
+        }
+        else {
+            buf.append("KEY ");
+        }
+        buf.append("`");
+        buf.append(rule.getName());
+        buf.append("`");
+        buf.append(" ");
+        buf.append("(");
+        List<Integer> prefixes = rule.getPrefix();
+        List<ColumnMeta> columns = rule.getColumns(table);
+        for (int i=0; i<columns.size(); i++) {
+            buf.append("`");
+            buf.append(columns.get(i).getColumnName());
+            buf.append("`");
+            if ((prefixes != null) && (i<prefixes.size())) {
+                Integer prefix = prefixes.get(i);
+                if (prefix != null) {
+                    buf.append("(");
+                    buf.append(prefix.toString());
+                    buf.append(")");
+                }
+            }
             buf.append(",");
         }
         buf.deleteCharAt(buf.length()-1);

@@ -182,6 +182,7 @@ public class BlobReorderReplayer extends ReplayRelay {
 
     @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+        this.downstream.transactionWindow(entry);
         long oldestTrxid = entry.getTrxid();
         for (Iterator<Entry> i=this.buf.iterator();;) {
             if (!i.hasNext()) {

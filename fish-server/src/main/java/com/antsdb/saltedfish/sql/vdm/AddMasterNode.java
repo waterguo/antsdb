@@ -114,7 +114,7 @@ public class AddMasterNode extends Statement {
             return result;
         }
         catch (Exception x) {
-            throw new OrcaException(x, "unable to add node");
+            throw new OrcaException(x);
         }
         finally {
             DbUtils.closeQuietly(conn);

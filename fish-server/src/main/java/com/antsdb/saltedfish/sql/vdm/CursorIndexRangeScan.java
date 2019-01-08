@@ -50,7 +50,7 @@ public class CursorIndexRangeScan extends CursorMaker {
         private GTable gindex;
 
         public MyCursor(SpaceManager memman, GTable gtable, GTable gindex, Transaction trx, AtomicLong counter) {
-            super(CursorIndexRangeScan.this);
+            super(CursorIndexRangeScan.this.getCursorMeta());
             this.gtable = gtable;
             this.gindex = gindex;
             this.trx = trx;

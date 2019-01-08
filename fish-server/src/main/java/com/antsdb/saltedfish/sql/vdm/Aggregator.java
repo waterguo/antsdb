@@ -38,7 +38,7 @@ public class Aggregator extends CursorMaker {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ExprCursor cursor = new ExprCursor(
-                this, 
+                this.getCursorMeta(), 
                 (Cursor)this.upstream.run(ctx, params, pMaster), 
                 params, 
                 ctx.getCursorStats(makerId));

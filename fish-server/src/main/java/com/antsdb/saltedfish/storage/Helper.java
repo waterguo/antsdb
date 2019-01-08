@@ -406,8 +406,11 @@ final class Helper {
         if (table != null) {
             row = populateUsingMetadata(heap, table, dataFamilyMap, colDataType, size, key);
         }
-        else {
+        else if (tableId < 0x100) {
             row = populateDirect(heap, dataFamilyMap, colDataType, size, key);
+        }
+        else {
+            throw new OrcaHBaseException("metadata not found for table " + tableId);
         }
         row.setVersion(1);
         long pRow = Row.from(heap, row);
@@ -450,9 +453,10 @@ final class Helper {
             byte[] types,
             int size, 
             byte[] rowkey) {
-        VaporizingRow row = new VaporizingRow(heap, table.getMaxColumnId());
+        int maxColumnId = types.length-1;
+        VaporizingRow row = new VaporizingRow(heap, maxColumnId);
         row.setKey(rowkey);
-        for (int i=0; i<=table.getMaxColumnId(); i++) {
+        for (int i=0; i<=maxColumnId; i++) {
             if (i == 0) {
                 // rowid
                 byte[] colValueBytes = data.get(SYS_COLUMN_ROWID_BYTES);

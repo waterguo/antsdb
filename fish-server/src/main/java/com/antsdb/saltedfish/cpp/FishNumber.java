@@ -371,6 +371,8 @@ public class FishNumber extends Value {
             return Int8.compare(addr1, type2, addr2);
         case Value.FORMAT_INT4:
             return Int4.compare(addr1, type2, addr2);
+        case Value.FORMAT_FLOAT4:
+            return Float4.compare(addr1, type2, addr2);
         case Value.FORMAT_FLOAT8:
             return Float8.compare(addr1, type2, addr2);
         default:

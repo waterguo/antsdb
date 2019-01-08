@@ -145,7 +145,7 @@ public class UberUtil {
                 double dy = ((Number)val2).doubleValue();
                 return Double.compare(dx, dy);
             }
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(val1.getClass().getName() + " " + val2.getClass().getName());
         }
         if (val1 instanceof String) {
             return ((String) val1).compareTo((String) val2);
@@ -448,5 +448,14 @@ public class UberUtil {
     
     public static <T,R> R ifNotNull(T x, Function<T, R> function) {
         return (x != null) ? function.apply(x) : null;
+    }
+    
+    public static long throughput(long start, long end, long count) {
+        long elapse = end - start;
+        return elapse == 0 ? 0 : count * 1000 / elapse;
+    }
+    
+    public static boolean between(long value, long min, long max) {
+        return (value >= min) && (value <= max);
     }
 }

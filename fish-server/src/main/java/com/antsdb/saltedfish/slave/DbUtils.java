@@ -69,6 +69,22 @@ public class DbUtils {
         }
     }
 
+    public static Map<String, Object> firstRow(Connection conn, String sql, Object... args) 
+    throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            for (int i=0; i<args.length; i++) {
+                stmt.setObject(i+1, args[i]);
+            }
+            try (ResultSet rs =stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                Map<String, Object> result = toRow(rs);
+                return result;
+            }
+        }
+    }
+    
     private static Map<String, Object> toRow(ResultSet rs) throws SQLException {
         Map<String, Object> result = new HashMap<>();
         ResultSetMetaData meta = rs.getMetaData();
@@ -96,11 +112,19 @@ public class DbUtils {
 
     public static boolean ping(Connection conn) {
         try {
-            Map<String, Object> row = firstRow(conn, "SELECT 1");
-            return row != null;
+            execute(conn, "/* ping */ SELECT 1");
+            return true;
         } 
         catch (Exception x) {
             return false;
+        }
+    }
+
+    public static void closeQuietly(Connection conn) {
+        try {
+            conn.close();
+        }
+        catch (SQLException e) {
         }
     }
 }

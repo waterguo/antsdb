@@ -37,7 +37,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.MemoryManager;
 import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
-import com.antsdb.saltedfish.minke.Warmer;
+import com.antsdb.saltedfish.minke.PageCacheWarmer;
 import com.antsdb.saltedfish.slave.JdbcReplicator;
 import com.antsdb.saltedfish.slave.SlaveReplicator;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -125,6 +125,7 @@ public final class Humpback {
     private Replicator<JdbcReplicator> slaveThread;
     private TotalLogDependency logDependency = new TotalLogDependency();
     private long serverId;
+    private PageCacheWarmer warmer;
 
     class ShutdownThread extends Thread {
         @Override
@@ -356,8 +357,8 @@ public final class Humpback {
             else {
                 throw new IllegalArgumentException();
             }
-            Warmer warmer = new Warmer(minke, warmSize);
-            this.jobman.schedule(1, TimeUnit.SECONDS, warmer);
+            this.warmer = new PageCacheWarmer(minke, warmSize);
+            this.jobman.scheduleWithFixedDelay(5, TimeUnit.MINUTES, this.warmer);
         }
     }
 
@@ -1328,4 +1329,7 @@ public final class Humpback {
         }
     }
 
+    public PageCacheWarmer getPageCacheWarmer() {
+        return this.warmer;
+    }
 }

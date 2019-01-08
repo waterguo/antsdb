@@ -28,11 +28,6 @@ public abstract class Cursor implements Closeable {
     public abstract long next();
     public abstract void close();
 
-    public Cursor(CursorMaker maker) {
-        this(maker.getCursorMeta());
-        this.maker = maker;
-    }
-    
     public Cursor(CursorMeta meta) {
         this.meta = meta;
     }

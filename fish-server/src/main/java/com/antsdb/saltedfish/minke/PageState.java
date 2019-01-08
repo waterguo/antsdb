@@ -14,6 +14,13 @@
 package com.antsdb.saltedfish.minke;
 
 /**
+ * explanation of page state:
+ * 
+ * FREE: not used, available for new page allocation
+ * ACTIVE: allocated and writable
+ * CABONFREEZED: allocated but read only, it is either full or in last check point
+ * GARBAGE: removed from table, but not yet available for allocation, waiting for garbage collection
+ * ZOMBIE: removed from table, but not available for allocation because it is last check point
  * 
  * @author *-xguo0<@
  */
@@ -22,6 +29,7 @@ public class PageState {
     public static final int ACTIVE = 1;
     public static final int CARBONFREEZED = 2;
     public static final int GARBAGE = 3;
+    public static final int ZOMBIE = 4;
     
     public static String getStateName(int value) {
         String result = "";
@@ -37,6 +45,9 @@ public class PageState {
             break;
         case GARBAGE:
             result = "GARBAGE";
+            break;
+        case ZOMBIE:
+            result = "ZOMBIE";
             break;
         }
         return result;

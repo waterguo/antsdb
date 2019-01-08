@@ -269,4 +269,12 @@ public class TableMeta extends MetaObject {
     public String getCharset() {
         return (String)row.get(ColumnId.systable_charset.getId());
     }
+    
+    public void setEngine(String value) {
+        row.set(ColumnId.systable_engine.getId(), value);
+    }
+    
+    public String getEngine() {
+        return (String)row.get(ColumnId.systable_engine.getId());
+    }
 }

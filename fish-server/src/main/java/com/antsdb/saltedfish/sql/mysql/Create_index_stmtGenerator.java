@@ -25,6 +25,7 @@ import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.MysqlUpgradeIndexToPrimaryKey;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.util.Pair;
 
 public class Create_index_stmtGenerator extends DdlGenerator<Create_index_stmtContext>{
 
@@ -33,8 +34,10 @@ public class Create_index_stmtGenerator extends DdlGenerator<Create_index_stmtCo
     throws OrcaException {
         String indexName = Utils.getIdentifier(rule.index_name().identifier());
         ObjectName tableName = TableName.parse(ctx, rule.table_name_());
-        List<String> columns = new ArrayList<String>();
-        rule.indexed_column_def().forEach((it) -> columns.add(Utils.getIdentifier(it.indexed_column().identifier())));
+        List<Pair<String, Integer>> columns = new ArrayList<>();
+        rule.indexed_column_def().forEach((it) -> {
+            columns.add(new Pair<>(Utils.getIdentifier(it.indexed_column().identifier()), null));
+        });
         boolean isUnique = rule.K_UNIQUE() != null;
         boolean createIfNotExists = rule.K_IF() != null && rule.K_NOT() != null && rule.K_EXISTS() != null;
         boolean isFullText = rule.K_FULLTEXT() != null;

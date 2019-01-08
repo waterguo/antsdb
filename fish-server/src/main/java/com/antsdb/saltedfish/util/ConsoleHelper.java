@@ -20,24 +20,34 @@ import java.io.StringReader;
 import org.apache.commons.lang.StringUtils;
 
 public interface ConsoleHelper {
-	public default void println(String format, Object... args) {
-		String text = String.format(format, args);
-		System.out.println(text);
-	}
+    public default void println(String format, Object... args) {
+        String text = String.format(format, args);
+        System.out.println(text);
+    }
 
-	public default void print(String format, Object... args) {
-		String text = String.format(format, args);
-		System.out.print(text);
-	}
-	
-	public default void printlnWithIndentation(String text, int spaces) {
-	    try {
-	        String indentation = StringUtils.repeat(" ", spaces);
-    	    LineNumberReader reader = new LineNumberReader(new StringReader(text));
-    	    for (String line=reader.readLine(); line != null; line=reader.readLine()) {
-    	        println("%s%s", indentation, line);
-    	    }
-	    }
-	    catch (IOException ignored) {}
-	}
+    public default void print(String format, Object... args) {
+        String text = String.format(format, args);
+        System.out.print(text);
+    }
+    
+    public default void eprintln(String format, Object... args) {
+        String text = String.format(format, args);
+        System.err.println(text);
+    }
+
+    public default void eprint(String format, Object... args) {
+        String text = String.format(format, args);
+        System.err.print(text);
+    }
+    
+    public default void printlnWithIndentation(String text, int spaces) {
+        try {
+            String indentation = StringUtils.repeat(" ", spaces);
+            LineNumberReader reader = new LineNumberReader(new StringReader(text));
+            for (String line=reader.readLine(); line != null; line=reader.readLine()) {
+                println("%s%s", indentation, line);
+            }
+        }
+        catch (IOException ignored) {}
+    }
 }

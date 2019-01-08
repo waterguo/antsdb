@@ -13,17 +13,13 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
-import java.util.List;
-
 /**
  * 
  * @author *-xguo0<@
  */
 public interface Replicable {
+    default public void connect() throws Exception {};
     public long getReplicateLogPointer();
     public long getCommittedLogPointer();
     public ReplicationHandler getReplayHandler();
-    public void putRows(int tableId, List<Long> rows);
-    public void putIndexLines(int tableId, List<Long> indexLines);
-    public void deletes(int tableId, List<Long> deletes);
 }

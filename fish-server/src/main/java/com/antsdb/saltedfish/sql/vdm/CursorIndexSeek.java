@@ -30,109 +30,109 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
  * @author wgu0
  */
 public class CursorIndexSeek extends CursorMaker {
-	TableMeta table;
-	IndexMeta index;
+    TableMeta table;
+    IndexMeta index;
     CursorMeta meta;
     int[] mapping;
-	private CursorMaker select;
-	private List<Operator> prefix;
+    private CursorMaker select;
+    private List<Operator> prefix;
 
-	class MyCursor extends CursorWithHeap {
-		Cursor select;
-		long[] values;
-		RowIterator iter;
-		boolean isClosed = false;
-		private AtomicLong counter;
-		GTable gtable;
-		Transaction trx;
-		private GTable gindex;
-		
-		public MyCursor(
-				SpaceManager memman, 
-				GTable gtable,
-				GTable gindex,
-				Transaction trx, 
-				AtomicLong counter) {
-			super(CursorIndexSeek.this);
-			this.gtable = gtable;
-			this.gindex = gindex;
-			this.trx = trx;
-			this.counter = counter;
-		}
+    class MyCursor extends CursorWithHeap {
+        Cursor select;
+        long[] values;
+        RowIterator iter;
+        boolean isClosed = false;
+        private AtomicLong counter;
+        GTable gtable;
+        Transaction trx;
+        private GTable gindex;
+        
+        public MyCursor(
+                SpaceManager memman, 
+                GTable gtable,
+                GTable gindex,
+                Transaction trx, 
+                AtomicLong counter) {
+            super(CursorIndexSeek.this.getCursorMeta());
+            this.gtable = gtable;
+            this.gindex = gindex;
+            this.trx = trx;
+            this.counter = counter;
+        }
 
-		@Override
-		public long next() {
-			for (;;) {
-				if (isClosed) {
-					return 0;
-				}
-				
-				// next scan
-				
-				if (this.iter == null) {
-					nextScan();
-					continue;
-				}
-				
-				// next record 
-				
-				if (!this.iter.next()) {
-					this.iter.close();
-					this.iter = null;
-					continue;
-				}
+        @Override
+        public long next() {
+            for (;;) {
+                if (isClosed) {
+                    return 0;
+                }
+                
+                // next scan
+                
+                if (this.iter == null) {
+                    nextScan();
+                    continue;
+                }
+                
+                // next record 
+                
+                if (!this.iter.next()) {
+                    this.iter.close();
+                    this.iter = null;
+                    continue;
+                }
 
-				// convert row to record
-				
-		    	long pRecord = newRecord();
-		        long pRowKey = iter.getRowKeyPointer();
-		        if (pRowKey == 0) {
-		            continue;
-		        }
-		        Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
-		        Record.setKey(pRecord, row.getKeyAddress());
-		        for (int i=0; i<this.meta.getColumnCount(); i++) {
-		        	long pValue = row.getFieldAddress(CursorIndexSeek.this.mapping[i]);
-		        	Record.set(pRecord, i, pValue);
-		        }
-		        this.counter.incrementAndGet();
-		        return pRecord;
-			}
-		}
+                // convert row to record
+                
+                long pRecord = newRecord();
+                long pRowKey = iter.getRowKeyPointer();
+                if (pRowKey == 0) {
+                    continue;
+                }
+                Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+                Record.setKey(pRecord, row.getKeyAddress());
+                for (int i=0; i<this.meta.getColumnCount(); i++) {
+                    long pValue = row.getFieldAddress(CursorIndexSeek.this.mapping[i]);
+                    Record.set(pRecord, i, pValue);
+                }
+                this.counter.incrementAndGet();
+                return pRecord;
+            }
+        }
 
-		private void nextScan() {
-			// fetch next value from cursor
-			
-			long pRec = this.select.next();
-			if (pRec == 0) {
-				close();
-				return;
-			}
-			long pValue = Record.get(pRec, 0);
-			
-			// calculate key
-			
-			this.values[this.values.length-1] = pValue;
-			KeyMaker keymaker = CursorIndexSeek.this.index.getKeyMaker();
-			long pFrom = keymaker.make(getHeap(), values);
-			long pTo = keymaker.makeMax(getHeap(), values);
-			
-			// scan !!
-			
-	        this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
-		}
+        private void nextScan() {
+            // fetch next value from cursor
+            
+            long pRec = this.select.next();
+            if (pRec == 0) {
+                close();
+                return;
+            }
+            long pValue = Record.get(pRec, 0);
+            
+            // calculate key
+            
+            this.values[this.values.length-1] = pValue;
+            KeyMaker keymaker = CursorIndexSeek.this.index.getKeyMaker();
+            long pFrom = keymaker.make(getHeap(), values);
+            long pTo = keymaker.makeMax(getHeap(), values);
+            
+            // scan !!
+            
+            this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
+        }
 
-		@Override
-		public void close() {
-			this.isClosed = true;
-			super.close();
-			this.select.close();
-		}
-	}
-	
+        @Override
+        public void close() {
+            this.isClosed = true;
+            super.close();
+            this.select.close();
+        }
+    }
+    
     public CursorIndexSeek(TableMeta table, IndexMeta index, int makerId) {
-    	this.table = table;
-    	this.index = index;
+        this.table = table;
+        this.index = index;
         this.meta = CursorMeta.from(table);
         this.mapping = this.meta.getHumpbackMapping();
         setMakerId(makerId);
@@ -148,27 +148,27 @@ public class CursorIndexSeek extends CursorMaker {
         GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
         GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         Transaction trx = ctx.getTransaction();
-    	MyCursor c = new MyCursor(
-    			ctx.getSpaceManager(), 
-    			gtable, 
-    			gindex, 
-    			trx, 
-    			ctx.getCursorStats(makerId));
-    	boolean success = false;
-    	try {
-        	c.select = this.select.make(ctx, params, pMaster);
-        	c.values = new long[this.prefix.size() + 1];
-        	for (int i=0; i<this.prefix.size(); i++) {
-        		c.values[i] = this.prefix.get(i).eval(ctx, c.getHeap(), params, pMaster);
-        	}
-    		success = true;
-        	return c;
-    	}
-    	finally {
-    		if (!success) {
-    			c.close();
-    		}
-    	}
+        MyCursor c = new MyCursor(
+                ctx.getSpaceManager(), 
+                gtable, 
+                gindex, 
+                trx, 
+                ctx.getCursorStats(makerId));
+        boolean success = false;
+        try {
+            c.select = this.select.make(ctx, params, pMaster);
+            c.values = new long[this.prefix.size() + 1];
+            for (int i=0; i<this.prefix.size(); i++) {
+                c.values[i] = this.prefix.get(i).eval(ctx, c.getHeap(), params, pMaster);
+            }
+            success = true;
+            return c;
+        }
+        finally {
+            if (!success) {
+                c.close();
+            }
+        }
     }
 
     @Override
@@ -183,10 +183,10 @@ public class CursorIndexSeek extends CursorMaker {
         this.select.explain(level+1, records);
     }
 
-	public void setRange(List<Operator> prefix, CursorMaker select) {
-		this.prefix = prefix;
-		this.select = select;
-	}
+    public void setRange(List<Operator> prefix, CursorMaker select) {
+        this.prefix = prefix;
+        this.select = select;
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {

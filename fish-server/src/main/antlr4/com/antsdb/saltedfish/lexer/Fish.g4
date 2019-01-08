@@ -5,16 +5,21 @@ script
  ; 
 
 stmt
-  : carbonfreeze_stmt
+  : add_master_node_stmt
+  | carbonfreeze_stmt
   | change_slave_stmt
   | clear_meta_cache_stmt
+  | delete_node_stmt
   | evict_cache_stmt
   | ping_stmt
   | gc_stmt
-  | reorganize_stmt
   | hdelete_stmt
   | hselect_stmt
   | hupdate_stmt
+  | join_cluster_stmt
+  | leave_cluster_stmt
+  | reorganize_stmt
+  | show_cluster_status_stmt
   | shutdown_stmt
   | start_replicator_stmt
   | start_slave_stmt
@@ -26,8 +31,9 @@ stmt
   | reset_metrics_stmt
   ; 
 
-carbonfreeze_stmt: K_CARBONFREEZE;
+add_master_node_stmt: K_ADD K_EXTERNAL? (K_MASTER | K_SLAVE) K_NODE assignment*;
 
+carbonfreeze_stmt: K_CARBONFREEZE;
 
 evict_cache_stmt: K_EVICT K_CACHE (cache_page | cache_table | cache_all);
 
@@ -41,6 +47,8 @@ clear_meta_cache_stmt : K_CLEAR K_META K_CACHE;
 
 change_slave_stmt: K_CHANGE K_SLAVE K_TO assignment*;
  
+delete_node_stmt: K_DELETE K_NODE STRING_LITERAL;
+
 gc_stmt: K_GC;
   
 ping_stmt: K_PING;
@@ -52,6 +60,10 @@ hdelete_stmt: K_HDELETE K_FROM table where;
 hselect_stmt: K_HSELECT columns K_FROM table where? limit?;
 
 hupdate_stmt: K_HUPDATE table update_sets where;
+
+join_cluster_stmt: K_JOIN K_CLUSTER K_AS (K_MASTER | K_SLAVE) assignment*;
+
+leave_cluster_stmt : K_LEAVE K_CLUSTER;
 
 update_sets: K_SET update_set ( ', ' update_set)*;
 
@@ -76,6 +88,8 @@ column: ('$' number_value) | '*';
 
 table: number_value;
 
+show_cluster_status_stmt: K_SHOW K_CLUSTER K_STATUS;
+
 shutdown_stmt: K_SHUTDOWN;
 
 start_replicator_stmt: K_START K_REPLICATOR;
@@ -98,19 +112,27 @@ number_value:NUMERIC_LITERAL;
 
 assignment: IDENTIFIER '=' STRING_LITERAL;
 
+K_ADD: A D D;
 K_ALL: A L L;
 K_AND: A N D;
+K_AS: A S;
 K_CACHE : C A C H E;
 K_CARBONFREEZE : C A R B O N F R E E Z E;
 K_CHANGE : C H A N G E; 
 K_CLEAR : C L E A R;
+K_DELETE : D E L E T E;
 K_EVICT : E V I C T;
+K_EXTERNAL : E X T E R N A L;
 K_FROM : F R O M;
 K_GC : G C;
+K_CLUSTER: C L U S T E R;
+K_LEAVE : L E A V E;
 K_LIMIT : L I M I T;
+K_MASTER: M A S T E R;
 K_META : M E T A;
 K_METRICS : M E T R I C S;
 K_NULL : N U L L;
+K_NODE: N O D E;
 K_OFFSET : O F F S E T;
 K_PAGE : P A G E;
 K_PING : P I N G;
@@ -120,10 +142,13 @@ K_RESET : R E S E T;
 K_HDELETE : H D E L E T E;
 K_HSELECT : H S E L E C T;
 K_HUPDATE : H U P D A T E;
+K_JOIN : J O I N;
 K_SET : S E T;
+K_SHOW : S H O W;
 K_SHUTDOWN : S H U T D O W N;  
 K_SLAVE : S L A V E;
 K_START : S T A R T;
+K_STATUS : S T A T U S;
 K_STOP : S T O P;
 K_SYNCHRONIZE : S Y N C H R O N I Z E;
 K_SYNCHRONIZER : S Y N C H R O N I Z E R;

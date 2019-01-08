@@ -14,27 +14,27 @@
 package com.antsdb.saltedfish.cpp;
 
 public class FishBool {
-	public static final boolean get(Heap heap, long address) {
-		if (address == 0) {
-			return false;
-		}
-		byte value = Unsafe.getByte(address + 1);
-		return value != 0;
-	}
-	
-	public static final long allocSet(Heap heap, boolean value) {
-		long address = heap.alloc(2);
-		set(address, value);
-		return address;
-	}
+    public static final boolean get(Heap heap, long address) {
+        if (address == 0) {
+            throw new IllegalArgumentException();
+        }
+        byte value = Unsafe.getByte(address + 1);
+        return value != 0;
+    }
+    
+    public static final long allocSet(Heap heap, boolean value) {
+        long address = heap.alloc(2);
+        set(address, value);
+        return address;
+    }
 
-	public static final void set(long address, boolean value) {
-		Unsafe.putByte(address, Value.FORMAT_BOOL);
-		Unsafe.putByte(address + 1, value ? (byte)1 : (byte)0);
-	}
+    public static final void set(long address, boolean value) {
+        Unsafe.putByte(address, Value.FORMAT_BOOL);
+        Unsafe.putByte(address + 1, value ? (byte)1 : (byte)0);
+    }
 
-	public final static int getSize(long pValue) {
-		return 2;
-	}
+    public final static int getSize(long pValue) {
+        return 2;
+    }
 
 }

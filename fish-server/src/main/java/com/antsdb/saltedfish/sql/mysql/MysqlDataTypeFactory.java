@@ -55,10 +55,10 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
         name = name.toLowerCase();
         DataType type = null;
         if ("char".equals(name)) {
-            type = new TypeString("char", length, Types.CHAR);
+            type = new TypeString("char", Types.CHAR, length);
         }
         else if ("varchar".equals(name)) {
-            type = new TypeString("varchar", length, Types.VARCHAR);
+            type = new TypeString("varchar", Types.VARCHAR, length);
         }
         else if ("float".equals(name)) {
             type = new TypeFloat("float");

@@ -26,6 +26,9 @@ public class OpNot extends UnaryOperator {
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long addr = upstream.eval(ctx, heap, params, pRecord);
+        if (addr == 0) {
+            return 0;
+        }
         boolean b = FishBool.get(heap, addr);
         return FishBool.allocSet(heap, !b);
     }

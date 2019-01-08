@@ -347,7 +347,7 @@ class MinkeSkipList<V> {
      * or the base-level header if there is no such node.  Also
      * unlinks indexes to deleted nodes found along the way.  Callers
      * rely on this side-effect of clearing indices to deleted nodes.
-     * @param key the key
+     * @param keyExpr the key
      * @return a predecessor of key
      */
     private Node<V> findPredecessor(long pKey) {
@@ -419,7 +419,7 @@ class MinkeSkipList<V> {
      * reads of fields held in locals occurring in the orders they
      * were performed.
      *
-     * @param key the key
+     * @param keyExpr the key
      * @return node holding key, or null if no such
      */
     private Node<V> findNode(long pKey) {
@@ -454,7 +454,7 @@ class MinkeSkipList<V> {
      * Gets value for key. Almost the same as findNode, but returns
      * the found value (to avoid retries during re-reads)
      *
-     * @param key the key
+     * @param keyExpr the key
      * @return the value, or null if absent
      */
     private V doGet(long pKey) {
@@ -492,7 +492,7 @@ class MinkeSkipList<V> {
     /**
      * Main insertion method.  Adds element if not present, or
      * replaces value if present and onlyIfAbsent is false.
-     * @param key the key
+     * @param keyExpr the key
      * @param value the value that must be associated with key
      * @param onlyIfAbsent if should not insert if already present
      * @return the old value, or null if newly inserted
@@ -629,7 +629,7 @@ class MinkeSkipList<V> {
      * search for it, and we'd like to ensure lack of garbage
      * retention, so must call to be sure.
      *
-     * @param key the key
+     * @param keyExpr the key
      * @param value if non-null, the value that must be
      * associated with key
      * @return the node, or null if not found
@@ -904,7 +904,7 @@ class MinkeSkipList<V> {
 
     /**
      * Utility for ceiling, floor, lower, higher methods.
-     * @param key the key
+     * @param keyExpr the key
      * @param rel the relation -- OR'ed combination of EQ, LT, GT
      * @return nearest node fitting relation, or null if no such
      */
@@ -939,7 +939,7 @@ class MinkeSkipList<V> {
 
     /**
      * Returns SimpleImmutableEntry for results of findNear.
-     * @param key the key
+     * @param keyExpr the key
      * @param rel the relation -- OR'ed combination of EQ, LT, GT
      * @return Entry fitting relation, or null if no such
      */
@@ -1043,7 +1043,7 @@ class MinkeSkipList<V> {
      * Returns {@code true} if this map contains a mapping for the specified
      * key.
      *
-     * @param key key whose presence in this map is to be tested
+     * @param keyExpr key whose presence in this map is to be tested
      * @return {@code true} if this map contains a mapping for the specified key
      * @throws ClassCastException if the specified key cannot be compared
      *         with the keys currently in the map
@@ -1075,7 +1075,7 @@ class MinkeSkipList<V> {
      * Returns the value to which the specified key is mapped,
      * or the given defaultValue if this map contains no mapping for the key.
      *
-     * @param key the key
+     * @param keyExpr the key
      * @param defaultValue the value to return if this map contains
      * no mapping for the given key
      * @return the mapping for the key, if present; else the defaultValue
@@ -1092,7 +1092,7 @@ class MinkeSkipList<V> {
      * If the map previously contained a mapping for the key, the old
      * value is replaced.
      *
-     * @param key key with which the specified value is to be associated
+     * @param keyExpr key with which the specified value is to be associated
      * @param value value to be associated with the specified key
      * @return the previous value associated with the specified key, or
      *         {@code null} if there was no mapping for the key
@@ -1109,7 +1109,7 @@ class MinkeSkipList<V> {
     /**
      * Removes the mapping for the specified key from this map if present.
      *
-     * @param  key key for which mapping should be removed
+     * @param  keyExpr key for which mapping should be removed
      * @return the previous value associated with the specified key, or
      *         {@code null} if there was no mapping for the key
      * @throws ClassCastException if the specified key cannot be compared
@@ -1190,7 +1190,7 @@ class MinkeSkipList<V> {
      * is <em>NOT</em> guaranteed to be applied once atomically only
      * if the value is not present.
      *
-     * @param key key with which the specified value is to be associated
+     * @param keyExpr key with which the specified value is to be associated
      * @param mappingFunction the function to compute a value
      * @return the current (existing or computed) value associated with
      *         the specified key, or null if the computed value is null
@@ -1214,7 +1214,7 @@ class MinkeSkipList<V> {
      * value. The function is <em>NOT</em> guaranteed to be applied
      * once atomically.
      *
-     * @param key key with which a value may be associated
+     * @param keyExpr key with which a value may be associated
      * @param remappingFunction the function to compute a value
      * @return the new value associated with the specified key, or null if none
      * @throws NullPointerException if the specified key is null
@@ -1246,7 +1246,7 @@ class MinkeSkipList<V> {
      * mapping). The function is <em>NOT</em> guaranteed to be applied
      * once atomically.
      *
-     * @param key key with which the specified value is to be associated
+     * @param keyExpr key with which the specified value is to be associated
      * @param remappingFunction the function to compute a value
      * @return the new value associated with the specified key, or null if none
      * @throws NullPointerException if the specified key is null
@@ -1284,7 +1284,7 @@ class MinkeSkipList<V> {
      * removes if {@code null}. The function is <em>NOT</em>
      * guaranteed to be applied once atomically.
      *
-     * @param key key with which the specified value is to be associated
+     * @param keyExpr key with which the specified value is to be associated
      * @param value the value to use if absent
      * @param remappingFunction the function to recompute a value if present
      * @return the new value associated with the specified key, or null if none
@@ -1578,7 +1578,7 @@ class MinkeSkipList<V> {
      * is no such key. The returned entry does <em>not</em> support
      * the {@code Entry.setValue} method.
      *
-     * @param key the key
+     * @param keyExpr the key
      * @throws ClassCastException {@inheritDoc}
      * @throws NullPointerException if the specified key is null
      */
@@ -1587,7 +1587,7 @@ class MinkeSkipList<V> {
     }
 
     /**
-     * @param key the key
+     * @param keyExpr the key
      * @throws ClassCastException {@inheritDoc}
      * @throws NullPointerException if the specified key is null
      */
@@ -1624,7 +1624,7 @@ class MinkeSkipList<V> {
      * is no such key. The returned entry does <em>not</em> support
      * the {@code Entry.setValue} method.
      *
-     * @param key the key
+     * @param keyExpr the key
      * @throws ClassCastException {@inheritDoc}
      * @throws NullPointerException if the specified key is null
      */
@@ -1633,7 +1633,7 @@ class MinkeSkipList<V> {
     }
 
     /**
-     * @param key the key
+     * @param keyExpr the key
      * @throws ClassCastException {@inheritDoc}
      * @throws NullPointerException if the specified key is null
      */

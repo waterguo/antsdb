@@ -43,6 +43,7 @@ import com.antsdb.saltedfish.nosql.ConfigService;
 import com.antsdb.saltedfish.nosql.GarbageCollector;
 import com.antsdb.saltedfish.nosql.HumpbackUtil;
 import com.antsdb.saltedfish.nosql.LogSpan;
+import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
@@ -50,6 +51,7 @@ import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.SizeConstants;
+import com.antsdb.saltedfish.util.TimeConstants;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -81,12 +83,14 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     long checkpointSp = 0;
     boolean isMutable = true;
     long size = Long.MAX_VALUE;
-    private int nPages;
+    private long nPages;
     private AtomicLong pastHits = new AtomicLong();
     private int pagesPerFile;
     private volatile int nOpenFiles;
     /** max number of files */
-    private int nFiles;
+    private long nFiles;
+    private ConfigService config;
+    private long lastCheckPontTime;
     
     static class GarbagePage implements Comparable<GarbagePage> {
         int child1;
@@ -185,6 +189,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public void open(File home, ConfigService config, boolean isMutable) throws Exception {
+        this.config = config;
         if (this.files.size() != 0) {
             throw new CodingError("reopen is not supported");
         }
@@ -192,7 +197,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
             this.fileSize = config.getMinkeFileSize();
             this.pageSize = config.getMinkePageSize();
             this.size = config.getMinkeSize();
-            this.nFiles = (int)(this.size / this.fileSize);
+            this.nFiles = this.size / this.fileSize;
             this.pagesPerFile = (this.fileSize - MinkeFile.HEADER_SIZE) / this.pageSize;
             this.nPages = this.pagesPerFile * this.nFiles;
         }
@@ -253,6 +258,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
             pages.remove(it.id);
             this.lastFreeze.put(it.id, it);
         });
+        this.lastCheckPontTime = UberTime.getTime();
         
         // done
         
@@ -310,6 +316,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         PageIndexFile next = (this.pif == null) ? PageIndexFile.getFile(this.home, 0): this.pif.next();
         next.save(this.tableById, sp);
         this.checkpointSp = sp;
+        this.lastCheckPontTime = UberTime.getTime();
         
         // garbage collection
         
@@ -375,15 +382,19 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
 
     public void freePage(MinkePage page) {
         if (this.lastFreeze.containsKey(page.id)) {
+            page.zombie();
             _log.debug("page {} is zombied with tableId={} ts={}", hex(page.id), page.tableId, page.lastAccess.get());
             return;
         }
-        _log.debug("page {} is in garbage bin with tableId={} ts={}", 
-                   hex(page.id), 
-                   page.tableId, 
-                   page.lastAccess.get());
         if (page.garbage()) {
             this.garbage.add(page);
+            _log.debug("page {} is in garbage bin with tableId={} ts={}", 
+                    hex(page.id), 
+                    page.tableId, 
+                    page.lastAccess.get());
+        }
+        else {
+            _log.error("failed to garbage page {} state={}", hex(page.id), page.getState()); 
         }
     }
 
@@ -392,7 +403,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         return result;
     }
     
-    public int getFreePageCount() {
+    public long getFreePageCount() {
         if (this.nFiles == Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }
@@ -471,11 +482,26 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
     }
     
-    private synchronized void checkpointIfNeccessary() throws IOException {
-        if (this.pageSize * getZombiePageCount() < SizeConstants.GB) {
+    synchronized void checkpointIfNeccessary() throws IOException {
+        // make a checkpoint if zombie pages take over 1GB
+        if (this.pageSize * getZombiePageCount() >= SizeConstants.GB) {
+            checkpoint();
             return;
         }
-        checkpoint();
+        
+        // make a checkpoint if log space is more than 1gb
+        long nfiles = this.syncSp >> 32 - this.checkpointSp >> 32;
+        long size = this.config.getSpaceFileSize() * nfiles;
+        if (size >= SizeConstants.GB) {
+            checkpoint();
+            return;
+        }
+        
+        // make a checkpoint if last checkpoint is older than 1 hour
+        if (UberTime.getTime() - this.lastCheckPontTime >= TimeConstants.hour(1)) {
+            checkpoint();
+            return;
+        }
     }
 
     void validate() {
@@ -562,7 +588,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         return count;
     }
     
-    public int getMaxPages() {
+    public long getMaxPages() {
         return this.nPages;
     }
 
@@ -616,11 +642,6 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
             count += i.getPageCount();
         }
         return count;
-    }
-
-    @Override
-    public boolean supportReplication() {
-        return false;
     }
 
     public long getFreeSpace() {
@@ -677,5 +698,10 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     
     public List<MinkeFile> getFiles() {
         return this.files;
+    }
+
+    @Override
+    public Replicable getReplicable() {
+        return null;
     }
 }

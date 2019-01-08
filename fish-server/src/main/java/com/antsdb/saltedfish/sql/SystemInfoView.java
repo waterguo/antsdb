@@ -66,11 +66,14 @@ public class SystemInfoView extends View {
         props.put("vm.java_vm_version", System.getProperty("java.vm.version"));
         props.put("system.system cpu load", UberUtil.getSystemCpuLoad());
         props.put("system.process cpu load", UberUtil.getProcessCpuLoad());
+        props.put("memory.commited_virtual_memory", MemoryUtil.getCommittedVirtualMemorySize());
         props.put("memory.direct_capacity", MemoryUtil.getDirectMemoryCapacity());
         props.put("memory.direct_used", MemoryUtil.getDirectMemoryUsed());
         props.put("memory.direct_max", MemoryUtil.getMaxDirectMemory());
         props.put("memory.jvm_heap_size", MemoryUtil.getHeapSize());
         props.put("memory.jvm_heap_used", MemoryUtil.getHeapUsage());
+        props.put("memory.total_physical", MemoryUtil.getTotalPhysicalMemorySize());
+        props.put("memory.total_swap", MemoryUtil.getTotalSwapSpaceSize());
         for (GarbageCollectorMXBean gcbean:ManagementFactory.getGarbageCollectorMXBeans()) {
             props.put("gc." + gcbean.getName() + ".collection_time", gcbean.getCollectionTime());
             props.put("gc." + gcbean.getName() + ".collection_count", gcbean.getCollectionCount());

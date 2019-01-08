@@ -16,12 +16,23 @@ package com.antsdb.saltedfish.nosql;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.JumpException;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -47,7 +58,17 @@ class TransactionScanner implements ReplayHandler {
     }
 
     @Override
+    public void insert(InsertEntry2 entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
     public void update(UpdateEntry entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void update(UpdateEntry2 entry) throws Exception {
         this.lp = entry.getSpacePointer();
     }
 
@@ -57,7 +78,47 @@ class TransactionScanner implements ReplayHandler {
     }
 
     @Override
+    public void put(PutEntry2 entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void delete(DeleteEntry entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void delete(DeleteEntry2 entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
     public void deleteRow(DeleteRowEntry entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void index(IndexEntry entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void index(IndexEntry2 entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void message(MessageEntry entry) throws Exception {
+        this.lp = entry.getSpacePointer();
+    }
+
+    @Override
+    public void message(MessageEntry2 entry) throws Exception {
         this.lp = entry.getSpacePointer();
     }
 
@@ -103,6 +164,11 @@ class TransactionScanner implements ReplayHandler {
         catch (Exception x) {
             _log.error("error", x);
         }
+    }
+
+    @Override
+    public void ddl(DdlEntry entry) throws Exception {
+        this.lp = entry.getSpacePointer();
     }
 
 }

@@ -29,7 +29,7 @@ public class BooleanValue extends Operator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	long addr = FishBool.allocSet(heap, this.value);
+        long addr = FishBool.allocSet(heap, this.value);
         return addr;
     }
 
@@ -43,8 +43,8 @@ public class BooleanValue extends Operator {
         visitor.accept(this);
     }
 
-	@Override
-	public String toString() {
-		return this.value ? "TRUE" : "FALSE";
-	}
+    @Override
+    public String toString() {
+        return this.value ? "TRUE" : "FALSE";
+    }
 }

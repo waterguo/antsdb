@@ -1,0 +1,17 @@
+.idea
+/target/
+/target
+saltedfish.iml
+sonar-project.properties
+sonar.dump
+import.sh
+export.sh
+.settings
+db
+/dependency-reduced-pom.xml
+/java
+/mysql-db/
+/oracle-db/
+/hbase-db/
+/mysql-cluster-node1
+/mysql-cluster-node2

@@ -13,19 +13,24 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.lang.NotImplementedException;
-
+import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.UberTime;
 
 /**
@@ -42,7 +47,7 @@ public class Statistician extends ReplicationHandler implements Replicable {
 
     public Statistician(Humpback humpback) {
         this.humpback = humpback;
-        this.hsession = humpback.createSession();
+        this.hsession = humpback.createSession("local/statistician");
         this.sp = this.humpback.getCheckPoint().getStatisticanLogPointer();
         if (this.sp == 0) {
             this.sp = this.humpback.getGobbler().getStartSp();
@@ -53,41 +58,62 @@ public class Statistician extends ReplicationHandler implements Replicable {
 
     @Override
     public void insert(InsertEntry entry) throws Exception {
-        long pRow = entry.getRowPointer();
+        insert(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
+    }
+    
+    @Override
+    public void insert(InsertEntry2 entry) throws Exception {
+        insert(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
+    }
+    
+    private void insert(long sp, int tableId, long pRow) throws Exception {
         Row row = Row.fromMemoryPointer(pRow, 0);
-        int tableId = entry.getTableId();
         if (tableId == Humpback.SYSSTATS_TABLE_ID) {
             return;
         }
         TableStats table = getTableStats(tableId);
-        table.inspectInsert(row, entry.sp);
-        this.sp = entry.sp;
+        table.inspectInsert(row, sp);
+        this.sp = sp;
     }
 
     @Override
     public void update(UpdateEntry entry) throws Exception {
-        long pRow = entry.getRowPointer();
+        update(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
+    }
+    
+    @Override
+    public void update(UpdateEntry2 entry) throws Exception {
+        update(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
+    }
+    
+    private void update(long sp, int tableId, long pRow) throws Exception {
         Row row = Row.fromMemoryPointer(pRow, 0);
-        int tableId = entry.getTableId();
         if (tableId == Humpback.SYSSTATS_TABLE_ID) {
             return;
         }
         TableStats table = getTableStats(tableId);
-        table.inspectUpdate(row, entry.sp);
-        this.sp = entry.sp;
+        table.inspectUpdate(row, sp);
+        this.sp = sp;
     }
 
     @Override
     public void put(PutEntry entry) throws Exception {
-        long pRow = entry.getRowPointer();
+        put(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
+    }
+    
+    @Override
+    public void put(PutEntry2 entry) throws Exception {
+        put(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
+    }
+    
+    private void put(long sp, int tableId, long pRow) throws Exception {
         Row row = Row.fromMemoryPointer(pRow, 0);
-        int tableId = entry.getTableId();
         if (tableId == Humpback.SYSSTATS_TABLE_ID) {
             return;
         }
         TableStats table = getTableStats(tableId);
-        table.inspectPut(row, entry.sp);
-        this.sp = entry.sp;
+        table.inspectPut(row, sp);
+        this.sp = sp;
     }
 
     @Override
@@ -96,25 +122,46 @@ public class Statistician extends ReplicationHandler implements Replicable {
     }
 
     @Override
+    public void index(IndexEntry2 entry) throws Exception {
+        this.sp = entry.sp;
+    }
+
+    @Override
     public void delete(DeleteEntry entry) throws Exception {
-        int tableId = entry.getTableId();
+        delete(entry.getSpacePointer(), entry.getTableId());
+    }
+    
+    @Override
+    public void delete(DeleteEntry2 entry) throws Exception {
+        delete(entry.getSpacePointer(), entry.getTableId());
+    }
+    
+    private void delete(long sp, int tableId) throws Exception {
         if (tableId == Humpback.SYSSTATS_TABLE_ID) {
             return;
         }
         TableStats table = getTableStats(tableId);
-        table.inspectDelete(entry.sp);
-        this.sp = entry.sp;
+        table.inspectDelete(sp);
+        this.sp = sp;
     }
     
     @Override
     public void deleteRow(DeleteRowEntry entry) throws Exception {
-        int tableId = entry.getTableId();
+        deleteRow(entry.getSpacePointer(), entry.getTableId());
+    }
+    
+    @Override
+    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
+        deleteRow(entry.getSpacePointer(), entry.getTableId());
+    }
+    
+    private void deleteRow(long sp, int tableId) throws Exception {
         if (tableId == Humpback.SYSSTATS_TABLE_ID) {
             return;
         }
         TableStats table = getTableStats(tableId);
-        table.inspectDelete(entry.sp);
-        this.sp = entry.sp;
+        table.inspectDelete(sp);
+        this.sp = sp;
     }
 
     @Override
@@ -179,21 +226,6 @@ public class Statistician extends ReplicationHandler implements Replicable {
     }
 
     @Override
-    public void putRows(int tableId, List<Long> rows) {
-        throw new NotImplementedException();
-    }
-
-    @Override
-    public void putIndexLines(int tableId, List<Long> indexLines) {
-        throw new NotImplementedException();
-    }
-
-    @Override
-    public void deletes(int tableId, List<Long> deletes) {
-        throw new NotImplementedException();
-    }
-    
-    @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
         this.sp = entry.getSpacePointer();
     }
@@ -201,5 +233,13 @@ public class Statistician extends ReplicationHandler implements Replicable {
     @Override
     public long getCommittedLogPointer() {
         return this.commitedLp;
+    }
+
+    @Override
+    public void message(MessageEntry2 entry) throws Exception {
+    }
+
+    @Override
+    public void ddl(DdlEntry entry) throws Exception {
     }
 }

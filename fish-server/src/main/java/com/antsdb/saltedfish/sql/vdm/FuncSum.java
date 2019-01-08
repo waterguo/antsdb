@@ -27,7 +27,7 @@ public class FuncSum extends Function {
     int variableId;
 
     private static class Data {
-    	    Object sum;
+            Object sum;
     }
     
     public FuncSum(int variableId, Operator expr) {
@@ -56,6 +56,9 @@ public class FuncSum extends Function {
         else if (upstreamType.getJavaType() == String.class) {
             this.returnType = DataType.number();
         }
+        else if (upstreamType.getJavaType() == Boolean.class) {
+            this.returnType = DataType.number();
+        }
         else {
             throw new CodingError(upstreamType.getJavaType().toString());
         }
@@ -63,10 +66,10 @@ public class FuncSum extends Function {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        	Data data = (Data)ctx.getVariable(this.variableId);
-        	if (data == null) {
-        		data = init(ctx);
-        	}
+        Data data = (Data)ctx.getVariable(this.variableId);
+        if (data == null) {
+            data = init(ctx);
+        }
         if (Record.isGroupEnd(pRecord)) {
             if (data.sum instanceof Float) {
                 data.sum = Float.valueOf(0);
@@ -102,7 +105,7 @@ public class FuncSum extends Function {
                 data.sum = ((Double)data.sum) + ((Float)value);
             }
             else if (value instanceof Double) {
-            	data.sum = ((Double)data.sum) + ((Double)value);
+                data.sum = ((Double)data.sum) + ((Double)value);
             }
             else {
                 throw new CodingError();
@@ -110,19 +113,19 @@ public class FuncSum extends Function {
         }
         else if (data.sum instanceof BigDecimal) {
             if (value instanceof Integer) {
-            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Integer)value));
+                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Integer)value));
             }
             else if (value instanceof Long) {
-            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Long)value));
+                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Long)value));
             }
             else if (value instanceof BigInteger) {
-            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((BigInteger)value));
+                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((BigInteger)value));
             }
             else if (value instanceof BigDecimal) {
-            	    data.sum = ((BigDecimal)data.sum).add((BigDecimal)value);
+                    data.sum = ((BigDecimal)data.sum).add((BigDecimal)value);
             }
             else if (value instanceof String) {
-            	    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((String)value));
+                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((String)value));
             }
             else {
                 throw new CodingError();
@@ -135,30 +138,30 @@ public class FuncSum extends Function {
     }
 
     private Data init(VdmContext ctx) {
-		Data data = new Data();
-		ctx.setVariable(variableId, data);
-		if (this.returnType.getJavaType() == Double.class) {
-			data.sum = Double.valueOf(0);
-		}
-		else if (this.returnType.getJavaType() == Float.class) {
-			data.sum = Float.valueOf(0);
-		}
-		else if (this.returnType.getJavaType() == BigDecimal.class) {
-			data.sum = BigDecimal.ZERO;
-		}
+        Data data = new Data();
+        ctx.setVariable(variableId, data);
+        if (this.returnType.getJavaType() == Double.class) {
+            data.sum = Double.valueOf(0);
+        }
+        else if (this.returnType.getJavaType() == Float.class) {
+            data.sum = Float.valueOf(0);
+        }
+        else if (this.returnType.getJavaType() == BigDecimal.class) {
+            data.sum = BigDecimal.ZERO;
+        }
         else {
             throw new CodingError();
         }
-		return data;
-	}
+        return data;
+    }
 
-	@Override
+    @Override
     public DataType getReturnType() {
         return DataType.number();
     }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 }

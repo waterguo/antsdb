@@ -265,6 +265,7 @@ public class Orca {
         registerSystemView(SYSNS, "MINKE_PAGES", new SystemViewMinkePages());
         registerSystemView(SYSNS, "MEM_IMMORTAL", new SystemViewMemImmortals());
         registerSystemView(SYSNS, "SLAVE_WARMER_INFO", new SystemViewSlaveWarmerInfo());
+        registerSystemView(SYSNS, "PAGE_CACHE_WARMER_INFO", new PageCacheWarmerInfo());
     }
 
     private void verifySystem() {

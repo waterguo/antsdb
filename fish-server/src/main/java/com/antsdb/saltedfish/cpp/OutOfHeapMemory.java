@@ -19,6 +19,13 @@ package com.antsdb.saltedfish.cpp;
  */
 public class OutOfHeapMemory extends RuntimeException {
 
-	private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
+    public OutOfHeapMemory() {
+        super();
+    }
+    
+    public OutOfHeapMemory(String msg) {
+        super(msg);
+    }
 }

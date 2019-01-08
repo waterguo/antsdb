@@ -25,7 +25,6 @@ public class Show_columns_stmtGenerator extends Generator<Show_columns_stmtConte
     // SHOW COLUMNS FROM table_name_ FROM namespace    
     @Override
     public Instruction gen(GeneratorContext ctx, Show_columns_stmtContext rule) throws OrcaException {
-        
         String ns = "";
         String table = rule.table_name_().getText();
         boolean full = (rule.K_FULL() != null);

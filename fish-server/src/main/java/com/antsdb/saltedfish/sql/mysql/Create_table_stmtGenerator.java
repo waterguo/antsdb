@@ -39,6 +39,7 @@ import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.IfTableNotExist;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.util.Pair;
 
 public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtContext>{
 
@@ -58,6 +59,9 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
             options.put(option, value);
             if (option.equalsIgnoreCase("DEFAULTCHARSET")) {
                 createTable.setCharset(value);
+            }
+            else if (option.equalsIgnoreCase("ENGINE")) {
+                createTable.setEngine(value);
             }
         }
         
@@ -162,12 +166,12 @@ public class Create_table_stmtGenerator extends DdlGenerator<Create_table_stmtCo
     private Instruction createIndex(GeneratorContext ctx, ObjectName tableName, Index_defContext rule) {
         boolean isUnique = rule.K_UNIQUE() != null;
         String indexName = null;
-        List<String> columns = Utils.getColumns(rule.index_columns());
+        List<Pair<String, Integer>> columns = Utils.getIndexColumns(rule.index_columns());
             if (rule.identifier() != null) {
                 indexName = Utils.getIdentifier(rule.identifier());
             }
             else {
-                indexName = columns.get(0); 
+                indexName = columns.get(0).x; 
             }
         boolean isFullText = rule.K_FULLTEXT() != null;
         CreateIndex step = new CreateIndex(indexName, isFullText, isUnique, false, tableName, columns);

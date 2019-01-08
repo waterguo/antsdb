@@ -36,6 +36,7 @@ import com.antsdb.saltedfish.sql.vdm.InsertOnDuplicate;
 import com.antsdb.saltedfish.sql.vdm.InsertSelect;
 import com.antsdb.saltedfish.sql.vdm.InsertSingleRow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.NotNullCheck;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.OpIncrementColumnValue;
 import com.antsdb.saltedfish.sql.vdm.Operator;
@@ -92,6 +93,7 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
             value = Utils.autoCast(column, value);
             values[column.getColumnId()] = value;
         }
+        setDefaultValues(ctx, table, values);
         return new InsertSelect(ctx.getOrca(), gtable, table, maker, values);
     }
     
@@ -102,10 +104,8 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
         for (Insert_stmt_values_rowContext i: rule.insert_stmt_values_row()) {
             Operator[] values = new Operator[table.getMaxColumnId() + 1];
             List<ExprContext> exprs = i.expr();
-            if (rule.insert_stmt_values_columns() != null) {
-                if (exprs.size() != rule.insert_stmt_values_columns().column_name().size()) {
-                    throw new OrcaException("number of columns is not matching number of values");
-                }
+            if (exprs.size() != columns.size()) {
+                throw new OrcaException("column count doesn't match value count");
             }
             for (int j=0; j<exprs.size(); j++) {
                 ExprContext expr = exprs.get(j);
@@ -163,10 +163,15 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
                 }
             }
             else if (i.getDefault() != null) {
-                values[i.getColumnId()] = ExprGenerator.gen(ctx, null, i.getDefault());
+                Operator value = ExprGenerator.gen(ctx, null, i.getDefault());
+                value = Utils.autoCast(i, value);
+                values[i.getColumnId()] = value;
             }
             else if (i.isAutoIncrement()) {
                 values[i.getColumnId()] = new OpIncrementColumnValue(table, null);
+            }
+            if (!i.isNullable()) {
+                values[i.getColumnId()] = new NotNullCheck(values[i.getColumnId()], i);
             }
         }
     }

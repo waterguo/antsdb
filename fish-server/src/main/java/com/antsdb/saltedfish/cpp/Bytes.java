@@ -91,10 +91,15 @@ public class Bytes {
     }
     
     public final static int compare(long xAddr, long yAddr) {
-        if (Unsafe.getByte(xAddr) != Value.FORMAT_BYTES) {
+        byte typex = Value.getFormat(null, xAddr);
+        byte typey = Value.getFormat(null, yAddr);
+        if ((typex == Value.FORMAT_KEY_BYTES) && (typey == Value.FORMAT_KEY_BYTES)) {
+            return KeyBytes.compare(xAddr, yAddr);
+        }
+        if (typex != Value.FORMAT_BYTES) {
             throw new IllegalArgumentException();
         }
-        if (Unsafe.getByte(yAddr) != Value.FORMAT_BYTES) {
+        if (typey != Value.FORMAT_BYTES) {
             throw new IllegalArgumentException();
         }
         return compare_(xAddr, yAddr);

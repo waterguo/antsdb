@@ -49,6 +49,7 @@ import com.antsdb.saltedfish.sql.vdm.ModifyColumn;
 import com.antsdb.saltedfish.sql.vdm.MysqlUpgradeIndexToPrimaryKey;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.RunScript;
+import com.antsdb.saltedfish.util.Pair;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtContext> {
@@ -120,14 +121,16 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
     }
 
     private Instruction addIndex(GeneratorContext ctx, Alter_table_add_indexContext rule, ObjectName tableName) {
-        List<String> columns = new ArrayList<String>();
-        rule.indexed_column_def().forEach((it) -> columns.add(Utils.getIdentifier(it.indexed_column().identifier())));
+        List<Pair<String, Integer>> columns = new ArrayList<>();
+        rule.indexed_column_def().forEach((it) -> {
+            columns.add(new Pair<>(Utils.getIdentifier(it.indexed_column().identifier()), null));
+        });
         String indexName = null;
         if (rule.index_name() != null) {
             indexName = Utils.getIdentifier(rule.index_name().identifier());
         }
         else {
-            indexName = columns.get(0); 
+            indexName = columns.get(0).x; 
         }
         boolean isUnique = rule.K_UNIQUE() != null;
         boolean isFullText = rule.K_FULLTEXT() != null;
@@ -192,7 +195,7 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
             String oldName, 
             Column_defContext rule) {
         ModifyColumn mc = new ModifyColumn(tableName, oldName);
-        Utils.updateColumnAttributes(ctx, mc, rule, new ArrayList<String>());
+        Utils.updateColumnAttributes(ctx, mc, rule, new ArrayList<>());
         return mc;
     }
 

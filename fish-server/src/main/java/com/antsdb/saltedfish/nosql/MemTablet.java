@@ -54,7 +54,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  *  
  * @author wgu0
  */
-public final class MemTablet implements ConsoleHelper, Recycable, Closeable, LogSpan {
+public final class MemTablet implements ConsoleHelper, Recycable, Closeable, LogSpan, LogDependency {
     static Logger _log = UberUtil.getThisLogger();
     static Pattern _ptn = Pattern.compile("^([0-9a-fA-F]{8})-([0-9a-fA-F]{8})\\.tbl$");
     static final VariableLengthLongComparator _comp = new VariableLengthLongComparator();
@@ -1079,7 +1079,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                         throw new IllegalArgumentException(String.valueOf(rowState));
                     }
                     trackTrxId(version, node.getOffset());
-                    trackSp(spRow - Gobbler.PutEntry.getHeaderSize());
+                    trackSp(spRow - Gobbler.PutEntry2.getHeaderSize());
                     return HumpbackError.SUCCESS;
                 }
                 if (!lockWait(error, timer, pKey, oHeadValue, version)) {
@@ -1113,7 +1113,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     continue;
                 }
                 trackTrxId(version, node.getOffset());
-                trackSp(sp - Gobbler.PutEntry.getHeaderSize());
+                trackSp(sp - Gobbler.PutEntry2.getHeaderSize());
                 return HumpbackError.SUCCESS;
             }
         }
@@ -1148,7 +1148,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     });
                     node.setSpacePointer(spRow);
                     trackTrxId(version, node.getOffset());
-                    trackSp(spRow - Gobbler.InsertEntry.getHeaderSize());
+                    trackSp(spRow - Gobbler.InsertEntry2.getHeaderSize());
                     return HumpbackError.SUCCESS;
                 }
                 if (!lockWait(error, timer, pKey, oHeadValue, version)) {
@@ -1191,7 +1191,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     long sp = this.humpback.getGobbler().logIndex(hsession, tableId, version, pIndexKey, pRowKey, misc);
                     node.setSpacePointer(sp);
                     trackTrxId(version, node.getOffset());
-                    trackSp(sp - Gobbler.IndexEntry.getHeaderSize());
+                    trackSp(sp - Gobbler.IndexEntry2.getHeaderSize());
                     return HumpbackError.SUCCESS;
                 }
                 if (!lockWait(error, timer, pIndexKey, oHeadValue, version)) {
@@ -1228,7 +1228,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                 }
                 node.setSpacePointer(sp);
                 trackTrxId(version, node.getOffset());
-                trackSp(sp - Gobbler.IndexEntry.getHeaderSize());
+                trackSp(sp - Gobbler.IndexEntry2.getHeaderSize());
                 return HumpbackError.SUCCESS;
             }
         }
@@ -1302,7 +1302,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     long spRow = this.humpback.getGobbler().logUpdate(hsession, row, this.tableId);
                     node.setSpacePointer(spRow);
                     trackTrxId(version, node.getOffset());
-                    trackSp(spRow - Gobbler.UpdateEntry.getHeaderSize());
+                    trackSp(spRow - Gobbler.UpdateEntry2.getHeaderSize());
                     return HumpbackError.SUCCESS;
                 }
                 if (!lockWait(error, timer, pKey, oHeadValue, version)) {
@@ -1343,7 +1343,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     long sprow = this.humpback.getGobbler().logDelete(hsession, trxid, this.tableId, pKey, length);
                     node.setSpacePointer(sprow);
                     trackTrxId(trxid, node.getOffset());
-                    trackSp(sprow - Gobbler.DeleteEntry.getHeaderSize());
+                    trackSp(sprow - Gobbler.DeleteEntry2.getHeaderSize());
                     return HumpbackError.SUCCESS;
                 }
                 if (!lockWait(error, timer, pKey, oHeadValue, trxid)) {
@@ -1380,7 +1380,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     long sprow = this.humpback.getGobbler().logDeleteRow(hsession, trxid, this.tableId, pRow);
                     node.setSpacePointer(sprow);
                     trackTrxId(trxid, node.getOffset());
-                    trackSp(sprow - Gobbler.DeleteRowEntry.getHeaderSize());
+                    trackSp(sprow - Gobbler.DeleteRowEntry2.getHeaderSize());
                     return HumpbackError.SUCCESS;
                 }
                 if (!lockWait(error, timer, pKey, oHeadValue, trxid)) {
@@ -1419,7 +1419,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
                     continue;
                 }
                 trackTrxId(trxid, node.getOffset());
-                trackSp(sprow - Gobbler.DeleteEntry.getHeaderSize());
+                trackSp(sprow - Gobbler.DeleteEntry2.getHeaderSize());
                 return HumpbackError.SUCCESS;
             }
         }
@@ -1850,5 +1850,21 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
             return true;
         }
         return false;
+    }
+
+    @Override
+    public long getLogPointer() {
+        LongLong span = this.getLogSpan();
+        return span!=null ? span.x : Long.MAX_VALUE;
+    }
+
+    @Override
+    public String getName() {
+        return this.file.getName();
+    }
+
+    @Override
+    public List<LogDependency> getChildren() {
+        return null;
     }
 }

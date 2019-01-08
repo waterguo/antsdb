@@ -58,4 +58,11 @@ public class OrcaException extends RuntimeException {
         super(x);
     }
 
+    public void setCode(int value) {
+        this.code = value;
+    }
+
+    public int getCode() {
+        return this.code;
+    }
 }

@@ -81,7 +81,9 @@ public class TruncateTable extends Statement {
                 ObjectName seqname = table.getAutoIncrementSequenceName();
                 SequenceMeta seq = meta.getSequence(trx, seqname);
                 if (seq != null) {
-                    seq.setLastNumber(seq.getSeed() - seq.getIncrement());
+                    seq.setLastNumber(0);
+                    seq.setSeed(0);
+                    seq.setIncrement(1);
                     meta.updateSequence(ctx.getHSession(), trx.getTrxId(), seq);
                 }
                 

@@ -4,7 +4,7 @@
  
     <groupId>com.antsdb</groupId>
     <artifactId>fish-root</artifactId>
-    <version>18.05.27</version>
+    <version>18.12.29-beyond</version>
     <packaging>pom</packaging>
     
     <properties>

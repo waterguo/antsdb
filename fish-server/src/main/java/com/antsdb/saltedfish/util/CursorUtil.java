@@ -120,10 +120,12 @@ public class CursorUtil {
 
     static class SingleRecordCursor extends Cursor {
         long pRecord;
+        Heap heap;
 
-        public SingleRecordCursor(CursorMeta meta, long pRecord) {
+        public SingleRecordCursor(CursorMeta meta, Heap heap, long pRecord) {
             super(meta);
             this.pRecord = pRecord;
+            this.heap = heap;
         }
 
         @Override
@@ -135,6 +137,10 @@ public class CursorUtil {
 
         @Override
         public void close() {
+            if (this.heap != null) {
+                this.heap.close();
+                this.heap = null;
+            }
         }
 
     }
@@ -280,7 +286,11 @@ public class CursorUtil {
     }
 
     public static Cursor toCursor(CursorMeta meta, long pRecord) {
-        Cursor c = new SingleRecordCursor(meta, pRecord);
+        return toCursor(meta, null, pRecord);
+    }
+
+    public static Cursor toCursor(CursorMeta meta, Heap heap, long pRecord) {
+        Cursor c = new SingleRecordCursor(meta, heap, pRecord);
         return c;
     }
 

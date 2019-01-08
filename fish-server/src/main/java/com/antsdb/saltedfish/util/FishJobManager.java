@@ -29,69 +29,69 @@ import org.slf4j.Logger;
  * @author wgu0
  */
 public class FishJobManager {
-	static Logger _log = UberUtil.getThisLogger();
-	static Field _hiddenField;
-	
-	ScheduledThreadPoolExecutor poolPeriodic = new ScheduledThreadPoolExecutor(2);
-	ScheduledThreadPoolExecutor poolOneTime = new ScheduledThreadPoolExecutor(1);
-	
-	static {
-		try {
-			_hiddenField = FutureTask.class.getDeclaredField("callable");
-			_hiddenField.setAccessible(true);
-		}
-		catch (Exception e) {
-			_log.error("", e);
-		}
-	}
-	public FishJobManager() {
-	}
-	
-	public ScheduledFuture<?> scheduleWithFixedDelay(long delay, TimeUnit unit, Runnable callable) {
-		return poolPeriodic.scheduleWithFixedDelay(callable, 0, delay, unit);
-	}
+    static Logger _log = UberUtil.getThisLogger();
+    static Field _hiddenField;
+    
+    ScheduledThreadPoolExecutor poolPeriodic = new ScheduledThreadPoolExecutor(2);
+    ScheduledThreadPoolExecutor poolOneTime = new ScheduledThreadPoolExecutor(1);
+    
+    static {
+        try {
+            _hiddenField = FutureTask.class.getDeclaredField("callable");
+            _hiddenField.setAccessible(true);
+        }
+        catch (Exception e) {
+            _log.error("", e);
+        }
+    }
+    public FishJobManager() {
+    }
+    
+    public ScheduledFuture<?> scheduleWithFixedDelay(long delay, TimeUnit unit, Runnable callable) {
+        return poolPeriodic.scheduleWithFixedDelay(callable, 0, delay, unit);
+    }
 
-	public ScheduledFuture<?> scheduleWithFixedDelay(Runnable callable, long delay, TimeUnit unit) {
-		return poolPeriodic.scheduleWithFixedDelay(callable, 0, delay, unit);
-	}
+    public ScheduledFuture<?> scheduleWithFixedDelay(Runnable callable, long delay, TimeUnit unit) {
+        return poolPeriodic.scheduleWithFixedDelay(callable, 0, delay, unit);
+    }
 
-	public ScheduledFuture<?> schedule(long delay, TimeUnit unit, Runnable callable) {
-		return poolOneTime.schedule(callable, delay, unit);
-	}
+    public ScheduledFuture<?> schedule(long delay, TimeUnit unit, Runnable callable) {
+        return poolOneTime.schedule(callable, delay, unit);
+    }
 
     public ScheduledFuture<?> schedule(long delay, TimeUnit unit, Callable<?> callable) {
         return poolOneTime.schedule(callable, delay, unit);
     }
 
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public void close() {
-		// shutdown periodic futures
-		
-		this.poolPeriodic.shutdown();
-		try {
-			this.poolPeriodic.awaitTermination(30, TimeUnit.SECONDS);
-		}
-		catch (InterruptedException e) {
-		}
-		
-		// shutdown one-shot futures. we need to complete these futures
-		
-		List<ScheduledFuture<?>> futures = (List)this.poolOneTime.shutdownNow();
-		try {
-			this.poolOneTime.awaitTermination(30, TimeUnit.SECONDS);
-		}
-		catch (InterruptedException e) {
-		}
-		for (ScheduledFuture<?> i:futures) {
-			try {
-				Callable<?> callable = (Callable)_hiddenField.get(i);
-				callable.call();
-			}
-			catch (InterruptedException e) {
-			}
-			catch (Exception e) {
-				_log.error("", e);
-			}
-		}
-	}
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void close() {
+        // shutdown periodic futures
+        
+        this.poolPeriodic.shutdown();
+        try {
+            this.poolPeriodic.awaitTermination(30, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e) {
+        }
+        
+        // shutdown one-shot futures. we need to complete these futures
+        
+        List<ScheduledFuture<?>> futures = (List)this.poolOneTime.shutdownNow();
+        try {
+            this.poolOneTime.awaitTermination(30, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e) {
+        }
+        for (ScheduledFuture<?> i:futures) {
+            try {
+                Callable<?> callable = (Callable)_hiddenField.get(i);
+                callable.call();
+            }
+            catch (InterruptedException e) {
+            }
+            catch (Exception e) {
+                _log.error("", e);
+            }
+        }
+    }
 }

@@ -1,11 +1,11 @@
 # TCP port antsdb is listening on. default is 3306
-# fish.port= 
+# fish.port=
 
 # number of threads in the pool. default is number of cpus * 2
 # netty.worker.pool.size=
 
 # storage engine. uncomment to enable hbase integration
-# humpback.storage-engine=hbase
+humpback.storage-engine=hbase
 
 # location of hbase configuration file - hbase-site.xml. 
 # humpback.hbase-conf=

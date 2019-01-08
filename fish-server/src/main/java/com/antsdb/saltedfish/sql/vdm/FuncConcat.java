@@ -23,38 +23,38 @@ import com.antsdb.saltedfish.sql.DataType;
  */
 public class FuncConcat extends Function {
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-	    long pResult = 0;
-	    for (Operator i:this.parameters) {
-	        long pValue = i.eval(ctx, heap, params, pRecord);
-	        if (pValue == 0) {
-	            return 0;
-	        }
-	        pValue = AutoCaster.toString(heap, pValue);
-	        if (pResult == 0) {
-	            pResult = pValue;
-	        }
-	        else {
-	            pResult = FishString.concat(heap, pResult, pValue);
-	        }
-	    }
-		return pResult;
-	}
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pResult = 0;
+        for (Operator i:this.parameters) {
+            long pValue = i.eval(ctx, heap, params, pRecord);
+            if (pValue == 0) {
+                return 0;
+            }
+            pValue = AutoCaster.toString(heap, pValue);
+            if (pResult == 0) {
+                pResult = pValue;
+            }
+            else {
+                pResult = FishString.concat(heap, pResult, pValue);
+            }
+        }
+        return pResult;
+    }
 
-	@Override
+    @Override
     public int getMaxParameters() {
         return Integer.MAX_VALUE;
     }
 
     @Override
-	public DataType getReturnType() {
-		return DataType.varchar();
-	}
+    public DataType getReturnType() {
+        return DataType.varchar();
+    }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 
 }

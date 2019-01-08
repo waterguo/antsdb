@@ -50,7 +50,7 @@ class Seed {
     }
     
     void run() {
-        HumpbackSession hsession = this.humpback.createSession();
+        HumpbackSession hsession = this.humpback.createSession("local/seed");
         hsession.open();
         try {
             // system tables

@@ -27,11 +27,12 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.util.Pair;
 
 public class CreateIndex extends Statement {
     String indexName;
     ObjectName tableName;
-    List<String> columns;
+    List<Pair<String, Integer>> columns;
     boolean isUnique;
     boolean createIfNotExists;
     private boolean isFullText;
@@ -42,7 +43,7 @@ public class CreateIndex extends Statement {
                        boolean isUnique, 
                        boolean createIfNotExists, 
                        ObjectName tableName, 
-                       List<String> columns) {
+                       List<Pair<String, Integer>> columns) {
         super();
         this.indexName = indexName;
         this.tableName = tableName;
@@ -95,14 +96,16 @@ public class CreateIndex extends Statement {
         // create new index
         
         List<ColumnMeta> columns = new ArrayList<>();
-        for (String i:this.columns) {
-            ColumnMeta col = table.getColumn(i);
+        List<Integer> prefix = new ArrayList<>();
+        for (Pair<String, Integer> i:this.columns) {
+            ColumnMeta col = table.getColumn(i.x);
             if (col == null) {
                 throw new OrcaException("column that makes of the index is not found: " + i);
             }
             columns.add(col);
+            prefix.add(i.y);
         }
-        createIndex(ctx, table, indexName, isFullText, isUnique, columns, this.rebuild);
+        createIndex(ctx, table, indexName, isFullText, isUnique, columns, prefix, this.rebuild);
     }
 
     static IndexMeta createIndex(
@@ -112,6 +115,7 @@ public class CreateIndex extends Statement {
             boolean isFullText,
             boolean isUnique, 
             List<ColumnMeta> columns,
+            List<Integer> prefix,
             boolean rebuild) {
         // create new index
         IndexMeta index = new IndexMeta(ctx.getOrca(), table);
@@ -123,6 +127,7 @@ public class CreateIndex extends Statement {
         index.genUniqueExternalName(table, indexName, id);
         index.setFullText(isFullText);
         index.setRuleColumns(columns);
+        index.setPrefix(prefix);
         ctx.getMetaService().addRule(ctx.getHSession(), ctx.getTransaction(), index);
         
         // create physical table

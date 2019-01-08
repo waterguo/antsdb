@@ -20,6 +20,11 @@ import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
 import static com.antsdb.saltedfish.sql.OrcaConstant.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.lang.StringUtils;
+
 public class IndexMeta extends RuleMeta<IndexMeta> {
     static final ObjectName SEQ_NAME = new ObjectName(SYSNS, TABLENAME_SYSRULE);
 
@@ -39,13 +44,13 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
     }
 
     public boolean isUnique() {
-            Object obj = row.get(ColumnId.sysrule_is_unique.getId());
-            if (obj instanceof Integer) {
-                return ((Integer)obj) == 1;
-            }
-            else {
-                return false;
-            }
+        Object obj = row.get(ColumnId.sysrule_is_unique.getId());
+        if (obj instanceof Integer) {
+            return ((Integer)obj) == 1;
+        }
+        else {
+            return false;
+        }
     }
     
     public KeyMaker getKeyMaker() {
@@ -100,6 +105,28 @@ public class IndexMeta extends RuleMeta<IndexMeta> {
         SlowRow clone = this.row.clone();
         IndexMeta result = new IndexMeta(clone);
         result.keyMaker = this.keyMaker;
+        return result;
+    }
+    
+    public void setPrefix(List<Integer> prefixes) {
+        String temp = StringUtils.join(prefixes, ',');
+        row.set(ColumnId.sysrule_index_prefix.getId(), temp);
+    }
+    
+    public List<Integer> getPrefix() {
+        String temp = (String)row.get(ColumnId.sysrule_index_prefix.getId());
+        if (StringUtils.isEmpty(temp)) {
+            return null;
+        }
+        List<Integer> result = new ArrayList<>();
+        for (String i:temp.split(",")) {
+            if (i.isEmpty()) {
+                result.add(null);
+            }
+            else {
+                result.add(Integer.parseInt(i));
+            }
+        }
         return result;
     }
 }

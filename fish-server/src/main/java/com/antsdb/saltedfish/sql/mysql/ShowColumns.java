@@ -142,7 +142,7 @@ public class ShowColumns extends View {
         item.Null = column.isNullable() ? "YES" : "NO";
         item.Key = getColumnKeyType(table, column);
         item.Default = column.getDefault();
-        item.Extra = "";
+        item.Extra = isAutoIncrement(table, column.getColumnName()) ? "auto_increment" : "";
         return item;
     }
 

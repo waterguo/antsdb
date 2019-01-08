@@ -36,6 +36,25 @@ public class DumbSorter extends CursorMaker {
     List<Operator> exprs;
     List<Boolean> sortAsc;
 
+    class MyComparator2 implements Comparator<Item> {
+        VdmContext ctx;
+        Heap heap;
+        Parameters params;
+        
+        @Override
+        public int compare(Item x, Item y) {
+            for (int i=0; i<exprs.size(); i++) {
+                long px = exprs.get(i).eval(ctx, heap, params, x.pRecord);
+                long py = exprs.get(i).eval(ctx, heap, params, y.pRecord);
+                int comp = AutoCaster.compare(heap, px, py);
+                if (comp != 0) {
+                    return sortAsc.get(i) ? comp : -comp;
+                }
+            }
+            return 0;
+        }
+    }
+    
     class MyComparator implements Comparator<Item> {
         @Override
         public int compare(Item x, Item y) {
@@ -132,7 +151,11 @@ public class DumbSorter extends CursorMaker {
                 items.add(item);
             }
             counter.addAndGet(items.size());
-            Collections.sort(items, new MyComparator());
+            MyComparator2 comp = new MyComparator2();
+            comp.ctx = ctx;
+            comp.heap = heap;
+            comp.params = params;
+            Collections.sort(items, comp);
             result.items = items;
             success = true;
             return result;

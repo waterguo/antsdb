@@ -14,17 +14,25 @@
 package com.antsdb.saltedfish.nosql;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 
 /**
  * 
@@ -95,6 +103,46 @@ public class ReplayRelay implements ReplayHandler {
 
     public ReplayRelay(ReplayHandler downstream) {
         this.downstream = downstream;
+    }
+
+    @Override
+    public void insert(InsertEntry2 entry) throws Exception {
+        this.downstream.insert(entry);
+    }
+
+    @Override
+    public void update(UpdateEntry2 entry) throws Exception {
+        this.downstream.update(entry);
+    }
+
+    @Override
+    public void put(PutEntry2 entry) throws Exception {
+        this.downstream.put(entry);
+    }
+
+    @Override
+    public void index(IndexEntry2 entry) throws Exception {
+        this.downstream.index(entry);
+    }
+
+    @Override
+    public void delete(DeleteEntry2 entry) throws Exception {
+        this.downstream.delete(entry);
+    }
+
+    @Override
+    public void message(MessageEntry2 entry) throws Exception {
+        this.downstream.message(entry);
+    }
+
+    @Override
+    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
+        this.downstream.deleteRow(entry);
+    }
+
+    @Override
+    public void ddl(DdlEntry entry) throws Exception {
+        this.downstream.ddl(entry);
     }
     
 }

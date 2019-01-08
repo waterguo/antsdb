@@ -28,6 +28,8 @@ public interface StorageEngine extends Synchronizable  {
     public void createNamespace(String name);
     public void deleteNamespace(String name);
     public void syncTable(SysMetaRow meta);
+    public Replicable getReplicable();
+    
     /**
      * check if the table physically exist in the storage
      * 
@@ -46,5 +48,4 @@ public interface StorageEngine extends Synchronizable  {
      */
     public boolean isTransactionRecoveryRequired();
     public void close() throws IOException;
-    public boolean supportReplication();
 }

@@ -20,6 +20,9 @@ package com.antsdb.saltedfish.server.mysql;
 public class ErrorMessage extends RuntimeException {
     private static final long serialVersionUID = 1L;
     
+    public static final int ZK_NOT_ENABLED = 50000;
+    public static final int ZK_NODE_ALREADY_REGISTERED = 50001;
+    
     private int error;
     private String message;
 

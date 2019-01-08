@@ -83,13 +83,13 @@ public class DataType {
         return this.klass;
     }
 
-    static DataType _varchar = new TypeString("_varchar", 4000, Types.VARCHAR);
+    static DataType _varchar = new TypeString("_varchar", Types.VARCHAR, 4000);
     public static DataType varchar() {
         return _varchar;
     }
 
     public static DataType varchar(int length) {
-            return new TypeString("_varchar", length, Types.VARCHAR);
+        return new TypeString("_varchar", Types.VARCHAR, length);
     }
 
     static DataType _number = new TypeDecimal("_decimal", 38, 4);
@@ -189,7 +189,13 @@ public class DataType {
     @Override
     public String toString() {
         String text;
-        if (this.getJavaType() == String.class) {
+        if (this.getSqlType() == Types.CLOB) {
+            text = this.name;
+        }
+        else if (this.getSqlType() == Types.BLOB) {
+            text = this.name;
+        }
+        else if (this.getJavaType() == String.class) {
             text = this.name + '(' + length + ')';
         }
         else if (this.getJavaType() == byte[].class) {

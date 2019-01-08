@@ -47,7 +47,7 @@ public class CursorPrimaryKeySeek extends CursorMaker {
                 GTable gtable,
                 Transaction trx, 
                 AtomicLong counter) {
-            super(CursorPrimaryKeySeek.this);
+            super(CursorPrimaryKeySeek.this.getCursorMeta());
             this.gtable = gtable;
             this.trx = trx;
             this.counter = counter;

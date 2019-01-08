@@ -4,7 +4,7 @@
     <parent>
         <groupId>com.antsdb</groupId>
         <artifactId>fish-root</artifactId>
-        <version>18.12.29</version>
+        <version>18.12.29-beyond</version>
     </parent>
     
     <modelVersion>4.0.0</modelVersion>
@@ -269,7 +269,7 @@
 	<dependency>
 		<groupId>org.apache.lucene</groupId>
 		<artifactId>lucene-core</artifactId>
-		<version>6.2.1</version>
+		<version>7.1.0</version>
 	</dependency>
 	<dependency>
 		<groupId>org.apache.curator</groupId>

@@ -36,6 +36,7 @@ import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Filter;
+import com.antsdb.saltedfish.sql.vdm.HSeek;
 import com.antsdb.saltedfish.sql.vdm.HSelect;
 import com.antsdb.saltedfish.sql.vdm.Limiter;
 import com.antsdb.saltedfish.sql.vdm.LongValue;
@@ -58,18 +59,20 @@ class HCrudUtil {
         return gtable;
     }
     
-    static CursorMaker gen(GeneratorContext ctx, int tableId) {
+    static CursorMaker genCursorMaker(GeneratorContext ctx, int tableId, WhereContext where) {
         GTable gtable = getTable(ctx, tableId);
         List<Integer> columns = getColumns(ctx.getHumpback(), gtable);
         if ((columns == null) || (columns.size() == 0)) {
             throw new OrcaException("columns of table {} is not found", tableId);
         }
-        HSelect result = new HSelect(gtable, columns);
+        HSelect result = hasSeek(where) ? new HSeek(gtable, columns) : new HSelect(gtable, columns);
         return result;
     }
 
     static List<Integer> getColumns(Humpback humpback, GTable gtable) {
         List<Integer> result = new ArrayList<>();
+        result.add(-1);
+        result.add(0);
         List<HColumnRow> htableColumns = humpback.getColumns(gtable.getId());
         if ((htableColumns != null) && (htableColumns.size() > 0)) {
             for (HColumnRow i:htableColumns) {
@@ -105,8 +108,32 @@ class HCrudUtil {
         return result;
     }
 
+    static boolean hasSeek(WhereContext rule) {
+        if (rule == null) {
+            return false;
+        }
+        return hasSeek(rule.expr());
+    }
+    
+    private static boolean hasSeek(ExprContext rule) {
+        if (rule == null) {
+            return false;
+        }
+        if (rule.expr_equal() != null) {
+            return isSeek(rule.expr_equal());
+        }
+        else if (rule.K_AND() != null) {
+            return hasSeek(rule.expr(0)) || hasSeek(rule.expr(1));
+        }
+        return false;
+    }
+
+    private static boolean isSeek(Expr_equalContext rule) {
+        return rule.column().getText().equals("$00");
+    }
+
     static CursorMaker gen(GeneratorContext ctx, int tableId, WhereContext whereRule) {
-        CursorMaker result = gen(ctx, tableId);
+        CursorMaker result = genCursorMaker(ctx, tableId, whereRule);
         if (whereRule != null) {
             Operator where = genWhere(result, whereRule);
             result = new Filter(result, where, 1);
@@ -137,6 +164,9 @@ class HCrudUtil {
         Operator left = genColumn(maker, rule.column());
         Operator right = genValue(rule.value());
         OpEqual result = new OpEqual(left, right);
+        if ((maker instanceof HSeek) && rule.column().getText().equals("$00")) {
+            ((HSeek)maker).setKey(right);
+        }
         return result;
     }
 

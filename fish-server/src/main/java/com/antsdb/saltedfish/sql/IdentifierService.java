@@ -34,7 +34,9 @@ public class IdentifierService {
     volatile long rowidEnd;
     MetadataService meta;
     HumpbackSession hsession;
-
+    int increment = 1;
+    private int mod;
+    
     IdentifierService(Orca orca) {
         super();
         this.orca = orca;
@@ -42,7 +44,7 @@ public class IdentifierService {
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME);
         this.nextRowid.set(seq.getLastNumber());
         this.rowidEnd = this.nextRowid.get();
-        this.hsession = this.orca.getHumpback().createSession();
+        this.hsession = this.orca.getHumpback().createSession("local/id");
     }
     
     /**
@@ -91,13 +93,18 @@ public class IdentifierService {
     
     public long getNextId(ObjectName name) {
         try (HumpbackSession foo = this.hsession.open()) {
-            return this.meta.nextSequence(this.hsession, name);
+            long result = this.meta.nextSequence(this.hsession, name, this.increment);
+            while (result % this.increment != this.mod) {
+                result = this.meta.nextSequence(this.hsession, name, 1);
+            }
+            return result;
         }
     }
     
-    public long getNextId(ObjectName name, int increment) {
+    private long getNextId(ObjectName name, int increment) {
         try (HumpbackSession foo = this.hsession.open()) {
-            return this.meta.nextSequence(this.hsession, name, increment);
+            long result = this.meta.nextSequence(this.hsession, name, increment);
+            return result;
         }
     }
     
@@ -108,5 +115,10 @@ public class IdentifierService {
             this.orca.metaService.updateSequence(this.hsession, this.orca.getTrxMan().getNewVersion(), seq);
         }
         this.orca.getHumpback().deleteSession(this.hsession);
+    }
+
+    public void setMod(int divider, int mod) {
+        this.increment = divider;
+        this.mod = mod;
     }
 }

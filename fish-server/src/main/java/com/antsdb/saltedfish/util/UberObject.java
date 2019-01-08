@@ -19,5 +19,4 @@ public class UberObject {
     public String toString() {
         return UberUtil.toString(this);
     }
-
 }

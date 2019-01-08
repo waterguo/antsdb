@@ -25,7 +25,7 @@ public class Script extends Instruction {
     Instruction root;
     int nParameters;
     int nVariables;
-    String sql;
+    public String sql;
     Measure measure = new Measure();
     
     public Script(Instruction root, int nParameters, int nVariables, String sql) {

@@ -13,10 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.command;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Properties;
 
-import com.antsdb.saltedfish.lexer.FishParser.AssignmentContext;
 import com.antsdb.saltedfish.lexer.FishParser.Change_slave_stmtContext;
 import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
@@ -32,18 +30,7 @@ public class Change_slave_stmtGenerator extends Generator<Change_slave_stmtConte
 
     @Override
     public Instruction gen(GeneratorContext ctx, Change_slave_stmtContext rule) throws OrcaException {
-        Map<String, String> props = new HashMap<>();
-        for (AssignmentContext i:rule.assignment()) {
-            gen(props, i);
-        }
+        Properties props = Utils.getProperties(rule.assignment());
         return new ChangeSlave(props);
     }
-
-    private void gen(Map<String, String> props, AssignmentContext rule) {
-        String key = rule.IDENTIFIER().getText();
-        String value = rule.STRING_LITERAL().getText();
-        value = value.substring(1, value.length()-1);
-        props.put(key.toLowerCase(), value);
-    }
-
 }

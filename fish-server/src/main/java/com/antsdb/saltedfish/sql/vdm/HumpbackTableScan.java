@@ -35,7 +35,7 @@ public class HumpbackTableScan extends CursorMaker {
     boolean noCache = false;
     
     public HumpbackTableScan(TableMeta table, int makerId) {
-            this.table = table;
+        this.table = table;
         this.cursorMeta = CursorMeta.from(table);
         this.mapping = new int[this.cursorMeta.fields.size()];
         this.mapping = this.cursorMeta.getHumpbackMapping();

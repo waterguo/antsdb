@@ -38,20 +38,36 @@ import com.antsdb.saltedfish.sql.vdm.ColumnAttributes;
 import com.antsdb.saltedfish.sql.vdm.ExprUtil;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.TypeUtil;
+import com.antsdb.saltedfish.util.Pair;
 import com.antsdb.saltedfish.util.UberUtil;
 
 class Utils {
     static Logger _log = UberUtil.getThisLogger();
 
     static List<String> getColumns(ColumnsContext columns) {
-        List<String> list = new ArrayList<String>();
+        List<String> list = new ArrayList<>();
         columns.identifier().forEach(it -> list.add(Utils.getIdentifier(it)));
         return list;
     }
 
     public static List<String> getColumns(Index_columnsContext columns) {
-        List<String> list = new ArrayList<String>();
-        columns.index_column().forEach(it -> list.add(Utils.getIdentifier(it.identifier())));
+        List<String> list = new ArrayList<>();
+        columns.index_column().forEach(it -> {
+            list.add(Utils.getIdentifier(it.identifier()));
+        });
+        return list;
+    }
+
+    public static List<Pair<String, Integer>> getIndexColumns(Index_columnsContext columns) {
+        List<Pair<String, Integer>> list = new ArrayList<>();
+        columns.index_column().forEach(it -> {
+            Pair<String, Integer> pair = new Pair<>();
+            pair.x = Utils.getIdentifier(it.identifier());
+            if (it.signed_number() != null) {
+                pair.y = Integer.parseInt(it.signed_number().getText());
+            }
+            list.add(pair);
+        });
         return list;
     }
 
@@ -88,7 +104,10 @@ class Utils {
         return TypeUtil.autoCast(column, expr, false);
     }
 
-    static void updateColumnAttributes(GeneratorContext ctx, ColumnAttributes attrs, Column_defContext rule,
+    static void updateColumnAttributes(
+            GeneratorContext ctx, 
+            ColumnAttributes attrs, 
+            Column_defContext rule,
             List<String> keyColumns) {
         String columnName = getIdentifier(rule.column_name().identifier());
         DataType type = parse(ctx.getTypeFactory(), rule.data_type());
@@ -110,6 +129,7 @@ class Utils {
                 attrs.setAutoIncrement(true);
             }
             else if (i.column_constraint_primary_key() != null) {
+                attrs.setNullable(false);
                 keyColumns.add(columnName);
             }
             else if (i.column_constraint_collate() != null) {

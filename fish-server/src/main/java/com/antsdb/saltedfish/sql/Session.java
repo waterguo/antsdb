@@ -129,14 +129,19 @@ public final class Session implements AutoCloseable {
     private Object run0(ByteBuffer buf, Parameters params, Consumer<Object> callback) throws SQLException {
         CharBuffer sql = toCharBuffer(buf);
         long startTime = UberTime.getTime();
+        Object result = null;
         try {
-            return run1(sql, params, callback);
+            result = run1(sql, params, callback);
+            return result;
         }
         finally {
             this.sql = null;
             this.thread = null;
             long time = UberTime.getTime() - startTime;
             trackQueryTime(sql, null, time);
+            if ((result instanceof Cursor) && (this.getId() >= 0) && (time <= 2000)) {
+                this.orca.sendToSlaveWarmer(this.currentNameSpace, sql.toString(), params, result);
+            }
         }
     }
     
@@ -154,13 +159,9 @@ public final class Session implements AutoCloseable {
         result = script.run(ctx, params, 0);
         if (result instanceof Cursor) {
             result = new FinalCursor(script, params, (Cursor)result);
-            if (this.getId() >= 0) {
-                this.orca.sendToSlaveWarmer(this.currentNameSpace, script.sql, params, result);
-            }
         }
         
         // write result back
-        
         if (callback != null) {
             callback.accept(result);
         }

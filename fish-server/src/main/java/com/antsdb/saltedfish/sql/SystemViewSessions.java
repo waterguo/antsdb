@@ -28,39 +28,39 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * @author wgu0
  */
 public class SystemViewSessions extends View {
-	Orca orca;
-	
+    Orca orca;
+    
     public static class Item {
         public int ID;
-		public long TRX;
-		public String USER;
-		public String REMOTE;
+        public long TRX;
+        public String USER;
+        public String REMOTE;
     }
 
-	public SystemViewSessions(Orca orca) {
-	    super(CursorUtil.toMeta(Item.class));
-		this.orca = orca;
-	}
+    public SystemViewSessions(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
+        this.orca = orca;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Item> list = new ArrayList<>();
         for (Session session:this.orca.sessions) {
             addItem(list, session);
         }
-		
-		// done
+        
+        // done
         Cursor c = CursorUtil.toCursor(meta, list);
         return c;
-	}
+    }
 
-	void addItem(List<Item> list, Session session) {
+    void addItem(List<Item> list, Session session) {
         Item item = new Item();
         list.add(item);
         item.ID = session.getId();
         Transaction trx = session.getTransaction_();
-		item.TRX = (trx != null) ? trx.getTrxId() : 0;
-		item.USER = session.getUser();
-		item.REMOTE = session.remote;
-	}
+        item.TRX = (trx != null) ? trx.getTrxId() : 0;
+        item.USER = session.getUser();
+        item.REMOTE = session.remote;
+    }
 }

@@ -36,13 +36,12 @@ public class CheckPoint {
     final static byte[] KEY = Bytes.toBytes(0);
     final static byte[] TRUNCATE_KEY = Bytes.toBytes(1);
     
-	/** space pointer that has been synchronized */
-	volatile long currentSp;
-	
-	/** should be same as serverId from Humpback. used to prevent accidental sync*/
-	long serverId;
-	
-	Connection conn;
+    /** space pointer that has been synchronized */
+    volatile long currentSp;
+    
+    /** should be same as serverId from Humpback. used to prevent accidental sync*/
+    long serverId;
+    
     private boolean isMutable;
     private TableName tn;
     private long createTimestamp;
@@ -50,60 +49,58 @@ public class CheckPoint {
     private String createOrcaVersion;
     private String updateorcaVersion;
     private boolean isActive;
-	
-	CheckPoint(Connection conn, TableName tn, boolean isMutable) throws IOException {
-		this.conn = conn;
-		this.isMutable = isMutable;
-		this.tn = tn;
-		readFromHBase();
-	}
-	
-	public long getCurrentSp() {
-		return currentSp;
-	}
+    
+    CheckPoint(TableName tn, boolean isMutable) throws IOException {
+        this.isMutable = isMutable;
+        this.tn = tn;
+    }
+    
+    public long getCurrentSp() {
+        return currentSp;
+    }
 
-	public void updateLogPointer(long lp) throws IOException {
+    public void updateLogPointer(Connection conn, long lp) throws IOException {
         if (!this.isMutable) {
             throw new OrcaHBaseException("failed to update since it is realy only mode");
         }
         this.currentSp = lp;
-	    updateHBase();
-	}
-	
-	public long getServerId() {
-		return serverId;
-	}
+        updateHBase(conn);
+    }
+    
+    public long getServerId() {
+        return serverId;
+    }
 
-	public void setServerId(long value) {
-		this.serverId = value;
-	}
-	
-	public void readFromHBase() throws IOException {
-		// Get table object
-		Table table = this.conn.getTable(this.tn);
-		
-		// Query row
-		Get get = new Get(KEY);
-		Result result = table.get(get);
-		if (!result.isEmpty()) {
-			this.currentSp = Bytes.toLong(get(result, "currentSp"));
-			this.serverId = Bytes.toLong(get(result, "serverId"));
+    public void setServerId(long value) {
+        this.serverId = value;
+    }
+    
+    public void readFromHBase(Connection conn) throws IOException {
+        // Get table object
+        Table table = conn.getTable(this.tn);
+        
+        // Query row
+        Get get = new Get(KEY);
+        Result result = table.get(get);
+        if (!result.isEmpty()) {
+            this.currentSp = Bytes.toLong(get(result, "currentSp"));
+            this.serverId = Bytes.toLong(get(result, "serverId"));
             this.createTimestamp = Optional.ofNullable(get(result, "createTimestamp")).map(Bytes::toLong).orElse(0l);
             this.updateTimestamp = Optional.ofNullable(get(result, "updateTimestamp")).map(Bytes::toLong).orElse(0l);
             this.createOrcaVersion = Bytes.toString(get(result, "createOrcaVersion"));
             this.updateorcaVersion = Bytes.toString(get(result, "updateOrcaVersion"));
             this.isActive = Optional.ofNullable(get(result, "isActive")).map(Bytes::toBoolean).orElse(Boolean.FALSE);
-		}
-	}
-	
-	/**
-	 * save changes to hbase
-	 * @throws IOException 
-	 */
-	public void updateHBase() throws IOException {
-	    if (!this.isMutable) {
-	        throw new OrcaHBaseException("failed to update since it is realy only mode");
-	    }
+        }
+    }
+    
+    /**
+     * save changes to hbase
+     * @throws IOException 
+     */
+    public void updateHBase(Connection conn) throws IOException {
+        if (!this.isMutable) {
+            throw new OrcaHBaseException("failed to update since it is realy only mode");
+        }
         // Get table object
         Table table = conn.getTable(tn);
         
@@ -127,30 +124,30 @@ public class CheckPoint {
         
         // put row
         table.put(put);
-	}
+    }
 
-	private byte[] get(Result r, String column) {
-	    byte[] result = r.getValue(COLUMN_FAMILY, Bytes.toBytes(column));
-	    return result;
-	}
-	
-	private void set(Put put, String column, Object value) {
-	    byte[] bytes;
-	    if (value instanceof Long) {
-	        bytes = Bytes.toBytes((Long)value);
-	    }
-	    else if (value instanceof String) {
-	        bytes = Bytes.toBytes((String)value);
-	    }
-	    else if (value instanceof Boolean) {
-	        bytes = Bytes.toBytes((Boolean)value);
-	    }
-	    else {
-	        throw new IllegalArgumentException();
-	    }
+    private byte[] get(Result r, String column) {
+        byte[] result = r.getValue(COLUMN_FAMILY, Bytes.toBytes(column));
+        return result;
+    }
+    
+    private void set(Put put, String column, Object value) {
+        byte[] bytes;
+        if (value instanceof Long) {
+            bytes = Bytes.toBytes((Long)value);
+        }
+        else if (value instanceof String) {
+            bytes = Bytes.toBytes((String)value);
+        }
+        else if (value instanceof Boolean) {
+            bytes = Bytes.toBytes((Boolean)value);
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
         put.addColumn(COLUMN_FAMILY, Bytes.toBytes(column), bytes);
-	}
-	
+    }
+    
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();

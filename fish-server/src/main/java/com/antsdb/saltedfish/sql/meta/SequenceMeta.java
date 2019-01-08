@@ -25,7 +25,7 @@ import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
 public class SequenceMeta {
     SlowRow row;
-    AtomicLong next;
+    AtomicLong last;
     
     public SequenceMeta(ObjectName name, int id) {
         this.row = new SlowRow(getKey(name));
@@ -40,7 +40,7 @@ public class SequenceMeta {
     public SequenceMeta(SlowRow row) {
         super();
         this.row = row;
-        this.next = new AtomicLong(getLastNumber() + 1);
+        this.last = new AtomicLong(getLastNumber());
     }
 
     public byte[] getKey() {
@@ -122,9 +122,8 @@ public class SequenceMeta {
     }
 
     public long next(HumpbackSession hsession, GTable table, TrxMan trxman, int increment) {
-        long next = this.next.addAndGet(increment);
-        long result = next - increment;
-        if (next > getLastNumber()) {
+        long result = this.last.addAndGet(increment);
+        if (result > getLastNumber()) {
             alloc(hsession, table, trxman, result);
         }
         return result;
@@ -145,8 +144,8 @@ public class SequenceMeta {
     }
     
     public synchronized void closeAndUpdate(HumpbackSession hsession, GTable table, TrxMan trxman) {
-        AtomicLong temp = this.next;
-        this.next = null;
+        AtomicLong temp = this.last;
+        this.last = null;
         setLastNumber(temp.get() - 1);
         table.update(hsession, trxman.getNewVersion(), this.row, 0);
     }

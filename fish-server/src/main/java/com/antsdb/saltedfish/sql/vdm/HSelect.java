@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -26,8 +27,8 @@ import com.antsdb.saltedfish.sql.DataType;
  */
 public class HSelect extends View {
 
-    private GTable gtable;
-    private int[] mapping;
+    protected GTable gtable;
+    protected int[] mapping;
 
     public HSelect(GTable gtable, List<Integer> columns) {
         super(createMeta(gtable, columns));
@@ -41,15 +42,29 @@ public class HSelect extends View {
     private static CursorMeta createMeta(GTable gtable, List<Integer> columns) {
         CursorMeta result = new CursorMeta();
         for (int i=0; i<columns.size(); i++) {
-            FieldMeta ii = new FieldMeta(String.valueOf(columns.get(i)), DataType.varchar());
+            int columnId = columns.get(i);
+            String name = (columnId == -1) ? "00" : String.valueOf(columns.get(i));
+            FieldMeta ii = new FieldMeta(name, DataType.varchar());
             result.addColumn(ii);
         }
         return result;
     }
 
+    protected ExprCursor wrap(Cursor upstream, Parameters params) {
+        ExprCursor result = new ExprCursor(meta, upstream, params, new AtomicLong());
+        result.exprs = new ArrayList<>();
+        for (FieldMeta field:meta.getColumns()) {
+            ToString op = new ToString(new FieldValue(field, result.exprs.size()));
+            result.exprs.add(op);
+        }
+        return result;
+    }
+    
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         RowIterator i = this.gtable.scan(0, Long.MAX_VALUE, true);
-        return new DumbCursor(ctx.getSpaceManager(), meta, i, this.mapping, new AtomicLong());
+        Cursor scan = new DumbCursor(ctx.getSpaceManager(), meta, i, this.mapping, new AtomicLong());
+        ExprCursor result = wrap(scan, params);
+        return result;
     }
 }

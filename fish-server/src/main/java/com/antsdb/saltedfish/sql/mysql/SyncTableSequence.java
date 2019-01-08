@@ -57,7 +57,7 @@ public class SyncTableSequence extends Statement {
         if ((column != null) && (seq == null)) {
             seq = new SequenceMeta(ctx.getOrca(), name);
             seq.setLastNumber(autoIncrement-1);
-            seq.setSeed(1);
+            seq.setSeed(0);
             seq.setIncrement(1);
             meta.addSequence(ctx.getHSession(), trx, seq);
         }

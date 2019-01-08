@@ -159,8 +159,11 @@ public class MetadataService {
     }
     
     private TableMeta loadTable(Transaction trx, String ns, String tableName) {
+        // if we in transaction use trxid, otherwise use latest visible
+        long trxid = trx.getTrxId();
+        long trxts = Long.MAX_VALUE;
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSTABLE);
-        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs(), true); i.next();) {
+        for (RowIterator i=table.scan(trxid, trxts, true); i.next();) {
             Row rrow = i.getRow();
             if (rrow == null) {
                 return null;
@@ -215,7 +218,7 @@ public class MetadataService {
         byte[] start = KeyMaker.gen(tableMeta.getId());
         byte[] end = KeyMaker.gen(tableMeta.getId() + 1);
         long options = ScanOptions.excludeEnd(0);
-        for (RowIterator i=table.scan(trx.getTrxId(), trx.getTrxTs(), start, end, options); i.next();) {
+        for (RowIterator i=table.scan(trx.getTrxId(), Long.MAX_VALUE, start, end, options); i.next();) {
             Row rrow = i.getRow();
             SlowRow row = SlowRow.from(rrow);
             if (row == null) {
@@ -250,7 +253,7 @@ public class MetadataService {
         byte[] from = KeyMaker.gen(tableMeta.getId());
         byte[] to = KeyMaker.gen(tableMeta.getId() + 1);
         long options = ScanOptions.excludeEnd(0);
-        for (RowIterator ii = table.scan(trx.getTrxId(), trx.getTrxTs(), from, to, options); ii.next();) {
+        for (RowIterator ii = table.scan(trx.getTrxId(), Long.MAX_VALUE, from, to, options); ii.next();) {
             SlowRow i = SlowRow.from(ii.getRow());
             if (i == null) {
                 break;
@@ -427,7 +430,7 @@ public class MetadataService {
     private SequenceMeta loadSequence(Transaction trx, ObjectName name) {
         Row raw = getSequenceTable().getRow(
                 trx.getTrxId(), 
-                trx.getTrxTs(), 
+                Long.MAX_VALUE, 
                 KeyMaker.make(name.getNamespace() + "." + name.getTableName()));
         SlowRow row = SlowRow.from(raw);
         if (row == null) {
@@ -635,7 +638,7 @@ public class MetadataService {
     }
     
     public void close() {
-        HumpbackSession hsession = this.orca.getHumpback().createSession();
+        HumpbackSession hsession = this.orca.getHumpback().createSession("local/metadata");
         hsession.open();
         try {
             for (SequenceMeta i:this.seqCache.values()) {

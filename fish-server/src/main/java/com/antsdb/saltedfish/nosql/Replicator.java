@@ -14,7 +14,6 @@
 package com.antsdb.saltedfish.nosql;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
@@ -57,7 +56,6 @@ public class Replicator<E extends Replicable> extends Thread {
     static final Logger _log = UberUtil.getThisLogger();
     static final int RETRY_WAIT = 30 * 1000;
     
-    private Logger log;
     private Humpback humpback;
     private Gobbler gobbler;
     private E replicable;
@@ -242,7 +240,6 @@ public class Replicator<E extends Replicable> extends Thread {
     }
     
     public Replicator(String name, Humpback humpback, E replicable, boolean needOrderedBlob) {
-        this.log = LoggerFactory.getLogger(UberUtil.getThisClassName() + "." + name);
         this.humpback = humpback;
         this.replicable = replicable;
         this.gobbler = this.humpback.getGobbler();
@@ -307,13 +304,14 @@ public class Replicator<E extends Replicable> extends Thread {
             }
             catch (InvalidTransactionIdException x) {
                 // expected. just continue
+                _log.trace("InvalidTransactionIdException");
             }
             catch (JumpException x) {
                 // expected
             }
             catch (Exception x) {
                 if (this.error == null) {
-                    log.warn(
+                    _log.warn(
                             "replication failed at {}, retry later from {}",
                             hex(this.relay.sp),
                             hex(this.replicable.getReplicateLogPointer()),
@@ -332,9 +330,9 @@ public class Replicator<E extends Replicable> extends Thread {
                 this.replicationHandler.flush();
                 long endSp = this.replicable.getReplicateLogPointer();
                 if (endSp != startSp) {
-                    log.debug("replicated {} -> {}", hex(startSp), hex(endSp));
+                    _log.debug("replicated {} -> {}", hex(startSp), hex(endSp));
                     if (this.error != null) {
-                        log.warn("replication resumed");
+                        _log.warn("replication resumed");
                         this.error = null;
                     }
                 }
@@ -355,7 +353,7 @@ public class Replicator<E extends Replicable> extends Thread {
             }
             catch (Exception x) {
                 if (this.error == null) {
-                    log.warn("replication failed, retry later", x);
+                    _log.warn("replication failed, retry later", x);
                 }
                 else {
                     this.retries++;
@@ -367,7 +365,7 @@ public class Replicator<E extends Replicable> extends Thread {
             }
             // done
         }
-        log.info("{} ended ...", getName());
+        _log.info("{} ended ...", getName());
     }
 
     public void pause(boolean value) {
@@ -378,13 +376,13 @@ public class Replicator<E extends Replicable> extends Thread {
     public void close() {
         this.isClosed = true;
         this.interrupt();
-        log.info("shutting down {} ...", getName());
+        _log.info("shutting down {} ...", getName());
         try {
             join(5000);
         }
         catch (InterruptedException e) {
         }
-        log.info("{} is shut down", getName());
+        _log.info("{} is shut down", getName());
     }
 
     private long getPendingBytes() {

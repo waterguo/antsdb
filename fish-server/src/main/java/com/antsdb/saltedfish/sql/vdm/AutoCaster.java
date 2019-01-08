@@ -21,6 +21,7 @@ import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.Bytes;
@@ -37,6 +38,7 @@ import com.antsdb.saltedfish.cpp.Float4;
 import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int4;
+import com.antsdb.saltedfish.cpp.Int4Array;
 import com.antsdb.saltedfish.cpp.Int8;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unicode16;
@@ -256,8 +258,17 @@ public class AutoCaster {
         case Value.FORMAT_KEY_BYTES: {
             return Unicode16.allocSet(heap, KeyBytes.create(pValue).toString());
         }
+        case Value.FORMAT_BOOL: {
+            boolean value = FishBool.get(heap, pValue);
+            return Unicode16.allocSet(heap, value ? "1" : "0");
+        }
+        case Value.FORMAT_INT4_ARRAY: {
+            Int4Array array = new Int4Array(pValue);
+            String temp = StringUtils.join(ArrayUtils.toObject(array.toArray()), ",");
+            return Unicode16.allocSet(heap, temp);
+        }
         default:
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(String.valueOf(format));
         }
     }
     
@@ -544,7 +555,7 @@ public class AutoCaster {
             }
             return result;
         }
-        throw new IllegalArgumentException();
+        throw new IllegalArgumentException(text);
     }
 
     public static long negate(Heap heap, long pValue) {
@@ -658,7 +669,15 @@ public class AutoCaster {
             return 0;
         }
         long x = FishTimestamp.getEpochMillisecond(heap, px);
+        if (x == Long.MIN_VALUE) {
+            // '0000-00-00 00:00:00' + interval '0' second returns NULL
+            return 0;
+        }
         long y = FishTimestamp.getEpochMillisecond(heap, py);
+        if (y == Long.MIN_VALUE) {
+            // '0000-00-00 00:00:00' + interval '0' second returns NULL
+            return 0;
+        }
         long z = x + y;
         long pResult = FishTimestamp.allocSet(heap, z);
         return pResult;

@@ -79,6 +79,9 @@ public class FieldValue extends Operator {
         Transaction trx = ctx.getTransaction();
         long pKey = ref.getRowKeyAddress();
         long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        if (pRow == 0) {
+            return 0;
+        }
         Row row = Row.fromMemoryPointer(pRow, Row.getVersion(pRow));
         pValue = row.getFieldAddress(field.getColumn().getColumnId());
         return pValue;
@@ -91,6 +94,9 @@ public class FieldValue extends Operator {
         Transaction trx = ctx.getTransaction();
         long pKey = ref.getRowKeyAddress();
         long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        if (pRow == 0) {
+            return 0;
+        }
         Row row = Row.fromMemoryPointer(pRow, Row.getVersion(pRow));
         pValue = row.getFieldAddress(field.getColumn().getColumnId());
         return pValue;

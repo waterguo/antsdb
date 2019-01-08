@@ -26,11 +26,11 @@ public class ExprCursor extends CursorWithHeap {
     Parameters params;
     long bufferedRecord = 0;
     boolean isEmptyCursor = true;
-	private AtomicLong counter;
+    private AtomicLong counter;
     private Script source;
     
-    public ExprCursor(CursorMaker maker, Cursor upstream, Parameters params, AtomicLong counter) {
-        super(maker);
+    public ExprCursor(CursorMeta meta, Cursor upstream, Parameters params, AtomicLong counter) {
+        super(meta);
         this.upstream = upstream;
         this.params = params;
         this.counter = counter;

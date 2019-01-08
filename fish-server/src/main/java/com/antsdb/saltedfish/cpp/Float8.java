@@ -107,6 +107,12 @@ public class Float8 {
         double x = get(null, addrx);
         double y;
         switch (typey) {
+        case Value.FORMAT_FLOAT4:
+            y = Float4.get(null, addry);
+            break;
+        case Value.FORMAT_FLOAT8:
+            y = Float8.get(null, addry);
+            break;
         case Value.FORMAT_DECIMAL:
             y = FishDecimal.get(null, addry).doubleValue();
             break;

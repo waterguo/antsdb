@@ -75,7 +75,7 @@ public class SystemViewHBase extends View {
         if (getService() == null) {
             return null;
         }
-        HBaseReplicationHandler result = (HBaseReplicationHandler)getService().getReplayHandler();
+        HBaseReplicationHandler result = (HBaseReplicationHandler)getService().getReplicable().getReplayHandler();
         return result;
     }
 }

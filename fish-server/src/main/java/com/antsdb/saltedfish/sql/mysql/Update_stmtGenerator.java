@@ -30,6 +30,7 @@ import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.NotNullCheck;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 
@@ -82,6 +83,9 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
                 throw new OrcaException("column is not found: " + columnName);
             }
             Operator op = ExprGenerator.gen(ctx, planner, i.expr());
+            if (!column.isNullable()) {
+                op = new NotNullCheck(op, column);
+            }
             columns.add(column);
             exprs.add(op);
         }

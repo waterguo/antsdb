@@ -146,39 +146,45 @@ public enum PacketType {
      */
     COM_HEARTBEAT(64),
     /** starting from here are not standard mysql type */
-    FISH_HANDSHAKE(0x100), 
-    FISH_AUTH(0x101),
-    FISH_ERROR(0x102),
-    FISH_EOF(0x103),
-    FISH_AUTH_OK(0x104),
-    FISH_OK(0x105),
-    FISH_PREPARE_OK(0x106),
-    FISH_RESULT_SET_HEADER(0x110),
-    FISH_RESULT_SET_COLUMN(0x111),
-    FISH_RESULT_SET_ROW(0x112),
+    FISH_HANDSHAKE(0x80), 
+    FISH_AUTH(0x81),
+    FISH_ERROR(0x82),
+    FISH_EOF(0x83),
+    FISH_AUTH_OK(0x84),
+    FISH_OK(0x85),
+    FISH_PREPARE_OK(0x86),
+    FISH_RESULT_SET_HEADER(0x90),
+    FISH_RESULT_SET_COLUMN(0x91),
+    FISH_RESULT_SET_ROW(0x92),
+    /** fish protocol */
+    FISH_BACKUP(0xa0),
+    FISH_RESTORE_START(0xa1),
+    FISH_RESTORE(0xa2),
+    FISH_RESTORE_END(0xa3),
+    
     /**/
     VERY_LARGE_PACKET(0x10000);
     ;
 
-	static Map<Integer, PacketType> _typeById = new HashMap<>();
+    static Map<Integer, PacketType> _typeById = new HashMap<>();
     
-	private final int id;
-	
-	static {
-		for (PacketType i:PacketType.values()) {
-			_typeById.put(i.getId(), i);
-		}
-	}
-	
-	PacketType(int id) {
-		this.id = id;
-	}
-	
-	public int getId() {
-		return this.id;
-	}
-	
-	public static PacketType valueOf(int id) {
-		return _typeById.get(id);
-	}
+    private final int id;
+    
+    static {
+        for (PacketType i:PacketType.values()) {
+            _typeById.put(i.getId(), i);
+        }
+    }
+    
+    PacketType(int id) {
+        this.id = id;
+    }
+    
+    public int getId() {
+        return this.id;
+    }
+    
+    public static PacketType valueOf(int id) {
+        return _typeById.get(id);
+    }
 }

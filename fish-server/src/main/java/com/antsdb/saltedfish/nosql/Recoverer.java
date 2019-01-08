@@ -17,14 +17,25 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
 import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
 import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberUtil;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
@@ -90,7 +101,17 @@ class Recoverer implements ReplayHandler {
     }
 
     @Override
+    public void insert(InsertEntry2 entry) throws Exception {
+        rowUpdate(entry);
+    }
+
+    @Override
     public void update(UpdateEntry entry) throws Exception {
+        rowUpdate(entry);
+    }
+
+    @Override
+    public void update(UpdateEntry2 entry) throws Exception {
         rowUpdate(entry);
     }
 
@@ -99,12 +120,29 @@ class Recoverer implements ReplayHandler {
         rowUpdate(entry);
     }
     
+    @Override
+    public void put(PutEntry2 entry) throws Exception {
+        rowUpdate(entry);
+    }
+    
     private void rowUpdate(RowUpdateEntry entry) throws Exception {
-        long pRow = entry.getRowPointer();
-        long sp = entry.getSpacePointer();
-        long spRow = entry.getRowSpacePointer();
+        rowUpdate(entry.getSpacePointer(), 
+                entry.getTrxId(), 
+                entry.getTableId(), 
+                entry.getRowSpacePointer(), 
+                entry.getRowPointer());
+    }
+    
+    private void rowUpdate(RowUpdateEntry2 entry) throws Exception {
+        rowUpdate(entry.getSpacePointer(), 
+                  entry.getTrxId(), 
+                  entry.getTableId(), 
+                  entry.getRowSpacePointer(), 
+                  entry.getRowPointer());
+    }
+    
+    private void rowUpdate(long sp, long trxid, int tableId, long spRow, long pRow) throws Exception {
         long version = Row.getVersion(pRow);
-        int tableId = entry.getTableId();
         if (this.tablesDeleted.contains(tableId)) {
             return;
         }
@@ -127,7 +165,7 @@ class Recoverer implements ReplayHandler {
         HumpbackError error = table.memtable.recoverPut(version, pKey, spRow);
         if (HumpbackError.SUCCESS != error) {
             _log.warn("unable to recover row @ {} due to {}", sp, error);
-            _log.warn("trxid = {}", entry.getTrxId());
+            _log.warn("trxid = {}", trxid);
             _log.warn("table = {}", tableId);
             Row row = Row.fromMemoryPointer(pRow, version);
             _log.warn("rowkey = {}", KeyBytes.toString(row.getKeyAddress()));
@@ -141,11 +179,29 @@ class Recoverer implements ReplayHandler {
 
     @Override
     public void delete(DeleteEntry entry) {
-        int tableId = entry.getTableId();
-        long sp = entry.getSpacePointer();
-        long trxid = entry.getTrxid();
-        long pKey = entry.getKeyAddress();
+        delete(entry.getSpacePointer(), entry.getTrxid(), entry.getTableId(), entry.getKeyAddress());
+    }
+    
+    @Override
+    public void delete(DeleteEntry2 entry) {
+        delete(entry.getSpacePointer(), entry.getTrxid(), entry.getTableId(), entry.getKeyAddress());
+    }
+    
+    @Override
+    public void deleteRow(DeleteRowEntry entry) throws Exception {
+        long pRow = entry.getRowPointer();
+        long pKey = Row.getKeyAddress(pRow);
+        delete(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), pKey);
+    }
 
+    @Override
+    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
+        long pRow = entry.getRowPointer();
+        long pKey = Row.getKeyAddress(pRow);
+        delete(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), pKey);
+    }
+
+    private void delete(long sp, long trxid, int tableId, long pKey) {
         if (_log.isTraceEnabled()) {
             _log.trace("delete @ {} tableId={} version={} key={}", sp, tableId, trxid,
                     KeyBytes.create(pKey).toString());
@@ -194,26 +250,47 @@ class Recoverer implements ReplayHandler {
 
     @Override
     public void index(IndexEntry entry) {
+        index(entry.getSpacePointer(), 
+              entry.getTrxid(), 
+              entry.getTableId(), 
+              entry.getIndexKeyAddress(), 
+              entry.getRowKeyAddress(), 
+              entry.getMisc());  
+    }
+    
+    @Override
+    public void index(IndexEntry2 entry) {
+        index(entry.getSpacePointer(), 
+              entry.getTrxid(), 
+              entry.getTableId(), 
+              entry.getIndexKeyAddress(), 
+              entry.getRowKeyAddress(), 
+              entry.getMisc());  
+    }
+    
+    private void index(long sp, long trxid, int tableId, long pIndexKey, long pRowKey, byte misc) {
         if (_log.isTraceEnabled()) {
-            _log.trace("index @ {} tableId={} version={} key={}", entry.getSpacePointer(), entry.getTableId(),
-                    entry.getTrxid(), KeyBytes.create(entry.getIndexKeyAddress()).toString());
+            _log.trace("index @ {} tableId={} version={} key={}", 
+                       sp, 
+                       tableId, 
+                       trxid, 
+                       KeyBytes.create(pIndexKey).toString());
         }
-        GTable table = this.humpback.getTable(entry.getTableId());
+        GTable table = this.humpback.getTable(tableId);
         if (table == null) {
-            _log.warn("unable to recover index @ {}. table {} not found", entry.getSpacePointer(), entry.getTableId());
+            _log.warn("unable to recover index @ {}. table {} not found", sp, tableId);
             return;
         }
         LongLong span = table.memtable.getLogSpan();
-        if ((span != null) && (entry.getSpacePointer() <= span.y)) {
+        if ((span != null) && (sp <= span.y)) {
             // space pointer i ahead of end row space pointer means the
             // operation has already applied
-            _log.trace("index @ {} is ignored", entry.getSpacePointer());
+            _log.trace("index @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.insertIndex_nologging(entry.getTrxid(), entry.getIndexKeyAddress(),
-                entry.getRowKeyAddress(), entry.getSpacePointer(), entry.getMisc(), 0);
+        HumpbackError error = table.insertIndex_nologging(trxid, pIndexKey, pRowKey, sp, misc, 0);
         if (HumpbackError.SUCCESS != error) {
-            _log.warn("unable to recover index @ {} due to {}", entry.getSpacePointer(), error);
+            _log.warn("unable to recover index @ {} due to {}", sp, error);
             return;
         }
         countRowUpdates();
@@ -224,6 +301,14 @@ class Recoverer implements ReplayHandler {
         long oldestTrxId = entry.getTrxid();
         render(oldestTrxId);
         this.humpback.trxMan.freeTo(oldestTrxId + 100);
+    }
+
+    @Override
+    public void message(MessageEntry entry) throws Exception {
+    }
+
+    @Override
+    public void message(MessageEntry2 entry) throws Exception {
     }
 
     private void render(long trxid) throws IOException {
@@ -248,6 +333,10 @@ class Recoverer implements ReplayHandler {
                 return;
             }
         }
+    }
+
+    @Override
+    public void ddl(DdlEntry entry) throws Exception {
     }
 
 }

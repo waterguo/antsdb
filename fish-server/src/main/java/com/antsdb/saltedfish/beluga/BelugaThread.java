@@ -103,6 +103,7 @@ class BelugaThread extends Thread {
                 this.member.user, 
                 this.member.password);
         restore.setThreads(this.member.nThreads);
+        restore.setReplication(true);
         restore.connect();
         clean(restore.getConnection());
         int threads = member.nThreads <= 0 ? 4 : member.nThreads;

@@ -93,9 +93,11 @@ public class CreateForeignKey extends Statement {
 
             // create index on child columns if there is none
 
+            ArrayList<Integer> prefix = new ArrayList<>();
+            childColumns.forEach((it) -> { prefix.add(null); });
             if (!isIndexed(child, this.spec.childColumns)) {
                 String indexName = getDefaultIndexName(child);
-                CreateIndex.createIndex(ctx, child, indexName, false, false, childColumns, this.rebuildIndex);
+                CreateIndex.createIndex(ctx, child, indexName, false, false, childColumns, prefix, this.rebuildIndex);
             }
         }
         finally {

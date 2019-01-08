@@ -66,8 +66,8 @@ public class JdbcRestoreMain extends BetterCommandLine {
     private boolean skipCreateTable;
     private boolean ignoreError;
     private int nErrors;
-
     private String filter;
+    private boolean isReplication = false;
 
     public JdbcRestoreMain() {
     }
@@ -382,7 +382,9 @@ public class JdbcRestoreMain extends BetterCommandLine {
         DbUtils.execute(conn, "SET UNIQUE_CHECKS=0");
         DbUtils.execute(conn, "SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO'");
         try {
-            DbUtils.execute(conn, "SET @@antsdb_slave_replication_session='true'");
+            if (this.isReplication) {
+                DbUtils.execute(conn, "SET @@antsdb_slave_replication_session='true'");
+            }
         }
         catch (SQLException ignored) {
         }
@@ -433,5 +435,14 @@ public class JdbcRestoreMain extends BetterCommandLine {
 
     public Connection getConnection() {
         return this.conn;
+    }
+
+    /**
+     * set the restore in replication mode. DML in this mode won't be spread to nodes other than the target 
+     * 
+     * @param b
+     */
+    public void setReplication(boolean b) {
+        this.isReplication = true;
     }
 }

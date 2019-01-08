@@ -50,4 +50,9 @@ public class View extends CursorMaker {
         return false;
     }
 
+    public Object run(VdmContext ctx, Parameters params) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
 }

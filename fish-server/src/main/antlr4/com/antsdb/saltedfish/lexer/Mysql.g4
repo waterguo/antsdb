@@ -211,7 +211,7 @@ create_database_stmt
  
 create_index_stmt:
    K_CREATE ((K_UNIQUE? K_FULLTEXT?) | K_FULLTEXT) K_INDEX ( K_IF K_NOT K_EXISTS )?
-   index_name K_ON table_name_ '(' indexed_column_def ( ',' indexed_column_def )* ')'
+   index_name K_ON table_name_ '(' indexed_column_def ( ',' indexed_column_def )* ')' index_type?
  ;
 
 indexed_column_def
@@ -289,11 +289,13 @@ column_constraint_collate: K_COLLATE any_name;
 column_constraint_character_set: K_CHARACTER K_SET any_name;
 
 primary_key_def
- : K_PRIMARY K_KEY '(' index_columns ')'
+ : K_PRIMARY K_KEY '(' index_columns ')' index_type?
  ;
+
+index_type : K_USING WORD;
  
 index_def
- : K_UNIQUE? K_FULLTEXT? (K_INDEX | K_KEY) identifier? '(' index_columns ')'
+ : K_UNIQUE? K_FULLTEXT? (K_INDEX | K_KEY) identifier? '(' index_columns ')' index_type?
  ;
  
 index_columns
@@ -720,12 +722,12 @@ value
 
 expr
  : value
- | unary_operator expr
- | expr_match
+ | expr_search
  | expr_exist 
  | expr_function
  | expr_parenthesis
  | expr_select 
+ | expr_unary
  | expr '||' expr
  | expr ( '*' | '/' | '%' | K_MOD) expr
  | expr ( '+' | '-' ) expr
@@ -735,8 +737,7 @@ expr
  | expr K_NOT? ( K_LIKE | K_GLOB | K_REGEXP | K_MATCH ) like_expr ( K_ESCAPE expr )?
  | expr expr_in_select
  | expr expr_in_values
- | expr expr_in_table 
- | expr_simple K_NOT? K_BETWEEN expr_simple K_AND expr_simple
+ | expr_simple K_NOT? K_BETWEEN expr_simple K_AND  expr_simple
  | expr_not
  | expr K_AND expr
  | expr K_REGEXP pattern
@@ -748,6 +749,40 @@ expr
  | expr_cast
  ;
 
+expr_primary
+ : value 
+ | expr_function
+ | expr_parenthesis
+ ;
+ 
+expr_not : (K_NOT | '!') expr_relational;
+
+expr_relational
+ : expr_compare
+ | expr_between
+ | expr_is
+ | expr_match
+ | expr_numeric expr_in_select
+ | expr_numeric expr_in_values
+ | expr_numeric
+ ;
+
+expr_compare : expr_numeric ( '<' | '<=' | '>' | '>=' | '=' | '!=' | '<>' | '<=>') expr_numeric;
+
+expr_between : expr_numeric K_NOT? K_BETWEEN expr_numeric K_AND  expr_numeric;
+
+expr_is : expr_numeric K_IS K_NOT? K_NULL;
+
+expr_match : expr_numeric K_NOT? ( K_LIKE | K_REGEXP ) like_expr ( K_ESCAPE expr_numeric )?;
+
+expr_numeric : expr_additive ;
+
+expr_additive : expr_multi (('+' | '-' | '|') expr_multi)*;
+
+expr_multi : expr_unary (('*' | '/' | '&' |  '%' | K_MOD) expr_unary)*;
+     
+expr_unary : ('-' | '+' | '~' | K_BINARY)? expr_primary;
+
 expr_simple
  : literal_value
  | bind_parameter
@@ -756,9 +791,10 @@ expr_simple
  | session_variable_reference
  | expr_function
  | expr_select 
+ | expr_simple '||' expr_simple
+ | expr_simple ( '*' | '/' | '%' | K_MOD) expr_simple
+ | expr_simple ( '+' | '-' ) expr_simple
  ;
-
-expr_not : (K_NOT | '!') expr;
 
 expr_case : K_CASE expr? expr_case_when+ expr_case_else? K_END;
 
@@ -806,7 +842,7 @@ expr_function_star_parameter
  : '*'
  ; 
   
-expr_match
+expr_search
  : K_MATCH '(' column_name_ ( ',' column_name_)* ')' K_AGAINST '(' value (K_IN K_BOOLEAN K_MODE)? ')'
  ;
  
@@ -830,10 +866,6 @@ expr_in_values
  : K_NOT? K_IN '(' expr ( ',' expr )* ')'
  ;
  
-expr_in_table
- : K_NOT? K_IN table_name_
- ;
-  
 variable_reference: USER_VARIABLE;
 
 session_variable_reference: SESSION_VARIABLE;
@@ -869,7 +901,7 @@ table_alias
  ;
 
 function_name
- : any_name | K_LEFT | K_IF | K_MOD | K_ISNULL
+ : any_name | K_LEFT | K_IF | K_MOD | K_ISNULL | K_REPLACE
  ;
 
 any_name
@@ -932,13 +964,7 @@ literal_value_binary
  : K__BINARY STRING_LITERAL
  ;
  
-unary_operator
- : '-'
- | '+'
- | '~'
- | K_BINARY
- ;
-
+EXCLAIMATION : '!';
 SCOL : ';';
 DOT : '.';
 OPEN_PAR : '(';

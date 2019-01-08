@@ -34,7 +34,7 @@ public class SaltedFish {
     ConfigService config;
     File home;
     boolean isClosed;
-    TcpServer server;
+    TcpServer listener;
 
     public SaltedFish(File home) {
         _singleton = this;
@@ -49,18 +49,18 @@ public class SaltedFish {
             startLogging();
             // MUST start listener before starting database. use the port to lock out database instance. otherwise, the
             // 2nd database will corrupt the database files.
-            this.server = getTcpServer(); 
-            server.start(getConfig().getPort());
+            this.listener = createTcpServer(); 
+            listener.start(getConfig().getPort());
             startDatabase();
             startWeb();
         }
-        catch (Exception x) {
+        catch (Throwable x) {
             _log.error("failed to start", x);
             throw x;
         }
     }
     
-    private TcpServer getTcpServer() {
+    private TcpServer createTcpServer() {
         String provider = this.config.getTcpServerProvider();
         
         if ("netty".equals(provider)) {
@@ -140,7 +140,7 @@ public class SaltedFish {
     
     public void shutdown() {
         try {
-            this.server.shutdown();
+            this.listener.shutdown();
         }
         catch (Exception x) {
             _log.warn("unable to shutdown tcp server", x);
@@ -172,6 +172,12 @@ public class SaltedFish {
     
     public void close() {
         this.isClosed = true;
+        try {
+            this.listener.shutdown();
+        }
+        catch (Exception x) {
+            _log.warn("unable to close tcp server", x);
+        }
         this.orca.shutdown();
     }
     

@@ -22,6 +22,7 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 public class CreateTable extends Statement {
     ObjectName tableName;
     private String charset;
+    private String engine;
     
     public CreateTable(ObjectName tableName) {
         super();
@@ -30,6 +31,10 @@ public class CreateTable extends Statement {
 
     public void setCharset(String value) {
         this.charset = value;
+    }
+    
+    public void setEngine(String value) {
+        this.engine = value;
     }
     
     @Override
@@ -47,6 +52,7 @@ public class CreateTable extends Statement {
         TableMeta tableMeta = new TableMeta(ctx.getOrca(), this.tableName);
         tableMeta.setNamespace(ns);
         tableMeta.setCharset(this.charset);
+        tableMeta.setEngine(this.engine);
         ctx.getOrca().getMetaService().addTable(ctx.getHSession(), trx, tableMeta);
         
         // find a good non-conflict name

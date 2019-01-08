@@ -34,26 +34,35 @@ import com.antsdb.saltedfish.lexer.MysqlParser;
 import com.antsdb.saltedfish.lexer.MysqlParser.Bind_parameterContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Column_name_Context;
 import com.antsdb.saltedfish.lexer.MysqlParser.ExprContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_additiveContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_betweenContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_caseContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_case_whenContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_castContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_cast_data_typeContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_compareContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_existContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_functionContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_selectContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_in_valuesContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_isContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_matchContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_multiContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_notContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_numericContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_parenthesisContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_primaryContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_relationalContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_searchContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_selectContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Expr_simpleContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Expr_unaryContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Group_concat_parameterContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Like_exprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_intervalContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Session_variable_referenceContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.Unary_operatorContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.ValueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Variable_referenceContext;
 import com.antsdb.saltedfish.sql.DataType;
@@ -103,6 +112,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncMonth;
 import com.antsdb.saltedfish.sql.vdm.FuncNow;
 import com.antsdb.saltedfish.sql.vdm.FuncRand;
 import com.antsdb.saltedfish.sql.vdm.FuncReleaseLock;
+import com.antsdb.saltedfish.sql.vdm.FuncReplace;
 import com.antsdb.saltedfish.sql.vdm.FuncRound;
 import com.antsdb.saltedfish.sql.vdm.FuncSubstringIndex;
 import com.antsdb.saltedfish.sql.vdm.FuncSum;
@@ -125,6 +135,7 @@ import com.antsdb.saltedfish.sql.vdm.OpAnd;
 import com.antsdb.saltedfish.sql.vdm.OpBetween;
 import com.antsdb.saltedfish.sql.vdm.OpBinary;
 import com.antsdb.saltedfish.sql.vdm.OpBitwiseAnd;
+import com.antsdb.saltedfish.sql.vdm.OpBitwiseOr;
 import com.antsdb.saltedfish.sql.vdm.OpCase;
 import com.antsdb.saltedfish.sql.vdm.OpConcat;
 import com.antsdb.saltedfish.sql.vdm.OpDivide;
@@ -190,6 +201,7 @@ public class ExprGenerator {
         _functionByName.put("now", FuncNow.class);
         _functionByName.put("rand", FuncRand.class);
         _functionByName.put("release_lock", FuncReleaseLock.class);
+        _functionByName.put("replace", FuncReplace.class);
         _functionByName.put("round", FuncRound.class);
         _functionByName.put("subdate", FuncDateSub.class);
         _functionByName.put("substring_index", FuncSubstringIndex.class);
@@ -235,6 +247,55 @@ public class ExprGenerator {
         else if (child instanceof Expr_selectContext) {
             result = genSingleValueQuery(ctx, planner, (Expr_selectContext)child);
         }
+        else if (child instanceof Expr_simpleContext) {
+            String op = rule.getChild(1).getText();
+            if ("+".equals(op)) {
+                Operator left = gen(ctx, planner, rule.expr_simple(0));
+                Operator right = gen(ctx, planner, rule.expr_simple(1));
+                if ((left instanceof OpInterval) || (right instanceof OpInterval)) {
+                    result = new OpAddTime(left, right);
+                }
+                else {
+                    result = new OpAdd(left, right);
+                }
+            }
+            else if ("-".equals(op)) {
+                Operator left = gen(ctx, planner, rule.expr_simple(0));
+                Operator right = gen(ctx, planner, rule.expr_simple(1));
+                if ((left instanceof OpInterval) || (right instanceof OpInterval)) {
+                    result = new OpAddTime(left, new OpNegate(right));
+                }
+                else {
+                    result = new OpAdd(left, new OpNegate(right));
+                }
+            }
+            else if ("*".equals(op)) {
+                Operator left = gen(ctx, planner, rule.expr_simple(0));
+                Operator right = gen(ctx, planner, rule.expr_simple(1));
+                result = new OpMultiply(left, right);
+            }
+            else if ("/".equals(op)) {
+                Operator left = gen(ctx, planner, rule.expr_simple(0));
+                Operator right = gen(ctx, planner, rule.expr_simple(1));
+                result = new OpDivide(left, right);
+            }
+            else if ("%".equals(op) || "MOD".equalsIgnoreCase(op)) {
+                Operator left = gen(ctx, planner, rule.expr_simple(0));
+                Operator right = gen(ctx, planner, rule.expr_simple(1));
+                FuncMod mod = new FuncMod();
+                mod.addParameter(left);
+                mod.addParameter(right);
+                result = mod;
+            }
+            else if ("||".equals(op)) {
+                Operator left = gen(ctx, planner, rule.expr_simple(0));
+                Operator right = gen(ctx, planner, rule.expr_simple(1));
+                return new OpConcat(left, right);
+            }
+            else {
+                throw new IllegalArgumentException(op);
+            }
+        }
         else {
             throw new IllegalArgumentException();
         }
@@ -264,11 +325,14 @@ public class ExprGenerator {
     }
     
     static Operator gen_(GeneratorContext ctx, Planner cursorMeta, ExprContext rule) throws OrcaException {
-        if (rule.expr_not() != null) {
-            return gen_not(ctx, cursorMeta, rule.expr_not());
-        }
-        else if (rule.value() != null) {
+        if (rule.value() != null) {
             return gen(ctx, cursorMeta, rule.value());
+        }
+        else if (rule.expr_unary() != null) {
+            return gen_unary(ctx, cursorMeta, rule.expr_unary());
+        }
+        else if (rule.expr_not() != null) {
+            return gen(ctx, cursorMeta, rule.expr_not());
         }
         else if (rule.getChildCount() == 1) {
             return gen_sinlge_node(ctx, cursorMeta, rule);
@@ -280,10 +344,6 @@ public class ExprGenerator {
         else if (rule.expr_in_select() != null) {
             Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
             return gen_in_select(ctx, cursorMeta, rule.expr_in_select(), left);
-        }
-        else if (rule.unary_operator() != null) {
-            Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(1));
-            return gen_unary(ctx, cursorMeta, rule.unary_operator(), right);
         }
         else if (rule.K_LIKE() != null) {
             Like_exprContext like = rule.like_expr();
@@ -460,30 +520,193 @@ public class ExprGenerator {
         }
     }
 
-    private static Operator gen_not(GeneratorContext ctx, Planner planner, Expr_notContext rule) {
-        Operator expr = gen(ctx, planner, rule.expr());
-        return new OpNot(expr);
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_notContext rule) {
+        Operator right = gen(ctx, planner, rule.expr_relational());
+        return new OpNot(right);
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_relationalContext rule) {
+        if (rule.expr_compare() != null) {
+            return gen(ctx, planner, rule.expr_compare());
+        }
+        if (rule.expr_in_select() != null) {
+            Operator left = gen(ctx, planner, rule.expr_numeric());
+            return gen_in_select(ctx, planner, rule.expr_in_select(), left);
+        }
+        if (rule.expr_in_values() != null) {
+            Operator left = gen(ctx, planner, rule.expr_numeric());
+            return gen_in_values(ctx, planner, rule.expr_in_values(), left);
+        }
+        if (rule.expr_is() != null) {
+            return gen(ctx, planner, rule.expr_is());
+        }
+        if (rule.expr_match() != null) {
+            return gen(ctx, planner, rule.expr_match());
+        }
+        if (rule.expr_between() != null) {
+            return gen(ctx, planner, rule.expr_between());
+        }
+        return gen(ctx, planner, rule.expr_numeric());
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_betweenContext rule) {
+        Operator expr = gen(ctx, planner, rule.expr_numeric(0));
+        Operator from = gen(ctx, planner, rule.expr_numeric(1));
+        Operator to = gen(ctx, planner, rule.expr_numeric(2));
+        return new OpBetween(expr, from, to);
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_matchContext rule) {
+        Operator result;
+        if (rule.K_LIKE() != null) {
+            Operator left = gen(ctx, planner, rule.expr_numeric(0));
+            Operator right = genLikeExpr(ctx, planner, rule.like_expr());
+            result = new OpLike(left, right);
+        }
+        else if (rule.K_REGEXP() != null) {
+            Operator expr = gen(ctx, planner, (ExprContext) rule.getChild(0));
+            Operator pattern = genLikeExpr(ctx, planner, rule.like_expr());
+            int variableId = ctx.allocVariable();
+            result = new OpRegexp(expr, pattern, variableId);
+        }
+        else {
+            throw new IllegalArgumentException();
+        }
+        return (rule.K_NOT() != null) ? new OpNot(result) : result;
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_isContext rule) {
+        Operator result = new OpIsNull(gen(ctx, planner, rule.expr_numeric()));
+        return (rule.K_NOT() != null) ? new OpNot(result) : result;
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_compareContext rule) {
+        String op = rule.getChild(1).getText();
+        Operator x = gen(ctx, planner, rule.expr_numeric(0));
+        Operator y = gen(ctx, planner, rule.expr_numeric(1));
+        if (">".equals(op)) {
+            return new OpLarger(x, y);
+        }
+        else if (">=".equals(op)) {
+            return new OpLargerEqual(x, y);
+        }
+        else if ("<".equals(op)) {
+            return new OpLess(x, y);
+        }
+        else if ("<=".equals(op)) {
+            return new OpLessEqual(x, y);
+        }
+        else if ("<>".equals(op)) {
+            return new OpNot(new OpEqual(x, y));
+        }
+        else if ("=".equals(op)) {
+            return new OpEqual(x, y);
+        }
+        else if ("==".equals(op)) {
+            return new OpEqualNull(x, y);
+        }
+        else if ("<=>".equals(op)) {
+            return new OpSafeEqual(x, y);
+        }
+        throw new IllegalArgumentException();
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_numericContext rule) {
+        return gen(ctx, planner, rule.expr_additive());
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_additiveContext rule) {
+        Operator result = gen(ctx, planner, rule.expr_multi(0));
+        for (int i=1; i<rule.getChildCount(); i+=2) {
+            String op = rule.getChild(i).getText();
+            Operator x = gen(ctx, planner, (Expr_multiContext)rule.getChild(i+1));
+            if (op.equals("+")) {
+                result = new OpAdd(result, x);
+            }
+            else if (op.equals("-")) {
+                result = new OpAdd(result, new OpNegate(x));
+            }
+            else if (op.equals("|")) {
+                result = new OpBitwiseOr(result, x);
+            }
+            else {
+                throw new IllegalArgumentException();
+            }
+        }
+        return result;
+    }
+
+    private static Operator gen(GeneratorContext ctx, Planner planner, Expr_multiContext rule) {
+        Operator result = gen_unary(ctx, planner, rule.expr_unary(0));
+        for (int i=1; i<rule.getChildCount(); i+=2) {
+            String op = rule.getChild(i).getText();
+            Operator x = gen_unary(ctx, planner, (Expr_unaryContext)rule.getChild(i+1));
+            if (op.equals("*")) {
+                result = new OpMultiply(result, x);
+            }
+            else if (op.equals("/")) {
+                result = new OpDivide(result, x);
+            }
+            else if (op.equals("&")) {
+                result = new OpBitwiseAnd(result, x);
+            }
+            else if (op.equals("%") || op.equalsIgnoreCase("mod")) {
+                FuncMod mod = new FuncMod();
+                mod.addParameter(result);
+                mod.addParameter(x);
+                result = mod;
+            }
+            else {
+                throw new IllegalArgumentException();
+            }
+        }
+        return result;
     }
 
     private static Operator genLikeExpr(GeneratorContext ctx, Planner cursorMeta, Like_exprContext rule) {
         return gen(ctx, cursorMeta, rule.expr_simple());
     }
 
-    private static Operator gen_unary(
-            GeneratorContext ctx, 
-            Planner cursorMeta, 
-            Unary_operatorContext rule,
-            Operator right) {
-        TerminalNode token = (TerminalNode) rule.getChild(0);
-        if (token.getSymbol().getType() == MysqlParser.MINUS) {
-            return new OpNegate(right);
-        }
-        else if (token.getSymbol().getType() == MysqlParser.K_BINARY) {
-            return new OpBinary(right);
+    private static Operator gen_unary(GeneratorContext ctx, Planner planner, Expr_unaryContext rule) {
+        Operator result = gen_primary(ctx, planner, rule.expr_primary());
+        if (rule.getChildCount() == 1) {
+            return result;
         }
         else {
-            throw new NotImplementedException();
+            TerminalNode token = (TerminalNode) rule.getChild(0);
+            if (token.getSymbol().getType() == MysqlParser.MINUS) {
+                return new OpNegate(result);
+            }
+            else if (token.getSymbol().getType() == MysqlParser.K_BINARY) {
+                return new OpBinary(result);
+            }
+            else if (token.getSymbol().getType() == MysqlParser.K_NOT) {
+                return new OpNot(result);
+            }
+            else if (token.getSymbol().getType() == MysqlParser.EXCLAIMATION) {
+                return new OpNot(result);
+            }
+            else {
+                throw new NotImplementedException();
+            }
         }
+    }
+
+    private static Operator gen_primary(GeneratorContext ctx, Planner planner, Expr_primaryContext rule) {
+        Operator result;
+        if (rule.value() != null) {
+            result = gen(ctx, planner, rule.value());
+        }
+        else if (rule.expr_function() != null) {
+            result = genFunction(ctx, planner, rule.expr_function());
+        }
+        else if (rule.expr_parenthesis() != null) {
+            result = gen(ctx, planner, rule.expr_parenthesis().expr());
+        }
+        else {
+            throw new IllegalArgumentException("unknown rule: " + rule.getText());
+        }
+        return result;
     }
 
     private static Operator gen_exists(GeneratorContext ctx, Planner cursorMeta, Expr_existContext rule) {
@@ -568,8 +791,8 @@ public class ExprGenerator {
         else if (rule.expr_cast() != null) {
             return gen_cast(ctx, cursorMeta, rule.expr_cast());
         }
-        else if (rule.expr_match() != null) {
-            return gen_match(ctx, cursorMeta, rule.expr_match());
+        else if (rule.expr_search() != null) {
+            return gen_match(ctx, cursorMeta, rule.expr_search());
         }
         else if (rule.expr_case() != null) {
             return gen_case(ctx, cursorMeta, rule.expr_case());
@@ -579,7 +802,7 @@ public class ExprGenerator {
         }
     }
 
-    private static Operator gen_match(GeneratorContext ctx, Planner planner, Expr_matchContext rule) {
+    private static Operator gen_match(GeneratorContext ctx, Planner planner, Expr_searchContext rule) {
         boolean isBooleanMode = rule.K_BOOLEAN() != null;
         List<FieldValue> columns = new ArrayList<>();
         rule.column_name_().forEach((it) -> {

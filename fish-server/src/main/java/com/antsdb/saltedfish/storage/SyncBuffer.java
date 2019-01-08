@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.storage;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,23 +21,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.RetriesExhaustedException;
+import org.slf4j.Logger;
+
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.nosql.TableType;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
 final class SyncBuffer {
+    static Logger _log = UberUtil.getThisLogger();
+    
     Map<Integer, Map<Long, Long>> tableById = new HashMap<>();
-    private Replicable replicable;
+    private HBaseStorageService hbase;
     private int capacity;
     private Humpback humpback;
     private int count = 0;
-    
+    Map<Integer, HBaseTableUpdater> updaters = new HashMap<>();
+    Connection conn;
+
     static class MyComparator implements Comparator<Long> {
         @Override
         public int compare(Long px, Long py) {
@@ -45,10 +54,18 @@ final class SyncBuffer {
         }
     }
     
-    SyncBuffer(Humpback humpback, Replicable replicable, int capacity) {
-        this.replicable = replicable;
+    SyncBuffer(Humpback humpback, HBaseStorageService hbase, int capacity) {
+        this.hbase = hbase;
         this.capacity = capacity;
         this.humpback = humpback;
+    }
+    
+    void connect() throws IOException {
+        if ((this.conn == null) || (this.conn.isClosed())) {
+            this.conn = this.hbase.createConnection(); 
+            this.updaters.clear();
+            _log.info("hbase master {} is connected", conn.getAdmin().getClusterStatus().getMaster());
+        }
     }
     
     void addRow(int tableId, long pKey, long pData) {
@@ -74,8 +91,8 @@ final class SyncBuffer {
         this.count = 0;
     }
     
-    boolean flushIfFull() {
-        if (this.count >= this.capacity) {
+    boolean flushIfFull(int tableId) throws IOException {
+        if ((this.count >= this.capacity) || detectMetadataChange(tableId)) {
             flush();
             return true;
         }
@@ -84,7 +101,19 @@ final class SyncBuffer {
         }
     }
     
-    int flush() {
+    int flush() throws IOException {
+        try {
+            return flush0();
+        }
+        catch (RetriesExhaustedException x) {
+            // when this happens, we need to reconnect or hbase client hangs forever
+            HBaseUtil.closeQuietly(this.conn);
+            this.conn = null;
+            throw x;
+        }
+    }
+    
+    int flush0() throws IOException {
         int result = 0;
         List<Long> puts = new ArrayList<>();
         List<Long> deletes = new ArrayList<>();
@@ -103,17 +132,19 @@ final class SyncBuffer {
                 }
             }
             if (puts.size() != 0) {
+                HBaseTableUpdater updater = getUpdater(tableId);
                 SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
                 if (tableInfo.getType() == TableType.DATA) {
-                    this.replicable.putRows(tableId, puts);
+                    updater.putRows(puts);
                 }
                 else {
-                    this.replicable.putIndexLines(tableId, puts);
+                    updater.putIndexLines(puts);
                 }
                 result += puts.size();
             }
             if (deletes.size() != 0) {
-                this.replicable.deletes(tableId, deletes);
+                HBaseTableUpdater updater = getUpdater(tableId);
+                updater.deletes(deletes);
                 result += deletes.size();
             }
         }
@@ -129,5 +160,25 @@ final class SyncBuffer {
             this.tableById.put(tableId, table);
         }
         return table;
+    }
+    
+    private HBaseTableUpdater getUpdater(int tableId) throws IOException {
+        HBaseTableUpdater result = this.updaters.get(tableId);
+        if (result == null) {
+            result = new HBaseTableUpdater(this.hbase, tableId);
+            result.prepare(this.conn);
+            this.updaters.put(tableId, result);
+        }
+        return result;
+    }
+    
+    private boolean detectMetadataChange(int tableId) {
+        switch (tableId) {
+        case Humpback.SYSMETA_TABLE_ID:
+        case Humpback.SYSNS_TABLE_ID:
+        case Humpback.SYSCOLUMN_TABLE_ID:
+            return true;
+        }
+        return false;
     }
 }
