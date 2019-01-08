@@ -30,7 +30,7 @@ final class Utils {
         return text.substring(1, text.length()-1);
     }
     
-    static Properties getProperties(List<AssignmentContext> rules) {
+    static Properties getProperties(List<? extends AssignmentContext> rules) {
         Properties props = new Properties();
         for (AssignmentContext rule:rules) {
             String key = rule.IDENTIFIER().getText().toLowerCase();

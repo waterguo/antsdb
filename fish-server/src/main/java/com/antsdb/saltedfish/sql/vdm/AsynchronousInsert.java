@@ -88,7 +88,7 @@ public class AsynchronousInsert implements AutoCloseable {
             CharBuffer chars = toCharBuffer(this.sql);
             try {
                 MysqlParserFactory parser = (MysqlParserFactory)session.getParserFactory();
-                Script script = parser.parse(session, new CharBufferStream(chars), 1);
+                Script script = parser.parse(session, new CharBufferStream(chars));
                 Instruction step = script.getRoot();
                 VdmContext ctx = new VdmContext(session, script.getVariableCount()); 
                 step.run(ctx, new Parameters(), 0);

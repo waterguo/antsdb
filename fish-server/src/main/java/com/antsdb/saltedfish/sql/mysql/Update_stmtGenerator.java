@@ -73,7 +73,7 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
             GeneratorContext ctx, 
             Planner planner, 
             TableMeta table,  
-            List<Update_stmt_setContext> rules) {
+            List<? extends Update_stmt_setContext> rules) {
         List<ColumnMeta> columns = new ArrayList<ColumnMeta>();
         List<Operator> exprs = new ArrayList<Operator>();
         for (Update_stmt_setContext i:rules) {

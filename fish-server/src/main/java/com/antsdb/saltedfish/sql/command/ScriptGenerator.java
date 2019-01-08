@@ -33,7 +33,7 @@ class ScriptGenerator extends Generator<ScriptContext>{
 
     @Override
     public Instruction gen(GeneratorContext ctx, ScriptContext rule) throws OrcaException {
-        List<StmtContext> stmts = rule.stmt();
+        List<? extends StmtContext> stmts = rule.stmt();
         if (stmts.size() == 0) {
             return new Flow();
         }

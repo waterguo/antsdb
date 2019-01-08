@@ -29,7 +29,7 @@ public class ScriptGenerator extends Generator<ScriptContext> {
 
     @Override
     public Instruction gen(GeneratorContext ctx, ScriptContext rule) throws OrcaException {
-        List<Sql_stmtContext> stmts = rule.sql_stmt();
+        List<? extends Sql_stmtContext> stmts = rule.sql_stmt();
         if (stmts.size() == 0) {
             return null;
         }
