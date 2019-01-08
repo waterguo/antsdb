@@ -20,9 +20,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.antlr.v4.runtime.CommonToken;
 import org.antlr.v4.runtime.CommonTokenFactory;
 import org.antlr.v4.runtime.RuleContext;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.antlr.v4.runtime.tree.TerminalNodeImpl;
@@ -307,7 +307,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         Column_name_Context column_name_ = new Column_name_Context(rule.getParent(), rule.invokingState);
         Column_nameContext column_name = new Column_nameContext(column_name_.getParent(), rule.invokingState);
         IdentifierContext identifier = new IdentifierContext(column_name, rule.invokingState);
-        CommonToken token = CommonTokenFactory.DEFAULT.create(
+        Token token = CommonTokenFactory.DEFAULT.create(
                 MysqlParser.BACKTICK_QUOTED_IDENTIFIER, 
                 '`' + field.name + '`' );
         TerminalNode term = new TerminalNodeImpl(token);
