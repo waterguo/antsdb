@@ -142,6 +142,10 @@ class Recoverer implements ReplayHandler {
     }
     
     private void rowUpdate(long sp, long trxid, int tableId, long spRow, long pRow) throws Exception {
+        if (tableId < 0) {
+            // dont recover temporary table
+            return;
+        }
         long version = Row.getVersion(pRow);
         if (this.tablesDeleted.contains(tableId)) {
             return;
@@ -162,7 +166,7 @@ class Recoverer implements ReplayHandler {
             _log.trace("put @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.memtable.recoverPut(version, pKey, spRow);
+        HumpbackError error = table.memtable.recover(sp);
         if (HumpbackError.SUCCESS != error) {
             _log.warn("unable to recover row @ {} due to {}", sp, error);
             _log.warn("trxid = {}", trxid);
@@ -202,6 +206,10 @@ class Recoverer implements ReplayHandler {
     }
 
     private void delete(long sp, long trxid, int tableId, long pKey) {
+        if (tableId < 0) {
+            // dont recover temporary table
+            return;
+        }
         if (_log.isTraceEnabled()) {
             _log.trace("delete @ {} tableId={} version={} key={}", sp, tableId, trxid,
                     KeyBytes.create(pKey).toString());
@@ -218,7 +226,7 @@ class Recoverer implements ReplayHandler {
             _log.trace("delete @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.memtable.recoverDelete(trxid, pKey, sp + Gobbler.ENTRY_HEADER_SIZE);
+        HumpbackError error = table.memtable.recover(sp);
         if (HumpbackError.SUCCESS != error) {
             _log.warn("unable to recover row @ {} due to {}", sp, error);
             return;
@@ -269,6 +277,10 @@ class Recoverer implements ReplayHandler {
     }
     
     private void index(long sp, long trxid, int tableId, long pIndexKey, long pRowKey, byte misc) {
+        if (tableId < 0) {
+            // dont recover temporary table
+            return;
+        }
         if (_log.isTraceEnabled()) {
             _log.trace("index @ {} tableId={} version={} key={}", 
                        sp, 
@@ -288,7 +300,7 @@ class Recoverer implements ReplayHandler {
             _log.trace("index @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.insertIndex_nologging(trxid, pIndexKey, pRowKey, sp, misc, 0);
+        HumpbackError error = table.memtable.recover(sp);
         if (HumpbackError.SUCCESS != error) {
             _log.warn("unable to recover index @ {} due to {}", sp, error);
             return;
@@ -326,7 +338,7 @@ class Recoverer implements ReplayHandler {
         // if system table is touched, synchronize with file system
         if (tableId == Humpback.SYSMETA_TABLE_ID) {
             try {
-                humpback.recoverTable();
+                humpback.recoverTables();
             }
             catch (Exception e) {
                 _log.warn("unable to recreate table {} @ {}.", sp, e);

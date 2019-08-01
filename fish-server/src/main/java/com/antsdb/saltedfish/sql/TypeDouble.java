@@ -25,6 +25,6 @@ import com.antsdb.saltedfish.cpp.Value;
 public class TypeDouble extends DataType {
 
     public TypeDouble(String name) {
-        super(name, 0, 0, Types.DOUBLE, Double.class, Value.TYPE_NUMBER);
+        super(name, 0, 0, Types.DOUBLE, Double.class, Value.TYPE_NUMBER, Weight.DOUBLE);
     }
 }

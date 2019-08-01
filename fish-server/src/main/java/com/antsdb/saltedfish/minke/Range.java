@@ -19,7 +19,7 @@ import com.antsdb.saltedfish.cpp.KeyBytes;
  * 
  * @author *-xguo0<@
  */
-final class Range {
+public final class Range {
     long pKeyStart;
     int startMark;
     long pKeyEnd;
@@ -42,20 +42,36 @@ final class Range {
         this.endMark = endMark;
     }
     
-    Boundary getStart() {
+    public Boundary getStart() {
         Boundary result = new Boundary();
         result.pKey = this.pKeyStart;
         result.mark = this.startMark;
         return result;
     }
     
-    Boundary getEnd() {
+    public Boundary getEnd() {
         Boundary result = new Boundary();
         result.pKey = this.pKeyEnd;
         result.mark = this.endMark;
         return result;
     }
 
+    public long getStartKey() {
+        return this.pKeyStart;
+    }
+    
+    public int getStartMark() {
+        return this.startMark;
+    }
+    
+    public long getEndKey() {
+        return this.pKeyEnd;
+    }
+    
+    public int getEndMark() {
+        return this.endMark;
+    }
+    
     public boolean isGreater(Boundary boundary) {
         int cmp = compare(boundary.pKey, boundary.mark, this.pKeyEnd, this.endMark);
         return cmp > 0;
@@ -80,6 +96,10 @@ final class Range {
         }
     }
 
+    public boolean isDot() {
+        return compare(this.pKeyStart, this.startMark, this.pKeyEnd, endMark) == 0;
+    }
+    
     public Range intersect(Range that) {
         Range result = new Range();
         int cmp = compare(this.pKeyStart, this.startMark, that.pKeyStart, that.startMark);
@@ -160,7 +180,7 @@ final class Range {
         return result;
     }
     
-    static int compare(long px, int xmark, long py, int ymark) {
+    public static int compare(long px, int xmark, long py, int ymark) {
         int cmp = compare(px, py);
         if (cmp != 0) {
             return cmp;

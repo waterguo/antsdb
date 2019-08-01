@@ -54,5 +54,9 @@ public class Flow extends Instruction {
             i.explain(level, records);
         }
     }
+
+    public List<Instruction> getInstructions() {
+        return this.instructions;
+    }
     
 }

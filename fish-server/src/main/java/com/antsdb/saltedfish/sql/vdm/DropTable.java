@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
@@ -36,6 +37,10 @@ public class DropTable extends Statement {
     List<ObjectName> tableNames;
     boolean ifExist;
     
+    public DropTable(ObjectName table, boolean ifExist) {
+        this(Collections.singletonList(table), ifExist);
+    }
+    
     public DropTable(List<ObjectName> tables, boolean ifExist) {
         super();
         this.tableNames = tables;
@@ -50,7 +55,7 @@ public class DropTable extends Statement {
             if (StringUtils.isEmpty(tblName.getNamespace())) {
                 throw new OrcaException("No database selected");
             }
-            TableMeta table = ctx.getOrca().getMetaService().getTable(ctx.getTransaction(), tblName);
+            TableMeta table = ctx.getSession().getTable(tblName);
             if (table == null) {
                 if (!this.ifExist) {
                     failTbls.add(tblName);
@@ -60,21 +65,17 @@ public class DropTable extends Statement {
 
             try {
                 // acquire exclusive lock
-                
                 Transaction trx = ctx.getTransaction();
                 ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
                 
                 // refetch the table metadata to avoid concurrency
-                
                 table = ctx.getMetaService().getTable(trx, table.getId());
                 check(ctx, table);
                 
                 // indexes blah blah
-                
                 dropDependents(ctx, table, params);
                 
                 // drop physical table
-                
                 Humpback humpback = ctx.getOrca().getHumpback();
                 humpback.dropTable(ctx.getHSession(), tblName.getNamespace(), table.getHtableId());
                 if (humpback.getTable(table.getBlobTableId()) != null) {
@@ -82,7 +83,6 @@ public class DropTable extends Statement {
                 }
                 
                 // remove metadata
-                
                 MetadataService meta = ctx.getOrca().getMetaService();
                 if (table.findAutoIncrementColumn() != null) {
                     SequenceMeta seq = meta.getSequence(trx, table.getAutoIncrementSequenceName());
@@ -91,6 +91,9 @@ public class DropTable extends Statement {
                     }
                 }
                 ctx.getOrca().getMetaService().dropTable(ctx.getHSession(), trx, table);
+                if (table.isTemproray()) {
+                    ctx.getSession().removeTemporaryTable(table);
+                }
             }
             finally {
                 ctx.getSession().unlockTable(table.getId());
@@ -104,7 +107,7 @@ public class DropTable extends Statement {
 
     private void check(VdmContext ctx, TableMeta table) {
         Humpback humpback = ctx.getHumpback();
-        SysMetaRow meta = humpback.getTableInfo(table.getId());
+        SysMetaRow meta = humpback.getTableInfo(table.getHtableId());
         if (meta != null) {
             if (!meta.isDeleted()) {
                 return;

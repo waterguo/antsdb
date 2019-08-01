@@ -45,7 +45,7 @@ public class InsertOnDuplicate extends UpdateBase {
         try (Heap heap = new FlexibleHeap()) {
             heap.reset(0);
             VaporizingRow row = this.insert.genRow(ctx, heap, params, null, 0);
-            long pKey = getExistingRowKey(trx, heap, row);
+            long pKey = this.indexHandlers.getRowKey(heap, trx, row);
             if (pKey == 0) {
                 result = this.insert.run(ctx, params);
             }
@@ -59,21 +59,5 @@ public class InsertOnDuplicate extends UpdateBase {
             }
             return result;
         }
-    }
-
-    private long getExistingRowKey(Transaction trx, Heap heap, VaporizingRow row) {
-        if (this.gtable.get(trx.getTrxId(), trx.getTrxTs(), row.getKeyAddress()) != 0) {
-            return row.getKeyAddress();
-        }
-        for (IndexEntryHandler i:this.indexHandlers.handlers) {
-            if (!i.index.isUnique()) {
-                continue;
-            }
-            long pRowKey = i.getRowKey(heap, trx, row);
-            if (pRowKey != 0) {
-                return pRowKey;
-            }
-        }
-        return 0;
     }
 }

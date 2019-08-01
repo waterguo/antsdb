@@ -84,24 +84,24 @@ public class GeneratorContext {
         return table;
     }
 
-	public int allocVariable() {
-		return this.variablesCount++;
-	}
-	
-	public int getVariableCount() {
-		return this.variablesCount;
-	}
+    public int allocVariable() {
+        return this.variablesCount++;
+    }
+    
+    public int getVariableCount() {
+        return this.variablesCount;
+    }
 
-	public DataTypeFactory getTypeFactory() {
-		return getOrca().getTypeFactory();
-	}
-	
-	/**
-	 * maker id is used to trace performance stats
-	 * 
-	 * @return
-	 */
-	public int getNextMakerId() {
-		return this.nextMakerId++;
-	}
+    public DataTypeFactory getTypeFactory() {
+        return getOrca().getTypeFactory();
+    }
+    
+    /**
+     * maker id is used to trace performance stats
+     * 
+     * @return
+     */
+    public int getNextMakerId() {
+        return this.nextMakerId++;
+    }
 }

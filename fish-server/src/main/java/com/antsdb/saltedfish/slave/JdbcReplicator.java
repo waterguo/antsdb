@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.slave;
 import static com.antsdb.saltedfish.util.UberFormatter.capacity;
 import static com.antsdb.saltedfish.util.UberFormatter.time;
 
+import java.io.File;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -50,6 +52,7 @@ import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.JdbcLog;
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.ReplicationHandler;
 import com.antsdb.saltedfish.nosql.Row;
@@ -64,6 +67,7 @@ import com.antsdb.saltedfish.nosql.TableType;
  */
 public abstract class JdbcReplicator extends ReplicationHandler implements Replicable {
     private static Logger _log = UberUtil.getThisLogger();
+    static JdbcLog _jdbclog;
     
     private Connection conn;
     protected Humpback humpback;
@@ -80,13 +84,28 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     private String password;
     private long lp;
     private long lpCommited;
+    private int opsSinceLastCommit;
 
     public JdbcReplicator(Humpback humpback, String host, String port, String user, String password) {
+        if (_jdbclog == null) {
+            initJdbcLog(humpback);
+        }
         this.humpback = humpback;
         this.host = host;
         this.port = port;
         this.user = user;
         this.password = password;
+    }
+
+    private void initJdbcLog(Humpback humpback) {
+        File file = new File(humpback.getHome(), "logs/jdbc-replication-log.dat");
+        _jdbclog = new JdbcLog(file);
+        try {
+            _jdbclog.open(false);
+        }
+        catch (IOException x) {
+            _log.warn("unable to open jdbc log", x);
+        }
     }
 
     public Connection createConnection() throws Exception {
@@ -139,6 +158,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             handler = getHandler(tableId-1);
         }
         handler.insert(trxid, row, isBlobRow);
+        this.opsSinceLastCommit++;
         this.ninserts++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.lp = sp;
@@ -169,6 +189,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             handler = getHandler(tableId-1);
         }
         handler.update(trxid, row, isBlobRow);
+        this.opsSinceLastCommit++;
         this.nupdates++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         this.lp = sp;
@@ -196,6 +217,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             handler = getHandler(tableId-1);
         }
         handler.update(trxid, row, isBlobRow);
+        this.opsSinceLastCommit++;
         this.lp = sp;
     }
 
@@ -240,6 +262,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
         CudHandler handler = getHandler(tableId);
         if (!handler.isBlobTable) {
             handler.delete(row);
+            this.opsSinceLastCommit++;
             this.ndeletes++;
             this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         }
@@ -262,25 +285,28 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
 
     @Override
     public void flush() throws Exception {
-        if (this.lp != this.lpCommited) {
+        if (this.opsSinceLastCommit > 0) {
             String sql = "REPLACE INTO antsdb_.bookmarks VALUES (?, ?)";
             DbUtils.executeUpdate(this.conn, sql, getKey(), this.lp);
             boolean success = false;
             try {
                 this.conn.commit();
+                _log.trace("commit {} {}", this.lp, this.opsSinceLastCommit);
+                this.lpCommited = this.lp;
+                this.opsSinceLastCommit = 0;
                 success = true;
             }
             finally {
                 // if we failed at commit. we don't know how many rows have been updated. thus force 
                 // re-read log pointer;
-                if (success) {
-                    this.lpCommited = this.lp;
-                }
-                else {
+                if (!success) {
                     this.lpCommited = 0;
                     this.lp = 0;
                 }
             }
+        }
+        else {
+            this.lpCommited = this.lp;
         }
     }
 
@@ -306,14 +332,20 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
 
     @Override
     public void ddl(DdlEntry entry) throws Exception {
+        // flush before ddl
+        flush();
+        
+        // ddl
         String sql = entry.getDdl();
         int indexOfSemicolon = sql.indexOf(';');
         if (indexOfSemicolon > 0) {
             DbUtils.execute(this.conn, sql.substring(0, indexOfSemicolon));
         }
         DbUtils.execute(this.conn, sql.substring(indexOfSemicolon + 1));
-        flush();
+        this.opsSinceLastCommit++;
         this.lp = entry.getSpacePointer();
+        
+        // flush after ddl
         flush();
     }
     
@@ -321,6 +353,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
         // we want to flush here so that upstream handler can release resources used to track transaction.
         // such as TransactionalReplayer and BoblReorderReplayer
+        this.opsSinceLastCommit++;
         flush();
         this.lp = entry.getSpacePointer();
     }
@@ -385,11 +418,13 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     public void connect() throws Exception {
         if (conn == null) {
             this.conn = createConnection();
+            this.opsSinceLastCommit = 0;
             this.handlers.clear();
             _log.info("connection to {} is established", this.url);
         }
         else if (!DbUtils.ping(this.conn)) {
             this.conn = createConnection();
+            this.opsSinceLastCommit = 0;
             this.handlers.clear();
             _log.info("connection to {} is resumed", this.url);
         }

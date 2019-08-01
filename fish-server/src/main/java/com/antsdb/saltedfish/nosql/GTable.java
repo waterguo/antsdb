@@ -85,16 +85,6 @@ public final class GTable implements AutoCloseable, LogSpan {
         }
     }
     
-    public HumpbackError insertIndex_nologging(
-            long trxid, 
-            long pIndexKey, 
-            long pRowKey, 
-            long sp, 
-            byte misc, 
-            int timeout) {
-        return this.memtable.recoverIndexInsert(trxid, pIndexKey, pRowKey, sp, misc, timeout);
-    }
-    
     public HumpbackError update(HumpbackSession hsession, long trxid, SlowRow row, int timeout) {
         try (BluntHeap heap = new BluntHeap()) {
             VaporizingRow vrow = row.toVaporisingRow(heap);
@@ -150,13 +140,13 @@ public final class GTable implements AutoCloseable, LogSpan {
     public long get(long trxid, long trxts, byte[] key) {
         try (BluntHeap heap = new BluntHeap()) {
             long pKey = KeyBytes.allocSet(heap, key).getAddress();
-            long row = this.memtable.get(trxid, trxts, pKey);
+            long row = this.memtable.get(trxid, trxts, pKey, 0);
             return row;
         }
     }
     
-    public long get(long trxid, long trxts, long pKey) {
-        long row = this.memtable.get(trxid, trxts, pKey);
+    public long get(long trxid, long trxts, long pKey, long options) {
+        long row = this.memtable.get(trxid, trxts, pKey, options);
         return row;
     }
     
@@ -164,7 +154,7 @@ public final class GTable implements AutoCloseable, LogSpan {
         Row row = null;
         try (BluntHeap heap = new BluntHeap()) {
             long pKey = KeyBytes.allocSet(heap, key).getAddress();
-            row = this.memtable.getRow(trxid, trxts, pKey);
+            row = this.memtable.getRow(trxid, trxts, pKey, 0);
             /*
             if ((row == null) && (this.humpback.getHBaseService() != null)) {
                 row = this.humpback.getHBaseService().get(this.id, trxid, trxts, pKey);
@@ -174,8 +164,8 @@ public final class GTable implements AutoCloseable, LogSpan {
         }
     }
     
-    public Row getRow(long trxid, long trxts, long pKey) {
-        return this.memtable.getRow(trxid, trxts, pKey);
+    public Row getRow(long trxid, long trxts, long pKey, long options) {
+        return this.memtable.getRow(trxid, trxts, pKey, 0);
     }
     
     public RowIterator scan(long trxid, long trxts, byte[] from, byte[] to, long options) {

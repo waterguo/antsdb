@@ -55,9 +55,28 @@ class ColumnFilter {
         return false;
     }
 
+    private String getOpString() {
+        switch (this.op) {
+        case LESS:
+            return "<";
+        case LESSEQUAL:
+            return "<=";
+        case LARGER:
+            return ">";
+        case LARGEREQUAL:
+            return ">=";
+        case EQUAL:
+            return "=";
+        case EQUALNULL:
+            return "==";
+        default:
+            return " " + this.op.toString() + " ";
+        }
+    }
+    
     @Override
     public String toString() {
-        return this.source.toString();
+        return this.field + getOpString() + this.operand.toString();
     }
     
 }

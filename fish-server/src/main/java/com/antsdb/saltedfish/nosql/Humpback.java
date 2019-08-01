@@ -44,6 +44,7 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.KeyMaker;
 import com.antsdb.saltedfish.storage.HBaseStorageService;
 import com.antsdb.saltedfish.storage.KerberosHelper;
+import com.antsdb.saltedfish.util.AntiCrashCrimeScene;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.FishJobManager;
 import com.antsdb.saltedfish.util.LatencyDetector;
@@ -86,6 +87,7 @@ public final class Humpback {
 
     File home;
     File data;
+    File temp;
     ConcurrentMap<Integer, GTable> tableById = new ConcurrentHashMap<>();
     ConcurrentMap<String, String> namespaces = new ConcurrentHashMap<String, String>();
     boolean isClosed = true;
@@ -141,6 +143,7 @@ public final class Humpback {
     public Humpback(File dbfolder, boolean forceDisableHBase) {
         this.home = dbfolder;
         this.data = new File(dbfolder, "data");
+        this.temp = new File(dbfolder, "temp");
         this.forceDisableHBase = forceDisableHBase;
     }
 
@@ -171,11 +174,13 @@ public final class Humpback {
         this.tabletSize = this.config.getTabletSize();
 
         // create database folder if absent
-
         _log.info("Humpback home: " + this.home.getAbsolutePath());
         if (!data.isDirectory()) {
             _log.info("data directory is not found, creating one");
             data.mkdirs();
+        }
+        if (!temp.isDirectory()) {
+            this.temp.mkdir();
         }
         File sys = new File(data, SYS_NAMESAPCE);
         if (!sys.exists()) {
@@ -183,7 +188,6 @@ public final class Humpback {
         }
 
         // initialize
-
         this.cp = new CheckPoint(new File(this.data, "checkpoint.bin"), this.isMutable);
         this.cp.open();
         this.serverId = this.config.getServerId() >= 0 ? this.config.getServerId() : this.cp.getServerId();
@@ -195,14 +199,12 @@ public final class Humpback {
         init(isRecovering);
 
         // add shutdown hook
-
         this.hook = new ShutdownThread();
         Runtime.getRuntime().addShutdownHook(this.hook);
         this.isClosed = false;
         _instances.add(this);
         
         // start slave replicator
-        
         if ("true".equals(getConfig(SlaveReplicator.KEY_ENABLED))) {
             try {
                 startSlave();
@@ -213,7 +215,6 @@ public final class Humpback {
         }
         
         // misc.
-        
         addLogDependency(new TabletLogDependency(this));
         addLogDependency(new StorageLogDependency(this));
         addLogDependency(new SlaveLogDependency(this));
@@ -226,11 +227,12 @@ public final class Humpback {
         this.carbonfreezer = new Carbonfreezer(this);
 
         // system wide parameters
-
         HumpbackUtil._isFakeDeletionEnabled = this.config.isFakeDeletetionEnabled();
+        if (this.config.isCrashSceneEnabled()) {
+            AntiCrashCrimeScene.init(new File(this.home, "logs/crash-scene.dat"));
+        }
 
         // init space
-
         this.spaceman = new SpaceManager(this.data, this.isMutable, config.getSpaceFileSize());
         _log.info("log retention: {}", this.config.getLogRetentionStrategy());
         this.spaceman.setLogRetention(this.config.getLogRetentionStrategy());
@@ -238,42 +240,34 @@ public final class Humpback {
         this.trxMan = new TrxMan(this.spaceman);
 
         // init logger
-
         this.gobbler = new Gobbler(this.spaceman, config.isLogWriterEnabled());
 
         // krb login
         KerberosHelper.initialize(this.config.getKrbRealm(), this.config.getKrbKdc(), this.config.getKrbJaasConf());
 
         // storage engine
-
         initStorage();
 
         // initialize sysmeta table
-
         initSysmeta(isRecovering);
         
         // initialize tables
-
         initTables(isRecovering);
 
         // data recovery
-
         if (this.isMutable) {
             recover();
         }
 
         // initialize name spaces. this step must be executed after recover()
-        
         initNamespaces();
         
         // marking database is open
-
         if (this.isMutable) {
             this.cp.setDatabaseOpen(true);
         }
 
         // validate
-
         if (this.isMutable) {
             if (!validate()) {
                 throw new OrcaException("failed in validation");
@@ -281,11 +275,9 @@ public final class Humpback {
         }
 
         // background jobs
-
         initJobs();
         
         // setting latency detection
-        
         LatencyDetector.set(this.config.getLatencyDetectionMs());
     }
 
@@ -321,30 +313,25 @@ public final class Humpback {
         }
         
         // start statistician
-        
         this.statisticianThread = new Replicator<>("statistician", this, new Statistician(this), false);
         this.statisticianThread.start();
         
         // start synchronizer
-        
         if ((getStorageEngine() instanceof Minke) || (getStorageEngine() instanceof MinkeCache)) {
             this.synchronizer = new Synchronizer(this);
         }
         
         // start cache evictor
-        
         if (getStorageEngine() instanceof MinkeCache) {
             this.cacheEvictor = new CacheEvictor((MinkeCache) getStorageEngine(), config.getCacheEvictorTarget());
         }
         
         // start delayed jobs
-        
         this.jobman.schedule(10, TimeUnit.SECONDS, () -> {
             initDelayedJobs();
         });
         
         // start warmer
-        
         long warmSize = this.config.getWarmerSize();
         if (warmSize > 0) {
             Minke minke;
@@ -447,6 +434,10 @@ public final class Humpback {
                 continue;
             }
             int id = row.getTableId();
+            if (id < 0) {
+                // skip temporary table
+                continue;
+            }
             String ns = row.getNamespace();
             this.storage.syncTable(row);
             GTable gtable = new GTable(this, ns, id, this.tabletSize, row.getType());
@@ -545,11 +536,12 @@ public final class Humpback {
             return;
         }
         this.isClosed = true;
+        _log.info("shutting down humpback...");
 
+        // close jobs
         closeJobs();
         
         // close write ahead logger
-
         if (this.gobbler != null) {
             this.gobbler.close();
         }
@@ -558,14 +550,11 @@ public final class Humpback {
         }
 
         // close trxman
-
         this.lastClosedTrxId = this.trxMan.getNewTrxId();
         this.trxMan.close();
 
         // write all data files
-
         try {
-            _log.info("shutting down humpback...");
             if (this.isMutable) {
                 flush(Long.MIN_VALUE, true);
                 tableMustBeCarbonfreezed(this.sysmeta);
@@ -579,13 +568,11 @@ public final class Humpback {
         }
 
         // validate
-
         if (this.isMutable) {
             validate();
         }
 
         // final gc
-
         for (long time = UberTime.getTime();;) {
             if (UberTime.getTime() != time) {
                 gc(UberTime.getTime());
@@ -594,13 +581,11 @@ public final class Humpback {
         }
 
         // close all tables
-
         for (GTable i : this.tableById.values()) {
             i.close();
         }
 
         // close minke
-
         try {
             getStorageEngine().close();
         }
@@ -609,21 +594,18 @@ public final class Humpback {
         }
 
         // mark database properly closed
-
         if (this.isMutable) {
             this.cp.setDatabaseOpen(false);
         }
         this.cp.close();
 
         // memory report
-
         _instances.remove(this);
         if (_instances.size() == 0) {
             MemoryManager.report();
         }
 
         // all done
-
         _log.info("humpback stopped peacefully");
     }
 
@@ -710,6 +692,9 @@ public final class Humpback {
         return new ArrayList<String>(this.namespaces.values());
     }
 
+    /*
+     * when id < 0, it is temporary table. temporary table dont get created in hbase
+     */
     public synchronized GTable createTable(HumpbackSession hsession, String ns, String name, int id, TableType type) {
         return createTable(hsession, ns, name, id, true, type);
     }
@@ -721,13 +706,11 @@ public final class Humpback {
                                             boolean createMeta, 
                                             TableType type) {
         // check id rule
-        
         if (id == SYSMETA_TABLE_ID) {
             throw new IllegalArgumentException();
         }
         
         // create table space
-
         ns = this.namespaces.get(ns.toLowerCase());
         if (ns == null) {
             throw new HumpbackException("namespace does not exist");
@@ -737,26 +720,25 @@ public final class Humpback {
         }
         GTable gtable;
         try {
-            gtable = new GTable(this, ns, id, this.tabletSize, type);
-            gtable.setMutable(this.isMutable);
-            tableById.put(id, gtable);
-
-            // create table in HBase
-
+            // create table in HBase. we create hbase table before update our own metadata. this is a must otherwise
+            // metadata is corrupted if we failed to create table in hbase.
+            _log.info("creating table id={} name={} type={}", id, name, type);
             SysMetaRow meta = new SysMetaRow(id);
             meta.setTableId(id);
             meta.setNamespace(ns);
             meta.setTableName(name);
             meta.setType(type);
-            this.storage.createTable(meta);
-
-            // update meta data
-
-            if (createMeta) {
-                this.sysmeta.put(hsession, 1, meta.row, 0);
-                this.storage.syncTable(meta);
+            if (id >= 0) {
+                this.storage.createTable(meta);
             }
 
+            // update meta data
+            gtable = new GTable(this, ns, id, this.tabletSize, type);
+            gtable.setMutable(this.isMutable);
+            tableById.put(id, gtable);
+            if (createMeta) {
+                this.sysmeta.put(hsession, 1, meta.row, 0);
+            }
             return gtable;
         }
         catch (Exception x) {
@@ -773,11 +755,12 @@ public final class Humpback {
         }
 
         // drop table in HBase
-
-        this.storage.deleteTable(id);
+        _log.info("dropping table {}", id);
+        if (id >= 0) {
+            this.storage.deleteTable(id);
+        }
 
         // update meta data
-
         table.drop();
         this.tableById.remove(id);
         meta.setDeleted(true);
@@ -875,6 +858,7 @@ public final class Humpback {
         cp.setDatabaseOpen(true);
         Recoverer recoverer = new Recoverer(this, this.gobbler);
         recoverer.run();
+        this.trxMan.setOldest(Long.MIN_VALUE);
         this.trxMan.close();
         this.sysmeta.getMemTable().render(Long.MIN_VALUE);
         for (GTable table : this.tableById.values()) {
@@ -918,7 +902,7 @@ public final class Humpback {
      * @throws ClassNotFoundException
      * @throws IOException
      */
-    void recoverTable() throws ClassNotFoundException, IOException {
+    void recoverTables() throws ClassNotFoundException, IOException {
         if (this.sysmeta == null) {
             return;
         }
@@ -941,8 +925,8 @@ public final class Humpback {
                 gtable.memtable.setRecoveryMode(true);
                 gtable.open();
                 this.tableById.put(gtable.getId(), gtable);
-                if (this.storage.getTable(gtable.getId()) == null) {
-                    this.storage.createTable(row);
+                if (tableId >= 0) {
+                    this.storage.syncTable(row);
                 }
             }
             validIds.add(tableId);
@@ -1091,20 +1075,19 @@ public final class Humpback {
         _log.trace("start humpback recycling with ts={} minke sp={}", ts, hex(span.y));
 
         // free tablets
-
         for (GTable table : this.tableById.values()) {
-            table.memtable.free(span.y);
+            if (table.getId() >= 0) {
+                table.memtable.free(span.y);
+            }
         }
 
         // free logs
-
         long sp = this.logDependency.getLogPointer();
         _log.trace("start log space recycling with sp={}", hex(sp));
         this.spaceman.gc(this.gc, sp);
         _log.trace("log space recycling is finished");
 
         //
-
         _log.trace("start garbage collection");
         this.gc.collect(ts);
         if (getStorageEngine() != null) {
@@ -1193,6 +1176,10 @@ public final class Humpback {
         if (getTableInfo(tableId) == null) {
             throw new HumpbackException("table {} not found", tableId);
         }
+        if (tableId < 0) {
+            // we dont want to maintain column mappings for temporary tables
+            return null;
+        }
         int maxColumnPos = 0;
         for (HColumnRow i:getColumns(tableId)) {
             maxColumnPos = Math.max(i.getColumnPos(), maxColumnPos);
@@ -1210,6 +1197,10 @@ public final class Humpback {
     }
     
     public void addColumn(HumpbackSession hsession, long trxid, int tableId, int columnId, String name) {
+        if (tableId < 0) {
+            // we dont care about temporary table in minke
+            return;
+        }
         HColumnRow row = new HColumnRow(tableId, columnId);
         row.setColumnName(name);
         this.syscolumn.put(hsession, trxid, row.row, 0);
@@ -1331,5 +1322,13 @@ public final class Humpback {
 
     public PageCacheWarmer getPageCacheWarmer() {
         return this.warmer;
+    }
+    
+    public File getHome() {
+        return this.home;
+    }
+
+    public File geTemp() {
+        return this.temp;
     }
 }

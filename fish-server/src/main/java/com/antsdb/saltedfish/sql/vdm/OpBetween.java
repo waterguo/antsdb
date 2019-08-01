@@ -73,4 +73,8 @@ public class OpBetween extends Operator {
         return this.to;
     }
 
+    @Override
+    public String toString() {
+        return "BETWEEN " + getFrom().toString() + " AND " + getTo().toString();
+    }
 }

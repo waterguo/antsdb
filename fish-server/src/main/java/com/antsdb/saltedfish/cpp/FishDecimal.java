@@ -16,7 +16,11 @@ package com.antsdb.saltedfish.cpp;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-public final class FishDecimal {
+public final class FishDecimal extends BrutalMemoryObject {
+
+    public FishDecimal(long addr) {
+        super(addr);
+    }
 
     final static int compare(long addrx, byte typey, long addry) {
         BigDecimal x = get(null, addrx);
@@ -68,6 +72,16 @@ public final class FishDecimal {
     public static long negate(Heap heap, long pValue) {
         BigDecimal value = get(heap, pValue);
         return FishNumber.allocSet(heap, value.negate());
+    }
+
+    @Override
+    public int getByteSize() {
+        return getSize(this.addr);
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_DECIMAL;
     }
     
 }

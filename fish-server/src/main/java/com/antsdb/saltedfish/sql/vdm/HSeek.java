@@ -46,7 +46,7 @@ public class HSeek extends HSelect {
             Transaction trx = ctx.getTransaction();
             long pKey = this.keyExpr.eval(ctx, heap, params, pMaster);
             KeyBytes key = KeyBytes.fromHexDump(AutoCaster.getString(heap, pKey));
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), key.getAddress());
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), key.getAddress(), 0);
             if (pRow != 0) {
                 long pRecord = Record.alloc(heap, this.meta.getColumnCount());
                 Row row = Row.fromMemoryPointer(pRow, 0);

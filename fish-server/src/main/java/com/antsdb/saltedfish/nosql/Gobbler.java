@@ -94,6 +94,9 @@ public class Gobbler {
         public LogEntry(long sp, long addr) {
             this.sp = sp;
             this.addr = addr;
+            if (getMagic() != MAGIC) {
+                UberUtil.error("invalid log entry at lp={} p={}", sp, addr);
+            }
         }
         
         protected void finish(EntryType type) {
@@ -1102,7 +1105,7 @@ public class Gobbler {
         long sp = entry.getSpacePointer();
         updatePersistencePointer(sp);
         logTimestamp();
-        return sp + DeleteEntry2.getHeaderSize();
+        return sp;
     }
 
     public long replayFromRowPointer(long spStartRow, ReplayHandler handler, boolean inclusive) throws Exception {

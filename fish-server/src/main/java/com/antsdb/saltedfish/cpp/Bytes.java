@@ -18,7 +18,11 @@ import java.nio.ByteBuffer;
 import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public class Bytes {
+public final class Bytes extends BrutalMemoryObject {
+    public Bytes(long addr) {
+        super(addr);
+    }
+
     public final static byte[] get(Heap heap, long addr) {
         if (Unsafe.getByte(addr) != Value.FORMAT_BYTES) {
             throw new IllegalArgumentException();
@@ -143,6 +147,16 @@ public class Bytes {
         Unsafe.putByte(addr, Value.FORMAT_BYTES);
         Unsafe.putInt3(addr+1, length);
         Unsafe.copyMemory(pSourceData, addr + 4, length);
+    }
+
+    @Override
+    public int getByteSize() {
+        return getRawSize(this.addr);
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_BYTES;
     }
 
 }

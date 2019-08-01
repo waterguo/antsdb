@@ -90,6 +90,7 @@ public class Member implements LogDependency {
         }
         if (this.thread.isAlive()) {
             this.thread.replicator.close();
+            this.thread.interrupt();
             try {
                 this.thread.join(5000);
             }

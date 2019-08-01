@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
@@ -28,6 +30,7 @@ import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * manipulates index at entry level
@@ -35,6 +38,8 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
  * @author wgu0
  */
 public class IndexEntryHandler {
+    static Logger _log = UberUtil.getThisLogger();
+    
     GTable gtable;
     IndexMeta index;
     KeyMaker keyMaker;
@@ -65,7 +70,7 @@ public class IndexEntryHandler {
                 boolean isReplace) {
             long pIndexKey = keyMaker.make(heap, row);
             long pRowKey = row.getKeyAddress();
-            insert(heap, hsession, trx, pIndexKey, pRowKey, (byte)0, timeout, isReplace);
+            insert(heap, hsession, trx, pIndexKey, pRowKey, (byte)0, timeout, isReplace, null);
     }
     
     void insert(Heap heap, 
@@ -75,33 +80,52 @@ public class IndexEntryHandler {
                 long pRowKey, 
                 byte misc, 
                 int timeout, 
-                boolean isReplace) {
-            for (;;) {
-            HumpbackError error = this.gtable.insertIndex(hsession, trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
+                boolean isReplace,
+                Row oldRow) {
+        for (;;) {
+            long trxid = trx.getTrxId();
+            long trxts = trx.getTrxTs();
+            HumpbackError error = this.gtable.insertIndex(hsession, trxid, pIndexKey, pRowKey, misc, timeout);
             if (error == HumpbackError.SUCCESS) {
-                    return;
+                return;
             }
             else {
-                    error = this.gtable.insertIndex(hsession, trx.getTrxId(), pIndexKey, pRowKey, misc, timeout);
-                    throw new OrcaException(
-                        "{} tableId={} rowkey={} indexkey={}", 
-                        error, 
-                        this.gtable.getId(),
-                        KeyBytes.toString(pRowKey), 
-                        KeyBytes.toString(pIndexKey));
+                String loc = this.gtable.getMemTable().getLocation(trxid, trxts, pIndexKey);
+                _log.debug("location: {}", loc);
+                long pIndex = this.gtable.getMemTable().getIndex(trxid, trxts, pIndexKey);
+                _log.debug("pIndex: {}", pIndex);
+                Long version = (oldRow == null) ? null : oldRow.getVersion();
+                throw new OrcaException(
+                    "{} tableId={} rowkey={} indexkey={} old_version={}", 
+                    error, 
+                    this.gtable.getId(),
+                    KeyBytes.toString(pRowKey), 
+                    KeyBytes.toString(pIndexKey),
+                    version);
             }
-            }
+        }
     }
     
     void delete(Heap heap, HumpbackSession hsession, Transaction trx, Row row, int timeout) {
         long pIndexKey = keyMaker.make(heap, row);
-        delete(heap, hsession, trx, pIndexKey, timeout);
+        delete(heap, hsession, trx, pIndexKey, row, timeout);
     }
     
-    void delete(Heap heap, HumpbackSession hsession, Transaction trx, long pIndexKey, int timeout) {
+    void delete(Heap heap, 
+                HumpbackSession hsession, 
+                Transaction trx, 
+                long pIndexKey, 
+                Row row, 
+                int timeout) {
         HumpbackError error = this.gtable.delete(hsession, trx.getTrxId(), pIndexKey, timeout);
         if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+            throw new OrcaException(
+                    "{} tableId={} rowkey={} indexkey={} old_version={}", 
+                    error, 
+                    this.gtable.getId(),
+                    KeyBytes.toString(row.getKeyAddress()), 
+                    KeyBytes.toString(pIndexKey),
+                    row.getVersion());
         }
     }
 
@@ -120,8 +144,8 @@ public class IndexEntryHandler {
             }
         }
         long pRowKey = newRow.getKeyAddress();
-        delete(heap, hsession, trx, pOldIndexKey, timeout);
-        insert(heap, hsession, trx, pNewIndexKey, pRowKey, (byte)0, timeout, true);
+        delete(heap, hsession, trx, pOldIndexKey, oldRow, timeout);
+        insert(heap, hsession, trx, pNewIndexKey, pRowKey, (byte)0, timeout, true, oldRow);
     }
     
     long getRowKey(Heap heap, Transaction trx, VaporizingRow row) {

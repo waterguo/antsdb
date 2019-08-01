@@ -111,7 +111,7 @@ public class IndexSeek extends CursorMaker implements Seekable {
             // find the row 
             
             GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey, 0);
             if (pRow != 0) {
                 ctx.getCursorStats(makerId).incrementAndGet();
             }

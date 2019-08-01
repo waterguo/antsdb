@@ -153,7 +153,9 @@ public class HBaseStorageService implements StorageEngine {
             init();
         }
         catch (Throwable x) {
-            this.hbaseConnection.close();
+            if (this.hbaseConnection != null) {
+                this.hbaseConnection.close();
+            }
             throw x;
         }
     }
@@ -170,35 +172,19 @@ public class HBaseStorageService implements StorageEngine {
         config.set("hbase.client.operation.timeout", "10000");
         
         // continue
-        
         Connection result;
-        if (User.isHBaseSecurityEnabled(config)) {
-            
-            System.setProperty("java.security.krb5.realm", "BLUE-ANTS.CLOUDAPP.NET");
-            System.setProperty("java.security.krb5.kdc", "blue-ants.cloudapp.net");
-
-            String hbasePrinc = config.get("hbase.master.kerberos.principal", "");
-            String hbaseKeytabFile = config.get("hbase.master.keytab.file", "");
-            
-            UserGroupInformation.setConfiguration(config);            
-            UserGroupInformation userGroupInformation = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
-                    hbasePrinc, 
-                    hbaseKeytabFile);
-            UserGroupInformation.setLoginUser(userGroupInformation);
-            User hbaseUser = User.create(userGroupInformation);
-            result = ConnectionFactory.createConnection(config, hbaseUser);
-        }
-        else {
-            result = ConnectionFactory.createConnection(config);
-        }
+        result = ConnectionFactory.createConnection(config);
         return result;
     }
 
-    public static Configuration getHBaseConfig(ConfigService config) {
+    public static Configuration getHBaseConfig(ConfigService config) throws IOException {
         Configuration result = HBaseConfiguration.create();
         if (config.getHBaseConf() != null) {
-            Path path = new Path(config.getHBaseConf());
-            result.addResource(path);
+            String path = config.getHBaseConf();
+            if (!new File(path).exists()) {
+                throw new OrcaHBaseException("hbase configuration file is not found {}", path);
+            }
+            result.addResource(new Path(path));
         }
         else if (config.getProperty("hbase.zookeeper.quorum", null) != null) {
             for (Map.Entry<Object, Object> i:config.getProperties().entrySet()) {
@@ -210,6 +196,22 @@ public class HBaseStorageService implements StorageEngine {
         }
         else {
             throw new OrcaHBaseException("quorum is not set");
+        }
+        if (config.isKerberosEnabled()) {
+            String krbconf = config.getKerberosConf();
+            String principal = config.getKerberosPrincipal();
+            String keytab = config.getKerberosKeytab();
+            if (!new File(keytab).exists()) {
+                throw new OrcaHBaseException("keytab file is not found {}", keytab);
+            }
+            if (!new File(krbconf).exists()) {
+                throw new OrcaHBaseException("kerberos configuration file is not found {}", krbconf);
+            }
+            _log.info("kerberos is enabled with krb={} principal={} keytab={}", krbconf, principal, keytab);
+            System.setProperty("java.security.krb5.conf", krbconf);
+            result.set("hadoop.security.authentication", "kerberos");
+            UserGroupInformation.setConfiguration(result);
+            UserGroupInformation.loginUserFromKeytab(principal, keytab);
         }
         return result;
     }
@@ -298,6 +300,10 @@ public class HBaseStorageService implements StorageEngine {
     
     @Override
     public synchronized  StorageTable createTable(SysMetaRow meta) throws OrcaHBaseException {
+        if (meta.getTableId() < 0) {
+            // we dont care about temporary table in minke
+            return null;
+        }
         if (!this.isMutable) {
             throw new OrcaHBaseException("hbase storage is in read-only mode");
         }
@@ -319,7 +325,7 @@ public class HBaseStorageService implements StorageEngine {
     }
     
     public boolean existsTable(String namespace, String tableName) {
-            return Helper.existsTable(this.hbaseConnection, namespace, tableName);
+        return Helper.existsTable(this.hbaseConnection, namespace, tableName);
     }
     
     @Override
@@ -643,6 +649,10 @@ public class HBaseStorageService implements StorageEngine {
 
     @Override
     public void syncTable(SysMetaRow meta) {
+        if (meta.getTableId() < 0) {
+            // we dont care about temporary table in minke
+            return;
+        }
         if (this.tableById.get(meta.getTableId()) != null) {
             return;
         }

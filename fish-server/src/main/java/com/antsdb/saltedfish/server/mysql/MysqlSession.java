@@ -22,8 +22,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.antlr.v4.runtime.InputMismatchException;
+import org.antlr.v4.runtime.NoViableAltException;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.antsdb.mysql.network.Packet;
 import com.antsdb.mysql.network.PacketDbInit;
@@ -59,6 +63,7 @@ import com.antsdb.saltedfish.sql.vdm.ShutdownException;
 import com.antsdb.saltedfish.sql.vdm.Use;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.storage.KerberosHelper;
+import com.antsdb.saltedfish.util.AntiCrashCrimeScene;
 import com.antsdb.saltedfish.util.UberUtil;
 
 import static com.antsdb.saltedfish.server.mysql.MysqlConstant.*;
@@ -71,6 +76,7 @@ import static com.antsdb.saltedfish.server.mysql.util.MysqlErrorCode.*;
  */
 public final class MysqlSession {
     static Logger _log = UberUtil.getThisLogger();
+    static Logger _logBrokenSql = LoggerFactory.getLogger(MysqlSession.class.getName() + ".broken-sql");
     static AtomicInteger _threadId = new AtomicInteger(300);
     
     public static String SERVER_VERSION = Orca._version;
@@ -326,7 +332,12 @@ public final class MysqlSession {
     }
 
     private void execute(PacketExecute packet, ByteBuffer buf) {
-        this.preparedStmtHandler.execute(buf);
+        try {
+            this.preparedStmtHandler.execute(buf);
+        }
+        catch (Exception x) {
+            sqlError(x, this.preparedStmtHandler.getSql(packet.getStatementId()));
+        }
     }
 
     private void closeStatement(PacketStmtClose packet) {
@@ -334,15 +345,11 @@ public final class MysqlSession {
     }
 
     private void prepare(PacketPrepare packet) throws SQLException {
-        boolean success = false;
         try {
             this.preparedStmtHandler.prepare(packet, getDecoder());
-            success = true;
         }
-        finally {
-            if (!success && _log.isDebugEnabled()) {
-                _log.debug("broken sql: {}", StringUtils.left(packet.getQuery(getDecoder()), 2048));
-            }
+        catch (Exception x) {
+            sqlError(x, packet.getQuery(getDecoder()));
         }
     }
 
@@ -351,8 +358,8 @@ public final class MysqlSession {
     }
 
     private void query(PacketQuery packet, Decoder decoder) throws Exception {
-        boolean success = false;
         ByteBuffer sql = packet.getQuery();
+        AntiCrashCrimeScene.log(sql);
         /* for debug
         if (FakeResponse.fake(sql, this.out)) {
             return;
@@ -363,13 +370,32 @@ public final class MysqlSession {
          */
         try {
             queryHandler.query(sql, decoder);
-            success = true;
         }
-        finally {
-            if (!success && _log.isDebugEnabled()) {
-                _log.debug("broken sql: {}", StringUtils.left(packet.getQueryAsString(getDecoder()), 1024));
+        catch (Exception x) {
+            sqlError(x, packet.getQueryAsString(getDecoder()));
+        }
+    }
+
+    private void sqlError(Exception x, String sql) {
+        _logBrokenSql.trace("broken sql: {}", StringUtils.left(sql, 2048));
+        _logBrokenSql.trace("parser error", x);
+        String msg = x.getMessage();
+        if (x instanceof ParseCancellationException) {
+            if (x.getCause() instanceof InputMismatchException) {
+                InputMismatchException xx = (InputMismatchException)x.getCause();
+                String offend = xx.getOffendingToken().getText();
+                msg = String.format("Invalid SQL. Offending token: %s", offend);
+            }
+            if (x.getCause() instanceof NoViableAltException) {
+                NoViableAltException xx = (NoViableAltException)x.getCause();
+                String offend = xx.getOffendingToken().getText();
+                msg = String.format("Invalid SQL. Offending token: %s", offend);
+            }
+            if (msg == null) {
+                msg = "You have an error in your SQL syntax";
             }
         }
+        writeErrMessage(ERR_FOUND_EXCEPION, msg);
     }
 
     private void init(PacketDbInit request) {
@@ -400,10 +426,8 @@ public final class MysqlSession {
         }
         this.session = this.fish.getOrca().createSession(request.user, this.remote.toString());
         this.session.setCurrentNamespace(request.dbname);
-        if (_log.isTraceEnabled()) {
-            _log.debug("Connection user:" + request.user);
-            _log.debug("Connection default schema:" + request.dbname);
-        }
+        _log.trace("Connection user:" + request.user);
+        _log.trace("Connection default schema:" + request.dbname);
         this.out.write(request.isSslEnabled() ? PacketEncoder.SSL_AUTH_OK_PACKET : PacketEncoder.AUTH_OK_PACKET);
         this.out.flush();
         return 1;
@@ -445,6 +469,9 @@ public final class MysqlSession {
     }
 
     public void writeErrMessage(int errno, String msg) {
+        if (msg == null) {
+            msg = "";
+        }
         ByteBuffer buf = Charset.defaultCharset().encode(msg);
         this.encoder.writePacket(this.out, (packet) -> this.encoder.writeErrorBody(
                 packet, 

@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,6 +90,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     private volatile int nOpenFiles;
     /** max number of files */
     private long nFiles;
+    @SuppressWarnings("unused")
     private ConfigService config;
     private long lastCheckPontTime;
     
@@ -117,6 +119,10 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     }
     
     public MinkeTable createTableIfAbsent(int tableId, TableType type) {
+        if (tableId < 0) {
+            // we dont care about temporary table in minke
+            return null;
+        }
         MinkeTable table = this.tableById.get(tableId);
         if (table != null) {
             return table;
@@ -211,14 +217,12 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         _log.info("openning minke {} ...", this.home);
         
         // create directory if necessary
-        
         if (!this.home.exists() && isMutable) {
             _log.info("minke does not exist, creating at {} ...", this.home);
             this.home.mkdirs();
         }
         
         // open pages
-        
         Map<Integer, MinkePage> pages = new HashMap<>();
         int maxFileId = this.nextFileId;
         for (File i:this.home.listFiles()) {
@@ -246,7 +250,6 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         int nPages = pages.size();
         
         // open page index file
-        
         this.pif = PageIndexFile.find(this.home);
         if (this.pif != null) {
             _log.info("loading pif: {}", this.pif.file);
@@ -261,7 +264,6 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         this.lastCheckPontTime = UberTime.getTime();
         
         // done
-        
         this.free.addAll(pages.values());
         this.isClosed = false;
         _log.info("minke @ {} is successfully initialzied. {} pages free. {} pages allocated",
@@ -298,7 +300,6 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         _log.info("creating new checkpoint with sp={}...", hex(sp));
         
         // carbonfreeze
-        
         Map<Integer, MinkePage> newFreeze = new HashMap<>();
         for (MinkeTable mtable:this.tableById.values()) {
             for (MinkePage i:mtable.getPages()) {
@@ -312,14 +313,12 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
 
         // save page index file
-        
         PageIndexFile next = (this.pif == null) ? PageIndexFile.getFile(this.home, 0): this.pif.next();
         next.save(this.tableById, sp);
         this.checkpointSp = sp;
         this.lastCheckPontTime = UberTime.getTime();
         
         // garbage collection
-        
         int count = 0;
         for (MinkePage i:this.lastFreeze.values()) {
             if (!newFreeze.containsKey(i.id)) {
@@ -332,7 +331,6 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         _log.debug("{} pages have been freed", count);
         
         // clean up
-        
         PageIndexFile old = this.pif;
         this.pif = next;
         if (old != null) {
@@ -348,7 +346,6 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
         
         // done
-        
         _log.info("checkpoint {} is created", next.file);
     }
     
@@ -490,12 +487,14 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
         
         // make a checkpoint if log space is more than 1gb
+        /* temporarily disabled. the following logic could trigger checkpoint() endlessly
         long nfiles = this.syncSp >> 32 - this.checkpointSp >> 32;
         long size = this.config.getSpaceFileSize() * nfiles;
         if (size >= SizeConstants.GB) {
             checkpoint();
             return;
         }
+        */
         
         // make a checkpoint if last checkpoint is older than 1 hour
         if (UberTime.getTime() - this.lastCheckPontTime >= TimeConstants.hour(1)) {
@@ -518,6 +517,10 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public StorageTable createTable(SysMetaRow meta) {
+        if (meta.getTableId() < 0) {
+            // we dont care about temporary table in minke
+            return null;
+        }
         int tableId = meta.getTableId();
         TableType type = meta.getType();
         MinkeTable table = this.tableById.get(tableId);
@@ -682,13 +685,17 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public void syncTable(SysMetaRow meta) {
-        if (meta.isDeleted()) {
+        if (meta.getTableId() < 0) {
+            // we dont care about temporary table in minke
             return;
         }
-        if (this.tableById.get(meta.getTableId()) != null) {
-            return;
+        MinkeTable mtable = this.tableById.get(meta.getTableId());
+        if (meta.isDeleted() && mtable != null) {
+            deleteTable(mtable.tableId);
         }
-        createTable(meta);
+        else if (!meta.isDeleted() && mtable == null) {
+            createTable(meta);
+        }
     }
 
     @Override
@@ -703,5 +710,9 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     @Override
     public Replicable getReplicable() {
         return null;
+    }
+    
+    public Collection<MinkeTable> getTables() {
+        return Collections.unmodifiableCollection(this.tableById.values());
     }
 }

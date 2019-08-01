@@ -13,18 +13,21 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.FileBasedHeap;
+import com.antsdb.saltedfish.nosql.Humpback;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public class RecordBuffer extends CursorWithHeap {
+public class RecordBuffer extends Cursor {
     private Cursor upstream;
+    private FileBasedHeap heap;
 
-    public RecordBuffer(Cursor upstream) {
+    public RecordBuffer(Humpback humpback, Cursor upstream) {
         super(upstream.getMetadata());
         this.upstream = upstream;
+        this.heap = new FileBasedHeap(humpback.geTemp());
     }
 
     @Override
@@ -33,19 +36,18 @@ public class RecordBuffer extends CursorWithHeap {
         if (pRecord == 0) {
             return 0;
         }
-        Heap heap = getHeap();
         long pResult = Record.clone(heap, pRecord);
         return pResult;
     }
     
     public void clear() {
-        newHeap();
+        this.heap.reset(0);
     }
 
     @Override
     public void close() {
         this.upstream.close();
-        super.close();
+        this.heap.close();
     }
     
 }

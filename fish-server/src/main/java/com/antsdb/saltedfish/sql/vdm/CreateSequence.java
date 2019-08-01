@@ -20,7 +20,7 @@ import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 public class CreateSequence extends Statement {
     ObjectName name;
     long seed;
-	long increment;
+    long increment;
     
     
     public CreateSequence(ObjectName name, long seed, long increment) {
@@ -32,7 +32,7 @@ public class CreateSequence extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-    	String ns = Checks.namespaceExist(ctx.getOrca(), name.getNamespace());
+        String ns = Checks.namespaceExist(ctx.getOrca(), name.getNamespace());
         Transaction trx = ctx.getTransaction();
         MetadataService metaService = ctx.getOrca().getMetaService();
         ObjectName canonizedName = new ObjectName(ns, this.name.getTableName());
@@ -41,7 +41,7 @@ public class CreateSequence extends Statement {
             throw new OrcaException("sequence already exists: " + this.name);
         }
         seq = new SequenceMeta(ctx.getOrca(), canonizedName);
-        seq.setLastNumber(this.seed-1);
+        seq.setNextNumber(this.seed);
         seq.setSeed(this.seed);
         seq.setIncrement(this.increment);
         metaService.addSequence(ctx.getHSession(), trx, seq);

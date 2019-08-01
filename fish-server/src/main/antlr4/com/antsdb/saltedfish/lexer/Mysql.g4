@@ -218,7 +218,13 @@ indexed_column_def
  : indexed_column ('(' signed_number ')')?
  ;
   
-create_table_stmt: K_CREATE K_TABLE (K_IF K_NOT K_EXISTS)? table_name_ '(' create_defs  ','? ')' table_options;
+create_table_stmt 
+ : K_CREATE K_TEMPORARY? K_TABLE (K_IF K_NOT K_EXISTS)? 
+   table_name_ 
+   ('(' create_defs  ','? ')')? 
+   table_options
+   select_or_values?
+ ;
 
 create_defs
  : create_def (',' create_def)*
@@ -354,13 +360,13 @@ delete_stmt
 
 drop_database_stmt: K_DROP (K_DATABASE | K_SCHEMA) (K_IF K_EXISTS)? identifier;
 
-drop_table_stmt: K_DROP K_TABLE (K_IF K_EXISTS)? table_names_ ;
+drop_table_stmt: K_DROP K_TEMPORARY? K_TABLE (K_IF K_EXISTS)? table_names_ ;
 
 drop_user_stmt : K_DROP K_USER (K_IF K_EXISTS)? string_value;
 
 drop_index_stmt: K_DROP K_INDEX index_name K_ON table_name_ ;
 
-explain_stmt: K_EXPLAIN K_PROFILE? sql_stmt;
+explain_stmt: K_EXPLAIN (K_PROFILE | K_ANALYZE)? sql_stmt;
  
 kill_stmt: K_KILL (K_CONNECTION | K_QUERY) number_value; 
 
@@ -389,7 +395,7 @@ insert_stmt_values_columns
  ;
  
 insert_stmt_values_row
- : '(' expr ( ',' expr )* ')'
+ : '(' (expr ( ',' expr )*)? ')'
  ;
  
 insert_duplicate_clause
@@ -607,7 +613,7 @@ show_tables_stmt
  ;
   
 show_triggers_stmt
- : K_SHOW K_FULL? K_TRIGGERS ( K_FROM identifier )? (K_LIKE string_value)?
+ : K_SHOW K_FULL? K_TRIGGERS ( K_FROM identifier )? (K_LIKE string_value)? where_clause?
  ;
  
 show_columns_stmt
@@ -913,7 +919,7 @@ name
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
  | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
  | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
- | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION | K_OJ
+ | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION | K_OJ | K_ANALYZE
  ;
  
 identifier
@@ -1157,7 +1163,6 @@ K_STRAIGHT_JOIN : S T R A I G H T '_' J O I N;
 K_SLAVE : S L A V E;
 K_TABLE : T A B L E;
 K_TABLES : T A B L E S;
-K_TEMP : T E M P;
 K_TEMPORARY : T E M P O R A R Y;
 K_THEN : T H E N;
 K_TO : T O;

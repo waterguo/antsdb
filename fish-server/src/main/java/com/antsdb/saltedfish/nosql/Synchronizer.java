@@ -52,6 +52,9 @@ public class Synchronizer extends FishServiceThread {
     private long totalOps = 0;
     private MinkeCache cache = null;
     private long reservedSize;
+    private String blockingFile = "";
+
+    private String blockingReason;
     
     Synchronizer(Humpback humpback) {
         super("synchronizer");
@@ -115,7 +118,7 @@ public class Synchronizer extends FishServiceThread {
     }
     
     private synchronized int sync_(boolean checkpoint) throws Exception {
-        long spReplicator = getReplicatorLogPointer();
+        long spReplicator = getStorageLogPointer();
         int result = 0;
         for (;;) {
             MemTablet tablet = TabletUtil.findOldestTablet(this.humpback, this.sp + 1, false);
@@ -123,13 +126,20 @@ public class Synchronizer extends FishServiceThread {
                 break;
             }
             if (!tablet.isCarbonfrozen()) {
+                this.blockingFile = tablet.toString();
+                this.blockingReason = "wait for freeze";
                 break;
             }
             if (tablet.getLogSpan().y >= spReplicator) {
                 // synchronizer cant go beyond replicator
+                this.blockingFile = tablet.toString();
+                this.blockingReason = String.format("file log pointer %x is ahead of storage", 
+                                                    tablet.getLogPointer());
                 return result;
             }
-             result += sync(tablet);
+            this.blockingFile = "";
+            this.blockingReason = "";
+            result += sync(tablet);
         }
         if (checkpoint) {
             getStorage().checkpoint();
@@ -319,13 +329,11 @@ public class Synchronizer extends FishServiceThread {
 
     private int sync(MemTablet source) {
         // cache check
-        
         if (isCacheFull()) {
             throw new OutOfMinkeSpace();
         }
         
         // check if the table is already deleted
-        
         StorageTable target = getStorage().getTable(source.getTableId());
         SysMetaRow sourceTableInfo = this.humpback.getTableInfo(source.getTableId());
         TableType type = sourceTableInfo.getType();
@@ -333,12 +341,11 @@ public class Synchronizer extends FishServiceThread {
             // table might disappear due to concurrent deletion 
             return 0;
         }
-        if (target == null) {
+        if (source.getTableId() >= 0 && target == null) {
             throw new CodingError();
         }
         
         // start synchronization
-        
         long spBackup = this.sp;
         long tabletSpBackup = this.tabletSp;
         int count = 0;
@@ -347,30 +354,33 @@ public class Synchronizer extends FishServiceThread {
         try {
             this.session.open();
             this.state = source.toString();
-            try (MemTablet.Scanner iter = source.scanDelta(this.tabletSp + 1, Long.MAX_VALUE)) {
-                while((iter != null) && iter.next()) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        break;
-                    }
-                    ScanResultSynchronizer.synchronizeSingleEntry(iter, target, type);
-                    this.tabletSp = iter.getLogSpacePointer();
-                    count++;
-                    this.totalOps++;
-                    if (count % 100 == 0) {
-                        this.speedometer.sample(this.totalOps);
-                        if (isCacheFull()) {
-                            throw new OutOfMinkeSpace();
+            // note we dont want to synchronize temporary table
+            if (source.getTableId() >= 0) {
+                try (MemTablet.Scanner iter = source.scanDelta(this.tabletSp + 1, Long.MAX_VALUE)) {
+                    while((iter != null) && iter.next()) {
+                        if (Thread.currentThread().isInterrupted()) {
+                            break;
+                        }
+                        ScanResultSynchronizer.synchronizeSingleEntry(iter, target, type);
+                        this.tabletSp = iter.getLogSpacePointer();
+                        count++;
+                        this.totalOps++;
+                        if (count % 100 == 0) {
+                            this.speedometer.sample(this.totalOps);
+                            if (isCacheFull()) {
+                                throw new OutOfMinkeSpace();
+                            }
                         }
                     }
                 }
-                this.tabletSp = 0;
-                this.speedometer.sample(this.totalOps);
-                MemTablet next = TabletUtil.findOldestTablet(this.humpback, source.getLogSpan().x + 1, false);
-                this.sp = (next != null) ? next.getLogSpan().x - 1 : source.getLogSpan().y + 1;
-                getStorage().setEndSpacePointer(this.sp);
-                success = true;
-                return count;
             }
+            this.tabletSp = 0;
+            this.speedometer.sample(this.totalOps);
+            MemTablet next = TabletUtil.findOldestTablet(this.humpback, source.getLogSpan().x + 1, false);
+            this.sp = (next != null) ? next.getLogSpan().x - 1 : source.getLogSpan().y + 1;
+            getStorage().setEndSpacePointer(this.sp);
+            success = true;
+            return count;
         }
         finally {
             this.session.close();
@@ -399,7 +409,7 @@ public class Synchronizer extends FishServiceThread {
             while (iter.next()) {
                 long pKey = iter.getKeyPointer();
                 long pRow = iter.getRowPointer();
-                long pResult = target.get(pKey);
+                long pResult = target.get(pKey, 0);
                 if (Row.isTombStone(pRow)) {
                     if (pResult == 0) {
                         continue;
@@ -429,8 +439,10 @@ public class Synchronizer extends FishServiceThread {
         props.put("ops/second", this.speedometer.getSpeed());
         props.put("state", this.state);
         props.put("pending data", UberFormatter.capacity(getPendingBytes()));
-        props.put("log position", UberFormatter.hex(this.sp));
-        props.put("committed log position", UberFormatter.hex(this.getStorage().getLogSpan().y));
+        props.put("log pointer", UberFormatter.hex(this.sp));
+        props.put("storage log pointer", UberFormatter.hex(getStorageLogPointer()));
+        props.put("blocking file", this.blockingFile);
+        props.put("blockign reason", this.blockingReason);
         return props;
     }
 
@@ -466,12 +478,14 @@ public class Synchronizer extends FishServiceThread {
         return false;
     }
     
-    private long getReplicatorLogPointer() {
+    private long getStorageLogPointer() {
         StorageEngine stor = this.getStorage();
-        if (!(stor instanceof Replicable)) {
+        if (stor instanceof MinkeCache) {
+            stor = ((MinkeCache)stor).getStorage();
+        }
+        if (stor instanceof Minke) {
             return Long.MAX_VALUE;
         }
-        long result = ((Replicable)stor).getReplicateLogPointer();
-        return result;
+        return stor.getLogSpan().y;
     }
 }

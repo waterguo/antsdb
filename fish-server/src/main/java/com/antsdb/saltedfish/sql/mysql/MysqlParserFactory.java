@@ -30,6 +30,8 @@ import com.antsdb.saltedfish.lexer.MysqlLexer;
 import com.antsdb.saltedfish.lexer.MysqlParser;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_stmtContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Create_database_stmtContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Create_index_stmtContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Create_table_like_stmtContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Create_table_stmtContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Drop_database_stmtContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Drop_index_stmtContext;
@@ -107,6 +109,7 @@ public class MysqlParserFactory extends SqlParserFactory {
         ParseTree stmt = rule.getChild(0);
         Generator<ParseTree> generator = InstructionGenerator.getGenerator(stmt);
         boolean isDdl = generator instanceof DdlGenerator<?>;
+        boolean isTemporaryTable = generator.isTemporaryTable(gctx, stmt);
         Instruction code = generator.gen(gctx, stmt);
         boolean success = false;
         if (code == null) {
@@ -114,7 +117,9 @@ public class MysqlParserFactory extends SqlParserFactory {
         }
         try {
             Object result = code.run(ctx, params, 0);
-            logDdl(ctx, rule);
+            if (!isTemporaryTable) {
+                logDdl(ctx, rule);
+            }
             success = true;
             return result;
         }
@@ -173,13 +178,13 @@ public class MysqlParserFactory extends SqlParserFactory {
         if (tree instanceof Create_table_stmtContext) {
             return true;
         }
-        else if (tree instanceof Create_table_like_stmtGenerator) {
+        else if (tree instanceof Create_table_like_stmtContext) {
             return true;
         }
         else if (tree instanceof Create_database_stmtContext) {
             return true;
         }
-        else if (tree instanceof Create_index_stmtGenerator) {
+        else if (tree instanceof Create_index_stmtContext) {
             return true;
         }
         else if (tree instanceof Alter_table_stmtContext) {

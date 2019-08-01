@@ -74,8 +74,8 @@ public class SimpleSocketWorker implements Runnable {
             _log.error("error", x);
         }
         finally {
-            this.mysession.close();
-            this.out.close();
+            UberUtil.quiet(()->{this.mysession.close();});
+            UberUtil.quiet(()->{this.out.close();});
             HBaseTable.freeMemory();
             MemoryManager.freeImmortal(AllocPoint.LISTENER, this.buf);
             MemoryManager.threadEnd();

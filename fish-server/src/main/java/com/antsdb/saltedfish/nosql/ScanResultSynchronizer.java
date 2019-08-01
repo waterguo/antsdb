@@ -79,7 +79,7 @@ public class ScanResultSynchronizer {
     }
     
     static boolean verify(long pRow, long pKey, StorageTable target, TableType type) {
-        long pResult = target.get(pKey);
+        long pResult = target.get(pKey, 0);
         if (Row.isTombStone(pRow)) {
             if (pResult == 0) {
                 return true;

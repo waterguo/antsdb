@@ -47,7 +47,7 @@ public class PacketQuery extends Packet {
     }
 
     public CharBuffer getQueryAsCharBuf(Decoder decoder) {
-        CharBuffer result = PacketUtil.readStringAsCharBufWithMysqlExtension(addr + 5, this.length - 1, decoder);
+        CharBuffer result = PacketUtil.readStringAsCharBufWithMysqlExtension(addr + 5, this.length - 5, decoder);
         result.flip();
         return result;
     }

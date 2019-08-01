@@ -128,6 +128,9 @@ public class CreateIndex extends Statement {
         index.setFullText(isFullText);
         index.setRuleColumns(columns);
         index.setPrefix(prefix);
+        if (table.isTemproray()) {
+            index.setIndexTableId(-index.getIndexTableId());
+        }
         ctx.getMetaService().addRule(ctx.getHSession(), ctx.getTransaction(), index);
         
         // create physical table

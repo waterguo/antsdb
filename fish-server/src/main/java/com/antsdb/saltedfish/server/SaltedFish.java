@@ -178,7 +178,12 @@ public class SaltedFish {
         catch (Exception x) {
             _log.warn("unable to close tcp server", x);
         }
-        this.orca.shutdown();
+        try {
+            this.orca.shutdown();
+        }
+        catch (Exception x) {
+            _log.warn("unable to shutdown orca", x);
+        }
     }
     
     public boolean isClosed() {

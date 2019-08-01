@@ -57,13 +57,14 @@ public class SystemViewPages extends View {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Line> list = new ArrayList<>();
         Minke minke = getMinke(); 
-        if (orca.getHumpback().getStorageEngine() instanceof Minke)
-        for (MinkeFile file:minke.getFiles()) {
-            if (file == null) {
-                continue;
-            }
-            for (MinkePage page:file.getPages()) {
-                list.add(toLine(page));
+        if (minke != null) {
+            for (MinkeFile file:minke.getFiles()) {
+                if (file == null) {
+                    continue;
+                }
+                for (MinkePage page:file.getPages()) {
+                    list.add(toLine(page));
+                }
             }
         }
         

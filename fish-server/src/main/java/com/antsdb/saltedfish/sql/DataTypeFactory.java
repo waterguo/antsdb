@@ -43,4 +43,6 @@ public abstract class DataTypeFactory {
         }
         return type;
     }
+
+    abstract public DataType findDefaultType(Class<?> javaType);
 }

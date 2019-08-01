@@ -968,6 +968,17 @@ public final class FishSkipList implements ConsoleHelper {
         return Node.getValuePointer(this.base, node);
     }
     
+    public long higherKey(long pKey) {
+        if (pKey == 0) {
+            return 0;
+        }
+        int node = findNode(pKey, OP_GT);
+        if (node == 0) {
+            return 0;
+        }
+        return Node.getKeyPointer(this.base, node);
+    }
+    
     public long floor(long pKey) {
         if (pKey == 0) {
             return 0;

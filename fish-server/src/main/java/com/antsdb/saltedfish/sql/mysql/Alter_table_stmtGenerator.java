@@ -56,6 +56,12 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
     static Logger _log = UberUtil.getThisLogger();
     
     @Override
+    public boolean isTemporaryTable(GeneratorContext ctx, Alter_table_stmtContext rule) {
+        ObjectName name = TableName.parse(ctx, rule.table_name_());
+        return isTemporaryTable(ctx, name);
+    }
+
+    @Override
     public Instruction gen(GeneratorContext ctx, Alter_table_stmtContext rule)
     throws OrcaException {
         Flow flow = new Flow();
@@ -108,8 +114,6 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
                 }
             }
         );
-                
-                
         flow.add(new SyncTableSequence(tableName, null));
         return flow;
     }

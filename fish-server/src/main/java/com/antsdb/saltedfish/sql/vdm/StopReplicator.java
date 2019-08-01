@@ -20,7 +20,7 @@ import com.antsdb.saltedfish.nosql.Replicator;
  * 
  * @author *-xguo0<@
  */
-public class StoptReplicator extends Statement {
+public class StopReplicator extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {

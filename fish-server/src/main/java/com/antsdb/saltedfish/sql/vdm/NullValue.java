@@ -28,7 +28,7 @@ public class NullValue extends Operator {
 
     @Override
     public DataType getReturnType() {
-        return null;
+        return DataType.doubleType();
     }
 
     @Override
@@ -41,8 +41,8 @@ public class NullValue extends Operator {
         visitor.accept(this);
     }
 
-	@Override
-	public String toString() {
-		return "NULL";
-	}
+    @Override
+    public String toString() {
+        return "NULL";
+    }
 }

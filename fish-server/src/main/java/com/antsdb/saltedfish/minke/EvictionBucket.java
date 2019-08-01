@@ -24,14 +24,14 @@ import java.util.PriorityQueue;
 class EvictionBucket {
     
     private int size;
-    private PriorityQueue<MinkePage> set = new PriorityQueue<>(new MyComparator());
+    private PriorityQueue<EvictableObject> set = new PriorityQueue<>(new MyComparator());
     private long min = Long.MAX_VALUE;
     private long max;
     
-    static class MyComparator implements Comparator<MinkePage>{
+    static class MyComparator implements Comparator<EvictableObject>{
         @Override
-        public int compare(MinkePage x, MinkePage y) {
-            return -Long.compare(x.copyLastAccess, y.copyLastAccess);
+        public int compare(EvictableObject x, EvictableObject y) {
+            return -Long.compare(x.getLastAccessTime(), y.getLastAccessTime());
         }
     }
     
@@ -39,19 +39,17 @@ class EvictionBucket {
         this.size = size;
     }
     
-    void add(MinkeTable table, MinkePage page) {
-        long lastAccess = page.lastAccess.get();
+    Collection<EvictableObject> getResult() {
+        return this.set;
+    }
+
+    public void add(EvictableObject evictable) {
+        long lastAccess = evictable.getLastAccessTime();
         this.min = Math.min(this.min, lastAccess);
         this.max = Math.max(this.max, lastAccess);
-        page.copyLastAccess = lastAccess;
-        page.tableId = table.tableId;
-        this.set.add(page);
+        this.set.add(evictable);
         while (set.size() > this.size) {
             this.set.poll();
         }
-    }
-    
-    Collection<MinkePage> getResult() {
-        return this.set;
     }
 }

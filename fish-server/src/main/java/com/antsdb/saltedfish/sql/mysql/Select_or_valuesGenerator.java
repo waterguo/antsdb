@@ -41,6 +41,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.From_clause_standardContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.From_itemContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.From_item_odbcContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.IdentifierContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Join_constraintContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Join_itemContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Join_operatorContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Result_columnContext;
@@ -67,6 +68,8 @@ import com.antsdb.saltedfish.sql.vdm.Function;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.NullIfEmpty;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.sql.vdm.OpAnd;
+import com.antsdb.saltedfish.sql.vdm.OpEqual;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.ToString;
 import com.antsdb.saltedfish.util.CodingError;
@@ -163,7 +166,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                 String fieldName = getFieldName(expr, op);
                 planner.addOutputField(fieldName, op);
                 if (expr.column_alias() != null) {
-                        exprByAlias.put(fieldName.toLowerCase(), op);
+                    exprByAlias.put(fieldName.toLowerCase(), op);
                 }
             }
             else {
@@ -177,7 +180,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             List<Operator> groupbys = new ArrayList<Operator>();
             if (rule.group_by_clause() != null) {
                 for (ExprContext i:rule.group_by_clause().expr()) {
-                    Operator op = Utils.findInPlannerOutputFields(planner, i.getText());
+                    Operator op = Utils.findInPlannerOutputFieldsForOrderBy(planner, i.getText());
                     if (op == null) {
                         op = ExprGenerator.gen(ctx, planner, i);
                     }
@@ -230,7 +233,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             Join_operatorContext joinop = rule.join_operator();
             outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
             left = joinop.K_RIGHT() == null;
-            addTableToPlanner(ctx, planner, rule.from_item(), rule.join_constraint().expr(), left, outer);
+            addTableToPlanner(ctx, planner, rule.from_item(), rule.join_constraint(), left, outer);
         }
         else if (rule.from_item() != null) {
             addTableToPlanner(ctx, planner, rule.from_item(), null, left, outer);
@@ -242,13 +245,11 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
 
     private static void genFrom(GeneratorContext ctx, From_clause_standardContext rule, Planner planner) {
         // from items
-        
         for (From_itemContext i:rule.from_item()) {
             addTableToPlanner(ctx, planner, i, null, true, false);
         }
         
         // joins
-        
         if (rule.join_clause() != null) {
             for (Join_itemContext i:rule.join_clause().join_item()) {
                 boolean outer = false;
@@ -258,7 +259,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                     outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
                     left = joinop.K_RIGHT() == null;
                 }
-                addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint().expr(), left, outer);
+                addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint(), left, outer);
             }
         }
     }
@@ -403,7 +404,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             GeneratorContext ctx, 
             Planner planner, 
             From_itemContext rule, 
-            ExprContext condition,
+            Join_constraintContext condition,
             boolean left,
             boolean isOuter) {
         String alias = null;
@@ -426,8 +427,37 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             name = planner.addTableOrView(alias, table, left, isOuter);
         }
         if (condition != null) {
-            Operator expr = ExprGenerator.gen(ctx, planner, condition);
-            planner.addJoinCondition(name, expr, left);
+            if (condition.K_ON() != null) {
+                Operator expr = ExprGenerator.gen(ctx, planner, condition.expr());
+                planner.addJoinCondition(name, expr, left);
+            }
+            else if (condition.K_USING() != null) {
+                Operator expr = null;
+                String table = name.toString();
+                for (Column_nameContext i:condition.column_name()) {
+                    String columnName = i.getText();
+                    PlannerField x=null, y=null;
+                    for (PlannerField j:planner.getFields()) {
+                        if (!j.getName().equalsIgnoreCase(columnName)) {
+                            continue;
+                        }
+                        if (j.getTableAlias().equals(table)) {
+                            y = j;
+                        }
+                        else if (x == null) {
+                            x = j;
+                        }
+                    }
+                    Operator equal = new OpEqual(new FieldValue(x), new FieldValue(y));
+                    if (expr == null) {
+                        expr = equal;   
+                    }
+                    else {
+                        expr = new OpAnd(expr, equal);
+                    }
+                }
+                planner.addJoinCondition(name, expr, left);
+            }
         }
     }
 

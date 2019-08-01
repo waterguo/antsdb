@@ -13,10 +13,33 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.planner;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.lang.StringUtils;
+
 /**
- * 
+ * a single smallest query possible  
+ *  
  * @author *-xguo0<@
  */
-class RowSet {
+public class RowSet {
+    public int tag;
+    public List<ColumnFilter> conditions = new ArrayList<>();
+    
+    RowSet() {
+    }
+    
+    RowSet(int tag) {
+        this.tag = tag;
+    }
 
+    public void add(ColumnFilter cf) {
+        this.conditions.add(cf);
+    }
+
+    @Override
+    public String toString() {
+        return StringUtils.join(this.conditions, ';');
+    }
 }

@@ -22,6 +22,8 @@ import org.apache.commons.lang.StringUtils;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.Int4;
+import com.antsdb.saltedfish.cpp.Int8;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.util.UberFormatter;
@@ -49,17 +51,30 @@ public class FuncCast extends UnaryOperator {
             return FishObject.allocSet(heap, value);
         }
         else if (type.getJavaType() == Integer.class) {
+            Integer result = null;
             if (value instanceof String) {
-                FishObject.allocSet(heap, Integer.valueOf((String) value));
+                result = Integer.valueOf((String) value);
             }
+            else if (value instanceof Number) {
+                result = ((Number)value).intValue();
+            }
+            return result == null ? 0 : Int4.allocSet(heap, result);
         }
         else if (type.getJavaType() == Long.class) {
+            Long result = null;
             if (value instanceof String) {
-                return FishObject.allocSet(heap, Long.valueOf((String) value));
+                result = Long.valueOf((String) value);
             }
-            if (value instanceof Integer) {
-                return FishObject.allocSet(heap, Long.valueOf((Integer)value));
+            else if (value instanceof Number) {
+                result = ((Number)value).longValue();;
             }
+            if (value instanceof Date) {
+                return Int8.allocSet(heap, AutoCaster.getLong(addrValue));
+            }
+            if (value instanceof Timestamp) {
+                return Int8.allocSet(heap, AutoCaster.getLong(addrValue));
+            }
+            return result == null ? 0 : Int8.allocSet(heap, result);
         }
         else if (type.getJavaType() == Double.class) {
             if (value instanceof Integer) {
@@ -97,7 +112,7 @@ public class FuncCast extends UnaryOperator {
         else if (type.getJavaType() == Timestamp.class) {
             return AutoCaster.toTimestamp(heap, addrValue);
         }
-        throw new OrcaException("unable to cast value " + value + " to " + type.toString());
+        throw new OrcaException("unable to cast value {} to {}", value, type.toString());
     }
 
     @Override

@@ -22,13 +22,19 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.Delete;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RetriesExhaustedException;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.nosql.SysMetaRow;
-import com.antsdb.saltedfish.nosql.TableType;
+import com.antsdb.saltedfish.nosql.SpaceManager;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
+import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -68,21 +74,21 @@ final class SyncBuffer {
         }
     }
     
-    void addRow(int tableId, long pKey, long pData) {
+    void addRow(int tableId, long pKey, long lpEntry) {
         Map<Long, Long> table = getTable(tableId);
-        table.put(pKey, pData);
+        table.put(pKey, lpEntry);
         this.count++;
     }
     
-    void addIndexLine(int tableId, long pKey, long pIndexLine) {
+    void addIndexLine(int tableId, long pKey, long lpEntry) {
         Map<Long, Long> table = getTable(tableId);
-        table.put(pKey, pIndexLine);
+        table.put(pKey, lpEntry);
         this.count++;
     }
     
-    void addDelete(int tableId, long pKey) {
+    void addDelete(int tableId, long pKey, long lpEntry) {
         Map<Long, Long> table = getTable(tableId);
-        table.put(pKey, 0l);
+        table.put(pKey, lpEntry);
         this.count++;
     }
     
@@ -114,40 +120,67 @@ final class SyncBuffer {
     }
     
     int flush0() throws IOException {
-        int result = 0;
-        List<Long> puts = new ArrayList<>();
-        List<Long> deletes = new ArrayList<>();
+        // detect metadata change
+        boolean metadataChanged = false;
         for (Map.Entry<Integer, Map<Long, Long>> i:this.tableById.entrySet()) {
             int tableId = i.getKey();
+            if (tableId < 0x50) {
+                metadataChanged = true;
+                break;
+            }
+        }
+        if (metadataChanged) {
+            this.updaters.clear();
+        }
+        
+        // update hbase
+        int result = 0;
+        List<Put> puts = new ArrayList<>();
+        List<Delete> deletes = new ArrayList<>();
+        SpaceManager sm = this.humpback.getSpaceManager();
+        for (Map.Entry<Integer, Map<Long, Long>> i:this.tableById.entrySet()) {
+            int tableId = i.getKey();
+            HBaseTableUpdater updater = getUpdater(tableId);
+            if (updater.isDeleted()) {
+                continue;
+            }
             puts.clear();
             deletes.clear();
             for (Map.Entry<Long,Long> j:i.getValue().entrySet()) {
                 long pKey = j.getKey();
-                long pData = j.getValue();
-                if (pData != 0) {
-                    puts.add(pData);
+                long lpEntry = j.getValue();
+                long pEntry = sm.toMemory(lpEntry);
+                LogEntry entry = LogEntry.getEntry(lpEntry, pEntry);
+                if (entry instanceof DeleteRowEntry2) {
+                    deletes.add(new Delete(Helper.antsKeyToHBase(pKey)));
+                }
+                else if (entry instanceof RowUpdateEntry2) {
+                    RowUpdateEntry2 rowEntry = (RowUpdateEntry2) entry;
+                    puts.add(updater.toPut(rowEntry));
+                }
+                else if (entry instanceof IndexEntry2) {
+                    IndexEntry2 indexEntry = (IndexEntry2) entry;
+                    puts.add(Helper.toPut(indexEntry));
+                }
+                else if (entry instanceof DeleteEntry2) {
+                    deletes.add(new Delete(Helper.antsKeyToHBase(pKey)));
                 }
                 else {
-                    deletes.add(pKey);
+                    String msg = String.format("lp=%x type=%s", lpEntry, entry.getClass().getName());
+                    throw new IllegalArgumentException(msg);
                 }
             }
             if (puts.size() != 0) {
-                HBaseTableUpdater updater = getUpdater(tableId);
-                SysMetaRow tableInfo = this.humpback.getTableInfo(tableId);
-                if (tableInfo.getType() == TableType.DATA) {
-                    updater.putRows(puts);
-                }
-                else {
-                    updater.putIndexLines(puts);
-                }
+                updater.putRows(puts);
                 result += puts.size();
             }
             if (deletes.size() != 0) {
-                HBaseTableUpdater updater = getUpdater(tableId);
                 updater.deletes(deletes);
                 result += deletes.size();
             }
         }
+        
+        // clean up
         this.tableById.clear();
         this.count = 0;
         return result;
@@ -180,5 +213,9 @@ final class SyncBuffer {
             return true;
         }
         return false;
+    }
+
+    public void resetUpdaters() {
+        this.updaters.clear();
     }
 }

@@ -23,9 +23,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.FileBasedHeap;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -83,16 +85,18 @@ public class DumbSorter extends CursorMaker {
         long pRecord;
     }
     
-    private static class MyCursor extends CursorWithHeap {
+    private static class MyCursor extends Cursor {
         List<Item> items;
         int i = 0;
+        private FileBasedHeap heap;
 
-        public MyCursor(CursorMeta meta) {
+        public MyCursor(Humpback humpback, CursorMeta meta) {
             super(meta);
+            this.heap = new FileBasedHeap(humpback.geTemp());
         }
 
         public Heap getHeap() {
-            return super.getHeap();
+            return this.heap;
         }
         
         @Override
@@ -110,7 +114,7 @@ public class DumbSorter extends CursorMaker {
 
         @Override
         public void close() {
-            super.close();
+            this.heap.close();
         }
     }
     
@@ -137,7 +141,7 @@ public class DumbSorter extends CursorMaker {
         MyCursor result = null;
         boolean success = false;
         try (Cursor cc = this.upstream.make(ctx, params, pMaster)) {
-            result = new MyCursor(getCursorMeta());
+            result = new MyCursor(ctx.getHumpback(), getCursorMeta());
             Heap heap = result.getHeap();
             List<Item> items = new ArrayList<>();
             for (long pRecord = cc.next(); pRecord != 0; pRecord = cc.next()) {

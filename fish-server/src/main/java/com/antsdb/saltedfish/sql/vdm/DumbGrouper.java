@@ -106,11 +106,10 @@ public class DumbGrouper extends CursorMaker {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         
         // fetch all rows in memory and group them by group key
-        
-    	AtomicLong counter = ctx.getCursorStats(makerId);
+        AtomicLong counter = ctx.getCursorStats(makerId);
         Map<GroupKey, List<Long>> recordsByGroupKey = new LinkedHashMap<DumbGrouper.GroupKey, List<Long>>();
         Cursor c = this.upstream.make(ctx, params, pMaster);
-        c = new RecordBuffer(c);
+        c = new RecordBuffer(ctx.getHumpback(), c);
         for (;;) {
             long pRec = c.next();
             if (pRec == 0) {
@@ -133,7 +132,6 @@ public class DumbGrouper extends CursorMaker {
         }
         
         // store the grouped records in list
-        
         List<Long> records = new ArrayList<Long>();
         for (List<Long> i:recordsByGroupKey.values()) {
             records.addAll(i);
@@ -141,13 +139,11 @@ public class DumbGrouper extends CursorMaker {
         }
 
         // prevent empty result. there are cases like select count(*) from empty_table
-        
         if (records.size() == 0 && (this.exprs.size() == 0)) {
             records.add(GROUP_END);
         }
         
         // done convert the list to the cursor
-        
         Cursor result = new MyCursor(c, records);
         return result;
     }

@@ -130,72 +130,108 @@ public class Replicator<E extends Replicable> extends Thread {
 
         @Override
         public void insert(InsertEntry entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.insert(entry);
             Replicator.this.stats.inserts++;
         }
 
         @Override
         public void insert(InsertEntry2 entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.insert(entry);
             Replicator.this.stats.inserts++;
         }
 
         @Override
         public void update(UpdateEntry entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.update(entry);
             Replicator.this.stats.updates++;
         }
 
         @Override
         public void update(UpdateEntry2 entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.update(entry);
             Replicator.this.stats.updates++;
         }
 
         @Override
         public void put(PutEntry entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.put(entry);
             Replicator.this.stats.puts++;
         }
 
         @Override
         public void put(PutEntry2 entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.put(entry);
             Replicator.this.stats.puts++;
         }
 
         @Override
         public void index(IndexEntry entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.index(entry);
             Replicator.this.stats.indexops++;
         }
 
         @Override
         public void index(IndexEntry2 entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.index(entry);
             Replicator.this.stats.indexops++;
         }
 
         @Override
         public void deleteRow(DeleteRowEntry entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.deleteRow(entry);
             Replicator.this.stats.deletes++;
         }
 
         @Override
         public void deleteRow(DeleteRowEntry2 entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.deleteRow(entry);
             Replicator.this.stats.deletes++;
         }
 
         @Override
         public void delete(DeleteEntry entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.delete(entry);
             Replicator.this.stats.deletes++;
         }
 
         @Override
         public void delete(DeleteEntry2 entry) throws Exception {
+            if (entry.getTableId() < 0) {
+                return;
+            }
             this.downstream.delete(entry);
             Replicator.this.stats.deletes++;
         }
@@ -311,7 +347,7 @@ public class Replicator<E extends Replicable> extends Thread {
             }
             catch (Exception x) {
                 if (this.error == null) {
-                    _log.warn(
+                    _log.info(
                             "replication failed at {}, retry later from {}",
                             hex(this.relay.sp),
                             hex(this.replicable.getReplicateLogPointer()),
@@ -332,7 +368,7 @@ public class Replicator<E extends Replicable> extends Thread {
                 if (endSp != startSp) {
                     _log.debug("replicated {} -> {}", hex(startSp), hex(endSp));
                     if (this.error != null) {
-                        _log.warn("replication resumed");
+                        _log.info("replication resumed");
                         this.error = null;
                     }
                 }
@@ -353,7 +389,7 @@ public class Replicator<E extends Replicable> extends Thread {
             }
             catch (Exception x) {
                 if (this.error == null) {
-                    _log.warn("replication failed, retry later", x);
+                    _log.info("replication failed, retry later", x);
                 }
                 else {
                     this.retries++;

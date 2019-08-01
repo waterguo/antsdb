@@ -13,10 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.planner;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import org.apache.commons.lang.NotImplementedException;
@@ -48,6 +48,7 @@ import com.antsdb.saltedfish.sql.vdm.Operator;
  * @author wgu0
  */
 class Analyzer {
+    static final Node INVALID_NODE = new Node(); 
     int version = 0;
     
     enum Mode {
@@ -64,36 +65,43 @@ class Analyzer {
      * @return
      */
     boolean analyzeWhere(Planner planner, Operator expr) {
-        int set = makeSet(0, this.version);
-        return analyze_(Mode.AND, set, planner, expr, null);
+        init(planner);
+        return analyze_(0, this.version, planner, expr, null);
     }
 
     boolean analyzeJoin(Planner planner, Operator expr, Node scope) {
-        int set = makeSet(0, this.version);
-        return analyze_(Mode.AND, set, planner, expr, scope);
+        init(planner);
+        return analyze_(0, this.version, planner, expr, scope);
+    }
+
+    private void init(Planner planner) {
+        // make sure each node starts with a full row set
+        for (Node i:planner.nodes.values()) {
+            if (i.union.size() == 0) {
+                i.union.add(new RowSet(this.version));
+            }
+        }
     }
     
-    private boolean analyze_(Mode mode, int set, Planner planner, Operator expr, Node scope) {
+    private boolean analyze_(int start, int end, Planner planner, Operator expr, Node scope) {
         if (expr instanceof OpAnd) {
-            return analyze_and(mode, set, planner, (OpAnd) expr, scope);
+            return analyze_and(start, end, planner, (OpAnd) expr, scope);
         }
         if (expr instanceof OpOr) {
-            return analyze_or(mode, set, planner, (OpOr) expr, scope);
+            return analyze_or(start, end, planner, (OpOr) expr, scope);
         }
         else if (expr instanceof BinaryOperator) {
-            return analyze_binary(mode, set, planner, (BinaryOperator) expr, scope);
+            return analyze_binary(start, end, planner, (BinaryOperator) expr, scope);
         }
         else if (expr instanceof OpBetween) {
             OpBetween between = (OpBetween)expr;
             Operator upstream = between.getLeftOperator();
             if (upstream instanceof FieldValue) {
                 FieldValue field = (FieldValue) upstream;
-                int ystart = this.version;
-                if (!analyze_binary(mode, set, planner, FilterOp.LARGEREQUAL, field, between.getFrom(), expr, scope)) {
+                if (!analyze_binary(start, end, planner, FilterOp.LARGEREQUAL, field, between.getFrom(), expr, scope)) {
                     return false;
                 }
-                int y = makeSet(ystart, this.version);
-                if (!analyze_binary(Mode.AND, y, planner, FilterOp.LESSEQUAL, field, between.getTo(), expr, scope)) {
+                if (!analyze_binary(start, end, planner, FilterOp.LESSEQUAL, field, between.getTo(), expr, scope)) {
                     return false;
                 }
                 return true;
@@ -103,14 +111,14 @@ class Analyzer {
             Operator upstream = ((OpIsNull) expr).getUpstream();
             if (upstream instanceof FieldValue) {
                 FieldValue field = (FieldValue) upstream;
-                return analyze_binary(mode, set, planner, FilterOp.EQUALNULL, field, new NullValue(), expr, scope);
+                return analyze_binary(start, end, planner, FilterOp.EQUALNULL, field, new NullValue(), expr, scope);
             }
         }
         else if (expr instanceof OpMatch) {
             OpMatch match = (OpMatch) expr;
             ColumnFilter cf = new ColumnFilter(null, FilterOp.MATCH, match, null);
             Node node = ((OpMatch) expr).getColumns().get(0).getField().owner;
-            addFilter(mode, set, node, cf);
+            addFilter(start, end, node, cf);
             return true;
         }
         return false;
@@ -120,107 +128,144 @@ class Analyzer {
      * x + (y * z) = x + y * z = x, y * z
      * x * (y * z) = x * y * z
      */
-    private boolean analyze_and(Mode mode, int x, Planner planner, OpAnd op, Node scope) {
-        this.version++;
-        int ystart = this.version;
-        boolean resultFromLeft = analyze_(mode, x, planner, op.left, scope);
-        int y = makeSet(ystart, this.version);
+    private boolean analyze_and(int start, int end, Planner planner, OpAnd op, Node scope) {
+        boolean resultFromLeft = analyze_(start, end, planner, op.left, scope);
         if (resultFromLeft) {
             op.left = new BooleanValue(true);
-            boolean resultFromRight = analyze_(Mode.AND, y, planner, op.right, scope);
-            if (resultFromRight) {
-                op.right = new BooleanValue(true);
-            }
-            return resultFromRight;
         }
-        else {
-            analyze_(mode, x, planner, op.right, scope);
-            return false;
+        // new RowSet might have been added when analyzing op.left. we need to include potential new RowSet
+        boolean resultFromRight = analyze_(start, this.version, planner, op.right, scope);
+        if (resultFromRight) {
+            op.right = new BooleanValue(true);
         }
+        return resultFromLeft && resultFromRight;
     }
 
     /*
      * x * (y + z) = x * y + x * z = x * y, x * z
      * x + (y + z) = x, y, z
      */
-    private boolean analyze_or(Mode mode, int x, Planner planner, OpOr op, Node scope) {
+    private boolean analyze_or(int start, int end, Planner planner, OpOr op, Node scope) {
+        // we only want to do it if we completely understand the conditions
         if (!canPushDown(planner, op, scope)) {
             return false;
         }
-        this.version++;
-        if (!analyze_(mode, x, planner, op.left, scope)) {
+        
+        // find the RowSets and keep a copy
+        Node node = findNodeInOr(op);
+        if (node == null) {
+            return false;
+        }
+        List<RowSet> x = new LinkedList<>();
+        findSets(node, start, end, rs->{
+            RowSet clone = new RowSet();
+            clone.conditions.addAll(rs.conditions);
+            x.add(clone);
+        });
+        
+        // run through the conditions on the left side
+        if (!analyze_(start, end, planner, op.left, scope)) {
             throw new IllegalArgumentException();
         }
         op.left = new BooleanValue(true);
+        
+        // add the copies. we do it this awkward way cuz we want the version to be continues during analyze_and 
         this.version++;
-        if (!analyze_(Mode.COPY_OR, x, planner, op.right, scope)) {
+        x.forEach(it->it.tag = this.version);
+        node.union.addAll(x);
+        
+        // run through the conditions on the right side
+        if (!analyze_(this.version, this.version, planner, op.right, scope)) {
             throw new IllegalArgumentException();
         }
         op.right = new BooleanValue(true);
         return true;
     }
 
-    private boolean analyze_binary(Mode mode, int set, Planner planner, BinaryOperator op, Node scope) {
+    /**
+     * find the node inside an OR operator. conditions can only be pushed down when there is ony one node
+     * involved. return null if there are more nodes involved 
+     * 
+     * @param op
+     * @return
+     */
+    private Node findNodeInOr(OpOr op) {
+        AtomicReference<Node> result = new AtomicReference<>();
+        op.visit((Operator it)->{
+            if (it instanceof FieldValue) {
+                Node node = ((FieldValue)it).getField().owner;
+                if (result.get() == null) {
+                    result.set(node);
+                }
+                else if (node != result.get()) {
+                    result.set(INVALID_NODE);
+                }
+            }
+        });
+        return result.get() == INVALID_NODE ? null : result.get();
+    }
+
+    private boolean analyze_binary(int start, int end, Planner planner, BinaryOperator op, Node scope) {
         boolean result = false;
         if (op.left instanceof FieldValue) {
             FieldValue field = (FieldValue) op.left;
             if (op instanceof OpEqual) {
-                result = analyze_binary(mode, set, planner, FilterOp.EQUAL, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.EQUAL, field, op.right, op, scope);
             }
             else if (op instanceof OpEqualNull) {
-                result = analyze_binary(mode, set, planner, FilterOp.EQUALNULL, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.EQUALNULL, field, op.right, op, scope);
             }
             else if (op instanceof OpLarger) {
-                result = analyze_binary(mode, set, planner, FilterOp.LARGER, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.LARGER, field, op.right, op, scope);
             }
             else if (op instanceof OpLargerEqual) {
-                result = analyze_binary(mode, set, planner, FilterOp.LARGEREQUAL, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.LARGEREQUAL, field, op.right, op, scope);
             }
             else if (op instanceof OpLess) {
-                result = analyze_binary(mode, set, planner, FilterOp.LESS, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.LESS, field, op.right, op, scope);
             }
             else if (op instanceof OpLessEqual) {
-                result = analyze_binary(mode, set, planner, FilterOp.LESSEQUAL, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.LESSEQUAL, field, op.right, op, scope);
             }
             else if (op instanceof OpLike) {
-                result = analyze_binary(mode, set, planner, FilterOp.LIKE, field, op.right, op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.LIKE, field, op.right, op, scope);
             }
             else if (op instanceof OpInSelect) {
                 OpInSelect in = (OpInSelect)op;
-                result = analyze_binary(mode, set, planner, FilterOp.INSELECT, field, in.getSelect(), op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.INSELECT, field, in.getSelect(), op, scope);
             }
             else if (op instanceof OpInValues) {
                 OpInValues in = (OpInValues)op;
-                result = analyze_binary(mode, set, planner, FilterOp.INVALUES, field, in.getValues(), op, scope);
+                result = analyze_binary(start, end, planner, FilterOp.INVALUES, field, in.getValues(), op, scope);
             }
         }
         if (op.right instanceof FieldValue) {
             FieldValue field = (FieldValue) op.right;
             if (op instanceof OpEqual) {
-                result = result | analyze_binary(mode, set, planner, FilterOp.EQUAL, field, op.left, op, scope);
+                result = result | analyze_binary(start, end, planner, FilterOp.EQUAL, field, op.left, op, scope);
             }
             else if (op instanceof OpEqualNull) {
-                result = result | analyze_binary(mode, set, planner, FilterOp.EQUALNULL, field, op.left, op, scope);
+                result = result | analyze_binary(start, end, planner, FilterOp.EQUALNULL, field, op.left, op, scope);
             }
             else if (op instanceof OpLarger) {
-                result = result | analyze_binary(mode, set, planner, FilterOp.LESSEQUAL, field, op.left, op, scope);
+                result = result | analyze_binary(start, end, planner, FilterOp.LESSEQUAL, field, op.left, op, scope);
             }
             else if (op instanceof OpLargerEqual) {
-                result = result | analyze_binary(mode, set, planner, FilterOp.LESS, field, op.left, op, scope);
+                result = result | analyze_binary(start, end, planner, FilterOp.LESS, field, op.left, op, scope);
             }
             else if (op instanceof OpLess) {
-                result = result | analyze_binary(mode, set, planner, FilterOp.LARGEREQUAL, field, op.left, op, scope);
+                result = result | analyze_binary(start, end, planner, FilterOp.LARGEREQUAL, field, op.left, op, scope);
             }
             else if (op instanceof OpLessEqual) {
-                result = result | analyze_binary(mode, set, planner, FilterOp.LARGER, field, op.left, op, scope);
+                result = result | analyze_binary(start, end, planner, FilterOp.LARGER, field, op.left, op, scope);
             }
         }
         return result;
     }
 
     private boolean analyze_binary(
-            Mode mode,
-            int set,
+            int start,
+            int end,
             Planner planner, 
             FilterOp op, 
             FieldValue field, 
@@ -250,48 +295,27 @@ class Analyzer {
         // it is
 
         cf.isConstant = isConstant(node, value);
-        addFilter(mode, set, node, cf);
+        addFilter(start, end, node, cf);
         return true;
     }
 
-    private void addFilter(Mode mode, int set, Node node, ColumnFilter cf) {
-        cf.version = this.version;
-        if (mode == Mode.AND) {
-            if (node.union.size() == 0) {
-                List<ColumnFilter> list = new LinkedList<>();
-                list.add(cf);
-                node.union.add(list);
-            }
-            else {
-                iterateSet(node, set, it -> {
-                    it.add(cf);
-                });
-            }
-        }
-        else if (mode == Mode.OR) {
-            List<ColumnFilter> list = new LinkedList<>();
-            list.add(cf);
-            node.union.add(list);
-        }
-        else if (mode == Mode.COPY_OR) {
-            List<List<ColumnFilter>> list = new ArrayList<>();
-            iterateSet(node, set, it -> {
-                List<ColumnFilter> clone = subset(it, set);
-                clone.add(cf);
-                list.add(clone);
-            });
-            if (list.isEmpty()) {
-                List<ColumnFilter> clone = new LinkedList<>();
-                clone.add(cf);
-                list.add(clone);
-            }
-            node.union.addAll(list);
-        }
-        else {
-            throw new IllegalArgumentException();
+    private void addFilter(int start, int end, Node node, ColumnFilter cf) {
+        if (!findSets(node, start, end, rs->rs.add(cf))) {
+            throw new IllegalArgumentException(cf.toString());
         }
     }
 
+    private boolean findSets(Node node, int start, int end, Consumer<RowSet> func) {
+        boolean found = false;
+        for (RowSet i:node.union) {
+            if ((i.tag >= start) && (i.tag <= end)) {
+                func.accept(i);
+                found = true;
+            }
+        }
+        return found;
+    }
+    /*
     private List<ColumnFilter> subset(List<ColumnFilter> input, int set) {
         List<ColumnFilter> result = new ArrayList<>();
         int start = set >>> 16;
@@ -303,6 +327,7 @@ class Analyzer {
         }
         return result;
     }
+    */
 
     /**
      * if expr calculatable in the scope of node
@@ -343,24 +368,6 @@ class Analyzer {
         }
     }
     
-    private static int makeSet(int start, int end) {
-        int result = start << 16 | (end & 0xffff);
-        return result;
-    }
-    
-    private void iterateSet(Node node, int set, Consumer<List<ColumnFilter>> func) {
-        int start = set >>> 16;
-        int end = set & 0xffff;
-        for (List<ColumnFilter> i:node.union) {
-            for (ColumnFilter j:i) {
-                if ((j.version >= start) && (j.version <= end)) {
-                    func.accept(i);
-                    break;
-                }
-            }
-        }
-    }
-
     private boolean canPushDown(Planner planner, Operator op, Node scope) {
         boolean result = false;
         if (op instanceof OpOr) {

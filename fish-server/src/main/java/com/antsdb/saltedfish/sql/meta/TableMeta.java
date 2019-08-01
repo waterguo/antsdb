@@ -277,4 +277,8 @@ public class TableMeta extends MetaObject {
     public String getEngine() {
         return (String)row.get(ColumnId.systable_engine.getId());
     }
+    
+    public boolean isTemproray() {
+        return !getNamespace().equals("#") && getHtableId() < 0;
+    }
 }

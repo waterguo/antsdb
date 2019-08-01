@@ -25,14 +25,13 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author *-xguo0<@
  */
-public final class KeyBytes {
+public final class KeyBytes extends BrutalMemoryObject {
     public static final int HEADER_SIZE = 4;
     private static final KeyBytes KEY_MIN;
     private static final KeyBytes KEY_MAX;
     private static final VariableLengthLongComparator _comp = new VariableLengthLongComparator();
     private static final Logger _log = UberUtil.getThisLogger();
     
-    long addr;
     ByteBuffer buffer;
     
     static {
@@ -42,15 +41,12 @@ public final class KeyBytes {
     }
     
     public KeyBytes (long addr) {
+        super(addr);
         if (Unsafe.getByte(addr) != Value.FORMAT_KEY_BYTES) {
             throw new IllegalMemoryException(addr);
         }
-        this.addr = addr;
     }
     
-    private KeyBytes() {
-    }
-
     public static KeyBytes create(long addr) {
         if (addr == 0) {
             return null;
@@ -110,8 +106,7 @@ public final class KeyBytes {
         ByteBuffer buf = ByteBuffer.allocateDirect(len);
         long addr = UberUtil.getAddress(buf);
         Unsafe.copyMemory(pKey, addr, len);
-        KeyBytes result = new KeyBytes();
-        result.addr = addr;
+        KeyBytes result = new KeyBytes(addr);
         result.buffer = buf;
         return result;
     }
@@ -130,8 +125,7 @@ public final class KeyBytes {
                 throw new IllegalArgumentException();
             }
             Unsafe.putShort(addr+2, bytes[0]);
-            KeyBytes result = new KeyBytes();
-            result.addr = addr;
+            KeyBytes result = new KeyBytes(addr);
             result.buffer = buf;
             return result;
         }
@@ -141,8 +135,7 @@ public final class KeyBytes {
             Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
             Unsafe.putShort(addr+2, (short)len);
             Unsafe.putBytes(addr + HEADER_SIZE, bytes);
-            KeyBytes result = new KeyBytes();
-            result.addr = addr;
+            KeyBytes result = new KeyBytes(addr);
             result.buffer = buf;
             return result;
         }
@@ -156,8 +149,7 @@ public final class KeyBytes {
         Unsafe.putByte(addr, Value.FORMAT_KEY_BYTES);
         Unsafe.putByte(addr+1, (byte)0);
         Unsafe.putShort(addr+2, (short)len);
-        KeyBytes result = new KeyBytes();
-        result.addr = addr;
+        KeyBytes result = new KeyBytes(addr);
         return result;
     }
     
@@ -187,10 +179,6 @@ public final class KeyBytes {
         long pResult = heap.alloc(length);
         Unsafe.copyMemory(key.getAddress(), pResult, length);
         return new KeyBytes(pResult);
-    }
-    
-    public long getAddress() {
-        return this.addr;
     }
     
     public long getDataAddress() {
@@ -338,5 +326,15 @@ public final class KeyBytes {
 
     public static KeyComparator getComparator() {
         return _comp;
+    }
+
+    @Override
+    public int getByteSize() {
+        return getRawSize(this.addr);
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_KEY_BYTES;
     }
 }

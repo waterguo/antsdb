@@ -32,7 +32,7 @@ import com.antsdb.saltedfish.sql.vdm.Operator;
  *  
  * @author wgu0
  */
-class Node {
+public class Node {
     boolean freeze = false;
     TableMeta table;
     CursorMaker maker;
@@ -41,7 +41,7 @@ class Node {
     boolean isOuter;
     boolean isParent = false;
     Operator joinCondition;
-    LinkedList<List<ColumnFilter>> union = new LinkedList<>();
+    LinkedList<RowSet> union = new LinkedList<>();
     public boolean isUsed = false;
     
     // below are fields related to union
@@ -114,5 +114,9 @@ class Node {
     
     boolean isCursor() {
         return this.table == null;
+    }
+    
+    public List<RowSet> getUnion() {
+        return this.union;
     }
 }

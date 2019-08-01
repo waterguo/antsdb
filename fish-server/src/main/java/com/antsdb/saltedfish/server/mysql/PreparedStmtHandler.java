@@ -35,6 +35,7 @@ import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.PreparedStatement;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
+import com.antsdb.saltedfish.util.AntiCrashCrimeScene;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -117,12 +118,18 @@ public class PreparedStmtHandler {
         }
     }
 
+    public String getSql(int statementId) {
+        MysqlPreparedStatement pstmt = this.mysession.getPrepared().get(statementId);
+        return (pstmt == null) ? null : pstmt.getSql().toString();
+    }
+    
     public void execute(ByteBuffer packet) {
         int statementId = (int) BufferUtils.readUB4(packet);
         MysqlPreparedStatement pstmt = this.mysession.getPrepared().get(statementId);
         if (pstmt == null) {
             throw new ErrorMessage(MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Unknown prepared statement ID");
         }
+        AntiCrashCrimeScene.log(pstmt.script.getSql(), packet);
         try (Heap heap = new FlexibleHeap()) {
             VaporizingRow row = pstmt.createRow(heap);
             setParameters(heap, pstmt, packet, row);
@@ -144,6 +151,7 @@ public class PreparedStmtHandler {
         }
         finally {
             if (!success) {
+                _log.debug("sql: {}", pstmt.script.getSql().toString());
                 _log.debug("statement parameters:\n{}", row);
             }
             pstmt.clear();
@@ -153,18 +161,31 @@ public class PreparedStmtHandler {
     private void writeResult(MysqlPreparedStatement pstmt, Object result) {
         if (result instanceof Cursor) {
             Cursor c = (Cursor)result;
-            if (pstmt.meta == null) {
-                ChannelWriterMemory buf = new ChannelWriterMemory();
-                Helper.writeCursorMeta(buf,
-                                       this.mysession.session, 
-                                       this.mysession.encoder, 
-                                       (Cursor)result);
-                pstmt.meta = (ByteBuffer)buf.getWrapped();
-                pstmt.packetSequence = this.mysession.encoder.packetSequence;
+            try {
+                if (pstmt.meta == null) {
+                    ChannelWriterMemory buf = null;
+                    try {
+                        buf = new ChannelWriterMemory();
+                        Helper.writeCursorMeta(buf,
+                                               this.mysession.session, 
+                                               this.mysession.encoder, 
+                                               (Cursor)result);
+                        pstmt.meta = (ByteBuffer)buf.getWrapped();
+                        pstmt.packetSequence = this.mysession.encoder.packetSequence;
+                    }
+                    finally {
+                        if (pstmt.meta == null && buf != null) {
+                            buf.close();
+                        }
+                    }
+                }
+                pstmt.meta.flip();
+                this.mysession.encoder.packetSequence = pstmt.packetSequence;
+                Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
             }
-            pstmt.meta.flip();
-            this.mysession.encoder.packetSequence = pstmt.packetSequence;
-            Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
+            finally {
+                c.close();
+            }
         }
         else {
             Helper.writeResonpse(mysession.out, mysession, result, false);

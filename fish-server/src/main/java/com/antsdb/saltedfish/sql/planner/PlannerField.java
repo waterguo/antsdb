@@ -28,6 +28,8 @@ public class PlannerField extends FieldMeta {
     ColumnMeta column;
     FieldMeta field;
     int index;
+    /** dont cache the value if it is a clob/blob field */
+    boolean noCache;
     
     PlannerField(Node owner, ColumnMeta column) {
         this.owner = owner;
@@ -117,5 +119,10 @@ public class PlannerField extends FieldMeta {
     
     public TableMeta getTable() {
         return this.owner.table;
+    }
+
+    /** dont cache the value if it is a clob/blob field */
+    public boolean isNoCache() {
+        return this.noCache;
     }
 }

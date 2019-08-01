@@ -18,65 +18,73 @@ package com.antsdb.saltedfish.cpp;
  * 
  * @author wgu0
  */
-public final class FishBoundary {
-	long p;
-	
-	public FishBoundary(long pValue) {
-		if (Value.getFormat(null, pValue) != Value.FORMAT_BOUNDARY) {
-			throw new IllegalArgumentException();
-		}
-		this.p = pValue;
-	}
-	
-	public boolean isInclusive() {
-		return (Unsafe.getByte(p+1) == 1) ? true : false;
-	}
-	
-	public byte[] getKey() {
-		KeyBytes key = KeyBytes.create(getKeyAddress());
-		byte[] bytes = key.get();
-		return bytes;
-	}
-	
-	public long getKeyAddress() {
-		return Unsafe.getLong(p+2);
-	}
-	
-	public static FishBoundary create(long p) {
-		if (p == 0) {
-			return null;
-		}
-		return new FishBoundary(p);
-	}
-	
-	/**
-	 * !!!! it only stores the address of key
-	 * 
-	 * @param heap
-	 * @param inclusive
-	 * @param pKey
-	 * @return
-	 */
-	public static long alloc(Heap heap, boolean inclusive, long pKey) {
-		long p = heap.alloc(8 + 1 + 1, false);
-		Unsafe.putByte(p, Value.FORMAT_BOUNDARY);
-		Unsafe.putByte(p+1, (byte)(inclusive ? 1 : 0));
-		Unsafe.putLong(p+2, pKey);
-		return p;
-	}
+public final class FishBoundary extends BrutalMemoryObject {
+    public FishBoundary(long pValue) {
+        super(pValue);
+        if (Value.getFormat(null, pValue) != Value.FORMAT_BOUNDARY) {
+            throw new IllegalArgumentException();
+        }
+    }
+    
+    public boolean isInclusive() {
+        return (Unsafe.getByte(this.addr+1) == 1) ? true : false;
+    }
+    
+    public byte[] getKey() {
+        KeyBytes key = KeyBytes.create(getKeyAddress());
+        byte[] bytes = key.get();
+        return bytes;
+    }
+    
+    public long getKeyAddress() {
+        return Unsafe.getLong(this.addr+2);
+    }
+    
+    public static FishBoundary create(long p) {
+        if (p == 0) {
+            return null;
+        }
+        return new FishBoundary(p);
+    }
+    
+    /**
+     * !!!! it only stores the address of key
+     * 
+     * @param heap
+     * @param inclusive
+     * @param pKey
+     * @return
+     */
+    public static long alloc(Heap heap, boolean inclusive, long pKey) {
+        long p = heap.alloc(8 + 1 + 1, false);
+        Unsafe.putByte(p, Value.FORMAT_BOUNDARY);
+        Unsafe.putByte(p+1, (byte)(inclusive ? 1 : 0));
+        Unsafe.putLong(p+2, pKey);
+        return p;
+    }
 
-	@Override
-	public String toString() {
-		StringBuilder buf = new StringBuilder();
-		if (this.p == 0) {
-			return "NULL";
-		}
-		buf.append("inclusive=");
-		buf.append(isInclusive());
-		buf.append(" ");
-		buf.append("key=");
-		KeyBytes key = KeyBytes.create(getKeyAddress());
-		buf.append(key.toString());
-		return buf.toString();
-	}
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        if (this.addr == 0) {
+            return "NULL";
+        }
+        buf.append("inclusive=");
+        buf.append(isInclusive());
+        buf.append(" ");
+        buf.append("key=");
+        KeyBytes key = KeyBytes.create(getKeyAddress());
+        buf.append(key.toString());
+        return buf.toString();
+    }
+
+    @Override
+    public int getByteSize() {
+        return 10;
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_BOUNDARY;
+    }
 }

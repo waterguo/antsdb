@@ -49,7 +49,7 @@ public class HUpdate extends Statement{
         try (Heap heap = new BluntHeap()) {
             for (long pRecord = c.next();pRecord != 0;pRecord = c.next()) {
                 long pKey = Record.getKey(pRecord);
-                Row row = this.gtable.getRow(0, Long.MAX_VALUE, pKey);
+                Row row = this.gtable.getRow(0, Long.MAX_VALUE, pKey, 0);
                 if (row == null) {
                     throw new OrcaException("unable to find row {}", KeyBytes.toString(pKey));
                 }

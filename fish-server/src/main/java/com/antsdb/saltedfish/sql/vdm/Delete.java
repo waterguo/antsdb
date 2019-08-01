@@ -33,20 +33,20 @@ public class Delete extends DeleteBase {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-		ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+        ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
         try (Cursor c = this.maker.make(ctx, params, 0)) {
-	        int count = 0;
-	        for (;;) {
-	            long pRecord = c.next();
-	            if (pRecord == 0) {
-	                break;
-	            }
-	            long pKey = Record.get(pRecord, 0);
-	            if (deleteSingleRow(ctx, params, pKey)) {
-	                count++;
-	            }
-	        }
-	        return count;
+            int count = 0;
+            for (;;) {
+                long pRecord = c.next();
+                if (pRecord == 0) {
+                    break;
+                }
+                long pKey = Record.get(pRecord, 0);
+                if (deleteSingleRow(ctx, params, pKey)) {
+                    count++;
+                }
+            }
+            return count;
         }
     }
 
@@ -55,5 +55,12 @@ public class Delete extends DeleteBase {
         List<TableMeta> list = new ArrayList<TableMeta>();
         list.add(this.table);
         return list;
+    }
+    
+    @Override
+    public void explain(int level, List<ExplainRecord> records) {
+        ExplainRecord rec = new ExplainRecord(-1, level, "delete");
+        records.add(rec);
+        this.maker.explain(level, records);
     }
 }

@@ -22,7 +22,7 @@ import com.antsdb.saltedfish.sql.vdm.AutoCaster;
 import com.antsdb.saltedfish.sql.vdm.BlobReference;
 import com.antsdb.saltedfish.sql.vdm.ToTimestampRelaxed;
 
-public class FishObject {
+public final class FishObject {
 
     public final static Object get(Heap heap, long addr) {
         if (addr == 0) {
@@ -330,6 +330,49 @@ public class FishObject {
         }
     }
 
+    public final static BrutalMemoryObject getBrutalObject(long pValue) {
+        if (pValue == 0) {
+            return null;
+        }
+        byte format = Value.getFormat(null, pValue);
+        switch (format) {
+        case Value.FORMAT_INT4:
+            return new Int4(pValue);
+        case Value.FORMAT_INT8:
+            return new Int8(pValue);
+        case Value.FORMAT_UTF8:
+            return new FishUtf8(pValue);
+        case Value.FORMAT_UNICODE16:
+            return new Unicode16(pValue);
+        case Value.FORMAT_KEY_BYTES:
+            return new KeyBytes(pValue);
+        case Value.FORMAT_BYTES:
+            return new Bytes(pValue);
+        case Value.FORMAT_BOOL:
+            return new FishBool(pValue);
+        case Value.FORMAT_DECIMAL:
+            return new FishDecimal(pValue);
+        case Value.FORMAT_TIMESTAMP:
+            return new FishTimestamp(pValue);
+        case Value.FORMAT_TIME:
+            return new FishTime(pValue);
+        case Value.FORMAT_FLOAT4:
+            return new Float4(pValue);
+        case Value.FORMAT_FLOAT8:
+            return new Float8(pValue);
+        case Value.FORMAT_DATE:
+            return new FishDate(pValue);
+        case Value.FORMAT_NULL:
+            return null;
+        case Value.FORMAT_INT4_ARRAY:
+            return new Int4Array(pValue);
+        case Value.FORMAT_BLOB_REF:
+            return new BlobReference(pValue);
+        default:
+            throw new IllegalArgumentException();
+        }
+    }
+    
     public final static int getSize(long pValue) {
         if (pValue == 0) {
             return 0;
@@ -369,7 +412,13 @@ public class FishObject {
         case Value.FORMAT_BLOB_REF:
             return new BlobReference(pValue).getSize();
         default:
-            throw new IllegalArgumentException();
+            BrutalMemoryObject bmo = getBrutalObject(pValue);
+            if (bmo != null) {
+                return bmo.getByteSize();
+            }
+            else {
+                throw new IllegalArgumentException();
+            }
         }
     }
 
@@ -436,4 +485,13 @@ public class FishObject {
         return buf.toString();
     }
 
+    public static long clone(Heap heap, long pValue) {
+        if (pValue == 0) {
+            return 0;
+        }
+        int size = FishObject.getSize(pValue);
+        long pResult = heap.alloc(size);
+        Unsafe.copyMemory(pValue, pResult, size);
+        return pResult;
+    }
 }

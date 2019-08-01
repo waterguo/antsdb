@@ -54,7 +54,7 @@ public class RecordLocker extends CursorMaker {
             		throw new OrcaException(error);
             	}
             	// get the latest version of the row, required by select for update
-                Row row = gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey);
+                Row row = gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey, 0);
                 pRecord = newRecord();
                 Record.setKey(pRecord, row.getKeyAddress());
                 for (int i=0; i<this.meta.getColumnCount(); i++) {

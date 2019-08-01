@@ -20,7 +20,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 
 import com.antsdb.saltedfish.lexer.FishParser.ColumnContext;
 import com.antsdb.saltedfish.lexer.FishParser.ExprContext;
-import com.antsdb.saltedfish.lexer.FishParser.Expr_equalContext;
+import com.antsdb.saltedfish.lexer.FishParser.Expr_compareContext;
 import com.antsdb.saltedfish.lexer.FishParser.LimitContext;
 import com.antsdb.saltedfish.lexer.FishParser.ValueContext;
 import com.antsdb.saltedfish.lexer.FishParser.WhereContext;
@@ -29,6 +29,7 @@ import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
@@ -36,13 +37,21 @@ import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Filter;
+import com.antsdb.saltedfish.sql.vdm.HIndexSeek;
 import com.antsdb.saltedfish.sql.vdm.HSeek;
 import com.antsdb.saltedfish.sql.vdm.HSelect;
+import com.antsdb.saltedfish.sql.vdm.HSelectIndex;
 import com.antsdb.saltedfish.sql.vdm.Limiter;
 import com.antsdb.saltedfish.sql.vdm.LongValue;
 import com.antsdb.saltedfish.sql.vdm.NullValue;
 import com.antsdb.saltedfish.sql.vdm.OpAnd;
 import com.antsdb.saltedfish.sql.vdm.OpEqual;
+import com.antsdb.saltedfish.sql.vdm.OpLarger;
+import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
+import com.antsdb.saltedfish.sql.vdm.OpLess;
+import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
+import com.antsdb.saltedfish.sql.vdm.OpNot;
+import com.antsdb.saltedfish.sql.vdm.OpSafeEqual;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.StringValue;
 
@@ -61,18 +70,24 @@ class HCrudUtil {
     
     static CursorMaker genCursorMaker(GeneratorContext ctx, int tableId, WhereContext where) {
         GTable gtable = getTable(ctx, tableId);
-        List<Integer> columns = getColumns(ctx.getHumpback(), gtable);
-        if ((columns == null) || (columns.size() == 0)) {
-            throw new OrcaException("columns of table {} is not found", tableId);
+        if (gtable.getTableType() == TableType.DATA) {
+            List<Integer> columns = getColumns(ctx.getHumpback(), gtable);
+            if ((columns == null) || (columns.size() == 0)) {
+                throw new OrcaException("columns of table {} is not found", tableId);
+            }
+            HSelect result = hasSeek(where) ? new HSeek(gtable, columns) : new HSelect(gtable, columns);
+            return result;
         }
-        HSelect result = hasSeek(where) ? new HSeek(gtable, columns) : new HSelect(gtable, columns);
-        return result;
+        else {
+            // index
+            HSelectIndex result = hasSeek(where) ? new HIndexSeek(gtable) : new HSelectIndex(gtable);
+            return result;
+        }
     }
 
     static List<Integer> getColumns(Humpback humpback, GTable gtable) {
         List<Integer> result = new ArrayList<>();
         result.add(-1);
-        result.add(0);
         List<HColumnRow> htableColumns = humpback.getColumns(gtable.getId());
         if ((htableColumns != null) && (htableColumns.size() > 0)) {
             for (HColumnRow i:htableColumns) {
@@ -119,8 +134,8 @@ class HCrudUtil {
         if (rule == null) {
             return false;
         }
-        if (rule.expr_equal() != null) {
-            return isSeek(rule.expr_equal());
+        if (rule.expr_compare() != null) {
+            return isSeek(rule.expr_compare());
         }
         else if (rule.K_AND() != null) {
             return hasSeek(rule.expr(0)) || hasSeek(rule.expr(1));
@@ -128,8 +143,9 @@ class HCrudUtil {
         return false;
     }
 
-    private static boolean isSeek(Expr_equalContext rule) {
-        return rule.column().getText().equals("$00");
+    private static boolean isSeek(Expr_compareContext rule) {
+        String op = rule.getChild(1).getText();
+        return op.equals("=") && rule.column().getText().equals("$00");
     }
 
     static CursorMaker gen(GeneratorContext ctx, int tableId, WhereContext whereRule) {
@@ -148,8 +164,8 @@ class HCrudUtil {
 
     static Operator genExpr(CursorMaker maker, ExprContext rule) {
         Operator result = null;
-        if (rule.expr_equal() != null) {
-            result = genExprEqual(maker, rule.expr_equal());
+        if (rule.expr_compare() != null) {
+            result = genExprCompare(maker, rule.expr_compare());
         }
         else if (rule.K_AND() != null) {
             result = new OpAnd(genExpr(maker, rule.expr(0)), genExpr(maker, rule.expr(1))); 
@@ -160,12 +176,37 @@ class HCrudUtil {
         return result;
     }
 
-    static Operator genExprEqual(CursorMaker maker, Expr_equalContext rule) {
+    static Operator genExprCompare(CursorMaker maker, Expr_compareContext rule) {
         Operator left = genColumn(maker, rule.column());
         Operator right = genValue(rule.value());
-        OpEqual result = new OpEqual(left, right);
-        if ((maker instanceof HSeek) && rule.column().getText().equals("$00")) {
-            ((HSeek)maker).setKey(right);
+        String op = rule.getChild(1).getText();
+        Operator result = null;
+        if (op.equals("=")) {
+            result = new OpEqual(left, right);
+            if ((maker instanceof HSeek) && rule.column().getText().equals("$00")) {
+                ((HSeek)maker).setKey(right);
+            }
+            if ((maker instanceof HIndexSeek) && rule.column().getText().equals("$00")) {
+                ((HIndexSeek)maker).setKey(right);
+            }
+        }
+        else if (op.equals("<>")) {
+            result = new OpNot(new OpSafeEqual(left, right));
+        }
+        else if (op.equals(">")) {
+            result = new OpLarger(left, right);
+        }
+        else if (op.equals(">=")) {
+            result = new OpLargerEqual(left, right);
+        }
+        else if (op.equals("<")) {
+            result = new OpLess(left, right);
+        }
+        else if (op.equals("<=")) {
+            result = new OpLessEqual(left, right);
+        }
+        else {
+            throw new IllegalArgumentException();
         }
         return result;
     }

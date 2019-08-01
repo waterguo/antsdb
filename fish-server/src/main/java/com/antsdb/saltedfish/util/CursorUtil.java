@@ -264,6 +264,12 @@ public class CursorUtil {
         else if (field.getType() == BigDecimal.class) {
             result = DataType.number();
         }
+        else if (field.getType() == Float.class) {
+            result = DataType.floatType();
+        }
+        else if (field.getType() == Double.class) {
+            result = DataType.doubleType();
+        }
         else {
             throw new NotImplementedException();
         }

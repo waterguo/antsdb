@@ -25,6 +25,6 @@ import com.antsdb.saltedfish.cpp.Value;
 public class TypeDate extends DataType {
 
 	public TypeDate(String name) {
-		super(name, 0, 0, Types.DATE, Date.class, Value.TYPE_DATE);
+		super(name, 0, 0, Types.DATE, Date.class, Value.TYPE_DATE, Weight.DATE);
 	}
 }

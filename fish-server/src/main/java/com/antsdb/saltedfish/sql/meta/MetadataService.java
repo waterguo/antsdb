@@ -71,7 +71,6 @@ public class MetadataService {
     
     public TableMeta getTable(Transaction trx, int id) {
         // are we in a transaction? read it from database if it is
-        
         long trxid = trx.getTrxId();
         if (trxid != 0) {
             if (trx.isDddl()) {
@@ -80,18 +79,19 @@ public class MetadataService {
         }
         
         // is it in the cache?
-        
         TableMeta tableMeta = this.cache.get(id);
         if (tableMeta != null) {
             return tableMeta;
         }
         
         // if not load it from storage
-        
         synchronized(this) {
             tableMeta = loadTable(trx, id);
             if (tableMeta != null) {
                 if (tableMeta.getHtableId() >= 0) {
+                    this.cache.put(tableMeta.getId(), tableMeta);
+                }
+                else if (tableMeta.isTemproray()) {
                     this.cache.put(tableMeta.getId(), tableMeta);
                 }
                 else {
@@ -362,18 +362,18 @@ public class MetadataService {
         sysColumn.insert(hsession, columnMeta.row, 0);
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
         
         // inform humpback
-        
         Humpback humpback = this.orca.getHumpback();
         int columnPos = columnMeta.getColumnId();
         String columnName = columnMeta.getColumnName();
-        humpback.addColumn(hsession, trxid, table.getHtableId(), columnPos, columnName);
-        int fishType = columnMeta.getDataType().getFishType();
-        if ((fishType == Value.TYPE_BLOB) || (fishType == Value.TYPE_CLOB)) {
-            humpback.addColumn(hsession, trxid, table.getBlobTableId(), columnPos, columnName);
+        if (table.getHtableId() >= 0) {
+            humpback.addColumn(hsession, trxid, table.getHtableId(), columnPos, columnName);
+            int fishType = columnMeta.getDataType().getFishType();
+            if ((fishType == Value.TYPE_BLOB) || (fishType == Value.TYPE_CLOB)) {
+                humpback.addColumn(hsession, trxid, table.getBlobTableId(), columnPos, columnName);
+            }
         }
     }
     
@@ -427,7 +427,7 @@ public class MetadataService {
         return tables;
     }
     
-    private SequenceMeta loadSequence(Transaction trx, ObjectName name) {
+    SequenceMeta loadSequence(Transaction trx, ObjectName name) {
         Row raw = getSequenceTable().getRow(
                 trx.getTrxId(), 
                 Long.MAX_VALUE, 

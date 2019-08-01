@@ -149,6 +149,7 @@ class TransactionScanner implements ReplayHandler {
 
     @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+        this.trxman.setOldest(entry.getTrxid());
         if (entry.getTrxid() <= this.stopId) {
             throw new JumpException();
         }

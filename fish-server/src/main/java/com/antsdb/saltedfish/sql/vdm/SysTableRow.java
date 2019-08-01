@@ -35,9 +35,22 @@ public class SysTableRow {
     }
     
     public int getId() {
-    	return (Integer)this.row.get(1);
+        return (Integer)this.row.get(1);
     }
 
+    /**
+     * get the humpback table id
+     * @return
+     */
+    public int getHtableId() {
+        Integer result = (Integer)row.get(ColumnId.systable_htable_id.getId());
+        return (result != null) ? result : getId();
+    }
+    
+    public boolean isTemproray() {
+        return !getNamespace().equals("#") && getHtableId() < 0;
+    }
+    
     public String dump() {
         StringBuilder buf = new StringBuilder();
         buf.append(toString());
@@ -57,8 +70,8 @@ public class SysTableRow {
         return buf.toString();
     }
     
-	@Override
-	public String toString() {
-		return String.format("%s.%s [id=%d]", getNamespace(), getTableName(), getId());
-	}
+    @Override
+    public String toString() {
+        return String.format("%s.%s [id=%d]", getNamespace(), getTableName(), getId());
+    }
 }

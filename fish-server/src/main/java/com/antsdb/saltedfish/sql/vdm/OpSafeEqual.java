@@ -21,7 +21,7 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
- * 
+ * @see https://dev.mysql.com/doc/refman/8.0/en/comparison-operators.html#operator_equal-to
  * @author *-xguo0<@
  */
 public class OpSafeEqual extends BinaryOperator {

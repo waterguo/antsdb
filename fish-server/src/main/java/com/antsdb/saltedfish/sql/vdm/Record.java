@@ -99,9 +99,13 @@ public abstract class Record {
     
     public final static long clone(Heap heap, long pRecord) {
         int nFields = Record.size(pRecord);
-        int bytes = OFFSET_FIELDS + nFields * 8;
-        long pResult = heap.alloc(bytes);
-        Unsafe.copyMemory(pRecord, pResult, bytes);
+        long pResult = Record.alloc(heap, nFields);
+        long pKey = Record.getKey(pRecord);
+        Record.setKey(pResult, FishObject.clone(heap, pKey));
+        for (int i=0; i<nFields; i++) {
+            long pValue = Record.getValueAddress(pRecord, i);
+            Record.set(pResult, i, FishObject.clone(heap, pValue));
+        }
         return pResult;
     }
     

@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
@@ -115,5 +116,26 @@ public class VdmContext {
 
     public HumpbackSession getHSession() {
         return this.session.getHSession();
+    }
+    
+    /**
+     * perform a conversion which is affect by mysql strict sql mode
+     * 
+     * @see https://dev.mysql.com/doc/refman/5.7/en/sql-mode.html#sql-mode-strict
+     * @param call a conversion function
+     * @return null if conversion failed and strict is on
+     */
+    <T> T strict(Supplier<T> call) {
+        if (this.session.getConfig().isStrict()) {
+            return call.get();
+        }
+        else {
+            try {
+                return call.get();
+            }
+            catch (Exception x) {
+                return null;
+            }
+        }
     }
 }

@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.Date;
+
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
@@ -32,7 +34,20 @@ public class OpAdd extends BinaryOperator {
 
     @Override
     public DataType getReturnType() {
-        return DataType.number();
+        Class<?> classx = left.getReturnType().getJavaType();
+        Class<?> classy = right.getReturnType().getJavaType();
+        if (classx == classy) {
+            return left.getReturnType();
+        } 
+        else if (Date.class.isAssignableFrom(classx) && Number.class.isAssignableFrom(classy)) {
+            return right.getReturnType();
+        }
+        else if (Date.class.isAssignableFrom(classy) && Number.class.isAssignableFrom(classx)) {
+            return left.getReturnType();
+        }
+        else {
+            return DataType.number();
+        }
     }
 
 }

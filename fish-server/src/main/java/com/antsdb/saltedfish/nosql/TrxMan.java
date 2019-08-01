@@ -50,6 +50,14 @@ public final class TrxMan {
         if (trx >= MARK_ROLLED_BACK) {
             return trx;
         }
+        
+        // if we know the trx is committed , return the version
+        Long timestamp = this.trx.get(trx);
+        if (timestamp != null) {
+            return timestamp;
+        }
+        
+        // this is not supposed to happen unless in recovery mode.
         if (trx > this.oldest) {
             if (this.isClosed) {
                 // recoverer is depending this logic. if there are unfinished transaction in the log
@@ -57,11 +65,9 @@ public final class TrxMan {
             }
             throw new IllegalArgumentException("oldest=" + this.oldest + " trx=" + trx);
         }
-        Long timestamp = this.trx.get(trx);
-        if (timestamp != null) {
-            return timestamp;
-        }
-        return this.isClosed ? MARK_ROLLED_BACK : trx;
+        
+        // transaction hasnt been committed, return the trxid
+        return trx;
     }
 
     public void commit(long trxid, long trxts) {

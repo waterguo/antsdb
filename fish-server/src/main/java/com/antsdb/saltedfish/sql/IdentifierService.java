@@ -42,7 +42,7 @@ public class IdentifierService {
         this.orca = orca;
         this.meta = orca.getMetaService();
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME);
-        this.nextRowid.set(seq.getLastNumber());
+        this.nextRowid.set(seq.getNextNumber());
         this.rowidEnd = this.nextRowid.get();
         this.hsession = this.orca.getHumpback().createSession("local/id");
     }
@@ -80,7 +80,7 @@ public class IdentifierService {
         try (HumpbackSession foo = this.hsession.open()) {
             this.rowidEnd = this.nextRowid.get() + 1000000;
             SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
-            seq.setLastNumber(rowidEnd);
+            seq.setNextNumber(rowidEnd);
             long version = this.orca.getTrxMan().getNewVersion();
             this.orca.metaService.updateSequence(hsession, version, seq);
             seq.getRow().setTrxTimestamp(version);
@@ -88,7 +88,8 @@ public class IdentifierService {
     }
     
     public long getNextGlobalId(int increment) {
-        return getNextId(GLOBAL_SEQUENCE_NAME, increment);
+        long result = getNextId(GLOBAL_SEQUENCE_NAME, increment);
+        return result;
     }
     
     public long getNextId(ObjectName name) {
@@ -110,7 +111,7 @@ public class IdentifierService {
     
     void close() {
         SequenceMeta seq = this.orca.getMetaService().getSequence(_trx, ROWID_SEQUENCE_NAME); 
-        seq.setLastNumber(this.nextRowid.get());
+        seq.setNextNumber(this.nextRowid.get());
         try (HumpbackSession foo = this.hsession.open()) {
             this.orca.metaService.updateSequence(this.hsession, this.orca.getTrxMan().getNewVersion(), seq);
         }

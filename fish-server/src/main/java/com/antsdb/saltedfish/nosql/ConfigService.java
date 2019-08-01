@@ -17,9 +17,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.Properties;
 
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+
+import com.antsdb.saltedfish.minke.AllButBlobStrategy;
+import com.antsdb.saltedfish.minke.CacheStrategy;
 import com.antsdb.saltedfish.util.Size;
 import com.antsdb.saltedfish.util.SizeConstants;
 import com.antsdb.saltedfish.util.TimeParser;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
@@ -29,6 +35,8 @@ public class ConfigService {
     static final int KB = 1024;
     static final int MB = 1024 * KB;
     static final int GB = 1024 * MB;
+
+    static Logger _log = UberUtil.getThisLogger();
 
     Properties props;
     File file;
@@ -127,7 +135,19 @@ public class ConfigService {
     public long getCacheSize() {
         return Size.parse(this.props.getProperty("cache.size"), "100g");
     }
-
+    
+    public CacheStrategy getCacheStrategy() {
+        String klass = this.props.getProperty("cache.strategy", "AllButBlob");
+        klass = "com.antsdb.saltedfish.minke." + klass + "Strategy";
+        try {
+            return (CacheStrategy)Class.forName(klass).newInstance();
+        }
+        catch (Exception x) {
+            _log.warn("invalid setting for cache.strategy", x);
+            return new AllButBlobStrategy();
+        }
+    }
+    
     private long getSeconds(String value, String defecto) {
         return TimeParser.parseSeconds(value, defecto);
     }
@@ -188,7 +208,8 @@ public class ConfigService {
     }
 
     public String getHBaseConf() {
-        String result = this.props.getProperty("humpback.hbase-conf");
+        // unbelievable, must call trim() otherwise kerberos will break with accidental white space
+        String result = StringUtils.trim(this.props.getProperty("humpback.hbase-conf"));
         return result;
     }
     
@@ -270,6 +291,10 @@ public class ConfigService {
         return 0;
     }
 
+    public boolean isCrashSceneEnabled() {
+        return getBoolean("humpback.crash-scene", false);
+    }
+    
     public String getZookeeperConnectionString() {
         return "baozi:2181";
     }
@@ -285,5 +310,25 @@ public class ConfigService {
     
     public long getServerId() {
         return getLong("server-id", -1);
+    }
+
+    public boolean isKerberosEnabled() {
+        return getBoolean("kerberos", false);
+    }
+
+    /**
+     * location of the krb5 config file
+     * @return null if not found
+     */
+    public String getKerberosConf() {
+        return this.props.getProperty("kerberos.krb5-conf");
+    }
+
+    public String getKerberosPrincipal() {
+        return this.props.getProperty("kerberos.principal");
+    }
+    
+    public String getKerberosKeytab() {
+        return this.props.getProperty("kerberos.keytab");
     }
 }

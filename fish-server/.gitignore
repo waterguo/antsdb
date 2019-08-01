@@ -18,3 +18,4 @@ db
 /mysql-cluster-node1
 /mysql-cluster-node2
 /.apt_generated/
+/hdfs-db/

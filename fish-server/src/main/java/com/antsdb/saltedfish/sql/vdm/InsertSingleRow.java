@@ -22,6 +22,7 @@ import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.HumpbackError;
+import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.LockLevel;
 import com.antsdb.saltedfish.sql.Orca;
@@ -31,28 +32,21 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.util.LatencyDetector;
 import com.antsdb.saltedfish.util.UberUtil;
 
-public class InsertSingleRow extends Statement {
+public class InsertSingleRow extends CrudBase {
     static Logger _log = UberUtil.getThisLogger();
     
-    TableMeta table;
-    GTable gtable;
     Operator[] values;
-    IndexEntryHandlers indexHandlers;
     boolean ignoreError = false;
     int tableId;
     boolean isReplace = false;
     boolean hasBlob = false;
-    GTable blobTable = null;
     
     public InsertSingleRow(Orca orca, TableMeta table, GTable gtable, Operator[] values) {
-        this.table = table;
-        this.gtable = gtable;
+        super(orca, table, gtable);
         this.values = values;
-        this.indexHandlers = new IndexEntryHandlers(orca, table);
         this.tableId = table.getId();
         for (ColumnMeta i:table.getColumns()) {
             if (i.isBlobClob()) {
-                this.blobTable = orca.getHumpback().getTable(table.getBlobTableId());
                 this.hasBlob = true;
                 break;
             }
@@ -126,7 +120,7 @@ public class InsertSingleRow extends Statement {
                     long pValue = row.getFieldAddress(column.getColumnId());
                     if (pValue != 0) {
                         BlobReference blobref = BlobReference.alloc(heap, pKey, pValue);
-                        row.setFieldAddress(column.getColumnId(), blobref.addr);
+                        row.setFieldAddress(column.getColumnId(), blobref.getAddress());
                         blob.setFieldAddress(column.getColumnId(), pValue);
                     }
                 }
@@ -141,7 +135,6 @@ public class InsertSingleRow extends Statement {
         Transaction trx = ctx.getTransaction();
         
         // collect values
-        
         VaporizingRow rowBlob = null;
         if (this.hasBlob) {
             int maxBlobColumnId = this.table.getMaxBlobColumnId();
@@ -150,21 +143,20 @@ public class InsertSingleRow extends Statement {
         VaporizingRow row = genRow(ctx, heap, params, rowBlob, pRecord);
         
         // collect key
-        
         long pKey = this.table.getKeyMaker().make(heap, row);
         row.setKey(pKey);
         
         // do it
-        
         row.setVersion(trx.getGuaranteedTrxId());
         if (this.hasBlob) {
             rowBlob.setKey(row.getKeyAddress());
             rowBlob.setVersion(row.getVersion());
         }
         for (;;) {
-            HumpbackError error = isReplace ? 
-                                  this.gtable.put(ctx.getHSession(), row, timeout) : 
-                                  this.gtable.insert(ctx.getHSession(), row, timeout);
+            if (this.isReplace) {
+                deleteOld(ctx, heap, trx, row);
+            }
+            HumpbackError error = this.gtable.insert(ctx.getHSession(), row, timeout);
             if (error == HumpbackError.SUCCESS) {
                 if (this.hasBlob) {
                     error = this.blobTable.insert(ctx.getHSession(), rowBlob, timeout);
@@ -181,6 +173,21 @@ public class InsertSingleRow extends Statement {
         }
     }
     
+    private void deleteOld(VdmContext ctx, Heap heap, Transaction trx, VaporizingRow vrow) {
+        Row row = this.gtable.getRow(trx.getGuaranteedTrxId(), trx.getTrxTs(), vrow.getKeyAddress(), 0);
+        if (row == null) {
+            long pRowKey = this.indexHandlers.getRowKey(heap, trx, vrow);
+            if (pRowKey == 0) {
+                return;
+            }
+            row = this.gtable.getRow(trx.getGuaranteedTrxId(), trx.getTrxTs(), vrow.getKeyAddress(), 0);
+            if (row == null) {
+                return;
+            }
+        }
+        deleteSingleRow(ctx, row);
+    }
+
     @Override
     List<TableMeta> getDependents() {
         List<TableMeta> list = new ArrayList<TableMeta>();

@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.function.Supplier;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.commons.lang.StringUtils;
@@ -35,14 +36,16 @@ public class DataType {
     String name;
     boolean zerofill = false;
     boolean isUnsigned = false;
+    int weight;
     
-    public DataType(String name, int length, int scale, int sqlType, Class<?> klass, byte fishType) {
+    public DataType(String name, int length, int scale, int sqlType, Class<?> klass, byte fishType, int weight) {
         this.length = length;
         this.scale = scale;
         this.name = name;
         this.sqlType = sqlType;
         this.klass = klass;
         this.fishType = fishType;
+        this.weight = weight;
     }
     
     @Override
@@ -280,6 +283,10 @@ public class DataType {
         return fishType;
     }
 
+    public int getWeight() {
+        return this.weight;
+    }
+    
     public String getName() {
         return this.name;
     }
@@ -298,5 +305,41 @@ public class DataType {
 
     public void setUnsigned(boolean value) {
         this.isUnsigned = value;
+    }
+    
+    /**
+     * 
+     * @param supplier
+     * @return null if the supplier provides an empty set
+     */
+    public static DataType getUpCast(Supplier<DataType> supplier) {
+        DataType result = null;
+        for (;;) {
+            DataType i = supplier.get();
+            if (i == null) {
+                break;
+            }
+            if (result == null) {
+                result = i;
+                continue;
+            }
+            result = getUpCast(result, i);
+        }
+        return result;
+    }
+
+    public static DataType getUpCast(DataType x, DataType y) {
+        int familyx = x!=null ? Weight.getFamily(x.getWeight()) : 0;
+        int familyy = y!=null ? Weight.getFamily(y.getWeight()) : 0;
+        if (familyx == familyy) {
+            return x.getWeight() >= y.getWeight() ? x : y;
+        }
+        if (familyx == Weight.FAMILY_BINARY || familyy == Weight.FAMILY_BINARY) {
+            return DataType._binary;
+        }
+        if (familyx == Weight.FAMILY_CHAR || familyy == Weight.FAMILY_CHAR) {
+            return DataType._varchar;
+        }
+        throw new IllegalArgumentException();
     }
 }

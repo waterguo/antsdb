@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.minke;
 
 import com.antsdb.saltedfish.minke.MinkePage.RangeScanner;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 
@@ -56,7 +57,7 @@ class MergeStream {
     
     MergeStream(TableType tableType, MinkePage page) {
         this.ranges = page.getAllRanges();
-        this.scanner = page.scanAll();
+        this.scanner = page.scanAll(ScanOptions.SHOW_DELETE_MARK);
         this.range = this.ranges.next();
         if (this.scanner != null) {
             this.scanner.next();

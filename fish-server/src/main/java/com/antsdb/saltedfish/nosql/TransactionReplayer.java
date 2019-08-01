@@ -55,6 +55,7 @@ public class TransactionReplayer implements ReplayHandler {
     public TransactionReplayer(Gobbler gobbler, ReplayHandler downstream) {
         this.gobbler = gobbler;
         this.trxman = new TrxMan(null);
+        this.trxman.close();
         this.downstream = downstream;
     }
     

@@ -59,11 +59,16 @@ public class SystemInfoView extends View {
         props.put("runtime.runtime_free_memory", Runtime.getRuntime().freeMemory());
         props.put("runtime.runtime_max_memory", Runtime.getRuntime().maxMemory());
         props.put("runtime.runtime_available_processors", Runtime.getRuntime().availableProcessors());
+        props.put("vm.java.home", System.getProperty("java.home"));
         props.put("vm.java_vm_info", System.getProperty("java.vm.info"));
         props.put("vm.java_vm_name", System.getProperty("java.vm.name"));
         props.put("vm.java_vm_vendor", System.getProperty("java.vm.vendor"));
         props.put("vm.java_vm_specification", System.getProperty("java.vm.specification.version"));
         props.put("vm.java_vm_version", System.getProperty("java.vm.version"));
+        props.put("vm.os.arch", System.getProperty("os.arch"));
+        props.put("vm.os.name", System.getProperty("os.name"));
+        props.put("vm.os.version", System.getProperty("os.version"));
+        props.put("vm.sun.arch.data.model", System.getProperty("sun.arch.data.model"));
         props.put("system.system cpu load", UberUtil.getSystemCpuLoad());
         props.put("system.process cpu load", UberUtil.getProcessCpuLoad());
         props.put("memory.commited_virtual_memory", MemoryUtil.getCommittedVirtualMemorySize());

@@ -16,10 +16,12 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SpaceManager;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.SortKey;
@@ -68,14 +70,12 @@ public class CursorIndexSeek extends CursorMaker {
                 }
                 
                 // next scan
-                
                 if (this.iter == null) {
                     nextScan();
                     continue;
                 }
                 
                 // next record 
-                
                 if (!this.iter.next()) {
                     this.iter.close();
                     this.iter = null;
@@ -83,13 +83,21 @@ public class CursorIndexSeek extends CursorMaker {
                 }
 
                 // convert row to record
-                
                 long pRecord = newRecord();
                 long pRowKey = iter.getRowKeyPointer();
                 if (pRowKey == 0) {
                     continue;
                 }
-                Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+                Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey, 0);
+                if (row == null) {
+                    long pIndexKey = this.iter.getKeyPointer();
+                    String msg = String.format("row not found indexKey=%x:%x rowKey=%x:%x", 
+                            this.gindex.getId(),
+                            KeyBytes.toString(pIndexKey),
+                            this.gtable.getId(),
+                            KeyBytes.toString(pRowKey));
+                    throw new OrcaException(msg);
+                }
                 Record.setKey(pRecord, row.getKeyAddress());
                 for (int i=0; i<this.meta.getColumnCount(); i++) {
                     long pValue = row.getFieldAddress(CursorIndexSeek.this.mapping[i]);
@@ -102,7 +110,6 @@ public class CursorIndexSeek extends CursorMaker {
 
         private void nextScan() {
             // fetch next value from cursor
-            
             long pRec = this.select.next();
             if (pRec == 0) {
                 close();
@@ -111,14 +118,12 @@ public class CursorIndexSeek extends CursorMaker {
             long pValue = Record.get(pRec, 0);
             
             // calculate key
-            
             this.values[this.values.length-1] = pValue;
             KeyMaker keymaker = CursorIndexSeek.this.index.getKeyMaker();
             long pFrom = keymaker.make(getHeap(), values);
             long pTo = keymaker.makeMax(getHeap(), values);
             
             // scan !!
-            
             this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
         }
 

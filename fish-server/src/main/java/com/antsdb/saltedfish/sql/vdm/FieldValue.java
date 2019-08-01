@@ -20,6 +20,7 @@ import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.GetOptions;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -78,7 +79,8 @@ public class FieldValue extends Operator {
         GTable blobTable = ctx.getHumpback().getTable(table.getBlobTableId());
         Transaction trx = ctx.getTransaction();
         long pKey = ref.getRowKeyAddress();
-        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        long options = this.field.isNoCache() ? GetOptions.noCache(0) : 0;
+        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey, options);
         if (pRow == 0) {
             return 0;
         }
@@ -93,7 +95,8 @@ public class FieldValue extends Operator {
         GTable blobTable = ctx.getHumpback().getTable(table.getBlobTableId());
         Transaction trx = ctx.getTransaction();
         long pKey = ref.getRowKeyAddress();
-        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        long options = this.field.isNoCache() ? GetOptions.noCache(0) : 0;
+        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey, options);
         if (pRow == 0) {
             return 0;
         }

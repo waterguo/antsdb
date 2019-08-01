@@ -188,7 +188,7 @@ public class HBaseTable implements StorageTable {
     }
 
     @Override
-    public long get(long pKey) {
+    public long get(long pKey, long options) {
         if (_log.isTraceEnabled()) {
             _log.trace("get {} {}", this.tn.toString(), KeyBytes.toString(pKey));
         }
@@ -337,7 +337,7 @@ public class HBaseTable implements StorageTable {
 
     @Override
     public boolean exist(long pKey) {
-        return get(pKey) != 0;
+        return get(pKey, 0) != 0;
     }
 
     @Override

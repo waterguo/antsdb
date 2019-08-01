@@ -23,6 +23,7 @@ import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Table;
 
+import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Row;
 
@@ -55,25 +56,26 @@ class HBaseTableUpdater {
         return this.tn == null;
     }
     
-    void putRows(List<Long> rows) throws IOException {
+    Put toPut(RowUpdateEntry2 entry) {
+        long pRow = entry.getRowPointer();
+        Row row = Row.fromMemoryPointer(pRow, 0);
+        Put put = Helper.toPut(mapping, row, entry.getSpacePointer());
+        return put;
+    }
+    
+    void putRows(List<Put> puts) throws IOException {
         if (!this.hbase.isMutable) {
             throw new OrcaHBaseException("hbase storage is in read-only mode");
         }
-        if (rows.size() <= 0) {
+        if (puts.size() <= 0) {
             return;
         }
         if (isDeleted()) {
             return;
         }
-        List<Put> puts = new ArrayList<>();
-        for (Long pRow:rows) {
-            Row row = Row.fromMemoryPointer(pRow, 0);
-            Put put = Helper.toPut(mapping, row);
-            puts.add(put);
-        }
         htable.put(puts);
     }
-
+    
     public void putIndexLines(List<Long> indexLines) throws IOException {
         if (!this.hbase.isMutable) {
             throw new OrcaHBaseException("hbase storage is in read-only mode");
@@ -93,25 +95,19 @@ class HBaseTableUpdater {
         this.htable.put(puts);
     }
 
-    public void deletes(List<Long> keys) throws IOException {
+    public void deletes(List<Delete> deletes) throws IOException {
         if (!this.hbase.isMutable) {
             throw new OrcaHBaseException("hbase storage is in read-only mode");
         }
-        if (keys.size() <= 0) {
+        if (deletes.size() <= 0) {
             return;
         }
         if (isDeleted()) {
             return;
         }
-        List<Delete> deletes = new ArrayList<>();
-        for (Long pkey:keys) {
-            byte[] key = Helper.antsKeyToHBase(pkey);
-            Delete delete = new Delete(key);
-            deletes.add(delete);
-       }
-       htable.delete(deletes);
+        htable.delete(deletes);
     }
-
+    
     @Override
     public String toString() {
         return String.format("%s(%d)", this.tn.toString(), this.tableId);

@@ -19,7 +19,7 @@ import com.antsdb.saltedfish.cpp.KeyBytes;
  * 
  * @author *-xguo0<@
  */
-class Boundary {
+public final class Boundary {
     static String[] _symbols = new String[] {".", "", "'"};
     
     long pKey;
@@ -33,6 +33,14 @@ class Boundary {
         this.mark = mark;
     }
 
+    public long getKey() {
+        return this.pKey;
+    }
+    
+    public int getMark() {
+        return this.mark;
+    }
+    
     public boolean in(Range range) {
         return range.contains(this);
     }

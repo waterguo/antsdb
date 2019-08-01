@@ -13,12 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import java.util.ArrayList;
-
-import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
-import com.antsdb.saltedfish.minke.MinkePage;
-import com.antsdb.saltedfish.minke.MinkeTable;
+import com.antsdb.saltedfish.minke.MinkeCacheTable;
 import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.sql.OrcaException;
 
@@ -41,15 +37,14 @@ public class EvictCacheTable extends Statement {
             throw new OrcaException("cache is not enabled");
         }
         MinkeCache cache = (MinkeCache)storage;
-        Minke minke = cache.getMinke();
-        MinkeTable table = (MinkeTable)minke.getTable(this.tableId);
-        if (table == null) {
+        MinkeCacheTable mctable = (MinkeCacheTable)cache.getTable(this.tableId);
+        if (mctable == null) {
             throw new OrcaException("table {} is not found", tableId);
         }
-        ArrayList<MinkePage> pages = new ArrayList<>(table.getPages());
-        for (MinkePage page:pages) {
-            table.deletePage(page);
+        if (this.tableId < 0) {
+            throw new OrcaException("can't evict pages from temporary table");
         }
+        mctable.evictAllPages();
         return null;
     }
 

@@ -121,7 +121,6 @@ public final class Transaction {
 
     public void releaseAllLocks() {
         // release all table locks
-        
         if (this.tableLock != null) {
             this.tableLock.releaseAll();
         }

@@ -36,10 +36,10 @@ public class OpNullEqual extends BinaryOperator {
         long yAddr = this.right.eval(ctx, heap, params, pRecord);
         boolean result ;
         if ((xAddr == 0) && (yAddr == 0)){
-        	result = true;
+            result = true;
         }
         else {
-        	result = AutoCaster.equals(heap, xAddr, yAddr);
+            result = AutoCaster.equals(heap, xAddr, yAddr);
         }
         return FishBool.allocSet(heap, result);
     }

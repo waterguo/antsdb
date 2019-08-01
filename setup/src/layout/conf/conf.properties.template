@@ -1,20 +1,18 @@
 # TCP port antsdb is listening on. default is 3306
 # fish.port=
 
-# number of threads in the pool. default is number of cpus * 2
-# netty.worker.pool.size=
-
-# storage engine. uncomment to enable hbase integration
+# hbase connector settings
 humpback.storage-engine=hbase
+humpback.hbase-conf=/etc/hbase/conf/hbase-site.xml
 
-# location of hbase configuration file - hbase-site.xml. 
-# humpback.hbase-conf=
-
-# hbase quorum name. only needed if you don't have hbase-site.xml
-# hbase.zookeeper.quorum=
-
-# default compression option for hbase, default is GZ. recommended value is SNAPPY
+# default compression option for hbase, default is GZ. recommended value is snappy
 # hbase_compression_codec= 
 
 # AntsDB system namespace in HBase. default is ANTSDB, only needed for multiple AntsDB instances in one HBase
 # humpback.hbase-system-ns=
+
+# Kerberos configuration
+# kerberos=true
+# kerberos.krb5-conf=/etc/krb5.conf
+# kerberos.principal=someone@EXAMPLE.COM
+# kerberos.keytab=/root/someone.keytab

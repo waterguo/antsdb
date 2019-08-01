@@ -45,8 +45,8 @@ public class OpIncrementColumnValue extends UnaryOperator {
                 if (val != 0 || ctx.getSession().getConfig().isNoAutoValueOnZero()) {
                     // if user set a value to an auto_increment column, we need to remember it
                     SequenceMeta seq = getSequence(ctx);
-                    if (val > seq.getLastNumber()) {
-                        seq.setLastNumber(val);
+                    if (val > seq.getNextNumber()) {
+                        seq.setNextNumber(val);
                         ctx.getMetaService().updateSequence(ctx.getHSession(), seq.getTransactionTimestamp(), seq);
                     }
                     return pNumber;

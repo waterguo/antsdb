@@ -54,7 +54,7 @@ public class ChannelWriterMemory extends ChannelWriter {
         if (this.buf.remaining() > size) {
             return;
         }
-        int newBufferSize = (this.buf.remaining() + size) * 3 / 2; 
+        int newBufferSize = (this.buf.capacity() + size) * 3 / 2; 
         this.buf = MemoryManager.growImmortal(AllocPoint.CHANNEL_WRITER, this.buf, newBufferSize);
     }
     

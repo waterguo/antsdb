@@ -13,6 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.sql.Types;
 
 import com.antsdb.saltedfish.cpp.Value;
@@ -264,6 +268,42 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             scale = Integer.parseInt(rule.data_type_length_scale().signed_number(1).getText());
         }
         return newDataType_(typeName, length, scale);
+    }
+
+    @Override
+    public DataType findDefaultType(Class<?> klass) {
+        DataType result = null;
+        if (klass == Integer.class) {
+            result = newDataType("int", 0, 0);
+        }
+        else if (klass == Long.class) {
+            result = newDataType("bigint", 0, 0);
+        }
+        else if (klass == BigInteger.class) {
+            result = newDataType("decimal", 38, 0);
+        }
+        else if (klass == BigDecimal.class) {
+            result = newDataType("decimal", 38, 5);
+        }
+        else if (klass == Float.class) {
+            result = newDataType("float", 38, 5);
+        }
+        else if (klass == Double.class) {
+            result = newDataType("double", 38, 5);
+        }
+        else if (klass == String.class) {
+            result = newDataType("varchar", 1000, 0);
+        }
+        else if (klass == Date.class) {
+            result = newDataType("date", 0, 0);
+        }
+        else if (klass == Timestamp.class) {
+            result = newDataType("timestamp", 1000, 0);
+        }
+        else if (klass == byte[].class) {
+            result = newDataType("longblob", 0xffffffff, 0);
+        }
+        return result;
     }
 
 }

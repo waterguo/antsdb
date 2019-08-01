@@ -15,6 +15,8 @@ package com.antsdb.saltedfish.minke;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -30,6 +32,8 @@ class CacheResultFilter extends ScanResult {
     private Range range;
     private boolean isBroken = false;
     private int count = 0;
+    private long pKey = 0;
+    private long pData;
 
     CacheResultFilter(ScanResult upstream, MinkeCacheTable mctable, Range range) {
         this.upstream = upstream;
@@ -43,16 +47,23 @@ class CacheResultFilter extends ScanResult {
         if (result) {
             MinkeTable table = this.mctable.mtable;
             try {
-                table.copyEntry(this);
+                table.copyEntry(this.upstream);
+                this.pKey = this.upstream.getKeyPointer();
+                this.pData = table.get(this.pKey, false);
                 this.count++;
             }
             catch (OutOfMinkeSpace x) {
                 // ignored if cache space runs out
                 this.isBroken = true;
+                this.pKey = this.upstream.getKeyPointer();
+                this.pData = this.upstream.getRowPointer();
+                this.count++;
             }
             this.mctable.cache.cacheMiss();
         }
         else {
+            this.pKey = 0;
+            this.pData = 0;
             if (!this.isBroken) {
                 try {
                     this.mctable.mtable.putRange(range);
@@ -80,27 +91,34 @@ class CacheResultFilter extends ScanResult {
 
     @Override
     public long getVersion() {
-        return this.upstream.getVersion();
+        if (this.pData == 0) {
+            return 0;
+        }
+        return Row.getVersion(this.pData);
     }
 
     @Override
     public long getKeyPointer() {
-        return this.upstream.getKeyPointer();
+        return this.pKey;
     }
 
     @Override
     public long getIndexRowKeyPointer() {
-        return this.upstream.getIndexRowKeyPointer();
+        return this.pData;
     }
 
     @Override
     public long getRowPointer() {
-        return this.upstream.getRowPointer();
+        return this.pData;
     }
 
     @Override
     public byte getMisc() {
-        return this.upstream.getMisc();
+        if (this.pData == 0) {
+            return 0;
+        }
+        KeyBytes key = new KeyBytes(this.pData);
+        return key.getSuffixByte();
     }
 
     @Override
@@ -112,5 +130,4 @@ class CacheResultFilter extends ScanResult {
     public String toString() {
         return this.upstream.toString();
     }
-
 }

@@ -44,20 +44,20 @@ public class Profile extends CursorMaker {
         Object result = this.root.run(ctx, params, pMaster);
         if (result instanceof Cursor) {
             try (Cursor c = (Cursor)result) {
-            	while (c.next() != 0) {};
+                while (c.next() != 0) {};
             }
         }
         List<ProfileRecord> records = new ArrayList<ProfileRecord>();
         List<ExplainRecord> explainations = new ArrayList<ExplainRecord>();
         this.root.explain(1, explainations);
         for (ExplainRecord i:explainations) {
-        	ProfileRecord rec = new ProfileRecord();
-        	rec.setLevel(i.level)
-        	   .setPlan(i.plan)
-        	   .setMakerId(i.id);
-        	AtomicLong stats = ctx.getCursorStats(i.id);
-        	rec.setStats(Long.toString(stats.get()));
-        	records.add(rec);
+            ProfileRecord rec = new ProfileRecord();
+            rec.setLevel(i.level)
+               .setPlan(i.plan)
+               .setMakerId(i.id);
+            AtomicLong stats = ctx.getCursorStats(i.id);
+            rec.setStats(Long.toString(stats.get()));
+            records.add(rec);
         }
         return CursorUtil.toCursor(meta, records);
     }

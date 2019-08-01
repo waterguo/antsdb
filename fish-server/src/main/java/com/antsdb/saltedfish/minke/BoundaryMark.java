@@ -17,8 +17,8 @@ package com.antsdb.saltedfish.minke;
  * 
  * @author *-xguo0<@
  */
-class BoundaryMark {
-    static final int NONE = 0;
-    static final int PLUS = 1;
-    static final int MINUS = -1;
+public final class BoundaryMark {
+    public static final int NONE = 0;
+    public static final int PLUS = 1;
+    public static final int MINUS = -1;
 }

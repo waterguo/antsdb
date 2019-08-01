@@ -149,7 +149,8 @@ class PageIndexFile {
     }
 
     public void save(Map<Integer, MinkeTable> tableById, long sp) throws IOException {
-        try (DataOutputStream out = new DataOutputStream(new FileOutputStream(file))) {
+        File temp = new File(this.file.getAbsolutePath() + ".tmp");
+        try (DataOutputStream out = new DataOutputStream(new FileOutputStream(temp))) {
             out.writeLong(VERSION | (0xff << 56));
             out.writeLong(sp);
             for (Map.Entry<Integer, MinkeTable> i:tableById.entrySet()) {
@@ -159,5 +160,6 @@ class PageIndexFile {
             }
             out.writeInt(EOF_MARK);
         }
+        temp.renameTo(this.file);
     }
 }

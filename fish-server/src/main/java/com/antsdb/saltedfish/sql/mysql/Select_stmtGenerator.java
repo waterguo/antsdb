@@ -78,7 +78,7 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
             List<Operator> orderExprs = new ArrayList<Operator>();
             List<Boolean> directions = new ArrayList<Boolean>();
             for (Ordering_termContext i:rule.order_by_clause().ordering_term()) {
-                Operator op = Utils.findInPlannerOutputFields(planner, i.expr().getText());
+                Operator op = Utils.findInPlannerOutputFieldsForOrderBy(planner, i.expr().getText());
                 if (op == null) {
                     op = ExprGenerator.gen(ctx, planner, i.expr());
                 }
@@ -109,7 +109,7 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
             List<Operator> orderExprs = new ArrayList<Operator>();
             List<Boolean> directions = new ArrayList<Boolean>();
             for (Ordering_termContext i:rule.order_by_clause().ordering_term()) {
-                Operator op = Utils.findInPlannerOutputFields(planner, i.expr().getText());
+                Operator op = Utils.findInPlannerOutputFieldsForOrderBy(planner, i.expr().getText());
                 if (op == null) {
                     op = ExprGenerator.gen(ctx, planner, i.expr());
                 }

@@ -136,7 +136,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
         int tableId = entry.getTableId();
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
-        this.buffer.addRow(tableId, row.getKeyAddress(), row.getAddress());
+        this.buffer.addRow(tableId, row.getKeyAddress(), entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -145,7 +145,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
         int tableId = entry.getTableId();
         long pRow = entry.getRowPointer();
         Row row = Row.fromMemoryPointer(pRow, 0);
-        this.buffer.addRow(tableId, row.getKeyAddress(), row.getAddress());
+        this.buffer.addRow(tableId, row.getKeyAddress(), entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -154,7 +154,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     public void delete(DeleteEntry entry) throws Exception {
         int tableId = entry.getTableId();
         long pKey = entry.getKeyAddress();
-        this.buffer.addDelete(tableId, pKey);
+        this.buffer.addDelete(tableId, pKey, entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -163,7 +163,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     public void delete(DeleteEntry2 entry) throws Exception {
         int tableId = entry.getTableId();
         long pKey = entry.getKeyAddress();
-        this.buffer.addDelete(tableId, pKey);
+        this.buffer.addDelete(tableId, pKey, entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -173,7 +173,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
         int tableId = entry.getTableId();
         long pRow = entry.getRowPointer();
         long pKey = Row.getKeyAddress(pRow);
-        this.buffer.addDelete(tableId, pKey);
+        this.buffer.addDelete(tableId, pKey, entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -183,7 +183,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
         int tableId = entry.getTableId();
         long pRow = entry.getRowPointer();
         long pKey = Row.getKeyAddress(pRow);
-        this.buffer.addDelete(tableId, pKey);
+        this.buffer.addDelete(tableId, pKey, entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -192,7 +192,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     public void index(IndexEntry entry) throws Exception {
         int tableId = entry.getTableId();
         long pKey = entry.getIndexKeyAddress();
-        this.buffer.addIndexLine(tableId, pKey, entry.getIndexLineAddress());
+        this.buffer.addIndexLine(tableId, pKey, entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -201,7 +201,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     public void index(IndexEntry2 entry) throws Exception {
         int tableId = entry.getTableId();
         long pKey = entry.getIndexKeyAddress();
-        this.buffer.addIndexLine(tableId, pKey, entry.getIndexLineAddress());
+        this.buffer.addIndexLine(tableId, pKey, entry.getSpacePointer());
         this.sp = entry.getSpacePointer();
         flushIfFull(tableId);
     }
@@ -237,12 +237,13 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     }
 
     @Override
-    public void ddl(DdlEntry entry) {};
+    public void ddl(DdlEntry entry) {
+    };
     
     private void flushIfFull(int tableId) throws IOException {
         if (this.buffer.flushIfFull(tableId)) {
             this.hbase.updateLogPointer(this.sp);
-            _log.debug("hbase checkpoint is updated with lp={}", UberFormatter.hex(this.sp));
+            _log.trace("hbase checkpoint is updated with lp={}", UberFormatter.hex(this.sp));
         }
     }
 }

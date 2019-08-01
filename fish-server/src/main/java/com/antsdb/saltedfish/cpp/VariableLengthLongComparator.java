@@ -18,19 +18,19 @@ package com.antsdb.saltedfish.cpp;
  * @author wgu0
  */
 public final class VariableLengthLongComparator extends KeyComparator{
-	
-	@Override
-	public int compare(long xAddr, long yAddr) {
-		return compare_(xAddr, yAddr);
-	}
-	
-	public static int compare_(long xAddr, long yAddr) {
-	    if ((xAddr < 10) || (yAddr < 10)) {
-	        throw new IllegalArgumentException();
-	    }
-		int xLength = KeyBytes.getUnmaskedLength(xAddr);
-		int yLength = KeyBytes.getUnmaskedLength(yAddr);
-		int minLength = Math.min(xLength, yLength);
+    
+    @Override
+    public int compare(long xAddr, long yAddr) {
+        return compare_(xAddr, yAddr);
+    }
+    
+    public static int compare_(long xAddr, long yAddr) {
+        if ((xAddr < 10) || (yAddr < 10)) {
+            throw new IllegalArgumentException();
+        }
+        int xLength = KeyBytes.getUnmaskedLength(xAddr);
+        int yLength = KeyBytes.getUnmaskedLength(yAddr);
+        int minLength = Math.min(xLength, yLength);
         for (int i=0; i<minLength; i+=8) {
             long x = Unsafe.getLongVolatile(xAddr + 4 + i);
             long y = Unsafe.getLongVolatile(yAddr + 4 + i);
@@ -39,6 +39,6 @@ public final class VariableLengthLongComparator extends KeyComparator{
                 return result;
             }
         }
-		return Integer.compare(xLength & 0x7fff, yLength & 0x7fff);
-	}
+        return Integer.compare(xLength & 0x7fff, yLength & 0x7fff);
+    }
 }

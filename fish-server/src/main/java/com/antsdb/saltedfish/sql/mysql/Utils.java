@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Column_constraintContext;
@@ -32,7 +33,9 @@ import com.antsdb.saltedfish.lexer.MysqlParser.String_valueContext;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.DataTypeFactory;
 import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
+import com.antsdb.saltedfish.sql.planner.OutputField;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.vdm.ColumnAttributes;
 import com.antsdb.saltedfish.sql.vdm.ExprUtil;
@@ -143,7 +146,14 @@ class Utils {
                 }
             }
             else if (i.column_constraint_character_set() != null) {
-                _log.warn("character set is ignored for column {}", columnName);
+                String cs = i.column_constraint_character_set().any_name().getText();
+                if (cs.equalsIgnoreCase("utf8")) {
+                }
+                else if (cs.equalsIgnoreCase("utf8mb4")) {
+                } 
+                else {
+                    _log.warn("character set is ignored for column {}", columnName);
+                }
             }
             else {
                 throw new NotImplementedException(i.getText());
@@ -199,7 +209,18 @@ class Utils {
         return fac.newDataType(typeName, length, scale);
     }
 
-    static Operator findInPlannerOutputFields(Planner planner, String name) {
+    static Operator findInPlannerOutputFieldsForOrderBy(Planner planner, String name) {
+        // field position
+        if (StringUtils.isNumeric(name)) {
+            int pos = Integer.parseInt(name);
+            List<OutputField> fields = planner.getOutputFields();
+            if ((pos < 1) || (pos > fields.size())) {
+                throw new OrcaException("Unknown column '{}' in 'order/group by clause'", pos);
+            }
+            return fields.get(pos-1).getExpr();
+        }
+        
+        // try field name
         if (name.startsWith("`") || name.startsWith("\"")) {
             name = name.substring(1, name.length() - 1);
         }

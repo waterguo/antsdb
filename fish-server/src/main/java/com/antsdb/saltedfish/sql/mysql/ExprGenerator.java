@@ -71,101 +71,7 @@ import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.planner.PlannerField;
-import com.antsdb.saltedfish.sql.vdm.BindParameter;
-import com.antsdb.saltedfish.sql.vdm.BytesValue;
-import com.antsdb.saltedfish.sql.vdm.CurrentTime;
-import com.antsdb.saltedfish.sql.vdm.CurrentTimestamp;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
-import com.antsdb.saltedfish.sql.vdm.FieldValue;
-import com.antsdb.saltedfish.sql.vdm.FuncAbs;
-import com.antsdb.saltedfish.sql.vdm.FuncAvg;
-import com.antsdb.saltedfish.sql.vdm.FuncBase64;
-import com.antsdb.saltedfish.sql.vdm.FuncCast;
-import com.antsdb.saltedfish.sql.vdm.FuncConcat;
-import com.antsdb.saltedfish.sql.vdm.FuncConnectionId;
-import com.antsdb.saltedfish.sql.vdm.FuncCount;
-import com.antsdb.saltedfish.sql.vdm.FuncCurDate;
-import com.antsdb.saltedfish.sql.vdm.FuncCurrentUser;
-import com.antsdb.saltedfish.sql.vdm.FuncDatabase;
-import com.antsdb.saltedfish.sql.vdm.FuncDateAdd;
-import com.antsdb.saltedfish.sql.vdm.FuncDateFormat;
-import com.antsdb.saltedfish.sql.vdm.FuncDateSub;
-import com.antsdb.saltedfish.sql.vdm.FuncDistinct;
-import com.antsdb.saltedfish.sql.vdm.FuncElt;
-import com.antsdb.saltedfish.sql.vdm.FuncEmptyClob;
-import com.antsdb.saltedfish.sql.vdm.FuncField;
-import com.antsdb.saltedfish.sql.vdm.FuncFindInSet;
-import com.antsdb.saltedfish.sql.vdm.FuncFromUnixTime;
-import com.antsdb.saltedfish.sql.vdm.FuncGetLock;
-import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
-import com.antsdb.saltedfish.sql.vdm.FuncHex;
-import com.antsdb.saltedfish.sql.vdm.FuncIf;
-import com.antsdb.saltedfish.sql.vdm.FuncIsNull;
-import com.antsdb.saltedfish.sql.vdm.FuncLeft;
-import com.antsdb.saltedfish.sql.vdm.FuncLength;
-import com.antsdb.saltedfish.sql.vdm.FuncLocate;
-import com.antsdb.saltedfish.sql.vdm.FuncLower;
-import com.antsdb.saltedfish.sql.vdm.FuncMax;
-import com.antsdb.saltedfish.sql.vdm.FuncMin;
-import com.antsdb.saltedfish.sql.vdm.FuncMod;
-import com.antsdb.saltedfish.sql.vdm.FuncMonth;
-import com.antsdb.saltedfish.sql.vdm.FuncNow;
-import com.antsdb.saltedfish.sql.vdm.FuncRand;
-import com.antsdb.saltedfish.sql.vdm.FuncReleaseLock;
-import com.antsdb.saltedfish.sql.vdm.FuncReplace;
-import com.antsdb.saltedfish.sql.vdm.FuncRound;
-import com.antsdb.saltedfish.sql.vdm.FuncSubstringIndex;
-import com.antsdb.saltedfish.sql.vdm.FuncSum;
-import com.antsdb.saltedfish.sql.vdm.FuncToTimestamp;
-import com.antsdb.saltedfish.sql.vdm.FuncTrim;
-import com.antsdb.saltedfish.sql.vdm.FuncUnixTimestamp;
-import com.antsdb.saltedfish.sql.vdm.FuncUpper;
-import com.antsdb.saltedfish.sql.vdm.FuncUser;
-import com.antsdb.saltedfish.sql.vdm.FuncVersion;
-import com.antsdb.saltedfish.sql.vdm.FuncWeekday;
-import com.antsdb.saltedfish.sql.vdm.FuncYear;
-import com.antsdb.saltedfish.sql.vdm.Function;
-import com.antsdb.saltedfish.sql.vdm.LongValue;
-import com.antsdb.saltedfish.sql.vdm.NullValue;
-import com.antsdb.saltedfish.sql.vdm.NumericValue;
-import com.antsdb.saltedfish.sql.vdm.ObjectName;
-import com.antsdb.saltedfish.sql.vdm.OpAdd;
-import com.antsdb.saltedfish.sql.vdm.OpAddTime;
-import com.antsdb.saltedfish.sql.vdm.OpAnd;
-import com.antsdb.saltedfish.sql.vdm.OpBetween;
-import com.antsdb.saltedfish.sql.vdm.OpBinary;
-import com.antsdb.saltedfish.sql.vdm.OpBitwiseAnd;
-import com.antsdb.saltedfish.sql.vdm.OpBitwiseOr;
-import com.antsdb.saltedfish.sql.vdm.OpCase;
-import com.antsdb.saltedfish.sql.vdm.OpConcat;
-import com.antsdb.saltedfish.sql.vdm.OpDivide;
-import com.antsdb.saltedfish.sql.vdm.OpEqual;
-import com.antsdb.saltedfish.sql.vdm.OpEqualNull;
-import com.antsdb.saltedfish.sql.vdm.OpExists;
-import com.antsdb.saltedfish.sql.vdm.OpInSelect;
-import com.antsdb.saltedfish.sql.vdm.OpInValues;
-import com.antsdb.saltedfish.sql.vdm.OpInterval;
-import com.antsdb.saltedfish.sql.vdm.OpIsNull;
-import com.antsdb.saltedfish.sql.vdm.OpLarger;
-import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
-import com.antsdb.saltedfish.sql.vdm.OpLess;
-import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
-import com.antsdb.saltedfish.sql.vdm.OpLike;
-import com.antsdb.saltedfish.sql.vdm.OpMatch;
-import com.antsdb.saltedfish.sql.vdm.OpMultiply;
-import com.antsdb.saltedfish.sql.vdm.OpNegate;
-import com.antsdb.saltedfish.sql.vdm.OpNot;
-import com.antsdb.saltedfish.sql.vdm.OpOr;
-import com.antsdb.saltedfish.sql.vdm.OpRegexp;
-import com.antsdb.saltedfish.sql.vdm.OpSafeEqual;
-import com.antsdb.saltedfish.sql.vdm.OpSequenceValue;
-import com.antsdb.saltedfish.sql.vdm.OpSingleValueQuery;
-import com.antsdb.saltedfish.sql.vdm.Operator;
-import com.antsdb.saltedfish.sql.vdm.RowidValue;
-import com.antsdb.saltedfish.sql.vdm.SysDate;
-import com.antsdb.saltedfish.sql.vdm.SystemVariableValue;
-import com.antsdb.saltedfish.sql.vdm.BinaryString;
-import com.antsdb.saltedfish.sql.vdm.UserVariableValue;
+import com.antsdb.saltedfish.sql.vdm.*;
 import com.antsdb.saltedfish.util.BytesUtil;
 import com.antsdb.saltedfish.util.Pair;
 
@@ -191,13 +97,16 @@ public class ExprGenerator {
         _functionByName.put("get_lock", FuncGetLock.class);
         _functionByName.put("hex", FuncHex.class);
         _functionByName.put("if", FuncIf.class);
+        _functionByName.put("ifnull", FuncIfNull.class);
         _functionByName.put("isnull", FuncIsNull.class);
+        _functionByName.put("last_insert_id", FuncLastInsertId.class);
         _functionByName.put("length", FuncLength.class);
         _functionByName.put("left", FuncLeft.class);
         _functionByName.put("locate", FuncLocate.class);
         _functionByName.put("lower", FuncLower.class);
         _functionByName.put("mod", FuncMod.class);
         _functionByName.put("month", FuncMonth.class);
+        _functionByName.put("monthname", FuncMonthName.class);
         _functionByName.put("now", FuncNow.class);
         _functionByName.put("rand", FuncRand.class);
         _functionByName.put("release_lock", FuncReleaseLock.class);
@@ -383,7 +292,7 @@ public class ExprGenerator {
             else if ("<=>".equals(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
                 Operator right = gen(ctx, cursorMeta, (ExprContext) rule.getChild(2));
-                return new OpSafeEqual(left, right);
+                return new OpEqualNull(left, right);
             }
             else if ("+".equals(op)) {
                 Operator left = gen(ctx, cursorMeta, (ExprContext) rule.getChild(0));
@@ -918,12 +827,13 @@ public class ExprGenerator {
             }
         }
         if (rule.group_concat_parameter() != null) {
+            FuncGroupConcat groupcat = (FuncGroupConcat)func;
             Group_concat_parameterContext params = rule.group_concat_parameter();
             Operator col = gen(ctx, cursorMeta, params.expr());
-            func.addParameter(col);
+            groupcat.addParameter(col);
             if (params.literal_value() != null) {
                 Operator separator = genLiteralValue(ctx, cursorMeta, params.literal_value());
-                func.addParameter(separator);
+                groupcat.setSeparator(separator);
             }
         }
         if ((func.getMinParameters() >= 0) && (func.getChildren().size() < func.getMinParameters())) {
@@ -937,8 +847,8 @@ public class ExprGenerator {
 
     private static Function genGroupConcat(GeneratorContext ctx, Expr_functionContext rule) {
         if (rule.expr_function_parameters() != null) {
-            if (rule.expr_function_parameters().expr().size() != 1) {
-                throw new OrcaException("GROUP_CONCAT requires one input parameter");
+            if (rule.expr_function_parameters().expr().size() < 1) {
+                throw new OrcaException("GROUP_CONCAT requires at least one input parameter");
             }
         }
         Group_concat_parameterContext param = rule.group_concat_parameter();
@@ -1067,6 +977,22 @@ public class ExprGenerator {
         else if (unit.equalsIgnoreCase("WEEK")) {
             multiplier = 1000 * 60 * 60 * 24 * 7;
         }
+        else if (unit.equalsIgnoreCase("MINUTE_SECOND")) {
+            multiplier = 1000;
+            return new OpInterval(new FuncParseMinuteSecond(upstream), multiplier);
+        }
+        else if (unit.equalsIgnoreCase("DAY_SECOND")) {
+            multiplier = 1000;
+            return new OpInterval(new FuncParseDaySecond(upstream), multiplier);
+        }
+        else if (unit.equalsIgnoreCase("DAY_HOUR")) {
+            multiplier = 1000;
+            return new OpInterval(new FuncParseDayHour(upstream), multiplier);
+        }
+        else if (unit.equalsIgnoreCase("SECOND_MICROSECOND")) {
+            multiplier = 1;
+            return new OpInterval(new FuncParseSecondMicro(upstream), multiplier);
+        }
         else {
             throw new OrcaException("unknown unit of time: " + unit);
         }
@@ -1152,7 +1078,7 @@ public class ExprGenerator {
     private static Operator gen_case(GeneratorContext ctx, Planner planner, Expr_caseContext rule) {
         List<Pair<Operator,Operator>> whens = new ArrayList<>();
         Operator alse = null;
-        Operator value = gen(ctx, planner, rule.expr());
+        Operator value = rule.expr()!=null ? gen(ctx, planner, rule.expr()) : null;
         for (Expr_case_whenContext i:rule.expr_case_when()) {
             Pair<Operator,Operator> pair = new Pair<>();
             pair.x = gen(ctx, planner, i.expr(0));

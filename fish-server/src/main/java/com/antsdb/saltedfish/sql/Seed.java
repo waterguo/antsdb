@@ -119,7 +119,7 @@ class Seed {
         }
         notifyUpgrade();
         seq = new SequenceMeta(name, id);
-        seq.setLastNumber(next);
+        seq.setNextNumber(next);
         seq.setIncrement(increment);
         meta.addSequence(hsession, Transaction.getSystemTransaction(), seq);
     }

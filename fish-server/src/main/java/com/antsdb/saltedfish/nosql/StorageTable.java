@@ -22,7 +22,7 @@ import com.antsdb.saltedfish.cpp.FileOffset;
  * @author *-xguo0<@
  */
 public interface StorageTable {
-    public long get(long pKey);
+    public long get(long pKey, long option);
     public boolean exist(long pKey);
     public long getIndex(long pKey);
     public ScanResult scan(long pKeyStart, long pKeyEnd, long options);

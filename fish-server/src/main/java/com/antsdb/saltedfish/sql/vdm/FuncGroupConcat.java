@@ -33,6 +33,7 @@ public class FuncGroupConcat extends Function {
     int variableId;
     Boolean asc;
     boolean distinct;
+    private Operator separator;
 
     private static class Data {
         String seprator = ",";
@@ -85,8 +86,8 @@ public class FuncGroupConcat extends Function {
         Data data = (Data) ctx.getVariable(this.variableId);
         if (data == null) {
             String separator = ",";
-            if (this.parameters.size() >= 2) {
-                long pSeparator = this.parameters.get(1).eval(ctx, heap, params, pRecord);
+            if (this.separator != null) {
+                long pSeparator = this.separator.eval(ctx, heap, params, pRecord);
                 separator = AutoCaster.getString(heap, pSeparator);
             }
             data = createData(separator);
@@ -96,13 +97,29 @@ public class FuncGroupConcat extends Function {
             data.words.clear();
             return 0;
         }
-        long addrVal = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-        addrVal = AutoCaster.toString(heap, addrVal);
-        String val = (String) FishObject.get(heap, addrVal);
-        if (val != null) {
-            data.words.add(val);
+        String value = getValue(ctx, heap, params, pRecord);
+        if (value != null) {
+            data.words.add(value);
         }
-        return FishObject.allocSet(heap, StringUtils.join(data.words, data.seprator));
+        String result = (data.words.size() == 0) ? null : StringUtils.join(data.words, data.seprator);
+        return FishObject.allocSet(heap, result);
+    }
+
+    private String getValue(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        String result = null;
+        for (Operator i:this.parameters) {
+            long pValue = i.eval(ctx, heap, params, pRecord);
+            pValue = AutoCaster.toString(heap, pValue);
+            String s = (String) FishObject.get(heap, pValue);
+            if (s == null) {
+                result = null;
+                break;
+            }
+            else {
+                result = (result == null) ? s : result + s;
+            }
+        }
+        return result;
     }
 
     @Override
@@ -117,6 +134,10 @@ public class FuncGroupConcat extends Function {
 
     @Override
     public int getMaxParameters() {
-        return 2;
+        return Integer.MAX_VALUE;
+    }
+
+    public void setSeparator(Operator separator) {
+        this.separator = separator;
     }
 }

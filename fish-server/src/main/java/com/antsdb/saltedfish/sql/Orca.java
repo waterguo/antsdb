@@ -14,7 +14,9 @@
 package com.antsdb.saltedfish.sql;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -23,6 +25,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -37,14 +40,18 @@ import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.Replicator;
+import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.server.mysql.replication.MysqlSlave;
+import com.antsdb.saltedfish.sql.meta.ColumnId;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.TableId;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.mysql.MysqlDialect;
+import com.antsdb.saltedfish.sql.vdm.DropTable;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
@@ -86,7 +93,12 @@ public class Orca {
     Map<String, View> sysviews = new HashMap<>();
     Map<String, String> namespaces = new HashMap<>();
     volatile boolean isClosed = false;
-    Set<Session> sessions = ConcurrentHashMap.newKeySet();
+    Set<Session> sessions = new ConcurrentSkipListSet<>(new Comparator<Session>() {
+        @Override
+        public int compare(Session x, Session y) {
+            return Integer.compare(x.getId(), y.getId());
+        }
+    });
     private ScheduledFuture<?> sessionSweeperFuture;
     private File home;
     private SqlDialect dialect;
@@ -142,10 +154,10 @@ public class Orca {
         this.config = new SystemParameters(this.humpback);
         this.config.set("autocommit", "1");
         this.config.set("auto_increment_increment", "1");
-        this.config.set("character_set_client", "utf8");
-        this.config.set("character_set_results", "utf8");
-        this.config.set("character_set_connection", "utf8");
-        this.config.set("collation_database", "utf8_general_ci");
+        this.config.set("character_set_client", "latin1");
+        this.config.set("character_set_results", "latin1");
+        this.config.set("character_set_connection", "latin1");
+        this.config.set("collation_database", "latin1_swedish_ci");
         this.config.set("lower_case_file_system", "NO");
         this.config.set("lower_case_table_names", "1");
         this.config.set("max_allowed_packet", String.valueOf(32 * 1024 * 1024));
@@ -156,11 +168,9 @@ public class Orca {
         this.config.set("version_comment", Orca._version + " Enterprise");
 
         // init statement cache
-        
         this.statementCache = CacheBuilder.newBuilder().maximumSize(1000).build();
 
         // start services
-        
         this.idService = new IdentifierService(this);
         if (UberUtil.between(this.humpback.getServerId(), 0, 1)) {
             this.idService.setMod(2, (int)this.humpback.getServerId());
@@ -189,6 +199,12 @@ public class Orca {
         // system views
 
         initViews();
+        
+        // system default session. used as the template for the use sessions
+        this.sysdefault = createSession("system", "default");
+        
+        // clean temp tables
+        cleanTempTables();
         
         // backend jobs
         
@@ -219,10 +235,6 @@ public class Orca {
             this.replicator.start();
         }
 
-        // system default session. used as the template for the use sessions
-        
-        this.sysdefault = createSession("system", "default");
-        
         // load cluster
         
         this.pod = new Pod(this);
@@ -231,6 +243,32 @@ public class Orca {
         this.humpback.addLogDependency(this.pod);
     }
     
+    private void cleanTempTables() {
+        GTable systable = this.metaService.getSysTable();
+        for (RowIterator i=systable.scan(0, Long.MAX_VALUE, true);;) {
+            if (!i.next()) {
+                break;
+            }
+            Row row = i.getRow();
+            Integer htableId = (Integer)row.get(ColumnId.systable_htable_id.getId());
+            if (htableId == null) {
+                continue;
+            }
+            if (htableId < 0) {
+                String ns = (String)row.get(ColumnId.systable_namespace.getId());
+                if (ns.equals("#")) {
+                    // stub
+                    continue;
+                }
+                String name = (String)row.get(ColumnId.systable_table_name.getId());
+                _log.info("deleting temp. table: {}", name);;
+                VdmContext ctx = new VdmContext(this.sysdefault, 0);
+                new DropTable(new ObjectName(ns, name), true).run(ctx, null);
+                this.sysdefault.commit();
+            }
+        }
+    }
+
     private void initViews() {
         registerSystemView(SYSNS, TABLENAME_SYSSEQUENCE, new SysSequence(this));
         registerSystemView(SYSNS, TABLENAME_SYSTABLE, new SysTable(this));
@@ -266,6 +304,7 @@ public class Orca {
         registerSystemView(SYSNS, "MEM_IMMORTAL", new SystemViewMemImmortals());
         registerSystemView(SYSNS, "SLAVE_WARMER_INFO", new SystemViewSlaveWarmerInfo());
         registerSystemView(SYSNS, "PAGE_CACHE_WARMER_INFO", new PageCacheWarmerInfo());
+        registerSystemView(SYSNS, "MINKE_PAGE_INDEX", new SysetmViewMinkePageIndex());
     }
 
     private void verifySystem() {
@@ -366,23 +405,29 @@ public class Orca {
         }
     }
     
-    public Session createSession(String user, String remoteEndpoint) {
-        if (this.isClosed) {
-            throw new OrcaException("orca is closed");
-        }
-        Session session = new Session(this, getSqlParserFactory(), user, remoteEndpoint);
-        if (this.sysdefault != null) {
-            for (Map.Entry<Integer, TableLock> i:this.sysdefault.tableLocks.entrySet()) {
-                int tableId = i.getKey();
-                TableLock lock = i.getValue();
-                TableLock newlock = lock.clone(session.getId());
-                session.tableLocks.put(tableId, newlock);
+    public Session createSession(String user, String endpoint) {
+        synchronized(this.sessions) {
+            if (this.isClosed) {
+                throw new OrcaException("orca is closed");
             }
+            Session session = new Session(this, getSqlParserFactory(), user, endpoint);
+            if (this.sysdefault != null) {
+                for (Map.Entry<Integer, TableLock> i:this.sysdefault.tableLocks.entrySet()) {
+                    int tableId = i.getKey();
+                    TableLock lock = i.getValue();
+                    TableLock newlock = lock.clone(session.getId());
+                    session.tableLocks.put(tableId, newlock);
+                }
+            }
+            String msg = String.format("session %d user %s from %s thread %d", 
+                    session.getId(), 
+                    user, 
+                    endpoint, 
+                    Thread.currentThread().getId());
+            getHumpback().getGobbler().logMessage(session.getHSession(), msg);
+            this.sessions.add(session);
+            return session;
         }
-        String msg = String.format("session %d user %s from %s", session.getId(), user, remoteEndpoint);
-        getHumpback().getGobbler().logMessage(session.getHSession(), msg);
-        this.sessions.add(session);
-        return session;
     }
     
     public void closeSession(Session session) {
@@ -410,9 +455,9 @@ public class Orca {
             return;
         }
         this.isClosed = true;
-
+        _log.info("shuting down orca ...");
+        
         // close jobs
-
         if (this.replicator != null) {
             this.replicator.close();
         }
@@ -424,7 +469,6 @@ public class Orca {
         }
 
         // close slave thread
-
         try {
             MysqlSlave.stopIfExists();
         }
@@ -433,7 +477,6 @@ public class Orca {
         }
 
         // close cluster threads;
-
         try {
             this.pod.close();
         }
@@ -442,24 +485,15 @@ public class Orca {
         }
         
         // close all sessions
-
-        if (this.sessionSweeperFuture != null) {
-            this.sessionSweeperFuture.cancel(false);
-        }
-        if (this.recyclerFuture != null) {
-            this.recyclerFuture.cancel(false);
-        }
         for (Session i:this.sessions) {
             closeSession(i);
         }
 
         // close services
-
         this.idService.close();
         this.metaService.close();
         
         // shutdown hbase storage service
-
         try {
             if (this.replicator != null) {
                 this.replicator.close();
@@ -472,9 +506,7 @@ public class Orca {
         }
 
         // shutdown humpback
-
         humpback.shutdown();
-
     }
     
     public Humpback getHumpback() {
@@ -684,6 +716,41 @@ public class Orca {
         SlaveWarmer warmer = this.pod.getWarmer();
         if (warmer != null) {
             warmer.send(ns, sql, params, result);
+        }
+    }
+    
+    public void lockExclusive(int owner, int tableId) {
+        synchronized(this.sessions) {
+            List<Session> undo = new ArrayList<>();
+            boolean success = false;
+            try {
+                for (Session i:this.sessions) {
+                    if (i.getId() == owner) {
+                        continue;
+                    }
+                    i.lockTable(owner, tableId, LockLevel.EXCLUSIVE_BY_OTHER, false);
+                    undo.add(i);
+                }
+                success = true;
+            }
+            finally {
+                if (!success) {
+                    for (Session i:undo) {
+                        i.unlockTable(owner, tableId);
+                    }
+                }
+            }
+        }
+    }
+    
+    public void unlockExclusive(int owner, int tableId) {
+        synchronized(this.sessions) {
+            for (Session i:this.sessions) {
+                if (i.getId() == owner) {
+                    continue;
+                }
+                i.unlockTable(owner, tableId);
+            }
         }
     }
 }

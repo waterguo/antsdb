@@ -17,21 +17,19 @@ package com.antsdb.saltedfish.cpp;
  * 
  * @author *-xguo0<@
  */
-public final class Int4Array {
+public final class Int4Array extends BrutalMemoryObject {
     static final int HEADER_SIZE = 4;
     
     private long addr;
     private int length;
 
     public Int4Array(long addr) {
+        super(addr);
         if (Unsafe.getByte(addr) != Value.FORMAT_INT4_ARRAY) {
             throw new IllegalArgumentException();
         }
         this.addr = addr;
         this.length = Unsafe.getShort(addr + 2) & 0xffff;
-    }
-    
-    private Int4Array() {
     }
     
     public static Int4Array alloc(Heap heap, byte[] value) {
@@ -64,14 +62,10 @@ public final class Int4Array {
         long addr = heap.alloc(HEADER_SIZE + length * 4);
         Unsafe.putByte(addr, Value.FORMAT_INT4_ARRAY);
         Unsafe.putShort(addr + 2, (short)length);
-        Int4Array result = new Int4Array();
+        Int4Array result = new Int4Array(addr);
         result.addr = addr;
         result.length = length;
         return result;
-    }
-    
-    public long getAddress() {
-        return this.addr;
     }
     
     /**
@@ -132,5 +126,15 @@ public final class Int4Array {
         }
         buf.deleteCharAt(buf.length()-1);
         return buf.toString();
+    }
+
+    @Override
+    public int getByteSize() {
+        return getSize();
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_INT4_ARRAY;
     }
 }

@@ -61,4 +61,10 @@ public class UpdateSingleRow extends UpdateBase {
             return updateSingleRow(ctx, heap, params, pKey) ? 1 : 0;
         }
     }
+    
+    @Override
+    public void explain(int level, List<ExplainRecord> records) {
+        ExplainRecord rec = new ExplainRecord(-1, level, "Table Seek (" + this.table.getObjectName() + ")");
+        records.add(rec);
+    }
 }

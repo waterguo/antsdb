@@ -71,7 +71,7 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
             long pIndexKey = this.keyMaker.make(heap, frow);
             int count = term.getValue().get();
             byte misc = (byte)((count > 0xff) ? 0xff : count);
-            insert(heap, hsession, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace);
+            insert(heap, hsession, trx, pIndexKey, row.getKeyAddress(), misc, timeout, isReplace, null);
         }
     }
 
@@ -92,7 +92,7 @@ public class FullTextIndexEntryHandler extends IndexEntryHandler {
         for (String term:terms) {
             frow.set(1, term);
             long pIndexKey = this.keyMaker.make(heap, frow);
-            delete(heap, hsession, trx, pIndexKey, timeout);
+            delete(heap, hsession, trx, pIndexKey, row, timeout);
         }
     }
 

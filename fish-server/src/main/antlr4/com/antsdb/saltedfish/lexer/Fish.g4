@@ -9,6 +9,7 @@ stmt
   | carbonfreeze_stmt
   | change_slave_stmt
   | clear_meta_cache_stmt
+  | compare_cache_stmt
   | delete_node_stmt
   | evict_cache_stmt
   | ping_stmt
@@ -35,7 +36,7 @@ add_master_node_stmt: K_ADD K_EXTERNAL? (K_MASTER | K_SLAVE) K_NODE assignment*;
 
 carbonfreeze_stmt: K_CARBONFREEZE;
 
-evict_cache_stmt: K_EVICT K_CACHE (cache_page | cache_table | cache_all);
+compare_cache_stmt: K_COMPARE K_CACHE (K_ALL | number_value) assignment*;
 
 cache_page: K_PAGE number_value;
 
@@ -47,6 +48,8 @@ clear_meta_cache_stmt : K_CLEAR K_META K_CACHE;
 
 change_slave_stmt: K_CHANGE K_SLAVE K_TO assignment*;
  
+evict_cache_stmt: K_EVICT K_CACHE (cache_page | cache_table | cache_all);
+
 delete_node_stmt: K_DELETE K_NODE STRING_LITERAL;
 
 gc_stmt: K_GC;
@@ -74,19 +77,19 @@ where: K_WHERE expr;
 limit: K_LIMIT number_value (K_OFFSET number_value)?;
  
 expr
- : expr_equal
+ : expr_compare
  | expr K_AND expr
  ; 
 
-expr_equal: column '=' value;
+expr_compare: column ('=' | '<' | '>' | '<>' | '>=' | '<=') value;
 
 value: STRING_LITERAL | NUMERIC_LITERAL | K_NULL;
  
-columns: column+;
+columns: '*' | (column (',' column) *);
 
-column: ('$' number_value) | '*';
+column: ('$' number_value);
 
-table: number_value;
+table: IDENTIFIER | NUMERIC_LITERAL;
 
 show_cluster_status_stmt: K_SHOW K_CLUSTER K_STATUS;
 
@@ -118,6 +121,7 @@ K_AND: A N D;
 K_AS: A S;
 K_CACHE : C A C H E;
 K_CARBONFREEZE : C A R B O N F R E E Z E;
+K_COMPARE : C O M P A R E;
 K_CHANGE : C H A N G E; 
 K_CLEAR : C L E A R;
 K_DELETE : D E L E T E;
@@ -163,7 +167,7 @@ STRING_LITERAL : '\'' ( ~('\''|'\\') | ('\\' .) | ('\'' '\'') )* '\'';
 SPACES : [ \u000B\t\r\n] -> channel(HIDDEN);
  
 NUMERIC_LITERAL
- : DIGIT+ ( '.' DIGIT* )? ( E [-+]? DIGIT+ )?
+ : [-+]? DIGIT+ ( '.' DIGIT* )? ( E [-+]? DIGIT+ )?
  | '.' DIGIT+ ( E [-+]? DIGIT+ )?
  ;
  

@@ -4,7 +4,7 @@
     <parent>
         <groupId>com.antsdb</groupId>
         <artifactId>fish-root</artifactId>
-        <version>18.12.29-beyond</version>
+        <version>1.2</version>
     </parent>
     
     <modelVersion>4.0.0</modelVersion>

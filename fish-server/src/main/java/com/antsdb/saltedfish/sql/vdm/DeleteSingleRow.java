@@ -25,7 +25,7 @@ import com.antsdb.saltedfish.sql.LockLevel;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
-public class DeleteSingleRow extends DeleteBase {
+public class DeleteSingleRow extends CrudBase {
     Operator key;
     int tableId;
     
@@ -37,24 +37,24 @@ public class DeleteSingleRow extends DeleteBase {
     
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-		ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
-		Transaction trx = ctx.getTransaction();
-    	try (Heap heap = new FlexibleHeap()) {
-    		long pBoundary = this.key.eval(ctx, heap, params, 0);
-	        if (pBoundary == 0) {
-	            return 0;
-	        }
-	        FishBoundary boundary = new FishBoundary(pBoundary);
-	        long pKey = boundary.getKeyAddress();
-	        if (pKey == 0) {
-	        	return 0;
-	        }
-	        Row row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
-	        if (row == null) {
-	            return 0;
-	        }
-            return deleteSingleRow(ctx, params, pKey) ? 1 : 0;
-    	}
+        ctx.getSession().lockTable(this.tableId, LockLevel.SHARED, true);
+        Transaction trx = ctx.getTransaction();
+        try (Heap heap = new FlexibleHeap()) {
+            long pBoundary = this.key.eval(ctx, heap, params, 0);
+            if (pBoundary == 0) {
+                return 0;
+            }
+            FishBoundary boundary = new FishBoundary(pBoundary);
+            long pKey = boundary.getKeyAddress();
+            if (pKey == 0) {
+                return 0;
+            }
+            Row row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey, 0);
+            if (row == null) {
+                return 0;
+            }
+            return deleteSingleRow(ctx, row) ? 1 : 0;
+        }
     }
 
     @Override
@@ -64,4 +64,9 @@ public class DeleteSingleRow extends DeleteBase {
         return list;
     }
 
+    @Override
+    public void explain(int level, List<ExplainRecord> records) {
+        ExplainRecord rec = new ExplainRecord(-1, level, "Table Seek (" + this.table.getObjectName() + ")");
+        records.add(rec);
+    }
 }

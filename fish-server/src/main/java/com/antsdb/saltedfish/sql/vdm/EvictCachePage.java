@@ -15,8 +15,8 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.minke.Minke;
 import com.antsdb.saltedfish.minke.MinkeCache;
+import com.antsdb.saltedfish.minke.MinkeCacheTable;
 import com.antsdb.saltedfish.minke.MinkePage;
-import com.antsdb.saltedfish.minke.MinkeTable;
 import com.antsdb.saltedfish.minke.PageState;
 import com.antsdb.saltedfish.nosql.StorageEngine;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -50,14 +50,51 @@ public class EvictCachePage extends Statement {
             throw new OrcaException("page {} is not active currently", this.pageId);
         }
         int tableId = page.getTableId();
-        MinkeTable table = (MinkeTable)minke.getTable(tableId);
+        MinkeCacheTable table = (MinkeCacheTable)cache.getTable(tableId);
         if (table == null) {
             throw new OrcaException("table {} is not found", tableId);
         }
-        boolean success = table.deletePage(page);
+        if (table.isFullCache()) {
+            throw new OrcaException("can't evict pages from fully cached table");
+        }
+        boolean success = table.evictPage(page) == 1;
         if (!success) {
             throw new OrcaException("unable to evict page {} from table {}", this.pageId, tableId);
         }
         return null;
     }
+    /* old debug code
+    private String safeGetKeyString(long pKey) {
+        try {
+            return KeyBytes.toString(pKey);
+        }
+        catch (Exception x) {
+            return x.getMessage();
+        }
+    }
+    
+    private void printDebug(MinkePage page) {
+        MinkeTable table = (MinkeTable)this.cache.minke.getTable(page.tableId);
+        _log.debug("unable to delete page {} {} from table {}", hex(page.id), hex(page.pStartKey), table.tableId);
+        MinkePage that = table.pages.get(page.getStartKeyPointer());
+        if (that == null) {
+            _log.error("that = null");
+        }
+        else {
+            _log.error("that page {} {} {}", hex(that.id), hex(that.pStartKey), safeGetKeyString(that.pStartKey));
+        }
+        for (Map.Entry<KeyBytes, MinkePage> i:table.pages.entrySet()) {
+            long pKey = i.getKey().getAddress();
+            MinkePage ii = i.getValue();
+            if (ii == page) {
+                _log.debug("{} {} {} {} {}", 
+                        hex(ii.id), 
+                        hex(pKey), 
+                        hex(ii.getStartKeyPointer()), 
+                        hex(ii.getStartKey().getAddress()),
+                        safeGetKeyString(pKey));
+            }
+        }
+    }
+    */
 }

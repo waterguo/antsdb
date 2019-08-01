@@ -84,7 +84,6 @@ public class CursorPrimaryKeySeek extends CursorMaker {
 
         private void nextRow() {
             // fetch next value from cursor
-            
             long pRec = this.select.next();
             if (pRec == 0) {
                 this.pRow = 0;
@@ -94,14 +93,12 @@ public class CursorPrimaryKeySeek extends CursorMaker {
             long pValue = Record.get(pRec, 0);
             
             // calculate key
-            
             this.values[this.values.length-1] = pValue;
             KeyMaker keymaker = CursorPrimaryKeySeek.this.table.getKeyMaker();
             long pKey = keymaker.make(getHeap(), values);
             
             // scan !!
-            
-            this.pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+            this.pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey, 0);
         }
 
         @Override

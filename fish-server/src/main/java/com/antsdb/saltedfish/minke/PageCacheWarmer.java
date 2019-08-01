@@ -60,7 +60,7 @@ public class PageCacheWarmer implements Runnable {
             if (count == 0) {
                 warm();
             }
-            else if (UberUtil.getProcessCpuLoad() < 0.1) {
+            else if (UberUtil.getProcessCpuLoad() < 0.05) {
                 warm();
             }
         }

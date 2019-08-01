@@ -27,19 +27,24 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
+import com.antsdb.saltedfish.sql.vdm.BooleanValue;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Flow;
+import com.antsdb.saltedfish.sql.vdm.FuncIfNull;
 import com.antsdb.saltedfish.sql.vdm.InsertOnDuplicate;
 import com.antsdb.saltedfish.sql.vdm.InsertSelect;
 import com.antsdb.saltedfish.sql.vdm.InsertSingleRow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.IntegerValue;
 import com.antsdb.saltedfish.sql.vdm.NotNullCheck;
+import com.antsdb.saltedfish.sql.vdm.NullValue;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.OpIncrementColumnValue;
 import com.antsdb.saltedfish.sql.vdm.Operator;
+import com.antsdb.saltedfish.sql.vdm.StringValue;
 import com.antsdb.saltedfish.util.CodingError;
 
 public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
@@ -93,20 +98,24 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
             value = Utils.autoCast(column, value);
             values[column.getColumnId()] = value;
         }
-        setDefaultValues(ctx, table, values);
+        setDefaultValues(ctx, table, values, true);
         return new InsertSelect(ctx.getOrca(), gtable, table, maker, values);
     }
     
     private List<InsertSingleRow> gen(GeneratorContext ctx,  TableMeta table,  Insert_stmt_valuesContext rule) {
         List<InsertSingleRow> result = new ArrayList<>();
+        int nFields = 0;
+        if (rule.insert_stmt_values_columns() != null) {
+            nFields = rule.insert_stmt_values_columns().column_name().size();
+        }
         List<ColumnMeta> columns = genColumns(table, rule.insert_stmt_values_columns());
         GTable gtable = ctx.getGtable(table.getObjectName());
         for (Insert_stmt_values_rowContext i: rule.insert_stmt_values_row()) {
-            Operator[] values = new Operator[table.getMaxColumnId() + 1];
-            List<ExprContext> exprs = i.expr();
-            if (exprs.size() != columns.size()) {
+            if (nFields != 0 && nFields != i.expr().size()) {
                 throw new OrcaException("column count doesn't match value count");
             }
+            Operator[] values = new Operator[table.getMaxColumnId() + 1];
+            List<ExprContext> exprs = i.expr();
             for (int j=0; j<exprs.size(); j++) {
                 ExprContext expr = exprs.get(j);
                 ColumnMeta column = columns.get(j);
@@ -114,7 +123,7 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
                 jj = Utils.autoCast(column, jj);
                 values[column.getColumnId()] = jj;
             }
-            setDefaultValues(ctx, table, values);
+            setDefaultValues(ctx, table, values, false);
             InsertSingleRow insert = new InsertSingleRow(ctx.getOrca(), table, gtable, values);
             result.add(insert);
         }
@@ -154,7 +163,8 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
         return fields;
     }
 
-    private void setDefaultValues(GeneratorContext ctx, TableMeta table, Operator[] values) {
+    private void 
+    setDefaultValues(GeneratorContext ctx, TableMeta table, Operator[] values, boolean isSelect) {
         List<ColumnMeta> columns = table.getColumns();
         for (ColumnMeta i:columns) {
             if (values[i.getColumnId()] != null) {
@@ -171,9 +181,40 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
                 values[i.getColumnId()] = new OpIncrementColumnValue(table, null);
             }
             if (!i.isNullable()) {
-                values[i.getColumnId()] = new NotNullCheck(values[i.getColumnId()], i);
+                if (!isSelect || ctx.getSession().getConfig().isStrict()) {
+                    values[i.getColumnId()] = new NotNullCheck(values[i.getColumnId()], i);
+                }
+                else {
+                    // wicked mysql behavior, assign empty value to not null column 
+                    Operator replacement = createReplacementValue(i);
+                    if (values[i.getColumnId()] == null) {
+                        values[i.getColumnId()] = replacement;
+                    }
+                    else {
+                        values[i.getColumnId()] = new FuncIfNull(values[i.getColumnId()], replacement);
+                    }
+                }
             }
         }
+    }
+
+    private Operator createReplacementValue(ColumnMeta column) {
+        // trying to simulate mysql behavior below
+        Class<?> klass = column.getDataType().getJavaType();
+        Operator result;
+        if (Number.class.isAssignableFrom(klass)) {
+            result = new IntegerValue(0);
+        }
+        else if (String.class.isAssignableFrom(klass)) {
+            result = new StringValue("");
+        }
+        else if (Boolean.class.isAssignableFrom(klass)) {
+            result = new BooleanValue(false);
+        }
+        else {
+            result = new NullValue();
+        }
+        return result;
     }
     
 }

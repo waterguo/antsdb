@@ -920,4 +920,18 @@ public final class KeyMaker {
         }
     }
 
+    public static int decodeInt(long pKey) {
+        int prefix = Unsafe.getByte(pKey + 7) & 0xff;
+        if (prefix < 0x80) {
+            // negative number is not supported for now forgive my laziness.
+            throw new IllegalArgumentException();
+        }
+        int size = prefix & 0x7f;
+        if (size > 3) {
+            // anything larger than 0xffffff is not supported. forgive my laziness.
+            throw new IllegalArgumentException();
+        }
+        long value = (Unsafe.getLong(pKey) & 0xffffffffffffffl) >> (7 - size) * 8;
+        return (int)value;
+    }
 }

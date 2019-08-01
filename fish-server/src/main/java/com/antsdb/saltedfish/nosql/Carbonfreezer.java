@@ -27,37 +27,37 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author wgu0
  */
 class Carbonfreezer implements Runnable {
-	static Logger _log = UberUtil.getThisLogger();
-	
-	Humpback humpback;
-	
-	public Carbonfreezer(Humpback humpback) {
-		super();
-		this.humpback = humpback;
-	}
+    static Logger _log = UberUtil.getThisLogger();
+    
+    Humpback humpback;
+    
+    public Carbonfreezer(Humpback humpback) {
+        super();
+        this.humpback = humpback;
+    }
 
-	@Override
-	public synchronized void run() {
-		// carbonfreeze tablets
-		
-		try {
-		    long oldestTrxId = this.humpback.getLastClosedTransactionId();
-		    run(oldestTrxId, false);
-		}
-		catch (Exception x) {
-			_log.error("unexpected exception", x);
-		}
-		
-		// release unused transactions
+    @Override
+    public synchronized void run() {
+        // carbonfreeze tablets
+        
+        try {
+            long oldestTrxId = this.humpback.getLastClosedTransactionId();
+            run(oldestTrxId, false);
+        }
+        catch (Exception x) {
+            _log.error("unexpected exception", x);
+        }
+        
+        // release unused transactions
 
-		TransactionCollector.collect(humpback);
-	}
-	
-	public synchronized int run(long oldestTrxId, boolean force) throws IOException {
-	    _log.trace("starting carbonfreezing with trxid={} force={}", oldestTrxId, force);
-	    
-	    // carbonfreeze all ready tablets
-	    
+        TransactionCollector.collect(humpback);
+    }
+    
+    public synchronized int run(long oldestTrxId, boolean force) throws IOException {
+        _log.trace("starting carbonfreezing with trxid={} force={}", oldestTrxId, force);
+        
+        // carbonfreeze all ready tablets
+        
         int count = 0;
         for (GTable table:this.humpback.getTables()) {
             for (MemTablet i:table.memtable.getTablets()) {
@@ -89,5 +89,5 @@ class Carbonfreezer implements Runnable {
         }
         _log.trace("carbonfreezing is finished");
         return count;
-	}
+    }
 }

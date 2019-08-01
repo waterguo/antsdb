@@ -34,7 +34,6 @@ import com.antsdb.saltedfish.nosql.HumpbackSession;
  * @author *-xguo0<@
  */
 public class SystemParameters {
-    private SystemParameters parent;
     private Map<String, String> params = new HashMap<>();
     private Boolean autoCommit;
     private Integer lockTimeout;
@@ -42,9 +41,12 @@ public class SystemParameters {
     private Decoder requestDecoder;
     private Charset resultEncoder;
     private Humpback humpback;
+    private boolean strict;
     
     SystemParameters(SystemParameters parent) {
-        this.parent = parent;
+        for (Map.Entry<String, String> i:parent.params.entrySet()) {
+            set(i.getKey(), i.getValue());
+        }
     }
     
     SystemParameters(Humpback humpback) {
@@ -64,11 +66,11 @@ public class SystemParameters {
         if (value != null) {
             return value;
         }
-        return (this.parent == null) ? null : this.parent.get(key);
+        return value;
     }
 
     public void setPermanent(HumpbackSession hsession, String key, String value) {
-        if (parent != null) {
+        if (humpback == null) {
             // only top level one can set permanently
             throw new IllegalArgumentException();
         }
@@ -103,6 +105,7 @@ public class SystemParameters {
             return;
         }
         this.no_auto_value_on_zero = false;
+        this.strict = false;
         if (StringUtils.isEmpty(value)) {
             return;
         }
@@ -111,6 +114,10 @@ public class SystemParameters {
                 this.no_auto_value_on_zero = true;
             }
             else if (mode.equals("STRICT_TRANS_TABLES")) {
+                this.strict = true;
+            }
+            else if (mode.equals("STRICT_ALL_TABLES")) {
+                this.strict = true;
             }
             else {
                 throw new OrcaException("unknown sql mode " + mode);
@@ -176,10 +183,7 @@ public class SystemParameters {
      * @return
      */
     public boolean isNoAutoValueOnZero() {
-        if (this.no_auto_value_on_zero != null) {
-            return this.no_auto_value_on_zero;
-        }
-        return (this.parent != null) ? this.parent.isNoAutoValueOnZero() : false;
+        return (this.no_auto_value_on_zero != null) ? this.no_auto_value_on_zero : false;
     }
     
     /**
@@ -188,17 +192,11 @@ public class SystemParameters {
      * @return
      */
     public int getLockTimeout() {
-        if (this.lockTimeout != null) {
-            return this.lockTimeout;
-        }
-        return (this.parent != null) ? this.parent.getLockTimeout() : 50 * 1000;
+        return (this.lockTimeout != null) ? this.lockTimeout : 50 * 1000;
     }
     
     public boolean getAutoCommit() {
-        if (this.autoCommit != null) {
-            return this.autoCommit;
-        }
-        return (this.parent != null) ? this.parent.getAutoCommit() : true;
+        return (this.autoCommit != null) ? this.autoCommit : true;
     }
 
     /**
@@ -207,10 +205,7 @@ public class SystemParameters {
      * @return
      */
     public Decoder getRequestDecoder() {
-        if (this.requestDecoder != null) {
-            return this.requestDecoder;
-        }
-        return (this.parent != null) ? this.parent.getRequestDecoder() : Codecs.get("UTF-8");
+        return (this.requestDecoder != null) ? this.requestDecoder : Codecs.get("UTF-8");
     }
     
     /**
@@ -218,10 +213,7 @@ public class SystemParameters {
      * @return
      */
     public Charset getResultEncoder() {
-        if (this.resultEncoder != null) {
-            return this.resultEncoder;
-        }
-        return (this.parent != null) ? this.parent.getResultEncoder() : Charsets.UTF_8;
+        return (this.resultEncoder != null) ? this.resultEncoder : Charsets.UTF_8;
     }
     
     public String getDatabaseType() {
@@ -295,5 +287,9 @@ public class SystemParameters {
     public byte[] getSeed() {
         String seed = get("antsdb_auth_seed");
         return seed.getBytes();
+    }
+    
+    public boolean isStrict() {
+        return this.strict;
     }
 }

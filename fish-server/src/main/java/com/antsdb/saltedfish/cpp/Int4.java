@@ -15,8 +15,12 @@ package com.antsdb.saltedfish.cpp;
 
 import java.nio.ByteBuffer;
 
-public class Int4 {
+public final class Int4 extends BrutalMemoryObject {
     
+    public Int4(long addr) {
+        super(addr);
+    }
+
     public static final int get(long address) {
         int type = Unsafe.getByte(address);
         if (type != Value.FORMAT_INT4) {
@@ -85,6 +89,16 @@ public class Int4 {
     public static long negate(Heap heap, long pValue) {
         int value = get(heap, pValue);
         return allocSet(heap, -value);
+    }
+
+    @Override
+    public int getByteSize() {
+        return getSize();
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_INT4;
     }
 
 }

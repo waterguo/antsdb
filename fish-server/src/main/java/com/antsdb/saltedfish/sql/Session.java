@@ -24,13 +24,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.antlr.v4.runtime.CharStream;
-import org.antlr.v4.runtime.InputMismatchException;
-import org.antlr.v4.runtime.NoViableAltException;
-import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.antlr.v4.runtime.IntStream;
 import org.apache.commons.codec.Charsets;
 import org.slf4j.Logger;
 
@@ -39,9 +36,13 @@ import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 import com.antsdb.saltedfish.sql.command.FishParserFactory;
+import com.antsdb.saltedfish.sql.meta.MetadataService;
+import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.AsynchronousInsert;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
+import com.antsdb.saltedfish.sql.vdm.DropTable;
 import com.antsdb.saltedfish.sql.vdm.FishParameters;
+import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.Transaction;
@@ -53,7 +54,6 @@ import com.antsdb.saltedfish.util.UberUtil;
 
 public final class Session implements AutoCloseable {
     static Logger _log = UberUtil.getThisLogger();
-    static AtomicInteger _id = new AtomicInteger();
             
     Orca orca;
     Map<String, Object> variables = new ConcurrentHashMap<String, Object>();
@@ -70,11 +70,12 @@ public final class Session implements AutoCloseable {
     private long lastInsertId;
     AsynchronousInsert asyncExecutor;
     private HumpbackSession hsession;
-    public String remote;
     private SystemParameters config;
     private volatile Thread thread;
     private Object sql;
     ConcurrentSkipListMap<Long, Execution> slowOnes = new ConcurrentSkipListMap<>();
+    /** temporary table */
+    private Map<ObjectName, ObjectName> temps = new HashMap<>();
     
     public Session(Orca orca, SqlParserFactory fac, String user, String endpoint) {
         this.orca = orca;
@@ -82,6 +83,7 @@ public final class Session implements AutoCloseable {
         this.user = user;
         this.hsession = orca.getHumpback().createSession(endpoint + "/" + user);
         this.config = new SystemParameters(orca.config);
+        _log.trace("session id={} user={} endpoint={} is created", getId(), user, endpoint);
     }
     
     public Object run(String sql) throws SQLException {
@@ -228,11 +230,13 @@ public final class Session implements AutoCloseable {
         startTrx();
         
         // check the global statement cache
-        
         Script script = this.getOrca().getCachedStatement(cs.toString());
 
-        // parse it for real if it is not cached
+        // skip leading comments
+        skipComments(cs);
+        skipSpaces(cs);
         
+        // parse it for real if it is not cached
         if (script == null) {
             try {
                 if (cs.LA(1) == '.') {
@@ -242,19 +246,6 @@ public final class Session implements AutoCloseable {
                 else {
                     script = this.fac.parse(this, cs);
                 }
-            }
-            catch (ParseCancellationException x) {
-                if (x.getCause() instanceof InputMismatchException) {
-                    InputMismatchException xx = (InputMismatchException)x.getCause();
-                    String offend = xx.getOffendingToken().getText();
-                    throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
-                }
-                if (x.getCause() instanceof NoViableAltException) {
-                    NoViableAltException xx = (NoViableAltException)x.getCause();
-                    String offend = xx.getOffendingToken().getText();
-                    throw new OrcaException(x, "Invalid SQL. Offending token: {}", offend);
-                }
-                throw new OrcaException("Invalid SQL", x);
             }
             catch (CompileDdlException x) {
                 script = new Script(null, x.nParameters, 100, cs.toString());
@@ -269,6 +260,37 @@ public final class Session implements AutoCloseable {
         return script;
     }
     
+    private void skipSpaces(CharStream cs) {
+        for (;;) {
+            if (Character.isWhitespace(cs.LA(1))) {
+                cs.consume();
+            }
+            else {
+                break;
+            }
+        }
+    }
+    
+    private void skipComments(CharStream cs) {
+        int idx = cs.index();
+        if (cs.LA(1) == '/') {
+            cs.consume();
+            if (cs.LA(1) == '*') {
+                cs.consume();
+                for (;;) {
+                    int ch = cs.LA(1);
+                    cs.consume();
+                    if (ch == IntStream.EOF) break;
+                    if (ch == '/') {
+                        break;
+                    }
+                }
+                return;
+            }
+        }
+        cs.seek(idx);
+    }
+
     public Script parse(String text) {
         return parse(CharBuffer.wrap(text));
     }
@@ -329,6 +351,7 @@ public final class Session implements AutoCloseable {
 
     @Override
     public void close() {
+        _log.trace("closing session {}", getId());
         for (;;) {
             // already closed return
             if (this.isClosed.get()) {
@@ -353,7 +376,22 @@ public final class Session implements AutoCloseable {
         }
         rollback();
         unlockAll();
+        
+        // remove all temp. tables
+        for (ObjectName i:new ArrayList<>(temps.values())) {
+            try {
+                VdmContext ctx = new VdmContext(this, 0);
+                new DropTable(i, true).run(ctx, null);
+                commit();
+            }
+            catch (Exception x) {
+                _log.warn("unable to drop temp. table {}", i);
+            }
+        }
+        
+        // end
         this.orca.sessions.remove(this);
+        _log.trace("session {} is closed", getId());
     }
     
     public boolean isClosed() {
@@ -363,59 +401,59 @@ public final class Session implements AutoCloseable {
     private void endTransaction(boolean success) {
         waitForAsyncExecution();
         
-            // only if there is a transaction
+        // only if there is a transaction
+        
+        if (this.trx == null) {
+            return;
+        }
+
+        try {
+            // commit/rollback
             
-            if (this.trx == null) {
-                return;
-            }
-    
-            try {
-                // commit/rollback
-                
-                long trxid = trx.getTrxId(); 
-                long trxts = -1;
-                if (trxid < 0) {
-                    if (success) {
-                        trxts = this.orca.getTrxMan().getNewVersion();
-                        _log.trace("commit trxid={} trxts={}", trxid, trxts);
-                        this.orca.getHumpback().commit(this.hsession, trxid, trxts);
-                    }
-                    else {
-                        _log.trace("rollback trxid={} trxts={}", trxid);
-                        this.orca.getHumpback().rollback(this.hsession, trxid);;
-                    }
+            long trxid = trx.getTrxId(); 
+            long trxts = -1;
+            if (trxid < 0) {
+                if (success) {
+                    trxts = this.orca.getTrxMan().getNewVersion();
+                    _log.trace("commit trxid={} trxts={}", trxid, trxts);
+                    this.orca.getHumpback().commit(this.hsession, trxid, trxts);
                 }
                 else {
-                    _log.trace("autonomous trxid={}", trxid);
+                    _log.trace("rollback trxid={} trxts={}", trxid);
+                    this.orca.getHumpback().rollback(this.hsession, trxid);;
                 }
-    
-                // notify metadata service 
-                
-                if (trx.isDddl()) {
-                    this.orca.getMetaService().commit(trx, trxts);
-                }
-                
-                // release all locks
-                
+            }
+            else {
+                _log.trace("autonomous trxid={}", trxid);
+            }
+
+            // notify metadata service 
+            
+            if (trx.isDddl()) {
+                this.orca.getMetaService().commit(trx, trxts);
+            }
+            
+            // release all locks
+            
             trx.releaseAllLocks();            
             
             // reset auto commit 
             
             if (this.resetAutoCommit > 0) {
-                    this.resetAutoCommit--;
-                    if (this.resetAutoCommit == 0) {
-                        setAutoCommit(true);
-                    }
+                this.resetAutoCommit--;
+                if (this.resetAutoCommit == 0) {
+                    setAutoCommit(true);
+                }
             }
             
             // done
             
             this.trx.reset();
-            }
-            catch (Throwable x) {
-                _log.error("fatal!!!", x);
-                throw x;
-            }
+        }
+        catch (Throwable x) {
+            _log.error("fatal!!!", x);
+            throw x;
+        }
     }
     
     /**
@@ -502,29 +540,21 @@ public final class Session implements AutoCloseable {
     public void unlockTable(int owner, int tableId) {
         TableLock lock = this.tableLocks.get(tableId);
         if (lock == null) {
-            throw new OrcaException("lock is not found");
+            throw new OrcaException("lock is not found {} {}", owner, tableId);
         }
         
         // unlock
-        
         int level = lock.getLevel();
         lock.release(owner);
         
         // unlock all other session
-        
         if (level == LockLevel.EXCLUSIVE) {
-            for (Session i:this.orca.sessions) {
-                if (i == this) {
-                    continue;
-                }
-                i.unlockTable(owner, tableId);
-            }
+            this.orca.unlockExclusive(this.getId(), tableId);
         }
     }
     
     public boolean lockTable(int owner, int tableId, int level, boolean transactional) {
         // guaranteed getting a table lock
-        
         TableLock lock = this.tableLocks.get(tableId);
         if (lock == null) {
             TableLock newone = new TableLock(getId(), tableId);
@@ -535,13 +565,11 @@ public final class Session implements AutoCloseable {
         }
         
         // lock the sucker
-        
         if (!lock.acquire(owner, level, this.config.getLockTimeout())) {
             return false;
         }
         
         // is it transactional ?
-        
         if (transactional && (!lock.isTransactional())) {
             Transaction trx = getTransaction();
             trx.addLock(lock);
@@ -551,27 +579,8 @@ public final class Session implements AutoCloseable {
         }
         
         // for exclusive lock, we need to lock out all other session
-        
         if (level == LockLevel.EXCLUSIVE) {
-            List<Session> undo = new ArrayList<>();
-            boolean success = false;
-            try {
-                for (Session i:this.orca.sessions) {
-                    if (i == this) {
-                        continue;
-                    }
-                    i.lockTable(owner, tableId, LockLevel.EXCLUSIVE_BY_OTHER, false);
-                    undo.add(i);
-                }
-                success = true;
-            }
-            finally {
-                if (!success) {
-                    for (Session i:undo) {
-                        i.unlockTable(owner, tableId);
-                    }
-                }
-            }
+            this.orca.lockExclusive(this.getId(), tableId);
         }
         return true;
     }
@@ -712,5 +721,37 @@ public final class Session implements AutoCloseable {
 
     public HumpbackSession getHSession() {
         return this.hsession;
+    }
+
+    public void addTemporaryTable(TableMeta tableMeta) {
+        ObjectName realname = new ObjectName(
+                tableMeta.getNamespace().toLowerCase(), 
+                tableMeta.getExternalName().toLowerCase());
+        this.temps.put(realname, tableMeta.getObjectName());
+    }
+
+    public void removeTemporaryTable(TableMeta table) {
+        ObjectName realname = new ObjectName(
+                table.getNamespace().toLowerCase(), 
+                table.getExternalName().toLowerCase());
+        this.temps.remove(realname);
+    }
+    
+    public TableMeta getTable(String ns, String table) {
+        ObjectName name = new ObjectName(ns.toLowerCase(), table.toLowerCase());
+        ObjectName realname = this.temps.get(name);
+        MetadataService meta = this.orca.getMetaService();
+        TableMeta result = null;
+        if (realname != null) {
+            result = meta.getTable(getTransaction(), realname);
+        }
+        if (result == null) {
+            result = meta.getTable(getTransaction(), ns, table);
+        }
+        return result;
+    }
+
+    public TableMeta getTable(ObjectName name) {
+        return getTable(name.getNamespace(), name.getTableName());
     }
 }

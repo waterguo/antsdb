@@ -76,6 +76,7 @@ import com.antsdb.saltedfish.sql.vdm.RowKeyValue;
 import com.antsdb.saltedfish.sql.vdm.TableRangeScan;
 import com.antsdb.saltedfish.sql.vdm.TableScan;
 import com.antsdb.saltedfish.sql.vdm.ThroughGrouper;
+import com.antsdb.saltedfish.sql.vdm.ToString;
 import com.antsdb.saltedfish.sql.vdm.Union;
 import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CodingError;
@@ -114,10 +115,10 @@ public class Planner {
     static {
         KEY.setColumnId(-1);
         KEY.setColumnName("*key");
-        KEY.setType(DataType.binary());
+        KEY.setType(DataType.varchar());
         ROWID.setColumnId(0);
         ROWID.setColumnName("*rowid");
-        ROWID.setType(DataType.longtype());
+        ROWID.setType(DataType.binary());
     }
 
     public Planner(GeneratorContext ctx) {
@@ -246,6 +247,16 @@ public class Planner {
     }
 
     public OutputField addOutputField(String name, Operator expr) {
+        // remove the system column prefix if it is wanted in the query result. it is because 
+        // Helper.getColumnCount() will hide the columns start with '*'
+        if (name.startsWith("*")) {
+            name = name.substring(1);
+            if (name.equals("key")) {
+                // pure hacks
+                expr = new ToString(expr);
+            }
+        }
+        
         adjustOpMatch(expr);
         OutputField field = new OutputField(name, expr);
         this.fields.add(field);
@@ -501,6 +512,7 @@ public class Planner {
         }
         int pos = indexFields(path.previous);
         for (PlannerField i : path.to.fields) {
+            i.noCache = this.noCache;
             i.index = pos++;
         }
         return pos;
@@ -546,13 +558,11 @@ public class Planner {
         for (Node node : this.nodes.values()) {
             
             // skip the parent node if it is not used
-            
             if (node.isParent && !node.isUsed) {
                 continue;
             }
             
             // if node already been in the path, next
-
             if (previous != null) {
                 if (previous.exists(node)) {
                     continue;
@@ -560,23 +570,19 @@ public class Planner {
             }
 
             // outer join node cant start the query
-            
             if (node.isOuter && (previous == null)) {
                 continue;
             }
             
             // outer join node can't replace existing one
-
             if (node.isOuter && (link != null)) {
                 continue;
             }
 
             // build the link
-
             Link result = build(previous, node);
 
             // keep the link with lowest score
-
             if (link == null) {
                 link = result;
             }
@@ -585,20 +591,17 @@ public class Planner {
             }
 
             // don't score the rest if this is the parent query node
-
             if (node.isParent) {
                 break;
             }
         }
 
         // end of nodes
-
         if (link == null) {
             return null;
         }
 
         // if not eof go deeper
-
         link.previous = previous;
         Link result = build(link);
         return (result != null) ? result : link;
@@ -611,8 +614,8 @@ public class Planner {
      * @param link
      * @param filters
      */
-    private void buildNodeJoinConditions(Link previous, Link link, List<ColumnFilter> filters) {
-        for (ColumnFilter i : filters) {
+    private void buildNodeJoinConditions(Link previous, Link link, RowSet tqs) {
+        for (ColumnFilter i : tqs.conditions) {
             if (i.isConstant) {
                 continue;
             }
@@ -645,9 +648,9 @@ public class Planner {
         return new OpAnd(x, y);
     }
 
-    private Operator buildNodeFilters(Link link, List<ColumnFilter> filters) {
+    private Operator buildNodeFilters(Link link, RowSet tqs) {
         List<ColumnFilter> result = new ArrayList<>();
-        for (ColumnFilter i : filters) {
+        for (ColumnFilter i : tqs.conditions) {
             if (i.isConstant && !link.consumed.contains(i)) {
                 result.add(i);
             }
@@ -719,9 +722,9 @@ public class Planner {
     }
 
     Link buildTableScan(Link previous, Node node) {
-        Link result = build_(previous, node, Collections.emptyList());
+        Link result = build_(previous, node, null);
         Operator filter = null;
-        for (List<ColumnFilter> i:node.union) {
+        for (RowSet i:node.union) {
             filter = buildOr(filter, buildNodeFilters(result, i));
             buildNodeJoinConditions(previous, result, i);
         }
@@ -737,37 +740,48 @@ public class Planner {
         // no columns filters found, just build the full table scan
         
         if (node.union.size() <= 0) {
-            return build_(previous, node, Collections.emptyList());
+            return build_(previous, node, null);
         }
         
         // union node, only proceed is it produced two non table scan
 
         List<Link> union = new ArrayList<>();
-        
-        for (List<ColumnFilter> i:node.union) {
-            Link ii = build_(previous, node, i);
-            
-            // table level filter. only for those not used in seek/scan and the
-            // right operand is constant
-
-            Operator filter = buildNodeFilters(ii, i);
-            if (filter != null) {
-                ii.maker = new Filter(ii.maker, filter, ctx.getNextMakerId());
+        boolean foundFullTableScan = false;
+        for (RowSet i:node.union) {
+            if (i.conditions.isEmpty()) {
+                foundFullTableScan = true;
             }
-
-            // join conditions
-
-            buildNodeJoinConditions(previous, ii, i);
-            
-            // build  union
-            
-            union.add(ii);
+        }
+        if (!foundFullTableScan) {
+            for (RowSet i:node.union) {
+                // skip if this is a full table scan, we will produce full table scan anyway
+                if (i.conditions.isEmpty()) {
+                    continue;
+                }
+                Link ii = build_(previous, node, i);
+                
+                // table level filter. only for those not used in seek/scan and the
+                // right operand is constant
+    
+                Operator filter = buildNodeFilters(ii, i);
+                if (filter != null) {
+                    ii.maker = new Filter(ii.maker, filter, ctx.getNextMakerId());
+                }
+    
+                // join conditions
+    
+                buildNodeJoinConditions(previous, ii, i);
+                
+                // build  union
+                
+                union.add(ii);
+            }
         }
 
         // find the better plan between full table scan and union
         
         Link tablescan = buildTableScan(previous, node);
-        if (tablescan.getScore() <= getScore(union)) {
+        if (union.isEmpty() || tablescan.getScore() <= getScore(union)) {
             result = tablescan;
         }
         else {
@@ -826,24 +840,21 @@ public class Planner {
         return result;
     }
     
-    Link build_(Link previous, Node node, List<ColumnFilter> filters) {
+    Link build_(Link previous, Node node, RowSet tqs) {
         Link link = null;
 
         // node is a record from outer query
-
         if (node.isParent) {
             link = new Link(node);
             link.maker = new MasterRecordCursorMaker(this.rawMeta.parent, ctx.getNextMakerId());
         }
 
         // try all keys/indexes
-
         if (link == null) {
-            link = tryKeys(previous, node, filters);
+            link = tryKeys(previous, node, tqs);
         }
 
         // fall back to full table scan
-
         if (link == null) {
             link = new Link(node);
             if (node.table != null) {
@@ -860,7 +871,6 @@ public class Planner {
         }
 
         // alias support
-
         /*
          * if ((node.table == null) ||
          * !node.alias.equals(node.table.getObjectName())) { link.maker = new
@@ -868,30 +878,30 @@ public class Planner {
          */
 
         // select for update support
-
         if (this.forUpdate) {
             GTable gtable = this.orca.getHumpback().getTable(node.table.getHtableId());
             link.maker = new RecordLocker(link.maker, node.table, gtable);
         }
 
         // all done
-
         return link;
     }
 
-    private Link tryKeys(Link previous, Node node, List<ColumnFilter> filters) {
+    private Link tryKeys(Link previous, Node node, RowSet tqs) {
         if (node.table == null) {
             return null;
         }
 
         // no filters, can't do table range scan
-
+        if (tqs == null) {
+            return null;
+        }
+        List<ColumnFilter> filters = tqs.conditions;
         if (filters.size() <= 0) {
             return null;
         }
 
         // no primary key, can't do table range scan
-
         Link best = null;
         PrimaryKeyMeta pk = node.table.getPrimaryKey();
         if (pk != null) {
@@ -1052,7 +1062,7 @@ public class Planner {
         }
     }
 
-    void analyze() {
+    public void analyze() {
         // analyze conditions
 
         if (this.where != null) {
@@ -1233,5 +1243,13 @@ public class Planner {
             });
         }
         return result.get();
+    }
+    
+    public Map<ObjectName, Node> getNodes() {
+        return this.nodes;
+    }
+    
+    public Operator getWhere() {
+        return this.where;
     }
 }

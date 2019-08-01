@@ -13,13 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.minke;
 
-import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.ConfigService;
@@ -30,12 +31,15 @@ import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberFormatter;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
+public final class MinkeCache implements LogSpan, StorageEngine {
+    static final Logger _log = UberUtil.getThisLogger();
+    
     /* an empty range goes from 0 to ff */
     static final Range EMPTY_RANGE = new Range(KeyBytes.getMinKey(),true, KeyBytes.getMaxKey(), true);
     
@@ -45,6 +49,7 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
     ConcurrentMap<Integer, MinkeCacheTable> tableById = new ConcurrentHashMap<>();
     boolean isMutable = true;
     private int verificationMode;
+    CacheStrategy strategy = new AllButBlobStrategy();
     
     public MinkeCache(StorageEngine storage) {
         this.stoarge = storage;
@@ -54,6 +59,7 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
     public void open(File home, ConfigService config, boolean isMutable) throws Exception {
         this.minke = new Minke();
         this.isMutable = isMutable;
+        this.strategy = config.getCacheStrategy();
         config.getProperties().setProperty("minke.size", String.valueOf(config.getCacheSize()));
         this.verificationMode = config.getCacheVerificationMode();
         this.minke.open(home, config, isMutable);
@@ -63,18 +69,9 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
     public StorageTable getTable(int id) {
         MinkeCacheTable result = this.tableById.get(id);
         if (result == null) {
-            synchronized(this) {
-                MinkeTable mtable = (MinkeTable)this.minke.getTable(id);
-                if (mtable != null) {
-                    StorageTable stable = this.getStorage().getTable(id);
-                    if (stable != null) {
-                        result = new MinkeCacheTable(this, mtable, stable);
-                        this.tableById.put(id, result);
-                    }
-                    else {
-                        throw new MinkeException("minke and storage are out of sync: " + id);
-                    }
-                }
+            MinkeTable mtable = (MinkeTable)this.minke.getTable(id);
+            if (mtable != null) {
+                _log.warn("minke and humpback are out of sync for table: {}", id);
             }
         }
         return result;
@@ -82,9 +79,12 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public StorageTable createTable(SysMetaRow meta) {
+        // we dont care temp. tables
+        if (meta.getTableId() < 0) return null;
+        
         StorageTable stable = this.stoarge.createTable(meta);
         MinkeTable mtable = (MinkeTable)this.minke.createTable(meta);
-        MinkeCacheTable result = new MinkeCacheTable(this, mtable, stable);
+        MinkeCacheTable result = new MinkeCacheTable(this, mtable, stable, meta);
         this.tableById.put(meta.getTableId(), result);
         // set an empty range so following inserts doesn't hit hbase
         mtable.putRange(EMPTY_RANGE);
@@ -93,8 +93,13 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public boolean deleteTable(int id) {
-        boolean result = this.stoarge.deleteTable(id);
+        boolean result = true;
+        if (id >= 0) {
+            // only harass hbase when this is not a temporary table
+            this.stoarge.deleteTable(id);
+        }
         this.minke.deleteTable(id);
+        this.tableById.remove(id);
         return result;
     }
 
@@ -222,15 +227,22 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public void syncTable(SysMetaRow row) {
-        this.minke.syncTable(row);
-        this.stoarge.syncTable(row);
-        if (row.isDeleted()) {
+        if (row.getTableId() < 0) {
+            // we dont care about temporary table
             return;
         }
-        MinkeTable mtable = (MinkeTable)this.minke.getTable(row.getTableId());
-        StorageTable stable = this.stoarge.getTable(row.getTableId());
-        MinkeCacheTable mctable = new MinkeCacheTable(this, mtable, stable);
-        this.tableById.put(row.getTableId(), mctable);
+        this.minke.syncTable(row);
+        this.stoarge.syncTable(row);
+        MinkeCacheTable mctable = this.tableById.get(row.getTableId());
+        if (row.isDeleted() && mctable != null) {
+            this.tableById.remove(row.getTableId());
+        }
+        else if (!row.isDeleted() && mctable == null) {
+            MinkeTable mtable = (MinkeTable)this.minke.getTable(row.getTableId());
+            StorageTable stable = this.stoarge.getTable(row.getTableId());
+            mctable = new MinkeCacheTable(this, mtable, stable, row);
+            this.tableById.put(row.getTableId(), mctable);
+        }
     }
 
     @Override

@@ -13,7 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
-public class FishBool {
+public final class FishBool extends BrutalMemoryObject {
+    public FishBool(long addr) {
+        super(addr);
+    }
+
     public static final boolean get(Heap heap, long address) {
         if (address == 0) {
             throw new IllegalArgumentException();
@@ -35,6 +39,16 @@ public class FishBool {
 
     public final static int getSize(long pValue) {
         return 2;
+    }
+
+    @Override
+    public int getByteSize() {
+        return 2;
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_BOOL;
     }
 
 }

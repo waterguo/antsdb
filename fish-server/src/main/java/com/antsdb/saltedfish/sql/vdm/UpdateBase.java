@@ -82,7 +82,7 @@ abstract class UpdateBase extends Statement {
             heap.reset(heapMark);
             // get the __latest__ version of the row 
 
-            Row oldRow = this.gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey);
+            Row oldRow = this.gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey, 0);
             if (oldRow == null) {
                 // row could be deleted between query and here
                 return false;
@@ -112,7 +112,7 @@ abstract class UpdateBase extends Statement {
                 else {
                     if (pValue != 0) {
                         BlobReference blobref = BlobReference.alloc(heap, pKey, pValue);
-                        newRow.setFieldAddress(column.getColumnId(), blobref.addr);
+                        newRow.setFieldAddress(column.getColumnId(), blobref.getAddress());
                         blobRow.setFieldAddress(column.getColumnId(), pValue);
                     }
                     else {
@@ -151,9 +151,17 @@ abstract class UpdateBase extends Statement {
                 // update blob
                 if (blobRow != null) {
                     if (primaryKeyChange) {
-                        long pOldBlobRow = this.blobTable.get(trx.getTrxId(), trx.getTrxTs(), oldRow.getKeyAddress());
+                        long pOldBlobRow = this.blobTable.get(
+                                trx.getTrxId(), 
+                                trx.getTrxTs(), 
+                                oldRow.getKeyAddress()
+                                ,0);
                         if (pOldBlobRow != 0) {
-                            error = this.blobTable.deleteRow(ctx.getHSession(), trx.getTrxId(), pOldBlobRow, timeout);
+                            error = this.blobTable.deleteRow(
+                                    ctx.getHSession(), 
+                                    trx.getTrxId(), 
+                                    pOldBlobRow, 
+                                    timeout);
                             if (error != HumpbackError.SUCCESS) {
                                 throw new OrcaException(error);
                             }

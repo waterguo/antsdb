@@ -41,13 +41,13 @@ abstract class DeleteBase extends Statement {
     }
 
     protected boolean deleteSingleRow(VdmContext ctx, Parameters params, long pKey) {
-            Transaction trx = ctx.getTransaction();
-            int timeout = ctx.getSession().getConfig().getLockTimeout();
+        Transaction trx = ctx.getTransaction();
+        int timeout = ctx.getSession().getConfig().getLockTimeout();
         try (Heap heap = new BluntHeap()) {
             heap.reset(0);
             Row row = null;
             long trxid = trx.getGuaranteedTrxId();
-            row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
+            row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey, 0);
             HumpbackError error = this.gtable.deleteRow(ctx.getHSession(), trxid, row.getAddress(), timeout);
             if (error == HumpbackError.SUCCESS) {
                 if (this.blobTable != null) {
@@ -68,5 +68,4 @@ abstract class DeleteBase extends Statement {
             }
         }
     }
-
 }

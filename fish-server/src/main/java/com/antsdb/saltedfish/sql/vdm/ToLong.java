@@ -27,21 +27,23 @@ public class ToLong extends UnaryOperator {
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long addrVal = this.upstream.eval(ctx, heap, params, pRecord);
-        Object val = FishObject.get(heap, addrVal);
+        final Object val = FishObject.get(heap, addrVal);
+        Long result = null;
         if (val == null) {
         }
         else if (val instanceof Long) {
         }
         else if (val instanceof Integer) {
-            val = Long.valueOf((Integer)val);
+            result = Long.valueOf((Integer)val);
         }
         else if (val instanceof String) {
-            val = Long.valueOf((String)val);
+            result = ctx.strict(()-> { return Long.parseLong((String)val); });
+            if (result == null) result = 0l;
         }
         else {
             throw new CodingError();
         }
-        return FishObject.allocSet(heap, val);
+        return FishObject.allocSet(heap, result);
     }
 
     @Override

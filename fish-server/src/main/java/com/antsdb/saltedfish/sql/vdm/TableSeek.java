@@ -89,7 +89,7 @@ public class TableSeek extends CursorMaker implements Seekable {
             long pKey = boundary.getKeyAddress();
             GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
             Transaction trx = ctx.getTransaction();
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey, 0);
             if (pRow != 0) {
                 ctx.getCursorStats(makerId).incrementAndGet();
             }

@@ -49,6 +49,7 @@ import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
@@ -77,6 +78,7 @@ final class Helper {
     public static final byte[] SYS_COLUMN_MISC_BYTES = Bytes.toBytes("*misc");    
     public static final byte[] SYS_COLUMN_SIZE_BYTES = Bytes.toBytes("*size");
     public static final byte[] SYS_COLUMN_HASH_BYTES = Bytes.toBytes("*hash");
+    public static final byte[] SYS_COLUMN_LOG_POINTER_BYTES = Bytes.toBytes("*lp");
 
     public static Map<String, byte[]> toMap(Result r) {
         Map<String, byte[]> row = new HashMap<>();
@@ -94,13 +96,19 @@ final class Helper {
     }
 
     public static Put toPut(Mapping mapping, Row row) {
+        return toPut(mapping, row, 0);
+    }
+    
+    public static Put toPut(Mapping mapping, Row row, long lpLogEntry) {
         byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
         Put put = new Put(key);
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(row.getLength()));
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_HASH_BYTES, Bytes.toBytes(row.getHash()));
+        if (lpLogEntry != 0) {
+            put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_LOG_POINTER_BYTES, Bytes.toBytes(lpLogEntry));
+        }
         
         // populate fields
-        
         int maxColumnId = row.getMaxColumnId();
         byte[] types = new byte[maxColumnId+1];
         for (int i=0; i<=maxColumnId; i++) {
@@ -112,7 +120,10 @@ final class Helper {
                 put.addColumn(mapping.getUserFamily(), mapping.getColumn(i), value);
             }
             else if (pValue != 0) {
-                String msg = String.format("%d:%s", mapping.tableId, KeyBytes.toString(row.getKeyAddress()));
+                String msg = String.format("tableId=%d key=%s lp=%x",
+                        mapping.tableId, 
+                        KeyBytes.toString(row.getKeyAddress()),
+                        lpLogEntry);
                 throw new IllegalArgumentException(msg);
             }
         }
@@ -122,7 +133,17 @@ final class Helper {
         return put;
     }
     
+    public static Put toPut(IndexEntry2 entry) {
+        long pIndexLine = entry.getIndexLineAddress();
+        IndexLine line = IndexLine.from(pIndexLine);
+        return toPut(line, entry.getSpacePointer());
+    }
+    
     public static Put toPut(IndexLine line) {
+        return toPut(line, 0);
+    }
+    
+    public static Put toPut(IndexLine line, long lpLogEntry) {
         byte[] key = Helper.antsKeyToHBase(line.getKey());
         byte[] rowKey = Helper.antsKeyToHBase(line.getRowKey());
         byte[] misc = new byte[1];
@@ -131,6 +152,9 @@ final class Helper {
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_INDEXKEY_BYTES, rowKey);
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_MISC_BYTES, misc);
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(line.getRawSize()));
+        if (lpLogEntry != 0) {
+            put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_LOG_POINTER_BYTES, Bytes.toBytes(lpLogEntry));
+        }
         return put;
     }
 
@@ -231,7 +255,7 @@ final class Helper {
     }
     
     public static boolean existsTable(Connection conn, String ns, String name) {
-            return existsTable(conn, TableName.valueOf(ns, name));            
+        return existsTable(conn, TableName.valueOf(ns, name));            
     }
 
     public static void createNamespace(Connection connection, String namespace) {        

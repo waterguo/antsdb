@@ -38,6 +38,7 @@ import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
  */
 public class BlobReorderReplayer extends ReplayRelay {
     List<Entry> buf = new ArrayList<>();
+    volatile long lp = Long.MAX_VALUE;
     
     private static class Entry {
         long pEntry;
@@ -115,7 +116,7 @@ public class BlobReorderReplayer extends ReplayRelay {
         Row row = Row.fromMemoryPointer(pRow, 0);
         if (hasBlobRef(row)) {
             buf.add(new Entry(entry.addr, sp, trxId, tableId, pRow, entry.getType()));
-            return;
+            updateLp();
         }
         else {
             for (int i=0; i<this.buf.size(); i++) {
@@ -123,6 +124,7 @@ public class BlobReorderReplayer extends ReplayRelay {
                 if (isPair(ii, entry.getType(), trxId, tableId, row.getKeyAddress())) {
                     replay(LogEntry.getEntry(ii.sp, ii.pEntry));
                     this.buf.remove(i);
+                    updateLp();
                     break;
                 }
             }
@@ -172,12 +174,7 @@ public class BlobReorderReplayer extends ReplayRelay {
     }
 
     public long getLogPointer() {
-        long result = Long.MAX_VALUE;
-        for (Entry i:this.buf) {
-            long lpParentEntry = i.sp;
-            result = Math.min(result, lpParentEntry);
-        }
-        return result;
+        return this.lp;
     }
 
     @Override
@@ -193,5 +190,15 @@ public class BlobReorderReplayer extends ReplayRelay {
                 i.remove();
             }
         }
+        updateLp();
+    }
+    
+    private void updateLp() {
+        long minLp = Long.MAX_VALUE;
+        for (Entry i:this.buf) {
+            minLp = Math.min(minLp, i.sp); 
+        }
+        this.lp = minLp;
+        return;
     }
 }

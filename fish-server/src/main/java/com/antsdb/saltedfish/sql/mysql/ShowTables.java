@@ -102,6 +102,9 @@ public class ShowTables extends View {
         }
         while (iter.next()) {
             SysTableRow row = new SysTableRow(iter.getRow());
+            if (row.isTemproray()) {
+                continue;
+            }
             if (!row.getNamespace().equalsIgnoreCase(ns)) {
                 continue;
             }

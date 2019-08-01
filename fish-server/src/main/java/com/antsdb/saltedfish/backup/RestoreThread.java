@@ -101,7 +101,6 @@ class RestoreThread extends Thread {
                         stmt.setObject(i+1, value);
                     }
                     stmt.addBatch();
-                    count++;
                 }
                 stmt.executeBatch();
                 this.count += rows.size();

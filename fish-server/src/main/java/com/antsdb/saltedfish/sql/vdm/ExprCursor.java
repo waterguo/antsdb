@@ -60,7 +60,7 @@ public class ExprCursor extends CursorWithHeap {
         //  if this is group end, well it is getting complex
         
         if (Record.isGroupEnd(pRecUpstream)) {
-            	if (!this.isEmptyCursor) {
+            if (!this.isEmptyCursor) {
                 // group end record doesn't produce anything.
                 resetAggregationFunctions(pRecUpstream);
                 return pRecUpstream;
@@ -94,9 +94,10 @@ public class ExprCursor extends CursorWithHeap {
         return "Aggregator";
     }
 
-	private long populateRecord(long pRecord) {
+    private long populateRecord(long pRecord) {
         long pResult = newRecord();
         Heap heap = newHeap();
+        Record.setKey(pResult, Record.getKey(pRecord));
         for (int i=0; i<this.exprs.size(); i++) {
             Operator it = this.exprs.get(i);
             long pValue = it.eval(ctx, heap, params, pRecord);

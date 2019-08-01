@@ -32,6 +32,7 @@ import com.antsdb.saltedfish.cpp.SkipListScanner;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
@@ -66,7 +67,6 @@ public final class MinkePage implements Comparable<MinkePage> {
     FishSkipList rows;
     FishSkipList ranges;
     AtomicLong hit = new AtomicLong();
-    AtomicInteger gate = new AtomicInteger();
     AtomicLong lastAccess = new AtomicLong();
     Exception callstack = null;
     private KeyBytes keyStart;
@@ -81,7 +81,6 @@ public final class MinkePage implements Comparable<MinkePage> {
     /** manage the split concurrency. without this, concurrent split on the same page leads to corrupted 
      * data structure 
      */
-    volatile int splitCounter;
     
 
     static enum ScanType {
@@ -196,8 +195,8 @@ public final class MinkePage implements Comparable<MinkePage> {
         public long getIndexRowKeyPointer() {
             long pValue = this.upstream.getValuePointer();
             int oRowKey = Unsafe.getInt(pValue);
-            if (oRowKey == 0) {
-                return 0;
+            if (oRowKey <= 1) {
+                return oRowKey;
             }
             return this.base + oRowKey;
         }
@@ -319,7 +318,6 @@ public final class MinkePage implements Comparable<MinkePage> {
         this.keyEnd = null;
         this.hit.set(0);
         this.lastAccess.set(0);
-        this.gate.set(0);
         this.callstack = null;
         this.garbageTime = 0;
     }
@@ -329,7 +327,6 @@ public final class MinkePage implements Comparable<MinkePage> {
     }
     
     long put(VaporizingRow row) {
-        this.gate.incrementAndGet();
         try {
             long pKey = row.getKeyAddress();
             ensureMutable(pKey);
@@ -346,16 +343,21 @@ public final class MinkePage implements Comparable<MinkePage> {
             return pRow;
         }
         finally {
-            this.gate.decrementAndGet();
         }
     }
 
     public long get(long pKey) {
+        return get(pKey, true);
+    }
+    
+    public long get(long pKey, boolean track) {
         long result = 0;
         long pHead = this.rows.get(pKey);
         if (pHead != 0) {
             int oRow = Unsafe.getIntVolatile(pHead);
-            trackRead();
+            if (track) {
+                trackRead();
+            }
             if (oRow <= 1) {
                 return oRow;
             }
@@ -381,7 +383,6 @@ public final class MinkePage implements Comparable<MinkePage> {
     }
 
     long put(Row row) {
-        this.gate.incrementAndGet();
         try {
             long pKey = row.getKeyAddress();
             ensureMutable(pKey);
@@ -397,7 +398,6 @@ public final class MinkePage implements Comparable<MinkePage> {
             return heap.getAddress(oNewRow);
         }
         finally {
-            this.gate.decrementAndGet();
         }
     }
 
@@ -410,7 +410,6 @@ public final class MinkePage implements Comparable<MinkePage> {
     }
     
     private void delete_(long pKey, int value) {
-        this.gate.incrementAndGet();
         try {
             ensureMutable(pKey);
             for (;;) {
@@ -423,12 +422,10 @@ public final class MinkePage implements Comparable<MinkePage> {
             trackWrite();
         }
         finally {
-            this.gate.decrementAndGet();
         }
     }
     
     public long putIndex(long pIndexKey, long pRowKey, byte misc) {
-        this.gate.incrementAndGet();
         try {
             ensureMutable(pIndexKey);
             KeyBytes rowkey = KeyBytes.create(pRowKey);
@@ -445,7 +442,6 @@ public final class MinkePage implements Comparable<MinkePage> {
             }
         }
         finally {
-            this.gate.decrementAndGet();
         }
     }
 
@@ -507,12 +503,13 @@ public final class MinkePage implements Comparable<MinkePage> {
         }
     }
     
-    public Scanner scanAll() {
+    public Scanner scanAll(long options) {
         SkipListScanner upstream = this.rows.scan(0, true, 0, true);
         if (upstream == null) {
             return null;
         }
         Scanner scanner = new Scanner(upstream, this);
+        scanner.skipDeletion = !ScanOptions.isShowDeleteMarkOn(options);
         return scanner;
     }
 
@@ -757,7 +754,6 @@ public final class MinkePage implements Comparable<MinkePage> {
         if (!value.isValid() || value.isEmpty()) {
             throw new IllegalArgumentException();
         }
-        this.gate.incrementAndGet();
         try {
             /*
              * suppose incoming range is f, starting f1 ending f2
@@ -776,7 +772,6 @@ public final class MinkePage implements Comparable<MinkePage> {
             return result;
         }
         finally {
-            this.gate.decrementAndGet();
         }
     }
 
@@ -862,6 +857,9 @@ public final class MinkePage implements Comparable<MinkePage> {
         return pRange;
     }
 
+    /**
+     * free the page so that mutation is not allowed. 
+     */
     public void freeze() {
         if (this.heap != null) {
             int usage = this.heap.freeze();
@@ -872,6 +870,7 @@ public final class MinkePage implements Comparable<MinkePage> {
     public void setEndKey(long pKey) {
         this.keyEnd = KeyBytes.alloc(pKey);
         this.pEndKey = this.keyEnd.getAddress();
+        _log.debug("change end key of page {} to {}", hex(this.id), KeyBytes.toString(pKey));
     }
 
     public KeyBytes getEndKey() {
@@ -1110,6 +1109,24 @@ public final class MinkePage implements Comparable<MinkePage> {
         return this == that;
     }
 
+    public Range findHigherRange(long pKey, int mark) {
+        if (mark <= NONE) {
+            long pRange = this.ranges.floor(pKey);
+            if (pRange != 0) {
+                Range range = toRange(pRange);
+                if (Range.compare(range.pKeyStart, range.startMark, pKey, mark) > 0) {
+                    return range;
+                }; 
+            }
+        }
+        long pRange = this.ranges.higher(pKey);
+        Range range = toRange(pRange);
+        if (range == null) {
+            return null;
+        }
+        return (Range.compare(range.pKeyStart, range.startMark, pKey, mark) > 0) ? range : null;
+    }
+    
     public Range findCeilingRange(long pKey, int mark) {
         long pRange = this.ranges.floor(pKey);
         if (pRange != 0) {

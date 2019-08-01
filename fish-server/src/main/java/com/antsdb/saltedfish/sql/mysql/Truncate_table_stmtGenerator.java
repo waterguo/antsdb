@@ -24,6 +24,12 @@ import com.antsdb.saltedfish.sql.vdm.TruncateTable;
 public class Truncate_table_stmtGenerator extends DdlGenerator<Truncate_table_stmtContext>{
 
     @Override
+    public boolean isTemporaryTable(GeneratorContext ctx, Truncate_table_stmtContext rule) {
+        ObjectName name = TableName.parse(ctx, rule.table_name_());
+        return isTemporaryTable(ctx, name);
+    }
+
+    @Override
     public Instruction gen(GeneratorContext ctx, Truncate_table_stmtContext rule) throws OrcaException {
         ObjectName name = TableName.parse(ctx, rule.table_name_());
         return new TruncateTable(name);

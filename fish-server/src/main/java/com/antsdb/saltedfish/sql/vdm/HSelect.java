@@ -54,7 +54,7 @@ public class HSelect extends View {
         ExprCursor result = new ExprCursor(meta, upstream, params, new AtomicLong());
         result.exprs = new ArrayList<>();
         for (FieldMeta field:meta.getColumns()) {
-            ToString op = new ToString(new FieldValue(field, result.exprs.size()));
+            Operator op = new ToString(new FieldValue(field, result.exprs.size()));
             result.exprs.add(op);
         }
         return result;

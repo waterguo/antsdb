@@ -47,14 +47,18 @@ public class DbUtils {
     public static List<Map<String, Object>> rows(Connection conn, String sql) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             try (ResultSet rs =stmt.executeQuery(sql)) {
-                List<Map<String, Object>> result = new ArrayList<>();
-                while(rs.next()) {
-                    Map<String, Object> row = toRow(rs);
-                    result.add(row);
-                }
-                return result;
+                return rows(rs);
             }
         }
+    }
+    
+    public static List<Map<String, Object>> rows(ResultSet rs) throws SQLException {
+        List<Map<String, Object>> result = new ArrayList<>();
+        while(rs.next()) {
+            Map<String, Object> row = toRow(rs);
+            result.add(row);
+        }
+        return result;
     }
     
     public static Map<String, Object> firstRow(Connection conn, String sql) throws SQLException {

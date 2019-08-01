@@ -23,6 +23,7 @@ public class CreateTable extends Statement {
     ObjectName tableName;
     private String charset;
     private String engine;
+    private boolean isTemporary;
     
     public CreateTable(ObjectName tableName) {
         super();
@@ -47,20 +48,23 @@ public class CreateTable extends Statement {
         Transaction trx = ctx.getTransaction();
         
         // create metadata
-        
         Checks.tableNotExist(ctx.getSession(), this.tableName);
         TableMeta tableMeta = new TableMeta(ctx.getOrca(), this.tableName);
         tableMeta.setNamespace(ns);
         tableMeta.setCharset(this.charset);
         tableMeta.setEngine(this.engine);
+        if (this.isTemporary) {
+            String name = "#" + ctx.getSession().getId() + "-" + this.tableName.getTableName();
+            tableMeta.setTableName(name);
+            tableMeta.setExternalName(this.tableName.getTableName());
+            tableMeta.setHtableId(-tableMeta.getId());
+        }
+        else {
+            tableMeta.setExternalName(tableMeta.getTableName());
+        }
         ctx.getOrca().getMetaService().addTable(ctx.getHSession(), trx, tableMeta);
         
-        // find a good non-conflict name
-        
-        tableMeta.setExternalName(tableMeta.getTableName());
-        
         // create physical table
-
         if (Orca.SYSNS.equals(tableName.getNamespace())) {
             if (humpback.getTable(tableName.getNamespace(), tableMeta.getHtableId()) == null) {
                 humpback.createTable(
@@ -80,7 +84,14 @@ public class CreateTable extends Statement {
         }
         
         // done
+        if (this.isTemporary) {
+            ctx.getSession().addTemporaryTable(tableMeta);
+        }
         
         return null;
+    }
+
+    public void setTemporary(boolean value) {
+        this.isTemporary = value;
     }
 }

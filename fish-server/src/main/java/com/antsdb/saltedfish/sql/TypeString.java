@@ -22,6 +22,6 @@ import com.antsdb.saltedfish.cpp.Value;
 public class TypeString extends DataType {
 
     public TypeString(String name, int sqlType, int length) {
-        super(name, length, 0, sqlType, String.class, Value.TYPE_STRING);
+        super(name, length, 0, sqlType, String.class, Value.TYPE_STRING, Weight.VARCHAR);
     }
 }

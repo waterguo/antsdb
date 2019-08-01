@@ -24,6 +24,7 @@ import sun.misc.Unsafe;
 import org.apache.commons.io.HexDump;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.helpers.MessageFormatter;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.management.ManagementFactory;
@@ -49,11 +50,15 @@ import java.util.function.Function;
 /**
  * Created by wguo on 15-01-06.
  */
-@SuppressWarnings("restriction")
 public class UberUtil {
+    static Logger _log = UberUtil.getThisLogger();
 
     private static final Unsafe unsafe;
     private static Field ADDRESS_FIELD;
+    
+    public static interface MyRunable {
+        public abstract void run() throws Exception;
+    }
 
     static {
         try {
@@ -438,6 +443,9 @@ public class UberUtil {
     }
 
     public static void sleep(long ms) {
+        if (Thread.currentThread().isInterrupted()) {
+            return;
+        }
         try {
             Thread.sleep(ms);
         }
@@ -457,5 +465,19 @@ public class UberUtil {
     
     public static boolean between(long value, long min, long max) {
         return (value >= min) && (value <= max);
+    }
+    
+    public static void error(String message, Object... args) {
+        String msg = MessageFormatter.arrayFormat(message, args).getMessage();
+        throw new IllegalArgumentException(msg);
+    }
+    
+    public static void quiet(MyRunable run) {
+        try {
+            run.run();
+        }
+        catch (Exception x) {
+            _log.warn("error ignored", x);
+        }
     }
 }
