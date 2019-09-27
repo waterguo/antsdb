@@ -28,6 +28,9 @@ import com.antsdb.saltedfish.charset.Codecs;
 import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
+import com.antsdb.saltedfish.util.Parser;
+import com.antsdb.saltedfish.util.Parsers;
+import com.antsdb.saltedfish.util.SizeConstants;
 
 /**
  * 
@@ -40,22 +43,74 @@ public class SystemParameters {
     private Boolean no_auto_value_on_zero;
     private Decoder requestDecoder;
     private Charset resultEncoder;
-    private Humpback humpback;
     private boolean strict;
+    private Charset defaultResultEncoder = Charsets.UTF_8;
+    private Map<String, Parameter<?>> factoryParams = new HashMap<>();
+    private Parameter<Long> antsdbMaxHeapSize = new Parameter<Long>(
+            Parsers.LONG,
+            "antsdb_max_heap_size", 
+            SizeConstants.gb(1), 
+            1024*1024l, 
+            Long.MAX_VALUE);
     
-    SystemParameters(SystemParameters parent) {
-        for (Map.Entry<String, String> i:parent.params.entrySet()) {
-            set(i.getKey(), i.getValue());
+    private class Parameter<T> {
+        String name;
+        T value;
+        T min;
+        T max;
+        T defacto;
+        Parser<T> parser;
+        
+        Parameter(Parser<T> parser, String name, T defacto, T min, T max) {
+            this.parser = parser;
+            this.name = name;
+            this.min = min;
+            this.max = max;
+            this.defacto = defacto;
+        }
+        
+        T get() {
+            return this.value != null ? this.value : this.defacto;
+        }
+        
+        @SuppressWarnings({ "unchecked", "rawtypes" })
+        void set(String s) throws Exception {
+            T value = this.parser.parse(s);
+            if (value != null) {
+                if (this.max != null) {
+                    if (((Comparable)value).compareTo((Comparable)this.max) > 0) {
+                        throw new Exception("value " + value + " is greater than maximum value " + this.max);
+                    }
+                }
+                if (this.min != null) {
+                    if (((Comparable)value).compareTo((Comparable)this.min) < 0) {
+                        throw new Exception("value " + value + " is smaller than minimum value " + this.min);
+                    }
+                }
+            }
+            this.value = value;
         }
     }
     
-    SystemParameters(Humpback humpback) {
-        this.humpback = humpback;
-        loadParams();
+    SystemParameters() {
+        this.factoryParams.put(this.antsdbMaxHeapSize.name, this.antsdbMaxHeapSize);
     }
     
-    private void loadParams() {
-        for (Map.Entry<String, String> i:this.humpback.getAllConfig().entrySet()) {
+    @Override
+    protected Object clone() {
+        SystemParameters result = new SystemParameters();
+        for (Map.Entry<String, String> i:this.params.entrySet()) {
+            try {
+                result.set(i.getKey(), i.getValue());
+            }
+            catch (Exception ignored) {
+            }
+        }
+        return result;
+    }
+    
+    public void load(Humpback humpback) {
+        for (Map.Entry<String, String> i:humpback.getAllConfig().entrySet()) {
             this.params.put(i.getKey(), i.getValue());
         }
     }
@@ -69,17 +124,17 @@ public class SystemParameters {
         return value;
     }
 
-    public void setPermanent(HumpbackSession hsession, String key, String value) {
+    public void setPermanent(Humpback humpback, HumpbackSession hsession, String key, String value) throws Exception {
         if (humpback == null) {
             // only top level one can set permanently
             throw new IllegalArgumentException();
         }
         key = key.toLowerCase();
         set(key, value);
-        this.humpback.setConfig(hsession, key, value);
+        humpback.setConfig(hsession, key, value);
     }
     
-    public void set(String key, String value) {
+    public void set(String key, String value) throws Exception {
         key = key.toLowerCase();
         if (key.equals("autocommit")) {
             setAutoCommit(value);
@@ -95,6 +150,15 @@ public class SystemParameters {
         }
         else if (key.equals("sql_mode")) {
             setSqlMode(value);
+        }
+        else if (key.equals("character_set_results_when_null")) {
+            this.defaultResultEncoder = Charset.forName(value);
+        }
+        else {
+            Parameter<?> param = this.factoryParams.get(key);
+            if (param != null) {
+                param.set(value);
+            }
         }
         this.params.put(key, value);
     }
@@ -205,7 +269,7 @@ public class SystemParameters {
      * @return
      */
     public Decoder getRequestDecoder() {
-        return (this.requestDecoder != null) ? this.requestDecoder : Codecs.get("UTF-8");
+        return (this.requestDecoder != null) ? this.requestDecoder : Codecs.UTF8;
     }
     
     /**
@@ -213,7 +277,7 @@ public class SystemParameters {
      * @return
      */
     public Charset getResultEncoder() {
-        return (this.resultEncoder != null) ? this.resultEncoder : Charsets.UTF_8;
+        return (this.resultEncoder != null) ? this.resultEncoder : this.defaultResultEncoder;
     }
     
     public String getDatabaseType() {
@@ -291,5 +355,9 @@ public class SystemParameters {
     
     public boolean isStrict() {
         return this.strict;
+    }
+
+    public long getMaxHeapSize() {
+        return this.antsdbMaxHeapSize.get();
     }
 }

@@ -22,15 +22,17 @@ import com.antsdb.saltedfish.util.LongLong;
 
 public final class GTable implements AutoCloseable, LogSpan {
     String namespace;
+    String name;
     MemTable memtable;
     int id;
     Humpback humpback;
     private TableType type;
 
-    public GTable(Humpback owner, String namespace, int id, int fileSize, TableType type) 
+    public GTable(Humpback owner, String namespace, String name, int id, int fileSize, TableType type) 
     throws IOException {
         this.id = id;
         this.namespace = namespace;
+        this.name = name;
         this.humpback = owner;
         this.memtable = new MemTable(owner, new File(owner.data, namespace), id, fileSize);
         this.type = type;
@@ -44,6 +46,10 @@ public final class GTable implements AutoCloseable, LogSpan {
         return namespace;
     }
 
+    public String getName() {
+        return this.name;
+    }
+    
     public HumpbackError insert(HumpbackSession hsession, SlowRow row, int timeout) {
         try (BluntHeap heap = new BluntHeap()) {
             return insert(hsession, row.toVaporisingRow(heap), timeout);

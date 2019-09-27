@@ -64,6 +64,15 @@ public class SetSystemParameter extends Statement {
     
     @Override
     public Object run(VdmContext ctx, Parameters params) {
+        try {
+            return run0(ctx, params);
+        }
+        catch (Exception x) {
+            throw new OrcaException(x);
+        }
+    }
+    
+    public Object run0(VdmContext ctx, Parameters params) throws Exception {
         Object value = null;
         if (this.expr != null) {
             // calculate the value
@@ -93,7 +102,8 @@ public class SetSystemParameter extends Statement {
         
         if (this.scope == Scope.GLOBAL) {
             if (this.permanent) {
-                ctx.getOrca().getConfig().setPermanent(ctx.getHSession(), 
+                ctx.getOrca().getConfig().setPermanent(ctx.getHumpback(),
+                                                       ctx.getHSession(), 
                                                        name, 
                                                        value == null ? null : value.toString());
             }

@@ -17,15 +17,15 @@ package com.antsdb.saltedfish.cpp;
  * 
  * @author wgu0
  */
-public class OutOfHeapMemory extends RuntimeException {
+public class OutOfHeapException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    public OutOfHeapMemory() {
+    public OutOfHeapException() {
         super();
     }
     
-    public OutOfHeapMemory(String msg) {
+    public OutOfHeapException(String msg) {
         super(msg);
     }
 }

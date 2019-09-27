@@ -95,9 +95,22 @@ public class IndexEntryHandler {
                 long pIndex = this.gtable.getMemTable().getIndex(trxid, trxts, pIndexKey);
                 _log.debug("pIndex: {}", pIndex);
                 Long version = (oldRow == null) ? null : oldRow.getVersion();
+                String msg;
+                if (error == HumpbackError.MISSING) {
+                    msg = "index entry not found";
+                }
+                else if (error == HumpbackError.LOCK_COMPETITION) {
+                    msg = "index entry is locked by another session";
+                }
+                else if (error == HumpbackError.EXISTS) {
+                    msg = "unique index violation";
+                }
+                else {
+                    msg = error.toString();
+                }
                 throw new OrcaException(
                     "{} tableId={} rowkey={} indexkey={} old_version={}", 
-                    error, 
+                    msg, 
                     this.gtable.getId(),
                     KeyBytes.toString(pRowKey), 
                     KeyBytes.toString(pIndexKey),
@@ -119,9 +132,20 @@ public class IndexEntryHandler {
                 int timeout) {
         HumpbackError error = this.gtable.delete(hsession, trx.getTrxId(), pIndexKey, timeout);
         if (error != HumpbackError.SUCCESS) {
+            String msg;
+            if (error == HumpbackError.MISSING) {
+                msg = "index entry not found";
+            }
+            else if (error == HumpbackError.LOCK_COMPETITION) {
+                msg = "index entry is locked by another session";
+            }
+            else {
+                msg = error.toString();
+            }
             throw new OrcaException(
-                    "{} tableId={} rowkey={} indexkey={} old_version={}", 
-                    error, 
+                    "{} index={} tableId={} rowkey={} indexkey={} old_version={}", 
+                    msg, 
+                    this.index.getName(),
                     this.gtable.getId(),
                     KeyBytes.toString(row.getKeyAddress()), 
                     KeyBytes.toString(pIndexKey),

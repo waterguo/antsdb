@@ -19,6 +19,7 @@ import java.util.List;
 import org.apache.commons.lang.NotImplementedException;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Compound_operatorContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Limit_clauseContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Ordering_termContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Select_or_valuesContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Select_stmtContext;
@@ -36,11 +37,11 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
     @Override
     public Instruction gen(GeneratorContext ctx, Select_stmtContext rule)
     throws OrcaException {
-        return gen(ctx, rule, null);
+        return gen(ctx, rule, null).run();
     }
 
-    public static CursorMaker gen(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
-        CursorMaker maker;
+    public static Planner gen(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
+        Planner maker;
 
         // this is a temporary solution until there is a better planner
         if (rule.select_or_values().size() == 1) {
@@ -50,12 +51,27 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
             maker = genWithUnion(ctx, rule, parent);
         }
         if (rule.limit_clause() != null) {
-            maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+            setLimit(maker, rule.limit_clause());
         }
         return maker;
     }
     
-    private static CursorMaker genWithUnion(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
+    static void setLimit(Planner planner, Limit_clauseContext rule) {
+        long offset = 0;
+        long count = Long.parseLong(rule.number_value(0).getText());
+        if (rule.K_OFFSET() != null) {
+            offset = Long.parseLong(rule.number_value(1).getText());
+        }
+        else {
+            if (rule.number_value(1) != null) {
+                offset = count;
+                count = Long.parseLong(rule.number_value(1).getText());
+            }
+        }
+        planner.setLimit(offset, count);
+    }
+
+    private static Planner genWithUnion(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
         CursorMaker maker = genMaker(ctx, rule.select_or_values(0), parent);
         for (int i=1; i<rule.getChildCount(); i++) {
             if (rule.getChild(i) instanceof Compound_operatorContext) {
@@ -70,11 +86,13 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
             }
         }
         
-        // order by
+        // fields
+        Planner planner = new Planner(ctx);
+        planner.addCursor("", maker, true, false);
+        planner.addAllFields();
         
+        // order by
         if (rule.order_by_clause() != null) {
-            Planner planner = new Planner(ctx);
-            planner.addCursor("", maker, true, false);
             List<Operator> orderExprs = new ArrayList<Operator>();
             List<Boolean> directions = new ArrayList<Boolean>();
             for (Ordering_termContext i:rule.order_by_clause().ordering_term()) {
@@ -89,7 +107,6 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
             planner.setOrderBy(orderExprs, directions);
 
             // for update
-            
             if (rule.K_UPDATE() != null) {
                 planner.setForUpdate(true);
             }
@@ -97,14 +114,13 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
             maker = planner.run();
         }
         
-       return maker;
+       return planner;
     }
 
-    private static CursorMaker genWithoutUnion(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
+    private static Planner genWithoutUnion(GeneratorContext ctx, Select_stmtContext rule, Planner parent) {
         Planner planner = Select_or_valuesGenerator.gen(ctx, rule.select_or_values(0), parent);
 
         // order by
-        
         if (rule.order_by_clause() != null) {
             List<Operator> orderExprs = new ArrayList<Operator>();
             List<Boolean> directions = new ArrayList<Boolean>();
@@ -121,12 +137,11 @@ public class Select_stmtGenerator extends Generator<Select_stmtContext>{
         }
         
         // for update
-        
         if (rule.K_UPDATE() != null) {
             planner.setForUpdate(true);
         }
         
-        return planner.run();
+        return planner;
     }
 
     private static CursorMaker genMaker(GeneratorContext ctx, Select_or_valuesContext rule, Planner parent) {

@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.FileOffset;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.nosql.ConcurrentLinkedList.Node;
 import com.antsdb.saltedfish.util.LongLong;
@@ -478,7 +478,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.insertIndex(hsession, pIndexKey, trxid, pRowKey, this.tablets, misc, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -494,7 +494,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.insert(hsession, row, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -510,7 +510,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.update(hsession, row, oldVersion, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -526,7 +526,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.delete(hsession, pKey, trxid, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -542,7 +542,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.deleteRow(hsession, pRow, trxid, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -558,7 +558,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.put(hsession, row, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -574,7 +574,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.recover(lpLogEntry);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -595,7 +595,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.recoverPut(pKey, trxid, spRow, this.tablets);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }
@@ -610,7 +610,7 @@ public final class MemTable extends ScalableData implements LogSpan {
             try {
                 return current.lock(trxid, pKey, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 grow(this.ticket);
             }
         }

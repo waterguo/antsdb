@@ -128,6 +128,7 @@ public final class Humpback {
     private TotalLogDependency logDependency = new TotalLogDependency();
     private long serverId;
     private PageCacheWarmer warmer;
+    private Object recyleLock = new Object();
 
     class ShutdownThread extends Thread {
         @Override
@@ -389,7 +390,9 @@ public final class Humpback {
     }
 
     private GTable createGtable(SysMetaRow meta, boolean isRecovering) throws IOException {
-        GTable gtable = new GTable(this, meta.getNamespace(), meta.getTableId(), this.tabletSize, TableType.DATA);
+        String ns = meta.getNamespace();
+        String name = meta.getTableName();
+        GTable gtable = new GTable(this, ns, name, meta.getTableId(), this.tabletSize, TableType.DATA);
         gtable.setMutable(this.isMutable);
         gtable.memtable.setRecoveryMode(isRecovering);
         gtable.open();
@@ -439,8 +442,9 @@ public final class Humpback {
                 continue;
             }
             String ns = row.getNamespace();
+            String name = row.getTableName();
             this.storage.syncTable(row);
-            GTable gtable = new GTable(this, ns, id, this.tabletSize, row.getType());
+            GTable gtable = new GTable(this, ns, name, id, this.tabletSize, row.getType());
             gtable.setMutable(this.isMutable);
             gtable.memtable.setRecoveryMode(isRecovering);
             gtable.open();
@@ -733,10 +737,11 @@ public final class Humpback {
             }
 
             // update meta data
-            gtable = new GTable(this, ns, id, this.tabletSize, type);
+            gtable = new GTable(this, ns, name, id, this.tabletSize, type);
             gtable.setMutable(this.isMutable);
             tableById.put(id, gtable);
-            if (createMeta) {
+            if (createMeta && id >= 0) {
+                // we dont need to maintain metadata for temporary table
                 this.sysmeta.put(hsession, 1, meta.row, 0);
             }
             return gtable;
@@ -749,7 +754,7 @@ public final class Humpback {
     public synchronized void dropTable(HumpbackSession hsession, String ns, int id) throws HumpbackException {
         GTable table = this.tableById.get(id);
         SysMetaRow meta = getTableInfo(id);
-        if (table == null || meta == null) {
+        if (table == null || (meta == null) && (id >= 0)) {
             _log.warn("table {} doesn't exist", id);
             return;
         }
@@ -763,33 +768,36 @@ public final class Humpback {
         // update meta data
         table.drop();
         this.tableById.remove(id);
-        meta.setDeleted(true);
-        this.sysmeta.put(hsession, 1, meta.row, 1000);
-        this.storage.syncTable(meta);
+        if (id >= 0) {
+            meta.setDeleted(true);
+            this.sysmeta.put(hsession, 1, meta.row, 1000);
+            this.storage.syncTable(meta);
+        }
     }
 
     public synchronized void truncateTable(HumpbackSession hsession, int oldTableId, int newTableId) 
     throws HumpbackException {
-        SysMetaRow oldTable = getTableInfo(oldTableId);
+        GTable oldTable = getTable(oldTableId);
         if (oldTable == null) {
             throw new HumpbackException("table is not found: " + oldTableId);
         }
 
         // create new table
-
-        dropTable(hsession, oldTable.getNamespace(), oldTableId);
-        createTable(hsession, oldTable.getNamespace(), oldTable.getTableName(), newTableId, TableType.DATA);
+        String ns = oldTable.getNamespace();
+        dropTable(hsession, ns, oldTableId);
+        createTable(hsession, ns, oldTable.getName(), newTableId, TableType.DATA);
         
         // copy the columns to the new table
-        
         List<HColumnRow> columns = getColumns(oldTableId);
-        for (HColumnRow i:columns) {
-            if (i.isDeleted()) {
-                continue;
+        if (columns != null) {
+            for (HColumnRow i:columns) {
+                if (i.isDeleted()) {
+                    continue;
+                }
+                HColumnRow ii = new HColumnRow(newTableId, i.getColumnPos());
+                ii.setColumnName(i.getColumnName());
+                this.syscolumn.put(hsession, 0, ii.row, 0);
             }
-            HColumnRow ii = new HColumnRow(newTableId, i.getColumnPos());
-            ii.setColumnName(i.getColumnName());
-            this.syscolumn.put(hsession, 0, ii.row, 0);
         }
     }
 
@@ -920,7 +928,7 @@ public final class Humpback {
             if (getTable(tableId) == null) {
                 String ns = row.getNamespace();
                 TableType type = row.getType();
-                GTable gtable = new GTable(this, ns, row.getTableId(), this.tabletSize, type);
+                GTable gtable = new GTable(this, ns, row.getTableName(), row.getTableId(), this.tabletSize, type);
                 gtable.setMutable(isMutable);
                 gtable.memtable.setRecoveryMode(true);
                 gtable.open();
@@ -1069,33 +1077,35 @@ public final class Humpback {
     /**
      * free unused resource
      */
-    public synchronized void recycle() {
-        LongLong span = this.storage.getLogSpan();
-        long ts = getOldestQueryTimestamp();
-        _log.trace("start humpback recycling with ts={} minke sp={}", ts, hex(span.y));
-
-        // free tablets
-        for (GTable table : this.tableById.values()) {
-            if (table.getId() >= 0) {
-                table.memtable.free(span.y);
+    public void recycle() {
+        synchronized (this.recyleLock ) {
+            LongLong span = this.storage.getLogSpan();
+            long ts = getOldestQueryTimestamp();
+            _log.trace("start humpback recycling with ts={} minke sp={}", ts, hex(span.y));
+    
+            // free tablets
+            for (GTable table : this.tableById.values()) {
+                if (table.getId() >= 0) {
+                    table.memtable.free(span.y);
+                }
             }
+    
+            // free logs
+            long sp = this.logDependency.getLogPointer();
+            _log.trace("start log space recycling with sp={}", hex(sp));
+            this.spaceman.gc(this.gc, sp);
+            _log.trace("log space recycling is finished");
+    
+            //
+            _log.trace("start garbage collection");
+            this.gc.collect(ts);
+            if (getStorageEngine() != null) {
+                getStorageEngine().gc(ts);
+            }
+            _log.trace("garbage collection is finished");
+    
+            _log.trace("recycling is finsihed");
         }
-
-        // free logs
-        long sp = this.logDependency.getLogPointer();
-        _log.trace("start log space recycling with sp={}", hex(sp));
-        this.spaceman.gc(this.gc, sp);
-        _log.trace("log space recycling is finished");
-
-        //
-        _log.trace("start garbage collection");
-        this.gc.collect(ts);
-        if (getStorageEngine() != null) {
-            getStorageEngine().gc(ts);
-        }
-        _log.trace("garbage collection is finished");
-
-        _log.trace("recycling is finsihed");
     }
 
     public List<SysMetaRow> getTablesMeta() {

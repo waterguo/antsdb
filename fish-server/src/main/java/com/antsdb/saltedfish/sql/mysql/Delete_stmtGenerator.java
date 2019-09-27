@@ -23,7 +23,6 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.planner.PlannerField;
 import com.antsdb.saltedfish.sql.vdm.Checks;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
@@ -76,12 +75,10 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
         }
         
         // done
-        
-        CursorMaker maker = planner.run();
         if (rule.limit_clause() != null) {
-            maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+            Select_stmtGenerator.setLimit(planner, rule.limit_clause());
         }
-        return GeneratorUtil.genDelete(ctx, table, maker);
+        return GeneratorUtil.genDelete(ctx, table, planner.run());
     }
 
 }

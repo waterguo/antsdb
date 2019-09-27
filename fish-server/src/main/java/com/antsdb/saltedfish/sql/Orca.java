@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.beluga.Pod;
 import com.antsdb.saltedfish.beluga.SlaveWarmer;
 import com.antsdb.saltedfish.beluga.SystemViewSlaveWarmerInfo;
+import com.antsdb.saltedfish.cpp.FileBasedHeap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
@@ -146,12 +147,11 @@ public class Orca {
         this.metaService = new MetadataService(this);
 
         // create seed 
-        
         init();
         
         // global parameters
-        
-        this.config = new SystemParameters(this.humpback);
+        this.config = new SystemParameters();
+        this.config.load(this.humpback);
         this.config.set("autocommit", "1");
         this.config.set("auto_increment_increment", "1");
         this.config.set("character_set_client", "latin1");
@@ -166,6 +166,7 @@ public class Orca {
         this.config.set("tx_isolation", "READ-COMMITTED");
         this.config.set("version", _version);
         this.config.set("version_comment", Orca._version + " Enterprise");
+        FileBasedHeap.setLimit(this.config.getMaxHeapSize());
 
         // init statement cache
         this.statementCache = CacheBuilder.newBuilder().maximumSize(1000).build();
@@ -180,7 +181,6 @@ public class Orca {
         // validate();
         
         // init dialect
-        
         _log.info("orca dialect: {}", this.config.getDatabaseType());
         this.dialect = getDialect(this.config.getDatabaseType());
         if (this.dialect == null) {
@@ -189,15 +189,12 @@ public class Orca {
         this.dialect.init(this);
         
         // validate
-        
         verifySystem();
         
         // start service threads
-        
         new RecycleThread(this).start();
 
         // system views
-
         initViews();
         
         // system default session. used as the template for the use sessions
@@ -207,7 +204,6 @@ public class Orca {
         cleanTempTables();
         
         // backend jobs
-        
         FishJobManager jobman = getJobManager();
         jobman.schedule(10, TimeUnit.SECONDS, ()-> {
             if (this.isClosed) {
@@ -236,7 +232,6 @@ public class Orca {
         }
 
         // load cluster
-        
         this.pod = new Pod(this);
         this.pod.open();
         this.pod.start();
@@ -290,7 +285,6 @@ public class Orca {
         registerSystemView(SYSNS, "SLAVE_INFO", new SystemViewSlaveInfo());
         registerSystemView(SYSNS, "SYNCHRONIZER_INFO", new SystemViewSynchronizerInfo());
         registerSystemView(SYSNS, "TABLE_STATS", new SystemViewTableStats(this));
-        registerSystemView(SYSNS, "PAGES", new SystemViewPages(this));
         registerSystemView(SYSNS, "x0", new SystemViewHumpbackMeta(this));
         registerSystemView(SYSNS, "x1", new SystemViewHumpbackNamespace(this));
         registerSystemView(SYSNS, "x2", new SystemViewTableStats(this));
@@ -300,7 +294,7 @@ public class Orca {
         registerSystemView(SYSNS, "CLUSTER_STATUS", new SystemViewClusterStatus());
         registerSystemView(SYSNS, "LOG_DEPENDENCY", new SystemViewLogDependency());
         registerSystemView(SYSNS, "HSESSIONS", new SystemViewHSessions());
-        registerSystemView(SYSNS, "MINKE_PAGES", new SystemViewMinkePages());
+        registerSystemView(SYSNS, "MINKE_PAGES", new SystemViewPages(this));
         registerSystemView(SYSNS, "MEM_IMMORTAL", new SystemViewMemImmortals());
         registerSystemView(SYSNS, "SLAVE_WARMER_INFO", new SystemViewSlaveWarmerInfo());
         registerSystemView(SYSNS, "PAGE_CACHE_WARMER_INFO", new PageCacheWarmerInfo());

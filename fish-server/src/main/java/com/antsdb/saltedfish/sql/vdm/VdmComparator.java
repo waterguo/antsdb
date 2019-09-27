@@ -57,13 +57,7 @@ public class VdmComparator {
     private int getType(Heap heap, long p, Operator op) {
         /* mysql string literal is actually binary, we need to treat them as string in comparison */
         int result;
-        if (op instanceof BinaryString) {
-            BinaryString bs = (BinaryString)op;
-            result = bs.isBinary() ? Value.TYPE_BYTES : Value.TYPE_STRING;
-        }
-        else {
-            result = Value.getType(heap, p);
-        }
+        result = Value.getType(heap, p);
         return result;
     }
 

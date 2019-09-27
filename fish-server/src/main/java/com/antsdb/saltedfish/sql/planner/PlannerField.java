@@ -17,7 +17,6 @@ import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
-import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
@@ -79,7 +78,12 @@ public class PlannerField extends FieldMeta {
 
     @Override
     public String getTableAlias() {
-        return UberUtil.ifNotNull(owner.alias, it->{return it.getTableName();});
+        if (this.owner != null) {
+            if (this.owner.alias != null) {
+                return this.owner.alias.getTableName();
+            }
+        }
+        return null;
     }
 
     @Override

@@ -28,7 +28,6 @@ import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.vdm.Checks;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.NotNullCheck;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
@@ -53,20 +52,17 @@ public class Update_stmtGenerator extends Generator<Update_stmtContext> {
         }
         
         // compile expressions
-        
-        CursorMaker maker = planner.run();
         Pair<List<ColumnMeta>, List<Operator>> sets = gen(ctx, planner, table, rule.update_stmt_set());
         
         // auto casting according to column data type
-        
         Utils.applyCasting(sets.getKey(), sets.getValue());
         
         // done
         if (rule.limit_clause() != null) {
-        	    maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+            Select_stmtGenerator.setLimit(planner, rule.limit_clause());
         }
         
-        return GeneratorUtil.genUpdate(ctx, table, maker, sets.getKey(), sets.getValue());
+        return GeneratorUtil.genUpdate(ctx, table, planner.run(), sets.getKey(), sets.getValue());
     }
 
     static Pair<List<ColumnMeta>, List<Operator>> gen(

@@ -29,8 +29,9 @@ import org.slf4j.Logger;
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.KeyBytes;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
+import com.antsdb.saltedfish.minke.MinkePage.RangeScanner;
 import com.antsdb.saltedfish.minke.MinkePage.ScanType;
 import com.antsdb.saltedfish.nosql.Recycable;
 import com.antsdb.saltedfish.nosql.Row;
@@ -348,7 +349,7 @@ public class MinkeTable implements StorageTable, Recycable {
             catch (OutOfPageRange x) {
                 grow(pKey);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 split1(page, pKey, size, row);
                 return;
             }
@@ -441,14 +442,16 @@ public class MinkeTable implements StorageTable, Recycable {
             }
             
             // if incoming key is greater than any keys in original page, we do an append
-            long pKeyTail = page.getTailKeyPointer();
-            if (pKeyTail == 0) {
-                throw new CodingError();
-            }
-            int cmp = _comp.compare(pIncomingKey, pKeyTail);
-            if (cmp > 0) {
-                append1(page, pIncomingKey, cb);
-                return result;
+            if (pIncomingKey != 0) {
+                long pKeyTail = page.getTailKeyPointer();
+                if (pKeyTail == 0) {
+                    throw new CodingError();
+                }
+                int cmp = _comp.compare(pIncomingKey, pKeyTail);
+                if (cmp > 0) {
+                    append1(page, pIncomingKey, cb);
+                    return result;
+                }
             }
             
             // at last we do half split
@@ -513,11 +516,11 @@ public class MinkeTable implements StorageTable, Recycable {
                 range = stream.getRange();
                 try {
                     if (target.getUsageRatio() >= fillFactor) {
-                        throw new OutOfHeapMemory();
+                        throw new OutOfHeapException();
                     }
                     target.putRange(range);
                 }
-                catch (OutOfHeapMemory x) {
+                catch (OutOfHeapException x) {
                     target.setEndKey(range.pKeyStart);
                     target = this.minke.alloc(this.tableId, range.pKeyStart, page.getEndKeyPointer());
                     newpages.add(target);
@@ -527,11 +530,11 @@ public class MinkeTable implements StorageTable, Recycable {
             else {
                 try {
                     if (target.getUsageRatio() >= fillFactor) {
-                        throw new OutOfHeapMemory();
+                        throw new OutOfHeapException();
                     }
                     stream.apply(target);
                 }
-                catch (OutOfHeapMemory x) {
+                catch (OutOfHeapException x) {
                     target.setEndKey(stream.getKey());
                     target = this.minke.alloc(this.tableId, stream.getKey(), page.getEndKeyPointer());
                     newpages.add(target);
@@ -594,7 +597,7 @@ public class MinkeTable implements StorageTable, Recycable {
             catch (OutOfPageRange x) {
                 grow(pKey);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 split1(page, pKey, size, row.getAddress());
                 return;
             }
@@ -615,7 +618,7 @@ public class MinkeTable implements StorageTable, Recycable {
             catch (OutOfPageRange x) {
                 grow(pKey);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 split1(page, pKey, 0, Row.DELETE_MARK);
                 return;
             }
@@ -647,7 +650,7 @@ public class MinkeTable implements StorageTable, Recycable {
             catch (OutOfPageRange x) {
                 grow(pIndexKey);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 int size = KeyBytes.getRawSize(pIndexKey) + KeyBytes.getRawSize(pRowKey) + 1;
                  return split1(page, pIndexKey, size, pRowKey, misc);
             }
@@ -675,7 +678,7 @@ public class MinkeTable implements StorageTable, Recycable {
             catch (OutOfPageRange x) {
                 grow(pKey);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 split1(page, pKey, 0, 0);
                 return;
             }
@@ -735,6 +738,9 @@ public class MinkeTable implements StorageTable, Recycable {
             if (version >= 1) {
                 mpage.lastAccess.set(in.readLong()); 
             }
+            if (version >= 2) {
+                mpage.waste.set(in.readInt());
+            }
             KeyBytes startKey = readKeyBytes(in);
             KeyBytes endKey = readKeyBytes(in);
             mpage.assign(this.tableId, startKey, endKey);
@@ -758,6 +764,7 @@ public class MinkeTable implements StorageTable, Recycable {
             MinkePage ii = i.getValue();
             out.writeInt(ii.id);
             out.writeLong(ii.lastAccess.get());
+            out.writeInt(ii.waste.get());
             writeKeyBytes(out, ii.getStartKey());
             writeKeyBytes(out, ii.getEndKey());
         }
@@ -865,7 +872,7 @@ public class MinkeTable implements StorageTable, Recycable {
             catch (OutOfPageRange x) {
                 grow(range.getStart().pKey);
             }
-            catch (OutOfHeapMemory x) {
+            catch (OutOfHeapException x) {
                 split1(page, localRange);
             }
             if (range.equals(localRange)) {
@@ -1060,4 +1067,82 @@ public class MinkeTable implements StorageTable, Recycable {
         result.includeOrphan = includeOrphan;
         return result;
     }
+
+    /**
+     * compact pages in the table when the wasted bytes is higher than the threshold
+     * 
+     * @param threshold
+     * @throws IOException 
+     */
+    public void compact(int threshold) throws IOException {
+        for (MinkePage i = this.pages.getCeilingPage(KeyBytes.getMinKey()); i!= null;) {
+            synchronized(this) {
+                MinkePage next = this.pages.getHigherPage(i.getStartKeyPointer());
+                if (next == null) {
+                    break;
+                }
+                int totalUnusedBytes = getUnusedBytes(i) + getUnusedBytes(next);
+                if ((totalUnusedBytes - this.minke.pageSize) >= threshold) {
+                    i = merge(i, next);
+                }
+                else {
+                    i = next;
+                }
+            }
+        }
+    }
+    
+    private void copy(MinkePage source, MinkePage target) {
+        MinkePage.Scanner scanner = source.scanAll(ScanOptions.SHOW_DELETE_MARK);
+        if (scanner != null) {
+            while (scanner.next()) {
+                target.put(getType(), scanner);
+            }
+        }
+        RangeScanner ranges = source.getAllRanges();
+        for (Range i=ranges.next(); i!=null; i=ranges.next()) {
+            target.putRange(i);
+        }
+    }
+    
+    private MinkePage merge(MinkePage first, MinkePage next) throws IOException {
+        _log.debug("merging: {} {} tableId={}", hex(first.id), hex(next.id), this.tableId);
+        MinkePage result = this.minke.alloc(this.tableId, first.getStartKey(), next.getEndKey());
+        copy(first, result);
+        copy(next, result);
+        this.pages.put(result);
+        this.pages.remove(next);
+        this.minke.freePage(first);
+        this.minke.freePage(next);
+        return result;
+    }
+
+    private int getUnusedBytes(MinkePage page) {
+        return this.minke.pageSize - page.getUsage() + page.getWastedBytes();
+    }
+    
+    public void shrink(int threshold) throws IOException {
+        for (MinkePage page:this.pages.values()) {
+            // prevent concurrency
+            synchronized (this) {
+                // leave active pages alone. 
+                if (page.getState() == PageState.CARBONFREEZED) {
+                    if (page.getWastedBytes() >= threshold) {
+                        compact(page);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * rewrite the page
+     * 
+     * @param page
+     * @throws IOException 
+     */
+    public synchronized void compact(MinkePage page) throws IOException {
+        this.mergeSplit1(page, 1, null);
+    }
+
 }

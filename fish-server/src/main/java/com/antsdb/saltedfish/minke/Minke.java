@@ -93,6 +93,7 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
     @SuppressWarnings("unused")
     private ConfigService config;
     private long lastCheckPontTime;
+    private Object checkPointLock = new Object();
     
     static class GarbagePage implements Comparable<GarbagePage> {
         int child1;
@@ -290,63 +291,73 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         _log.info("minke is closed");
     }
 
-    public synchronized void checkpoint() throws IOException {
-        if (!this.isMutable) {
-            // this is impossible in read only mode
-            throw new IllegalArgumentException();
-        }
-        
-        long sp = this.syncSp;
-        _log.info("creating new checkpoint with sp={}...", hex(sp));
-        
-        // carbonfreeze
-        Map<Integer, MinkePage> newFreeze = new HashMap<>();
-        for (MinkeTable mtable:this.tableById.values()) {
-            for (MinkePage i:mtable.getPages()) {
-                newFreeze.put(i.id, i);
-                if (this.lastFreeze.containsKey(i.id)) {
-                    // already carbonfreezed
-                    continue;
+    public void checkpoint() throws IOException {
+        synchronized (this.checkPointLock) {
+            if (!this.isMutable) {
+                // this is impossible in read only mode
+                throw new IllegalArgumentException();
+            }
+            
+            long sp = this.syncSp;
+            _log.info("creating new checkpoint with sp={}...", hex(sp));
+            
+            // compact the pages, free the wasted space
+            Compactor compactor = new Compactor(this);
+            compactor.call();
+            
+            // freeze page allocation
+            PageIndexFile next = null;
+            synchronized (this) {
+                // carbonfreeze
+                Map<Integer, MinkePage> newFreeze = new HashMap<>();
+                for (MinkeTable mtable:this.tableById.values()) {
+                    for (MinkePage i:mtable.getPages()) {
+                        newFreeze.put(i.id, i);
+                        if (this.lastFreeze.containsKey(i.id)) {
+                            // already carbonfreezed
+                            continue;
+                        }
+                        i.carbonfreeze();
+                    }
                 }
-                i.carbonfreeze();
+    
+                // save page index file
+                next = (this.pif == null) ? PageIndexFile.getFile(this.home, 0): this.pif.next();
+                next.save(this.tableById, sp);
+                this.checkpointSp = sp;
+                this.lastCheckPontTime = UberTime.getTime();
+            
+                // garbage collection
+                int count = 0;
+                for (MinkePage i:this.lastFreeze.values()) {
+                    if (!newFreeze.containsKey(i.id)) {
+                        this.lastFreeze.remove(i.id);
+                        freePage(i);
+                        count++;
+                    }
+                }
+                this.lastFreeze.putAll(newFreeze);
+                _log.debug("{} pages have been freed", count);
             }
-        }
-
-        // save page index file
-        PageIndexFile next = (this.pif == null) ? PageIndexFile.getFile(this.home, 0): this.pif.next();
-        next.save(this.tableById, sp);
-        this.checkpointSp = sp;
-        this.lastCheckPontTime = UberTime.getTime();
-        
-        // garbage collection
-        int count = 0;
-        for (MinkePage i:this.lastFreeze.values()) {
-            if (!newFreeze.containsKey(i.id)) {
-                this.lastFreeze.remove(i.id);
-                freePage(i);
-                count++;
+            
+            // clean up
+            PageIndexFile old = this.pif;
+            this.pif = next;
+            if (old != null) {
+                // keep the last 3 pif files
+                List<File> files = Arrays.asList(this.pif.file.getParentFile().listFiles((it)->{
+                    return it.getName().endsWith(".pif");
+                }));
+                Collections.sort(files);
+                for (int i=0; i<files.size() - 3; i++) {
+                    File file = files.get(i);
+                    HumpbackUtil.deleteHumpbackFile(file);
+                }
             }
+            
+            // done
+            _log.info("checkpoint {} is created", next.file);
         }
-        this.lastFreeze.putAll(newFreeze);
-        _log.debug("{} pages have been freed", count);
-        
-        // clean up
-        PageIndexFile old = this.pif;
-        this.pif = next;
-        if (old != null) {
-            // keep the last 3 pif files
-            List<File> files = Arrays.asList(this.pif.file.getParentFile().listFiles((it)->{
-                return it.getName().endsWith(".pif");
-            }));
-            Collections.sort(files);
-            for (int i=0; i<files.size() - 3; i++) {
-                File file = files.get(i);
-                HumpbackUtil.deleteHumpbackFile(file);
-            }
-        }
-        
-        // done
-        _log.info("checkpoint {} is created", next.file);
     }
     
     void clear() {
@@ -422,9 +433,8 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
      * 
      * @param oldestActiveQueryTimestamp
      */
-    public synchronized void gc(long oldestActiveQueryTimestamp) {
+    public void gc(long oldestActiveQueryTimestamp) {
         // check point to release zombie pages if it takes more than 1 gb 
-        
         try {
             checkpointIfNeccessary();
         }
@@ -433,11 +443,9 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
         
         // activate garbage collector
-        
         this.gc.collect(oldestActiveQueryTimestamp);
         
         // if the garbage timestamp is older than any active query, it can be recycled
-        
         long now = UberTime.getTime();
         List<MinkePage> list = new ArrayList<>();
         for (MinkePage i:this.garbage) {
@@ -453,23 +461,23 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
         
         // recycle
-        
-        int count = 0;
-        for (MinkePage page:list) {
-            this.garbage.remove(page);
-            if (page.free()) {
-                _log.debug("page {} is freed", hex(page.id));
-                this.pastHits.addAndGet(page.hit.get());
-                this.free.add(page);
-                count++;
+        synchronized (this) {
+            int count = 0;
+            for (MinkePage page:list) {
+                this.garbage.remove(page);
+                if (page.free()) {
+                    _log.debug("page {} is freed", hex(page.id));
+                    this.pastHits.addAndGet(page.hit.get());
+                    this.free.add(page);
+                    count++;
+                }
+                else {
+                    this.garbage.add(page);
+                }
             }
-            else {
-                this.garbage.add(page);
+            if (count != 0) {
+                _log.debug("{} pages have been recycled", count);
             }
-        }
-        
-        if (count != 0) {
-            _log.debug("{} pages have been recycled", count);
         }
     }
     
@@ -479,27 +487,29 @@ public class Minke implements Closeable, LogSpan, StorageEngine {
         }
     }
     
-    synchronized void checkpointIfNeccessary() throws IOException {
-        // make a checkpoint if zombie pages take over 1GB
-        if (this.pageSize * getZombiePageCount() >= SizeConstants.GB) {
-            checkpoint();
-            return;
-        }
-        
-        // make a checkpoint if log space is more than 1gb
-        /* temporarily disabled. the following logic could trigger checkpoint() endlessly
-        long nfiles = this.syncSp >> 32 - this.checkpointSp >> 32;
-        long size = this.config.getSpaceFileSize() * nfiles;
-        if (size >= SizeConstants.GB) {
-            checkpoint();
-            return;
-        }
-        */
-        
-        // make a checkpoint if last checkpoint is older than 1 hour
-        if (UberTime.getTime() - this.lastCheckPontTime >= TimeConstants.hour(1)) {
-            checkpoint();
-            return;
+    void checkpointIfNeccessary() throws IOException {
+        synchronized (this.checkPointLock) {
+            // make a checkpoint if zombie pages take over 1GB
+            if (this.pageSize * getZombiePageCount() >= SizeConstants.GB) {
+                checkpoint();
+                return;
+            }
+            
+            // make a checkpoint if log space is more than 1gb
+            /* temporarily disabled. the following logic could trigger checkpoint() endlessly
+            long nfiles = this.syncSp >> 32 - this.checkpointSp >> 32;
+            long size = this.config.getSpaceFileSize() * nfiles;
+            if (size >= SizeConstants.GB) {
+                checkpoint();
+                return;
+            }
+            */
+            
+            // make a checkpoint if last checkpoint is older than 1 hour
+            if (UberTime.getTime() - this.lastCheckPontTime >= TimeConstants.hour(1)) {
+                checkpoint();
+                return;
+            }
         }
     }
 

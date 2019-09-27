@@ -19,6 +19,6 @@ package com.antsdb.saltedfish.nosql;
  * @author *-xguo0<@
  */
 public enum TableType {
-	DATA,
-	INDEX;
+    DATA,
+    INDEX;
 }

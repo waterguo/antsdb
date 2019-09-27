@@ -107,13 +107,15 @@ public class DropTable extends Statement {
 
     private void check(VdmContext ctx, TableMeta table) {
         Humpback humpback = ctx.getHumpback();
-        SysMetaRow meta = humpback.getTableInfo(table.getHtableId());
-        if (meta != null) {
-            if (!meta.isDeleted()) {
-                return;
+        if (table.getHtableId() >= 0) {
+            SysMetaRow meta = humpback.getTableInfo(table.getHtableId());
+            if (meta != null) {
+                if (!meta.isDeleted()) {
+                    return;
+                }
             }
+            _log.warn("table {} is out of sync between orca and humpback", table.getId());
         }
-        _log.warn("table {} is out of sync between orca and humpback", table.getId());
     }
 
     private void dropDependents(VdmContext ctx, TableMeta table, Parameters params) {

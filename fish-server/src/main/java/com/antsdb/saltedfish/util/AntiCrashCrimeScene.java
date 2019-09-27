@@ -19,11 +19,15 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import org.apache.commons.io.Charsets;
+import org.apache.commons.io.IOUtils;
 
 import com.antsdb.saltedfish.charset.Utf8;
 import com.antsdb.saltedfish.cpp.Unsafe;
@@ -35,11 +39,13 @@ import com.antsdb.saltedfish.cpp.Unsafe;
  */
 public final class AntiCrashCrimeScene {
     static AntiCrashCrimeScene _singlton;
-    static ThreadLocal<Unit> _addr = ThreadLocal.withInitial(()->{return alloc();});
     
     private File file;
-    private MappedByteBuffer mmf;
-    private Unit[] units;
+    private List<MappedByteBuffer> mmfs = new ArrayList<>();
+    private List<Unit> units = new ArrayList<>();
+    private RandomAccessFile raf;
+    private FileChannel ch;
+    private ThreadLocal<Unit> addr = ThreadLocal.withInitial(()->{return alloc();});
     
     public static class Unit {
         static final int SIZE = 4 * 1024;
@@ -47,14 +53,9 @@ public final class AntiCrashCrimeScene {
         static final int OFFSET_TIMESTAMP=8;
         static final int OFFSET_VALUES=0x10;
         
-        boolean free = true;
         ByteBuffer buf; 
         long addr;
-        
-        @Override
-        protected void finalize() throws Throwable {
-            free(this);
-        }
+        Thread owner;
         
         void setThreadId() {
             Unsafe.putLong(this.addr + OFFSET_THREAD_ID, Thread.currentThread().getId());
@@ -100,7 +101,7 @@ public final class AntiCrashCrimeScene {
     }
     
     private void open(boolean write) throws IOException {
-        if (mmf != null) {
+        if (this.raf != null) {
             return;
         }
         
@@ -113,33 +114,39 @@ public final class AntiCrashCrimeScene {
         }
         
         // open it
-        int ncpu = Runtime.getRuntime().availableProcessors();
-        int nbuffers = ncpu * 2 + 1;
-        RandomAccessFile raf = new RandomAccessFile(file, write ? "rw" : "r");
-        mmf = raf.getChannel().map(write ? MapMode.READ_WRITE : MapMode.READ_ONLY, 0, Unit.SIZE * nbuffers);
-        mmf.order(ByteOrder.nativeOrder());
-        raf.close();
-        units = new Unit[nbuffers];
-        for (int i=0; i<units.length; i++) {
-            units[i] = new Unit();
-            mmf.position(i * Unit.SIZE);
-            mmf.limit(mmf.position() + Unit.SIZE);
-            units[i].buf = mmf.slice();
-            units[i].addr = UberUtil.getAddress(units[i].buf);
+        this.raf = new RandomAccessFile(file, write ? "rw" : "r");
+        this.ch = this.raf.getChannel();
+        
+        // map units if this is read only
+        if (!write) {
+            int nbuffers = (int)(this.file.length() / Unit.SIZE); 
+            MappedByteBuffer mmf = raf.getChannel().map(MapMode.READ_ONLY, 0, Unit.SIZE * nbuffers);
+            this.mmfs.add(mmf);
+            mmf.order(ByteOrder.nativeOrder());
+            for (int i=0; i<nbuffers; i++) {
+                Unit ii = new Unit();
+                mmf.position(i * Unit.SIZE);
+                mmf.limit(mmf.position() + Unit.SIZE);
+                ii.buf = mmf.slice();
+                ii.addr = UberUtil.getAddress(ii.buf);
+                this.units.add(ii);
+            }
+            this.ch.close();
+            this.raf.close();
         }
-        units[0].free = false;
     }
     
     public static void log(Object... args) {
-        if (_singlton == null) {
-            return;
+        if (_singlton != null) {
+            _singlton.log_(args);
         }
-        
+    }
+    
+    public void log_(Object... args) {
         // get a buffer
-        Unit unit = _addr.get();
+        Unit unit = addr.get();
         if (unit == null) {
-            // out of buffers, use the shared one. better than nothing
-            unit = _singlton.units[0];
+            return;
         }
         
         // write stuff
@@ -155,25 +162,48 @@ public final class AntiCrashCrimeScene {
         catch (Exception ignored) {}
     }
     
-    public static synchronized Unit alloc() {
-        if (_singlton == null) {
-            return null;
-        }
-        
-        // _buffers[0] is the shared one
-        for (int i=1; i<_singlton.units.length; i++) {
-            if (_singlton.units[i].free) {
-                _singlton.units[i].free = false;
-                return _singlton.units[i];
+    public static synchronized Unit alloc_() {
+        return (_singlton != null) ? _singlton.alloc() : null;
+    }
+    
+    private synchronized Unit alloc() {
+        for (int j=0; j<2; j++) {
+            // _buffers[0] is the shared one
+            for (int i=1; i<this.units.size(); i++) {
+                Unit ii = this.units.get(i);
+                if (ii.owner != null) {
+                    if (ii.owner.isAlive()) {
+                        continue;
+                    }
+                }
+                ii.owner = Thread.currentThread();
+                return ii;
             }
+            grow();
         }
         return null;
     }
     
-    private static synchronized void free(Unit buf) {
-        buf.free = true;
+    private synchronized void grow() {
+        try {
+            long start = this.units.size() * Unit.SIZE;
+            MappedByteBuffer mmf = this.ch.map(MapMode.READ_WRITE, start, Unit.SIZE * 100);
+            this.mmfs.add(mmf);
+            mmf.order(ByteOrder.nativeOrder());
+            for (int i=0; i<100; i++) {
+                Unit ii = new Unit();
+                mmf.position(i * Unit.SIZE);
+                mmf.limit(mmf.position() + Unit.SIZE);
+                ii.buf = mmf.slice();
+                ii.addr = UberUtil.getAddress(ii.buf);
+                this.units.add(ii);
+            }
+        }
+        catch (Exception ignored) {
+            // if it fails then nothing is logged
+        }
     }
-    
+
     private static Object getValue(ByteBuffer buf) {
         Object result = null;
         byte type = buf.get();
@@ -295,14 +325,18 @@ public final class AntiCrashCrimeScene {
     }
     
     public Unit getUnit(int idx) {
-        return this.units[idx];
+        return this.units.get(idx);
     }
     
-    public Unit[] getUnits() {
+    public List<Unit> getUnits() {
         return this.units;
     }
     
     public void close() {
-        Unsafe.unmap(this.mmf);
+        IOUtils.closeQuietly(this.ch);
+        IOUtils.closeQuietly(this.raf);
+        for (MappedByteBuffer i:this.mmfs) {
+            Unsafe.unmap(i);
+        }
     }
 }

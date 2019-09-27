@@ -13,6 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.sql.OrcaException;
+
 public class SetSessionParameter extends Statement {
     String name;
     Operator op;
@@ -27,7 +29,12 @@ public class SetSessionParameter extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Object val = Util.eval(ctx, this.op, params, 0);
-        ctx.getSession().getConfig().set(this.name, val == null ? null : val.toString());
+        try {
+            ctx.getSession().getConfig().set(this.name, val == null ? null : val.toString());
+        }
+        catch (Exception x) {
+            throw new OrcaException(x);
+        }
         return null;
     }
 

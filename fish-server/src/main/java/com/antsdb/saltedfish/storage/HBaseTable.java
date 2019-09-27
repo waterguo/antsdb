@@ -34,7 +34,7 @@ import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.MemoryManager;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.InterruptException;
 import com.antsdb.saltedfish.nosql.Row;
@@ -210,7 +210,7 @@ public class HBaseTable implements StorageTable {
             long pRow = Helper.toRow(getHeap(size * 2 + 0x100), r, getTableMeta(), this.tableId);
             return pRow;
         }
-        catch (OutOfHeapMemory x) {
+        catch (OutOfHeapException x) {
             _log.error("error table={} key={}", this.tableId, KeyBytes.toString(pKey));
             throw x;
         }

@@ -27,9 +27,10 @@ import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
 import com.antsdb.saltedfish.cpp.SkipListScanner;
 import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.ScanOptions;
@@ -68,6 +69,7 @@ public final class MinkePage implements Comparable<MinkePage> {
     FishSkipList ranges;
     AtomicLong hit = new AtomicLong();
     AtomicLong lastAccess = new AtomicLong();
+    AtomicInteger waste = new AtomicInteger();
     Exception callstack = null;
     private KeyBytes keyStart;
     private KeyBytes keyEnd;
@@ -78,10 +80,6 @@ public final class MinkePage implements Comparable<MinkePage> {
     private AtomicInteger state = new AtomicInteger(PageState.FREE);
     /** time when the page is put into garbage bin */
     long garbageTime;
-    /** manage the split concurrency. without this, concurrent split on the same page leads to corrupted 
-     * data structure 
-     */
-    
 
     static enum ScanType {
         NULL,
@@ -320,6 +318,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         this.lastAccess.set(0);
         this.callstack = null;
         this.garbageTime = 0;
+        this.waste.set(0);
     }
     
     int getSignature() {
@@ -336,10 +335,10 @@ public final class MinkePage implements Comparable<MinkePage> {
                 int oHeadValue = Unsafe.getIntVolatile(pHead);
                 int oRow = (int)(pRow - this.addr);
                 if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oRow)) {
+                    trackWrite(oHeadValue);
                     break;
                 }
             }
-            trackWrite();
             return pRow;
         }
         finally {
@@ -375,7 +374,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         }
         if (this.heap == null) {
             // this is a carbonfreezed page. need to split
-            throw new OutOfHeapMemory();
+            throw new OutOfHeapException();
         }
         if (pKey == 0) {
             return;
@@ -391,10 +390,10 @@ public final class MinkePage implements Comparable<MinkePage> {
                 long pHead = this.rows.put(pKey);
                 int oHeadValue = Unsafe.getIntVolatile(pHead);
                 if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oNewRow)) {
+                    trackWrite(oHeadValue);
                     break;
                 }
             }
-            trackWrite();
             return heap.getAddress(oNewRow);
         }
         finally {
@@ -416,10 +415,10 @@ public final class MinkePage implements Comparable<MinkePage> {
                 long pHead = this.rows.put(pKey);
                 int oHeadValue = Unsafe.getIntVolatile(pHead);
                 if (Unsafe.compareAndSwapInt(pHead, oHeadValue, value)) {
+                    trackWrite(oHeadValue);
                     break;
                 }
             }
-            trackWrite();
         }
         finally {
         }
@@ -436,7 +435,7 @@ public final class MinkePage implements Comparable<MinkePage> {
                 int oHeadValue = Unsafe.getIntVolatile(pHead);
                 int oNewRowKey = (int) (newRowKey.getAddress() - this.addr);
                 if (Unsafe.compareAndSwapInt(pHead, oHeadValue, oNewRowKey)) {
-                    trackWrite();
+                    trackWrite(oHeadValue);
                     return newRowKey.getAddress();
                 }
             }
@@ -768,7 +767,7 @@ public final class MinkePage implements Comparable<MinkePage> {
             Range merged = merge(start, end, value);
             long result = putRange(this.ranges, merged);
             deleteObsoleteRanges(this.ranges, merged);
-            trackWrite();
+            trackWrite(0);
             return result;
         }
         finally {
@@ -990,8 +989,26 @@ public final class MinkePage implements Comparable<MinkePage> {
         this.lastAccess.lazySet(UberTime.getTime());
     }
 
-    private void trackWrite() {
+    private void trackWrite(int oOldObjectOffset) {
         this.lastAccess.lazySet(UberTime.getTime());
+        
+        // calculate wasted bytes - bytes belongs to deleted/replaced data
+        if (oOldObjectOffset >= HEADER_SIZE) {
+            long pOld = this.addr + oOldObjectOffset;
+            byte format = Value.getFormat(this.heap, pOld);
+            int size = 0;
+            if (format == Value.FORMAT_ROW) {
+                size = Row.getLength(pOld);
+            }
+            else if (format == Value.FORMAT_KEY_BYTES) {
+                size = KeyBytes.getRawSize(pOld);
+                
+            }
+            else {
+                _log.warn("unknown format {}", format);
+            }
+            this.waste.addAndGet(size);
+        }
     }
 
     public boolean free() {
@@ -1040,10 +1057,8 @@ public final class MinkePage implements Comparable<MinkePage> {
      */
     public int getUsage() {
         if (this.heap != null) {
-            if (!this.heap.isFull()) {
-                int result = (int)this.heap.position();
-                return result;
-            }
+            int result = (int)this.heap.position();
+            return result;
         }
         int result = Unsafe.getIntVolatile(this.addr + OFFSET_USAGE);
         return result;
@@ -1198,4 +1213,7 @@ public final class MinkePage implements Comparable<MinkePage> {
         return getState() != PageState.ACTIVE;
     }
 
+    public int getWastedBytes() {
+        return this.waste.get();
+    }
 }

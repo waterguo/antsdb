@@ -28,6 +28,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
@@ -57,9 +58,6 @@ class CudHandler {
     private SysMetaRow table;
     Connection conn;
     private String replaceSql;
-    
-    CudHandler() {
-    }
     
     public void prepare(Connection conn, SysMetaRow table, List<HColumnRow> hcolumns) throws SQLException {
         this.conn = conn;
@@ -183,7 +181,7 @@ class CudHandler {
         return buf.toString();
     }
 
-    public void insert(long trxid, Row row, boolean isBlobRow) throws SQLException {
+    public void insert(long trxid, Row row, boolean isBlobRow, long lp, int tableId) throws SQLException {
         boolean hasBlobRef = false;
         boolean nullRow = true;
         for (int i=0; i<this.replaceParams.size(); i++) {
@@ -197,6 +195,7 @@ class CudHandler {
             else {
                 if (value instanceof BlobReference) {
                     hasBlobRef = true;
+                    this.replace.setObject(i+1, null);
                 }
                 else {
                     this.replace.setObject(i+1, value);
@@ -207,6 +206,10 @@ class CudHandler {
         if (!hasBlobRef) {
             if (!nullRow) {
                 int result = this.replace.executeUpdate();
+                if (_log.isTraceEnabled()) {
+                    String key = KeyBytes.toString(row.getKeyAddress());
+                    _log.trace("replace lp={} tableId={} key={} result={}", lp, tableId, key, result);
+                }
                 if (result != 1 && result != 2) {
                     // 1 means an INSERT. 2 means an UPDATE
                     log(result, this.replaceSql, replaceParams, row);
@@ -215,16 +218,20 @@ class CudHandler {
         }
     }
 
-    public void update(long trxid, Row row, boolean isBlobRow) throws SQLException {
-        insert(trxid, row, isBlobRow);
+    public void update(long trxid, Row row, boolean isBlobRow, long lp, int tableId) throws SQLException {
+        insert(trxid, row, isBlobRow, lp, tableId);
     }
     
-    public void delete(Row row) throws SQLException {
+    public void delete(Row row, long lp, int tableId) throws SQLException {
         for (int i=0; i<this.deleteParams.size(); i++) {
             Object value = getValue(row, this.deleteParams.get(i), false);
             this.delete.setObject(i+1, value);
         }
         int result = this.delete.executeUpdate();
+        if (_log.isTraceEnabled()) {
+            String key = KeyBytes.toString(row.getKeyAddress());
+            _log.trace("delete lp={} tableId={} key={} result={}", lp, tableId, key, result);
+        }
         if (result != 1) {
             log(result, this.deleteSql, this.deleteParams, row);
         }

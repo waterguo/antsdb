@@ -322,8 +322,6 @@ public class MetadataService {
         long trxid = trx.getGuaranteedTrxId();
         GTable table = getSysTable();
         HumpbackError error = table.delete(hsession, trxid, tableMeta.getKey(), 1000);
-        String location = table.getLocation(trxid, Long.MAX_VALUE, tableMeta.getKey());
-        _log.debug("table {}/{} is deleted at {}", trx, tableMeta.getObjectName().toString(), location);
         if (error != HumpbackError.SUCCESS) {
             throw new OrcaException(error);
         }
@@ -338,7 +336,6 @@ public class MetadataService {
         }
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
     

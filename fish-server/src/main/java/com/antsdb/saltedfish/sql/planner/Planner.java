@@ -54,6 +54,7 @@ import com.antsdb.saltedfish.sql.vdm.FuncMin;
 import com.antsdb.saltedfish.sql.vdm.FuncSum;
 import com.antsdb.saltedfish.sql.vdm.GroupByPostProcesser;
 import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
+import com.antsdb.saltedfish.sql.vdm.Limiter;
 import com.antsdb.saltedfish.sql.vdm.MasterRecordCursorMaker;
 import com.antsdb.saltedfish.sql.vdm.NestedJoin;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
@@ -111,6 +112,10 @@ public class Planner {
     private Node current;
     private boolean noCache = false;
     private Analyzer analyzer = new Analyzer();
+    private long offset;
+    private long count;
+    private CursorMeta outputMeta = new CursorMeta();
+    private boolean freeze = false;
 
     static {
         KEY.setColumnId(-1);
@@ -146,6 +151,9 @@ public class Planner {
     }
 
     public ObjectName addTable(String alias, TableMeta table, boolean left, boolean isOuter) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
         Node node = new Node();
         node.table = table;
         if (alias == null) {
@@ -184,16 +192,7 @@ public class Planner {
         return node.alias;
     }
 
-    public ObjectName addCursor(String alias, CursorMaker maker, boolean left, boolean isOuter) {
-        View view = (maker instanceof View) ? (View)maker : null;
-        Node node = new Node();
-        node.maker = maker;
-        if ((alias == null) && (view != null)) {
-            node.alias = view.getName();
-        }
-        else {
-            node.alias = new ObjectName(null, alias);
-        }
+    private void addCursor(Node node, CursorMeta meta, ObjectName sourceName, boolean left, boolean isOuter) {
         if (left) {
             node.isOuter = isOuter;
         }
@@ -203,16 +202,42 @@ public class Planner {
             node.isOuter = false;
         }
         this.nodes.put(node.alias, node);
-        for (FieldMeta i : maker.getCursorMeta().getFields()) {
+        for (FieldMeta i : meta.getFields()) {
             PlannerField field = new PlannerField(node, i);
-            if (view != null) {
-                field.setSourceTable(view.getName());
-            }
+            field.setSourceTable(sourceName);
             node.fields.add(field);
             this.rawMeta.addColumn(field);
         }
         this.last = this.current;
         this.current = node;
+    }
+    
+    public ObjectName addCursor(String alias, Planner planner, boolean left, boolean isOuter) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
+        Node node = new Node();
+        node.planner = planner;
+        node.alias = new ObjectName(null, alias);
+        addCursor(node, planner.getOutputMeta(), null, left, isOuter);
+        return node.alias;
+    }
+    
+    public ObjectName addCursor(String alias, CursorMaker maker, boolean left, boolean isOuter) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
+        View view = (maker instanceof View) ? (View)maker : null;
+        Node node = new Node();
+        node.maker = maker;
+        ObjectName sourceName = (view != null) ? view.getName() : null;
+        if ((alias == null) && (view != null)) {
+            node.alias = view.getName();
+        }
+        else {
+            node.alias = new ObjectName(null, alias);
+        }
+        addCursor(node, maker.getCursorMeta(), sourceName, left, isOuter);
         return node.alias;
     }
 
@@ -234,19 +259,76 @@ public class Planner {
     }
 
     public void addJoinCondition(ObjectName alias, Operator expr, boolean left) {
+        Node node = null;
         if (left) {
-            Node node = this.nodes.get(alias);
+            node = this.nodes.get(alias);
             if (node == null) {
                 throw new OrcaException("alias is not found: " + alias);
             }
-            node.joinCondition = expr;
         }
         else {
-            this.last.joinCondition = expr;
+            node = this.last;
+        }
+        node.joinCondition = expr;
+        if (node.planner != null) {
+            pushDown(node.planner, expr);
         }
     }
 
+    /**
+     * push down the provided condition to subquery so it can take advantage of indexes potentially. 
+     * 
+     * @param planner subquery
+     * @param expr condition
+     */
+    private void pushDown(Planner subquery, Operator expr) {
+        if (!(expr instanceof OpEqual)) {
+            // for now, we only handle a single =
+            return;
+        }
+        OpEqual equal = (OpEqual)expr;
+        if (!(equal.left instanceof FieldValue) || !(equal.right instanceof FieldValue)) {
+            // both operands of the = must be field name
+            return;
+        }
+        FieldValue x = findField(this, subquery, (FieldValue)equal.left);
+        FieldValue y = findField(this, subquery, (FieldValue)equal.right);
+        if ((x == null) || (y == null)) return;
+        OpEqual z = new OpEqual(x, y);
+        if (subquery.where == null) {
+            subquery.where = z;
+        }
+        else {
+            subquery.where = new OpAnd(subquery.where, z);
+        }
+    }
+
+    private FieldValue findField(Planner planner, Planner subquery, FieldValue fv) {
+        if (fv.getField().owner.planner == subquery) {
+            for (int i=0; i<subquery.getOutputMeta().getColumnCount(); i++) {
+                if (subquery.getOutputMeta().getColumn(i) == fv.getField().field) {
+                    if (subquery.getOutputFields().get(i).expr instanceof FieldValue) {
+                        return (FieldValue)subquery.getOutputFields().get(i).expr;
+                    }
+                }
+            }
+        }
+        else {
+            PlannerField result = subquery.findField(it->{
+                return it.getColumn() == fv.getField().getColumn();
+            });
+            if (result != null) {
+                return new FieldValue(result);
+            }
+        }
+        return null;
+    }
+
     public OutputField addOutputField(String name, Operator expr) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
+        
         // remove the system column prefix if it is wanted in the query result. it is because 
         // Helper.getColumnCount() will hide the columns start with '*'
         if (name.startsWith("*")) {
@@ -260,6 +342,16 @@ public class Planner {
         adjustOpMatch(expr);
         OutputField field = new OutputField(name, expr);
         this.fields.add(field);
+        FieldMeta fm = new FieldMeta(field.name, field.expr.getReturnType());
+        if (field.expr instanceof FieldValue) {
+            PlannerField pf = ((FieldValue)field.expr).getField();
+            fm.setSourceTable(pf.getSourceTable());
+            fm.setSourceColumnName(pf.getSourceName());
+            fm.setTableAlias(pf.getTableAlias());
+            fm.setColumn(pf.column);
+            fm.setKeyColumn(pf.isKeyColumn());
+        }
+        this.outputMeta.addColumn(fm);
         return field;
     }
 
@@ -277,6 +369,10 @@ public class Planner {
         });
     }
 
+    public CursorMeta getOutputMeta() {
+        return this.outputMeta;
+    }
+    
     public CursorMaker run() {
         if ((this.groupBy == null) && scanAggregationFunctions(getOutputFields())) {
             this.groupBy = Collections.emptyList();
@@ -286,16 +382,13 @@ public class Planner {
         Link path = build();
 
         // build join
-
         CursorMaker maker = buildJoin(path);
 
         // reindex fields. planner might adjust the order of participating
         // tables;
-
         reindexFields(path);
 
         // where clause
-
         Operator condition = null;
         if (this.where != null) {
             condition = this.where;
@@ -306,54 +399,42 @@ public class Planner {
         }
 
         // order by
-
         maker = buildOrderby(maker);
 
         // group by
-
         CursorMaker grouper = buildGroupBy(maker, path);
         boolean hasGrouper = grouper != maker;
         maker = grouper;
         
         // aggregation
-
         if (this.fields.size() > 0) {
-            CursorMeta meta = new CursorMeta();
             List<Operator> exprs = new ArrayList<>();
             for (OutputField i : this.fields) {
                 exprs.add(i.expr);
-                FieldMeta field = new FieldMeta(i.name, i.expr.getReturnType());
-                if (i.expr instanceof FieldValue) {
-                    PlannerField pf = ((FieldValue) i.expr).getField();
-                    field.setSourceTable(pf.getSourceTable());
-                    field.setSourceColumnName(pf.getSourceName());
-                    field.setTableAlias(pf.getTableAlias());
-                    field.setColumn(pf.column);
-                    field.setKeyColumn(pf.isKeyColumn());
-                }
-                meta.addColumn(field);
             }
-            maker = new Aggregator(maker, meta, exprs, this.ctx.getNextMakerId());
+            maker = new Aggregator(maker, this.outputMeta, exprs, this.ctx.getNextMakerId());
         }
 
         // group by post process
-
         if (hasGrouper) {
             maker = new GroupByPostProcesser(maker);
         }
 
         // having
-
         if (this.having != null) {
             maker = new Filter(maker, this.having, false, ctx.getNextMakerId());
         }
 
         // distinct
-
         if (this.isDistinct) {
             maker = new DumbDistinctFilter(maker);
         }
 
+        // limit
+        if ((this.count != 0) || (this.offset != 0)) {
+            maker = new Limiter(maker, this.offset, this.count);
+        }
+        
         return maker;
     }
 
@@ -862,11 +943,8 @@ public class Planner {
                 ts.setNoCache(this.noCache);
                 link.maker = ts;
             }
-            else if (node.maker != null) {
-                link.maker = node.maker;
-            }
             else {
-                throw new CodingError();
+                link.maker = node.getCursorMaker();
             }
         }
 
@@ -938,14 +1016,12 @@ public class Planner {
                         boolean isUnique, 
                         boolean isFullText) {
         // no filters, can't do table range scan
-
         if (filters.size() <= 0) {
             return null;
         }
 
         // match the key columns with the table filters one by one following the
         // sequence defined in the key.
-
         Link link = new Link(node);
         List<ColumnMeta> columns = key.getColumns(node.table);
         if (columns.size() < 1) {
@@ -957,7 +1033,6 @@ public class Planner {
             boolean found = false;
             for (ColumnFilter filter : filters) {
                 // is full text
-
                 if (filter.op == FilterOp.MATCH) {
                     if (isFullText) {
                         link.maker = createFullTextScanner(node.table, (IndexMeta) key, filter);
@@ -971,19 +1046,16 @@ public class Planner {
                 }
 
                 // is the same column?
-
                 if (filter.field.column != column) {
                     continue;
                 }
 
                 // continue only if the column is renderable
-
                 if (!checkColumnReference(previous, node, filter.operand)) {
                     continue;
                 }
 
                 //
-
                 found = true;
                 if (range.addFilter(i, filter)) {
                     link.consumed.add(filter);
@@ -995,7 +1067,6 @@ public class Planner {
         }
 
         // create the cursor maker if it is still null
-
         link.maker = range.createMaker(node.table, key, ctx);
         return (link.maker == null) ? null : link;
     }
@@ -1251,5 +1322,26 @@ public class Planner {
     
     public Operator getWhere() {
         return this.where;
+    }
+
+    public void setLimit(long offset, long count) {
+        this.offset = offset;
+        this.count = count;
+    }
+
+    public void addAllFields() {
+        this.freeze = true;
+        if (this.nodes.size() == 1) {
+            Node node = nodes.values().iterator().next();
+            if (node.maker != null) {
+                this.outputMeta = node.maker.getCursorMeta();
+                return;
+            }
+            else if (node.planner != null) {
+                this.outputMeta = node.planner.getOutputMeta();
+                return;
+            }
+        }
+        throw new IllegalArgumentException();
     }
 }

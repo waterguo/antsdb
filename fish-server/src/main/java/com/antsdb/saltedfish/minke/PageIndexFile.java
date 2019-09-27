@@ -34,13 +34,14 @@ import com.antsdb.saltedfish.nosql.TableType;
  */
 class PageIndexFile {
     static final int EOF_MARK = 0x77777777;
-    static final int VERSION = 1;
+    static final int VERSION = 2;
     
     File file;
     
     static interface LoadCallback {
+        void main(long version);
         void table(long version, int tableId, TableType type);
-        void page(long version, int pageId, long lastAccess, KeyBytes startKey, KeyBytes endKey);
+        void page(long version, int pageId, int waste, long lastAccess, KeyBytes startKey, KeyBytes endKey);
     }
     
     PageIndexFile(File file) {
@@ -83,7 +84,7 @@ class PageIndexFile {
             long sp;
             long version = in.readLong();
             if (version >>> 56 == 0xff) {
-                version = version & 0xffffffffl;
+                version = version & 0xffffl;
                 sp = in.readLong();
             }
             else {
@@ -112,13 +113,14 @@ class PageIndexFile {
             long sp;
             long version = in.readLong();
             if (version >>> 56 == 0xff) {
-                version = version & 0xffffffffl;
+                version = version & 0xffffl;
                 sp = in.readLong();
             }
             else {
                 sp = version;
                 version = 0;
             }
+            callback.main(version);
             for (;;) {
                 int tableId = in.readInt();
                 if (tableId == EOF_MARK) {
@@ -142,9 +144,13 @@ class PageIndexFile {
             if (version >= 1) {
                 lastAccess = in.readLong(); 
             }
+            int waste = 0;
+            if (version >= 2) {
+                waste = in.readInt();
+            }
             KeyBytes startKey = MinkeTable.readKeyBytes(in);
             KeyBytes endKey = MinkeTable.readKeyBytes(in);
-            callback.page(version, pageId, lastAccess, startKey, endKey);
+            callback.page(version, pageId, waste, lastAccess, startKey, endKey);
         }
     }
 

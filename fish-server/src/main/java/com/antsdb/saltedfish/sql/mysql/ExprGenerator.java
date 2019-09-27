@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntSupplier;
 
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.BailErrorStrategy;
@@ -29,6 +30,8 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.commons.lang.StringUtils;
 
+import com.antsdb.saltedfish.charset.Codecs;
+import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.lexer.MysqlLexer;
 import com.antsdb.saltedfish.lexer.MysqlParser;
 import com.antsdb.saltedfish.lexer.MysqlParser.Bind_parameterContext;
@@ -60,8 +63,8 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Expr_unaryContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Group_concat_parameterContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Like_exprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_intervalContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Literal_stringContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Literal_valueContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.Literal_value_binaryContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Session_variable_referenceContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.ValueContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Variable_referenceContext;
@@ -113,6 +116,8 @@ public class ExprGenerator {
         _functionByName.put("replace", FuncReplace.class);
         _functionByName.put("round", FuncRound.class);
         _functionByName.put("subdate", FuncDateSub.class);
+        _functionByName.put("substr", FuncSubstring.class);
+        _functionByName.put("substring", FuncSubstring.class);
         _functionByName.put("substring_index", FuncSubstringIndex.class);
         _functionByName.put("totimestamp", FuncToTimestamp.class);
         _functionByName.put("to_base64", FuncBase64.class);
@@ -622,10 +627,8 @@ public class ExprGenerator {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
         }
-        CursorMaker select = (CursorMaker) new Select_or_valuesGenerator().genSubquery(
-                ctx, 
-                rule.select_stmt(),
-                cursorMeta);
+        Planner planner = Select_or_valuesGenerator.genSubquery(ctx, rule.select_stmt(), cursorMeta);
+        CursorMaker select = planner.run();
         Operator in = new OpExists(select);
         if (rule.K_NOT() != null) {
             in = new OpNot(in);
@@ -672,8 +675,8 @@ public class ExprGenerator {
         if (rule.select_stmt().select_or_values().size() != 1) {
             throw new NotImplementedException();
         }
-        CursorMaker select = (CursorMaker) new Select_or_valuesGenerator().genSubquery(ctx, rule.select_stmt(),
-                cursorMeta);
+        Planner planner = Select_or_valuesGenerator.genSubquery(ctx, rule.select_stmt(), cursorMeta);
+        CursorMaker select = planner.run();
         if (select.getCursorMeta().getColumnCount() != 1) {
             throw new OrcaException("Operand should contain 1 column");
         }
@@ -910,8 +913,8 @@ public class ExprGenerator {
     }
 
     public static Operator genLiteralValue(GeneratorContext ctx, Planner planner, Literal_valueContext rule) {
-        if (rule.literal_value_binary() != null) {
-            return new BinaryString(getBytes(rule.literal_value_binary()), true);
+        if (rule.literal_string() != null) {
+            return genString(ctx, planner, rule.literal_string());
         }
         else if (rule.literal_interval() != null) {
             return parseInterval(ctx, planner, rule.literal_interval());
@@ -927,10 +930,6 @@ public class ExprGenerator {
             }
             return new NumericValue(new BigDecimal(rule.getText()));
         }
-        case MysqlParser.STRING_LITERAL:
-        case MysqlParser.DOUBLE_QUOTED_LITERAL:
-            /* mysql strings are all binary */
-            return new BinaryString(getBytes(token), false);
         case MysqlParser.K_NULL:
             return new NullValue();
         case MysqlParser.K_CURRENT_DATE:
@@ -956,6 +955,25 @@ public class ExprGenerator {
         default:
             throw new NotImplementedException();
         }
+    }
+
+    private static Operator genString(GeneratorContext ctx, Planner planner, Literal_stringContext rule) {
+        TerminalNode csctx = rule.CHARSET_NAME();
+        Decoder decoder = null;
+        if (csctx != null) {
+            String csname = csctx.getText().substring(1);
+            if (csname.equals("binary")) {
+                return new BytesValue(getBytes(getStringNode(rule)));
+            }
+            decoder = Codecs.get(csname);
+            if (decoder == null) {
+                throw new OrcaException("{} is not a valid character set", csname); 
+            }
+        }
+        if (decoder == null) {
+            decoder = ctx.getSession().getConfig().getRequestDecoder();
+        }
+        return new BinaryString(getBytes(getStringNode(rule)), decoder);
     }
 
     private static Operator parseInterval(GeneratorContext ctx, Planner planner, Literal_intervalContext rule) {
@@ -1018,8 +1036,50 @@ public class ExprGenerator {
         return bytes;
     }
 
-    private static byte[] getBytes(Literal_value_binaryContext rule) {
-        return getBytes(rule.STRING_LITERAL());
+    private static TerminalNode getStringNode(Literal_stringContext rule) {
+        TerminalNode singleQuoted = rule.STRING_LITERAL();
+        TerminalNode doubleQuoted = rule.DOUBLE_QUOTED_LITERAL();
+        return singleQuoted != null ? singleQuoted : doubleQuoted;
+    }
+    
+    static String getString(TerminalNode rule, Decoder decoder) {
+        Token token = rule.getSymbol();
+        CharStream cs = token.getInputStream();
+        int pos = cs.index();
+        cs.seek(token.getStartIndex() + 1);
+        int len = token.getStopIndex() - token.getStartIndex() - 1;
+        IntSupplier supplier = new IntSupplier() {
+            int i = 0;
+            
+            @Override
+            public int getAsInt() {
+                if (i >= len) {
+                    return -1;
+                }
+                int ch = cs.LA(i + 1);
+                if (ch == '\\') {
+                    i++;
+                    ch = cs.LA(i + 1);
+                    if (ch == '0') {
+                        ch = 0;
+                    }
+                    else if (ch == 'n') {
+                        ch = '\n';
+                    }
+                    else if (ch == 'r') {
+                        ch = '\r';
+                    }
+                    else if (ch == 'Z') {
+                        ch = '\032';
+                    }
+                }
+                i++;
+                return ch;
+            }
+        };
+        String result = decoder.toString(supplier);
+        cs.seek(pos);
+        return result;
     }
     
     private static byte[] getBytes(TerminalNode rule) {

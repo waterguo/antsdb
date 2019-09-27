@@ -94,7 +94,7 @@ public class BluntHeap extends Heap implements AutoCloseable {
         // out of heap
         int pos = this.pos.get();
         freeze();
-        throw new OutOfHeapMemory(this.capacity + " " + pos + " " + size);
+        throw new OutOfHeapException(this.capacity + " " + pos + " " + size);
     }
 
     public long write(ByteBuffer bytes) {

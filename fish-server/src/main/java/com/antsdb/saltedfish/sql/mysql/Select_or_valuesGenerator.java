@@ -102,10 +102,9 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
      * @return
      * @throws OrcaException
      */
-    public CursorMaker genSubquery(GeneratorContext ctx, Select_stmtContext rule, Planner parent) 
+    public static Planner genSubquery(GeneratorContext ctx, Select_stmtContext rule, Planner parent) 
     throws OrcaException {
-        CursorMaker subquery = Select_stmtGenerator.gen(ctx, rule, parent);
-        return subquery;
+        return Select_stmtGenerator.gen(ctx, rule, parent);
     }
     
     static Planner gen(GeneratorContext ctx, Select_or_valuesContext rule, Planner parent) 
@@ -118,20 +117,17 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         genFrom(ctx, rule.from_clause(), planner);
         
         // prevent null cursor. in case of 'select 1'.
-        
         if (planner.isEmpty()) {
             planner.addCursor("", new Dual(), true, false); 
         }
         
         // where
-        
         if (rule.where_clause() != null) {
             Operator filter = ExprGenerator.gen(ctx, planner, rule.where_clause().expr());
             planner.setWhere(filter);
         }
         
         // final values  
-        
         Map<String, Operator> exprByAlias = new HashMap<>();
         for (Result_columnContext it:rule.select_columns().result_column()) {
             ParseTree child = it.getChild(0);
@@ -175,7 +171,6 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         };
         
         // group by, prevent empty cursor if aggregate functions are used
-        
         if ((rule.group_by_clause()!=null)) {
             List<Operator> groupbys = new ArrayList<Operator>();
             if (rule.group_by_clause() != null) {
@@ -191,22 +186,20 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         }
         
         // having clause
-        
         if (rule.having_clause() != null) {
             ExprContext rewritten = rewriteHaving(ctx, planner, rule.having_clause().expr());
             Planner newone = new Planner(ctx);
             newone.addCursor("", planner.run(), true, false);
+            newone.addAllFields();
             Operator filter = ExprGenerator.gen(ctx, newone, rewritten);
             newone.setWhere(filter);
             planner = newone;
         }
         
         // distinct
-        
         planner.setDistinct(rule.K_DISTINCT() != null);
         
         // done
-        
         return planner;
     }
     
@@ -414,10 +407,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         }
         if (rule.from_subquery() != null) {
             // add sub query to planner
-            CursorMaker subquery = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
-                    ctx, 
-                    rule.from_subquery().select_stmt(),
-                    planner);
+            Planner subquery = genSubquery(ctx, rule.from_subquery().select_stmt(), planner);
             name = planner.addCursor(alias, subquery, left, isOuter);
         }
         else if (rule.from_table() != null) {

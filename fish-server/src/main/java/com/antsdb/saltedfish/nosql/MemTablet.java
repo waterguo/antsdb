@@ -34,7 +34,7 @@ import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.KeyBytes;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
 import com.antsdb.saltedfish.cpp.SkipListScanner;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
@@ -1851,7 +1851,7 @@ public final class MemTablet implements ConsoleHelper, Recycable, Closeable, Log
     
     private void ensureMutable() {
         if (!this.isMutable) {
-            throw new OutOfHeapMemory();
+            throw new OutOfHeapException();
         }
     }
 

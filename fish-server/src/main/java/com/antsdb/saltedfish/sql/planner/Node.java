@@ -43,9 +43,9 @@ public class Node {
     Operator joinCondition;
     LinkedList<RowSet> union = new LinkedList<>();
     public boolean isUsed = false;
+    Planner planner;
     
     // below are fields related to union
-    
     Operator where;
     
     PlannerField findField(FieldMeta field) {
@@ -118,5 +118,9 @@ public class Node {
     
     public List<RowSet> getUnion() {
         return this.union;
+    }
+    
+    CursorMaker getCursorMaker() {
+        return (this.maker != null) ? this.maker : this.planner.run();
     }
 }

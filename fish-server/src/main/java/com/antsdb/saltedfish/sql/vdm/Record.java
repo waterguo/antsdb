@@ -238,9 +238,19 @@ public abstract class Record {
         return pRecord;
     }
     
+    public static void validate(long pRecord) {
+        String result = dump(pRecord);
+        if ("not a record".equals(result)) {
+            throw new IllegalArgumentException();
+        }
+    }
+    
     public static String dump(long pRecord) {
         if (pRecord == 0) {
             return "NULL";
+        }
+        if (pRecord == GROUP_END) {
+            return "GROUP END";
         }
         StringBuilder buf = new StringBuilder();
         try {

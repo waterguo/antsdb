@@ -83,19 +83,19 @@ public class ConfigService {
         return value;
     }
     
-	public int getSlaveServerId() {
-		int value = Integer.parseInt(this.props.getProperty("slave.server-id"));
-		return value;
-	}
+    public int getSlaveServerId() {
+        int value = Integer.parseInt(this.props.getProperty("slave.server-id"));
+        return value;
+    }
 
-	public String getSlaveUser() {
+    public String getSlaveUser() {
         return this.props.getProperty("masterUser");
-	}
+    }
 
-	public String getSlavePassword() {
+    public String getSlavePassword() {
         return this.props.getProperty("masterPassword");
-	}
-	
+    }
+    
     public boolean isAsynchronousImportEnabled() {
         return getBoolean("orca.asynchronous-import", true);
     }
@@ -137,5 +137,4 @@ public class ConfigService {
         }
         return result;
     }
-    
 }

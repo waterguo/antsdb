@@ -16,7 +16,7 @@ package com.antsdb.saltedfish.sql;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
@@ -64,12 +64,12 @@ public class SystemViewLocks extends View {
     }
 
     private Item add(VdmContext ctx, TableLock lock) {
-        SysMetaRow tableInfo = ctx.getHumpback().getTableInfo(lock.tableId);
+        GTable table = ctx.getHumpback().getTable(lock.tableId);
         Item item = new Item();
         item.SESSION = lock.owner;
         item.LOCK_TYPE = LockLevel.toString(lock.level.get());
-        item.OBJECT_ID = tableInfo.getTableId();
-        item.OBJECT = tableInfo.getNamespace() + "." + tableInfo.getTableName();
+        item.OBJECT_ID = table.getId();
+        item.OBJECT = table.getNamespace() + "." + table.getName();
         return item;
     }
 }

@@ -335,12 +335,12 @@ public class Synchronizer extends FishServiceThread {
         
         // check if the table is already deleted
         StorageTable target = getStorage().getTable(source.getTableId());
-        SysMetaRow sourceTableInfo = this.humpback.getTableInfo(source.getTableId());
-        TableType type = sourceTableInfo.getType();
-        if (sourceTableInfo.isDeleted()) {
+        GTable sourceTable = this.humpback.getTable(source.getTableId());
+        if (sourceTable == null) {
             // table might disappear due to concurrent deletion 
             return 0;
         }
+        TableType type = sourceTable.getTableType();
         if (source.getTableId() >= 0 && target == null) {
             throw new CodingError();
         }

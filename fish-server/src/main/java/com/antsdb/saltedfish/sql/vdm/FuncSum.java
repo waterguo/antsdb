@@ -27,7 +27,8 @@ public class FuncSum extends Function {
     int variableId;
 
     private static class Data {
-            Object sum;
+        Object zero;
+        Object sum;
     }
     
     public FuncSum(int variableId, Operator expr) {
@@ -71,18 +72,7 @@ public class FuncSum extends Function {
             data = init(ctx);
         }
         if (Record.isGroupEnd(pRecord)) {
-            if (data.sum instanceof Float) {
-                data.sum = Float.valueOf(0);
-            }
-            else if (data.sum instanceof Double) {
-                data.sum = Double.valueOf(0);
-            }
-            else if (data.sum instanceof BigDecimal) {
-                data.sum = BigDecimal.ZERO;
-            }
-            else {
-                throw new CodingError();
-            }
+            data.sum = null;
             this.expr.eval(ctx, heap, params, pRecord);
             return FishObject.allocSet(heap, data.sum);
         }
@@ -92,7 +82,8 @@ public class FuncSum extends Function {
         if (addrValue == 0) {
             // do nothing
         }
-        else if (data.sum instanceof Float) {
+        else if (data.zero instanceof Float) {
+            if (data.sum == null) data.sum = data.zero;
             if (value instanceof Float) {
                 data.sum = ((Float)data.sum) + ((Float)value);
             }
@@ -100,7 +91,8 @@ public class FuncSum extends Function {
                 throw new CodingError();
             }
         }
-        else if (data.sum instanceof Double) {
+        else if (data.zero instanceof Double) {
+            if (data.sum == null) data.sum = data.zero;
             if (value instanceof Float) {
                 data.sum = ((Double)data.sum) + ((Float)value);
             }
@@ -111,7 +103,8 @@ public class FuncSum extends Function {
                 throw new CodingError();
             }
         }
-        else if (data.sum instanceof BigDecimal) {
+        else if (data.zero instanceof BigDecimal) {
+            if (data.sum == null) data.sum = data.zero;
             if (value instanceof Integer) {
                     data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Integer)value));
             }
@@ -141,13 +134,13 @@ public class FuncSum extends Function {
         Data data = new Data();
         ctx.setVariable(variableId, data);
         if (this.returnType.getJavaType() == Double.class) {
-            data.sum = Double.valueOf(0);
+            data.zero = Double.valueOf(0);
         }
         else if (this.returnType.getJavaType() == Float.class) {
-            data.sum = Float.valueOf(0);
+            data.zero = Float.valueOf(0);
         }
         else if (this.returnType.getJavaType() == BigDecimal.class) {
-            data.sum = BigDecimal.ZERO;
+            data.zero = BigDecimal.ZERO;
         }
         else {
             throw new CodingError();

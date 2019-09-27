@@ -157,7 +157,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             isBlobRow = true;
             handler = getHandler(tableId-1);
         }
-        handler.insert(trxid, row, isBlobRow);
+        handler.insert(trxid, row, isBlobRow, sp, tableId);
         this.opsSinceLastCommit++;
         this.ninserts++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
@@ -188,7 +188,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             isBlobRow = true;
             handler = getHandler(tableId-1);
         }
-        handler.update(trxid, row, isBlobRow);
+        handler.update(trxid, row, isBlobRow, sp, tableId);
         this.opsSinceLastCommit++;
         this.nupdates++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
@@ -216,7 +216,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             isBlobRow = true;
             handler = getHandler(tableId-1);
         }
-        handler.update(trxid, row, isBlobRow);
+        handler.update(trxid, row, isBlobRow, sp, tableId);
         this.opsSinceLastCommit++;
         this.lp = sp;
     }
@@ -261,7 +261,7 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
         }
         CudHandler handler = getHandler(tableId);
         if (!handler.isBlobTable) {
-            handler.delete(row);
+            handler.delete(row, sp, tableId);
             this.opsSinceLastCommit++;
             this.ndeletes++;
             this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);

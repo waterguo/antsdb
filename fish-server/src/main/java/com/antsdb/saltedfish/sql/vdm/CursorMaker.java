@@ -15,7 +15,6 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
-import com.antsdb.saltedfish.lexer.MysqlParser.Limit_clauseContext;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 
 public abstract class CursorMaker extends Instruction {
@@ -51,21 +50,4 @@ public abstract class CursorMaker extends Instruction {
     public void setMakerId(int value) {
         this.makerId = value;
     }
-    
-    public static CursorMaker createLimiter(CursorMaker maker, Limit_clauseContext rule) {
-        int offset = 0;
-        int count = Integer.parseInt(rule.number_value(0).getText());
-        if (rule.K_OFFSET() != null) {
-            offset = Integer.parseInt(rule.number_value(1).getText());
-        }
-        else {
-            if (rule.number_value(1) != null) {
-                offset = count;
-                count = Integer.parseInt(rule.number_value(1).getText());
-            }
-        }
-        maker = new Limiter(maker, offset, count);
-        return maker;
-    }
-
 }

@@ -82,7 +82,7 @@ public final class Session implements AutoCloseable {
         this.fac = fac;
         this.user = user;
         this.hsession = orca.getHumpback().createSession(endpoint + "/" + user);
-        this.config = new SystemParameters(orca.config);
+        this.config = (SystemParameters)orca.config.clone();
         _log.trace("session id={} user={} endpoint={} is created", getId(), user, endpoint);
     }
     
@@ -334,7 +334,11 @@ public final class Session implements AutoCloseable {
     }
     
     public void setAutoCommit(boolean autoCommit) {
-        this.config.set("autocommit", autoCommit ? "1" : "0");
+        try {
+            this.config.set("autocommit", autoCommit ? "1" : "0");
+        }
+        catch (Exception ignored) {
+        }
     }
 
     public boolean isAutoCommit() {

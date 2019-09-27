@@ -81,7 +81,7 @@ public class Insert_stmtGenerator extends Generator<Insert_stmtContext> {
     }
 
     private InsertSelect gen(GeneratorContext ctx,  TableMeta table,  Insert_stmt_selectContext rule) {
-        CursorMaker maker = Select_stmtGenerator.gen(ctx, rule.select_stmt(), null);
+        CursorMaker maker = Select_stmtGenerator.gen(ctx, rule.select_stmt(), null).run();
         GTable gtable = ctx.getGtable(table.getObjectName());
         List<ColumnMeta> columns = genColumns(table, rule.insert_stmt_values_columns());
         Operator[] values = new Operator[table.getMaxColumnId() + 1];

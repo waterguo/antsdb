@@ -11,33 +11,17 @@
  You should have received a copy of the GNU Affero General Public License along with this program.
  If not, see <https://www.gnu.org/licenses/lgpl-3.0.en.html>
 -------------------------------------------------------------------------------------------------*/
-package com.antsdb.saltedfish.charset;
+package com.antsdb.saltedfish.util;
 
-import java.util.HashMap;
-import java.util.Map;
+import org.apache.commons.lang.StringUtils;
 
 /**
  * 
- * @author wgu0
+ * @author *-xguo0<@
  */
-public class Codecs {
-    public final static Decoder UTF8 = new Utf8();
-    public final static Decoder ISO8859 = new Iso8859();
-    public final static Map<String, Decoder> DECODER_BY_NAME = new HashMap<>();
-    
-    static {
-        DECODER_BY_NAME.put("utf8", UTF8);
-        DECODER_BY_NAME.put("iso8859", ISO8859);
-        DECODER_BY_NAME.put("latin1", ISO8859);
-        DECODER_BY_NAME.put("cp1250", ISO8859);
-        DECODER_BY_NAME.put("utf8mb4", UTF8);
-    }
-    
-    /**
-     * @param name in upper case
-     * @return
-     */
-    public static Decoder get(String name) {
-        return DECODER_BY_NAME.get(name.toLowerCase());
+public class IntegerParser implements Parser<Integer>{
+    @Override
+    public Integer parse(String s) throws Exception {
+        return StringUtils.isEmpty(s) ? null : Integer.valueOf(s);
     }
 }

@@ -168,7 +168,7 @@ public final class MinkeCache implements LogSpan, StorageEngine {
     }
 
     @Override
-    public synchronized void checkpoint() throws Exception {
+    public void checkpoint() throws Exception {
         this.minke.checkpoint();
     }
 
@@ -177,7 +177,7 @@ public final class MinkeCache implements LogSpan, StorageEngine {
         this.minke.gc(timestamp);
     }
 
-    public synchronized void checkpointIfNeccessary() throws Exception {
+    public void checkpointIfNeccessary() throws Exception {
         this.minke.checkpointIfNeccessary();
     }
     

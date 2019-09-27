@@ -177,7 +177,7 @@ class Recoverer implements ReplayHandler {
             return;
         }
 
-        syncSchema(sp, tableId);
+        syncSchema(sp, pRow, tableId);
         countRowUpdates();
     }
 
@@ -231,7 +231,7 @@ class Recoverer implements ReplayHandler {
             _log.warn("unable to recover row @ {} due to {}", sp, error);
             return;
         }
-        syncSchema(sp, tableId);
+        syncSchema(sp, 0, tableId);
         countRowUpdates();
     }
 
@@ -313,6 +313,7 @@ class Recoverer implements ReplayHandler {
         long oldestTrxId = entry.getTrxid();
         render(oldestTrxId);
         this.humpback.trxMan.freeTo(oldestTrxId + 100);
+        _log.info("recovery progress: {}", hex(entry.getSpacePointer()));
     }
 
     @Override
@@ -334,9 +335,16 @@ class Recoverer implements ReplayHandler {
         this.rowCount++;
     }
     
-    private void syncSchema(long sp, int tableId) {
+    private void syncSchema(long sp, long pRow, int tableId) {
         // if system table is touched, synchronize with file system
         if (tableId == Humpback.SYSMETA_TABLE_ID) {
+            if (pRow != 0) {
+                SysMetaRow row = new SysMetaRow(SlowRow.fromRowPointer(pRow, 0));
+                if (row.getTableId() < 0) {
+                    // do nothing if the schema change is caused by temp. table
+                    return;
+                }
+            }
             try {
                 humpback.recoverTables();
             }

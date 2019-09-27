@@ -472,7 +472,7 @@ public final class FishSkipList implements ConsoleHelper {
         try {
             buildIndex(pKey, z);
         }
-        catch (OutOfHeapMemory x) {
+        catch (OutOfHeapException x) {
             // failed to add index node doesnt hurt
         }
         

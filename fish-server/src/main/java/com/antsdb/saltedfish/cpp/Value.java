@@ -74,7 +74,7 @@ public class Value {
         if (address == 0) {
             return 0;
         }
-        byte n = Unsafe.getByte(address);
+        byte n = Unsafe.getByteVolatile(address);
         return n;
     }
     

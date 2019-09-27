@@ -167,9 +167,15 @@ public class HBaseStorageService implements StorageEngine {
     static Connection createConnection(Configuration config) throws IOException {
         // we want the hbase client to throw error right away instead of waiting infinitely when the hbase
         // cluster is down
+        // explanation of timeout is below
+        // @link https://stackoverflow.com/questions/30923351/hbase-client-rpc-timeout
+        // @link http://hbasefly.com/2016/06/11/hbase-client-2/?egjmzi=i52jv
+        // hbase.client.scanner.timeout.period could also affect this
         
         config.set("hbase.client.retries.number", "2");
-        config.set("hbase.client.operation.timeout", "10000");
+        config.set("hbase.client.operation.timeout", "20000");
+        config.set("hbase.client.scanner.timeout.period", "20000");
+        config.set("hbase.rpc.timeout", "20000");
         
         // continue
         Connection result;

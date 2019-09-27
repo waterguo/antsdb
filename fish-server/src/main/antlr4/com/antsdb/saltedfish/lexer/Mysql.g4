@@ -948,11 +948,9 @@ current_timestamp_value:K_CURRENT_TIMESTAMP;
 
 literal_value
  : NUMERIC_LITERAL
- | STRING_LITERAL
- | DOUBLE_QUOTED_LITERAL
  | BLOB_LITERAL
  | HEX_LITERAL
- | literal_value_binary
+ | literal_string
  | literal_interval
  | K_NULL
  | K_CURRENT_TIME
@@ -966,10 +964,10 @@ literal_interval
  : K_INTERVAL expr WORD
  ;
  
-literal_value_binary
- : K__BINARY STRING_LITERAL
+literal_string
+ : CHARSET_NAME? (STRING_LITERAL | DOUBLE_QUOTED_LITERAL) (K_COLLATE collation_name) ?
  ;
- 
+
 EXCLAIMATION : '!';
 SCOL : ';';
 DOT : '.';
@@ -1013,7 +1011,6 @@ K_AUTO_INCREMENT : A U T O '_' I N C R E M E N T;
 K_BEFORE : B E F O R E;
 K_BEGIN : B E G I N;
 K_BETWEEN : B E T W E E N;
-K__BINARY : '_' B I N A R Y;
 K_BINARY : B I N A R Y;
 K_BOOLEAN : B O O L E A N;
 K_BY : B Y;
@@ -1205,6 +1202,8 @@ K___DELETE : '_' '_' D E L E T E;
 USER_VARIABLE: '@' [a-zA-Z_] [a-zA-Z_0-9]* ;
  
 SESSION_VARIABLE: '@' '@' [$.a-zA-Z_] [$.a-zA-Z_0-9]* ;
+ 
+CHARSET_NAME : '_' [_a-zA-Z0-9]*;
  
 WORD
  : [a-zA-Z_] [a-zA-Z_0-9\u00c0-\u00ff]*

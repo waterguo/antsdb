@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.function.Consumer;
 
+import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -39,7 +40,8 @@ public class OpSingleValueQuery extends Operator {
                 throw new OrcaException("Subquery returns more than 1 row");
             }
             long pValue = Record.get(pRecFromSubQuery, 0);
-            return pValue;
+            long pResult = FishObject.clone(heap, pValue);
+            return pResult;
         }
         finally {
             cursor.close();
