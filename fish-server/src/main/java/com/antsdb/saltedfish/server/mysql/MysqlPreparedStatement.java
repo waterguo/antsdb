@@ -36,7 +36,7 @@ import io.netty.buffer.ByteBuf;
  */
 public final class MysqlPreparedStatement implements Closeable {
 
-    public int[] types;
+    public byte[] types;
     PreparedStatement script;
     ByteBuffer meta;
     int packetSequence;

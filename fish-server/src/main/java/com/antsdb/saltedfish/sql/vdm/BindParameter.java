@@ -33,7 +33,7 @@ public class BindParameter extends Operator {
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pValue = 0;
-        if (this.pos >= params.size()) {
+        if (params == null || this.pos >= params.size()) {
             throw new OrcaException("parameter {} is missing", this.pos) ;
         }
         if (params instanceof FishParameters) {

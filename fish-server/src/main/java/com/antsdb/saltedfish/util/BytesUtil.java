@@ -41,26 +41,26 @@ public class BytesUtil {
     }
 
     public static String toHex(int value) {
-            StringBuilder buf = new StringBuilder();
+        StringBuilder buf = new StringBuilder();
         dump(buf, (byte)(value >>> 24));
         dump(buf, (byte)(value >>> 16 & 0xff));
         dump(buf, (byte)(value >>> 8 & 0xff));
         dump(buf, (byte)(value & 0xff));
-            return buf.toString();
+        return buf.toString();
     }
     
     public static String toHex8(byte[] bytes) {
-            if (bytes == null) {
-                return "";
+        if (bytes == null) {
+            return "";
+        }
+        StringBuilder buf = new StringBuilder();
+        for (int i=0; i<bytes.length; i++) {
+            if ((i > 0) && (i % 8 == 0)) {
+                buf.append('-');
             }
-            StringBuilder buf = new StringBuilder();
-            for (int i=0; i<bytes.length; i++) {
-                if ((i > 0) && (i % 8 == 0)) {
-                    buf.append('-');
-                }
-                dump(buf, bytes[i]);
-            }
-            return buf.toString();
+            dump(buf, bytes[i]);
+        }
+        return buf.toString();
     }
     
     public static String toHex(byte[] bytes) {

@@ -161,6 +161,7 @@ public enum PacketType {
     FISH_RESTORE_START(0xa1),
     FISH_RESTORE(0xa2),
     FISH_RESTORE_END(0xa3),
+    FISH_LOG_REPLICATE(0xa4),
     
     /**/
     VERY_LARGE_PACKET(0x10000);

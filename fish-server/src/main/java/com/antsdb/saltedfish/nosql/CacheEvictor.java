@@ -40,7 +40,6 @@ public class CacheEvictor implements Runnable{
         this.cache = cache;
         this.evictor = new LRUEvictor(cache, target);
     }
-
     
     @Override
     public void run() {

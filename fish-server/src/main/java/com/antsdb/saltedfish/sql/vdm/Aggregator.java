@@ -49,7 +49,7 @@ public class Aggregator extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString(), getScore());
         records.add(rec);
         this.upstream.explain(level+1, records);
     }
@@ -67,4 +67,10 @@ public class Aggregator extends CursorMaker {
     public boolean setSortingOrder(List<SortKey> order) {
         return this.upstream.setSortingOrder(order);
     }
+    
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
+    }
+
 }

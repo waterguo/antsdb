@@ -62,6 +62,7 @@ public class MetadataService {
     private long version;
     GTable gtableSeq;
     private TrxMan trxman;
+    private boolean isSlave = false;
     
     public MetadataService(Orca orca) {
         super();
@@ -71,7 +72,6 @@ public class MetadataService {
     
     public TableMeta getTable(Transaction trx, int id) {
         // are we in a transaction? read it from database if it is
-        
         long trxid = trx.getTrxId();
         if (trxid != 0) {
             if (trx.isDddl()) {
@@ -80,18 +80,19 @@ public class MetadataService {
         }
         
         // is it in the cache?
-        
         TableMeta tableMeta = this.cache.get(id);
         if (tableMeta != null) {
             return tableMeta;
         }
         
         // if not load it from storage
-        
         synchronized(this) {
             tableMeta = loadTable(trx, id);
             if (tableMeta != null) {
                 if (tableMeta.getHtableId() >= 0) {
+                    this.cache.put(tableMeta.getId(), tableMeta);
+                }
+                else if (tableMeta.isTemproray()) {
                     this.cache.put(tableMeta.getId(), tableMeta);
                 }
                 else {
@@ -113,7 +114,6 @@ public class MetadataService {
     
     public TableMeta getTable(Transaction trx, String ns, String tableName) {
         // are we in a transaction? read it from database if it is
-        
         long trxid = trx.getTrxId();
         if (trxid != 0) {
             if (trx.isDddl()) {
@@ -122,7 +122,6 @@ public class MetadataService {
         }
         
         // is it in the cache?
-        
         for (TableMeta i:this.cache.values()) {
             if (!i.getNamespace().equalsIgnoreCase(ns)) {
                 continue;
@@ -134,7 +133,6 @@ public class MetadataService {
         }
         
         // if not load it from storage
-        
         synchronized(this) {
             TableMeta tableMeta = loadTable(trx, ns, tableName);
             if (tableMeta != null) {
@@ -288,13 +286,16 @@ public class MetadataService {
     }
     
     public void addTable(HumpbackSession hsession, Transaction trx, TableMeta tableMeta) throws HumpbackException {
+        if (this.isSlave) {
+            throw new OrcaException("database is not mutable in slave mode");
+        }
+        
         long trxid = trx.getGuaranteedTrxId();
         GTable sysTable = getSysTable();
         tableMeta.row.setTrxTimestamp(trxid);
         sysTable.insert(hsession, tableMeta.row, 0);
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
 
@@ -308,7 +309,7 @@ public class MetadataService {
         return humpback.getTable(Orca.SYSNS, TABLEID_SYSCOLUMN);
     }
 
-    GTable getSysRule() {
+    public GTable getSysRule() {
         Humpback humpback = this.orca.getHumpback();
         return humpback.getTable(Orca.SYSNS, TABLEID_SYSRULE);
     }
@@ -321,24 +322,25 @@ public class MetadataService {
     public void dropTable(HumpbackSession hsession, Transaction trx, TableMeta tableMeta) throws HumpbackException {
         long trxid = trx.getGuaranteedTrxId();
         GTable table = getSysTable();
-        HumpbackError error = table.delete(hsession, trxid, tableMeta.getKey(), 1000);
+        long error = table.delete(hsession, trxid, tableMeta.getKey(), 1000);
         String location = table.getLocation(trxid, Long.MAX_VALUE, tableMeta.getKey());
         _log.debug("table {}/{} is deleted at {}", trx, tableMeta.getObjectName().toString(), location);
-        if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+        if (!HumpbackError.isSuccess(error)) {
+            throw new OrcaException(HumpbackError.toString(error));
+        }
+
+        // delete primary key
+        if (tableMeta.getPrimaryKey() != null) {
+            deletePrimaryKey(hsession, trx, tableMeta.getPrimaryKey());
         }
         
+        // delete columns
         GTable sysColumn = getSysColumn();
         for (ColumnMeta column:tableMeta.columns) {
             sysColumn.delete(hsession, trxid, column.getKey(), 1000);
         }
         
-        if (tableMeta.getPrimaryKey() != null) {
-            deletePrimaryKey(hsession, trx, tableMeta.getPrimaryKey());
-        }
-
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
     
@@ -354,26 +356,29 @@ public class MetadataService {
 
     public void addColumn(HumpbackSession hsession, Transaction trx, TableMeta table, ColumnMeta columnMeta) 
     throws HumpbackException {
+        if (this.isSlave) {
+            throw new OrcaException("database is not mutable in slave mode");
+        }
+
         // add column metadata
-        
         long trxid = trx.getGuaranteedTrxId();
         GTable sysColumn = getSysColumn();
         columnMeta.row.setTrxTimestamp(trxid);
         sysColumn.insert(hsession, columnMeta.row, 0);
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
         
         // inform humpback
-        
         Humpback humpback = this.orca.getHumpback();
         int columnPos = columnMeta.getColumnId();
         String columnName = columnMeta.getColumnName();
-        humpback.addColumn(hsession, trxid, table.getHtableId(), columnPos, columnName);
-        int fishType = columnMeta.getDataType().getFishType();
-        if ((fishType == Value.TYPE_BLOB) || (fishType == Value.TYPE_CLOB)) {
-            humpback.addColumn(hsession, trxid, table.getBlobTableId(), columnPos, columnName);
+        if (table.getHtableId() >= 0) {
+            int fishType = columnMeta.getDataType().getFishType();
+            humpback.addColumn(hsession, trxid, table.getHtableId(), columnPos, columnName, fishType);
+            if ((fishType == Value.TYPE_BLOB) || (fishType == Value.TYPE_CLOB)) {
+                humpback.addColumn(hsession, trxid, table.getBlobTableId(), columnPos, columnName, fishType);
+            }
         }
     }
     
@@ -427,7 +432,7 @@ public class MetadataService {
         return tables;
     }
     
-    private SequenceMeta loadSequence(Transaction trx, ObjectName name) {
+    SequenceMeta loadSequence(Transaction trx, ObjectName name) {
         Row raw = getSequenceTable().getRow(
                 trx.getTrxId(), 
                 Long.MAX_VALUE, 
@@ -442,13 +447,11 @@ public class MetadataService {
     
     public SequenceMeta getSequence(Transaction trx, ObjectName name) {
         // load from database is this is a ddl trx
-        
         if (trx.isDddl()) {
             return loadSequence(trx, name);
         }
         
         // find it from cache
-        
         SequenceMeta seq = this.seqCache.get(name);
         if (seq == null) {
             synchronized (this) {
@@ -465,16 +468,18 @@ public class MetadataService {
     }
     
     public void addSequence(HumpbackSession hsession, Transaction trx, SequenceMeta seq) {
+        if (this.isSlave) {
+            throw new OrcaException("database is not mutable in slave mode");
+        }
         long trxid = trx.getGuaranteedTrxId();
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSSEQUENCE);
         seq.row.setTrxTimestamp(trxid);
-        HumpbackError error = table.insert(hsession, seq.row, 0);
-        if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+        long error = table.insert(hsession, seq.row, 0);
+        if (!HumpbackError.isSuccess(error)) {
+            throw new OrcaException(HumpbackError.toString(error));
         }
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
     
@@ -489,15 +494,21 @@ public class MetadataService {
     }
 
     public void updateSequence(HumpbackSession hsession, long trxid, SequenceMeta seq) {
+        if (this.isSlave) {
+            throw new IllegalArgumentException("cant update system metadata in slave mode");
+        }
         GTable table = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSSEQUENCE);
-        HumpbackError error = table.update(hsession, trxid, seq.row, 0);
-        if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+        long error = table.update(hsession, trxid, seq.row, 0);
+        if (!HumpbackError.isSuccess(error)) {
+            throw new OrcaException(HumpbackError.toString(error));
         }
         this.seqCache.remove(seq.getObjectName());
     }
 
     public long nextSequence(HumpbackSession hsession, ObjectName name) {
+        if (this.isSlave) {
+            throw new IllegalArgumentException("cant get next sequence in slave mode");
+        }
         SequenceMeta seq = getSequence(Transaction.getSeeEverythingTrx(), name);
         if (seq == null) {
             throw new IllegalArgumentException();
@@ -506,6 +517,9 @@ public class MetadataService {
     }
     
     public long nextSequence(HumpbackSession hsession, ObjectName name, int increment) {
+        if (this.isSlave) {
+            throw new IllegalArgumentException("database is not mutable in slave mode");
+        }
         SequenceMeta seq = getSequence(Transaction.getSeeEverythingTrx(), name);
         if (seq == null) {
             throw new IllegalArgumentException();
@@ -514,22 +528,26 @@ public class MetadataService {
     }
 
     public void addRule(HumpbackSession hsession, Transaction trx, RuleMeta<?> rule) {
+        if (this.isSlave) {
+            throw new OrcaException("database is not mutable in slave mode");
+        }
         GTable ruleTable = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSRULE);
         rule.row.setTrxTimestamp(trx.getGuaranteedTrxId());
         ruleTable.insert(hsession, rule.row, 0);
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
     
     public void updateRule(HumpbackSession hsession, Transaction trx, RuleMeta<?> rule) {
+        if (this.isSlave) {
+            throw new IllegalArgumentException("cant update system metadata in slave mode");
+        }
         GTable ruleTable = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSRULE);
         rule.row.setTrxTimestamp(trx.getGuaranteedTrxId());
         ruleTable.update(hsession, trx.getGuaranteedTrxId(), rule.row, 0);
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
 
@@ -555,7 +573,6 @@ public class MetadataService {
         sysRule.delete(hsession, trxid, rule.row.getKey(), 0);
 
         // doh, this is a ddl transaction, remember it
-        
         trx.setDdl(true);
     }
 
@@ -579,21 +596,27 @@ public class MetadataService {
     }
 
     public void updateTable(HumpbackSession hsession, Transaction trx, TableMeta table) {
+        if (this.isSlave) {
+            throw new IllegalArgumentException("cant update system metadata in slave mode");
+        }
         trx.getGuaranteedTrxId();
         GTable systable = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSTABLE);
-        HumpbackError error = systable.update(hsession, trx.getGuaranteedTrxId(), table.row, 0);
-        if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+        long error = systable.update(hsession, trx.getGuaranteedTrxId(), table.row, 0);
+        if (!HumpbackError.isSuccess(error)) {
+            throw new OrcaException(HumpbackError.toString(error));
         }
         trx.setDdl(true);
     }
 
     public void updateIndex(HumpbackSession hsession, Transaction trx, IndexMeta index) {
+        if (this.isSlave) {
+            throw new IllegalArgumentException("cant update system metadata in slave mode");
+        }
         trx.getGuaranteedTrxId();
         GTable sysrule = this.orca.getHumpback().getTable(Orca.SYSNS, TABLEID_SYSRULE);
-        HumpbackError error = sysrule.update(hsession, trx.getGuaranteedTrxId(), index.row, 0);
-        if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+        long error = sysrule.update(hsession, trx.getGuaranteedTrxId(), index.row, 0);
+        if (!HumpbackError.isSuccess(error)) {
+            throw new OrcaException(HumpbackError.toString(error));
         }
         trx.setDdl(true);
     }
@@ -636,19 +659,23 @@ public class MetadataService {
         userMeta.setDeleteMark(true);
         sysuser.update(hsession, 1, userMeta.row, 0);
     }
-    
-    public void close() {
+
+    /**
+     * remove all sequences from cache and update system tables with correct "next" number
+     */
+    private void closeSequences() {
         HumpbackSession hsession = this.orca.getHumpback().createSession("local/metadata");
-        hsession.open();
-        try {
+        try (HumpbackSession temp = hsession.open()) {
             for (SequenceMeta i:this.seqCache.values()) {
                 i.closeAndUpdate(hsession, getSequenceTable(), this.trxman);
             }
-            this.seqCache = null;
+            this.seqCache.clear();;
         }
-        finally {
-            this.orca.getHumpback().deleteSession(hsession);
-        }
+    }
+    
+    public void close() {
+        closeSequences();
+        this.seqCache = null;
     }
     
     private GTable getSequenceTable() {
@@ -661,5 +688,24 @@ public class MetadataService {
     public void clearCache() {
         this.cache.clear();
         this.orca.clearStatementCache();
+        closeSequences();
+    }
+
+    public void setSlave(boolean value) {
+        this.isSlave = value;
+        if (value) {
+            closeSequences();
+        }
+    }
+
+    public void syncLocal(int tableId, long pKey, Row row, boolean isDelete) {
+        if (tableId >= 0x50 && tableId < 0x100) {
+            if (tableId == TABLEID_SYSSEQUENCE) {
+                this.seqCache.clear();
+            }
+            else {
+                this.clearCache();
+            }
+        }
     }
 }

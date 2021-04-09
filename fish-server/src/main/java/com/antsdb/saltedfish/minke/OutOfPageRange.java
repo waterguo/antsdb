@@ -19,4 +19,8 @@ package com.antsdb.saltedfish.minke;
  */
 public class OutOfPageRange extends RuntimeException {
     private static final long serialVersionUID = 1L;
+    
+    public OutOfPageRange(String message) {
+        super(message);
+    }
 }

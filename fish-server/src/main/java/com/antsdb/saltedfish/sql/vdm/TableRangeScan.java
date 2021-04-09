@@ -78,12 +78,20 @@ public class TableRangeScan extends CursorMaker implements RangeScannable, Order
             GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
             Transaction trx = ctx.getTransaction();
             long options = 0;
-            options = fromInclusive ? options : ScanOptions.excludeStart(options);
-            options = toInclusive ? options : ScanOptions.excludeEnd(options);
             options = this.isAsc ? options : ScanOptions.descending(options);
+            if (this.isAsc) {
+                options = fromInclusive ? options : ScanOptions.excludeStart(options);
+                options = toInclusive ? options : ScanOptions.excludeEnd(options);
+            }
+            else {
+                options = fromInclusive ? options : ScanOptions.excludeEnd(options);
+                options = toInclusive ? options : ScanOptions.excludeStart(options);
+                long temp = pKeyFrom;
+                pKeyFrom = pKeyTo;
+                pKeyTo = temp;
+            }
             RowIterator it = gtable.scan(trx.getTrxId(), trx.getTrxTs(), pKeyFrom, pKeyTo, options);
-            DumbCursor cursor = new DumbCursor(ctx.getSpaceManager(), this.meta, it, mapping,
-                    ctx.getCursorStats(makerId));
+            HumpbackCursor cursor = new HumpbackCursor(this.meta, it, ctx.getCursorStats(makerId));
             cursor.setName(this.toString());
             return cursor;
         }
@@ -92,12 +100,6 @@ public class TableRangeScan extends CursorMaker implements RangeScannable, Order
     @Override
     public String toString() {
         return "Table Range Scan (" + this.table.getObjectName() + ")";
-    }
-
-    @Override
-    public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
-        records.add(rec);
     }
 
     @Override
@@ -145,4 +147,29 @@ public class TableRangeScan extends CursorMaker implements RangeScannable, Order
             return false;
         }
     }
+
+    @Override
+    public float getScore() {
+        int factor = getMatchedColumns();
+        float score = 10 - factor * 0.1f;
+        return score;
+    }
+    
+    private int getMatchedColumns() {
+        List<Operator> values = null;
+        if (getFrom() != null) {
+            if (getFrom().getValues() != null) {
+                values = getFrom().getValues();
+            }
+        }
+        if (values == null) {
+            if (getTo() != null) {
+                if (getTo().getValues() != null) {
+                    values = getTo().getValues();
+                }
+            }
+        }
+        return values != null ? values.size() : 0;
+    }
+
 }

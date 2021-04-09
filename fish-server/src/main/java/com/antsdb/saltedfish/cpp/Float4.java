@@ -13,7 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
-public class Float4 {
+public final class Float4 extends BrutalMemoryObject {
+    public Float4(long addr) {
+        super(addr);
+    }
+
     public static final long allocSet(Heap heap, float value) {
         long address = heap.alloc(5);
         set(address, value);
@@ -57,6 +61,16 @@ public class Float4 {
             throw new IllegalArgumentException();
         }
         return Double.compare(x, y);
+    }
+
+    @Override
+    public int getByteSize() {
+        return getSize(this.addr);
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_FLOAT4;
     }
 
 }

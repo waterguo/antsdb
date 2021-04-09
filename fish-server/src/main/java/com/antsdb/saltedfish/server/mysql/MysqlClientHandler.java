@@ -13,6 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server.mysql;
 
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_CONNECT_WITH_DB;
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_PLUGIN_AUTH;
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_PROTOCOL_41;
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_RESERVED;
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_SECURE_CONNECTION;
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_SSL;
+import static com.antsdb.saltedfish.server.mysql.MysqlConstant.CLIENT_TRANSACTIONS;
+
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -40,8 +48,6 @@ import com.antsdb.saltedfish.util.UberUtil;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-
-import static com.antsdb.saltedfish.server.mysql.MysqlServerHandler.*;
 
 public class MysqlClientHandler extends ChannelInboundHandlerAdapter 
 {

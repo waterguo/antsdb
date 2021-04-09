@@ -21,6 +21,8 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.cpp.MemoryManager;
+import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
@@ -45,25 +47,34 @@ public class SystemInfoView extends View {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        Humpback humpback = this.orca.humpback;
         Map<String, Object> props = new HashMap<>();
         props.put("antsdb.last_sp", this.orca.getHumpback().getLatestSP());
+        props.put("antsdb.load", this.orca.getScheduler().getUserLoad());
         props.put("antsdb.memory_allocated", MemoryManager.getAllocated());
         props.put("antsdb.memory_pooled", MemoryManager.getPooled());
         props.put("antsdb.memory_immortal", getImmortalTotal());
         props.put("antsdb.trx_service_size", this.orca.getTrxMan().size());
         props.put("antsdb.trx_service_oldest", this.orca.getTrxMan().getOldest());
-        props.put("antsdb.trx_service_last", this.orca.getTrxMan().getNewTrxId());
+        props.put("antsdb.trx_service_last", TrxMan.getNewTrxId());
         props.put("antsdb.statistician_log_pointer", getStatisticianLogPointer());
         props.put("antsdb.storage_log_pointer", getStorageLogPointer());
+        props.put("antsdb.current_log_pointer", humpback.getSpaceManager().getAllocationPointer());
+        props.put("antsdb.dirty_log_pointer", humpback.getStartLogPointer());
         props.put("runtime.runtime_total_memory", Runtime.getRuntime().totalMemory());
         props.put("runtime.runtime_free_memory", Runtime.getRuntime().freeMemory());
         props.put("runtime.runtime_max_memory", Runtime.getRuntime().maxMemory());
         props.put("runtime.runtime_available_processors", Runtime.getRuntime().availableProcessors());
+        props.put("vm.java.home", System.getProperty("java.home"));
         props.put("vm.java_vm_info", System.getProperty("java.vm.info"));
         props.put("vm.java_vm_name", System.getProperty("java.vm.name"));
         props.put("vm.java_vm_vendor", System.getProperty("java.vm.vendor"));
         props.put("vm.java_vm_specification", System.getProperty("java.vm.specification.version"));
         props.put("vm.java_vm_version", System.getProperty("java.vm.version"));
+        props.put("vm.os.arch", System.getProperty("os.arch"));
+        props.put("vm.os.name", System.getProperty("os.name"));
+        props.put("vm.os.version", System.getProperty("os.version"));
+        props.put("vm.sun.arch.data.model", System.getProperty("sun.arch.data.model"));
         props.put("system.system cpu load", UberUtil.getSystemCpuLoad());
         props.put("system.process cpu load", UberUtil.getProcessCpuLoad());
         props.put("memory.commited_virtual_memory", MemoryUtil.getCommittedVirtualMemorySize());

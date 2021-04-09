@@ -82,4 +82,25 @@ public final class IndexEntryHandlers {
     boolean isEmpty() {
         return this.handlers.size() == 0;
     }
+    
+    /**
+     * only works on unique index
+     * 
+     * @param heap
+     * @param trx
+     * @param row
+     * @return
+     */
+    long getRowKey(Heap heap, Transaction trx, VaporizingRow row) {
+        for (IndexEntryHandler i:this.handlers) {
+            if (!i.index.isUnique()) {
+                continue;
+            }
+            long pRowKey = i.getRowKey(heap, trx, row);
+            if (pRowKey != 0) {
+                return pRowKey;
+            }
+        }
+        return 0;
+    }
 }

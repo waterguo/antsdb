@@ -73,13 +73,14 @@ public class ScanResultSynchronizer {
                 long pIndexKey = source.getKeyPointer();
                 long pRowKey = source.getIndexRowKeyPointer();
                 byte misc = source.getMisc();
-                target.putIndex(pIndexKey, pRowKey, misc);
+                long version = source.getVersion();
+                target.putIndex(version, pIndexKey, pRowKey, misc);
             }
         }
     }
     
     static boolean verify(long pRow, long pKey, StorageTable target, TableType type) {
-        long pResult = target.get(pKey);
+        long pResult = target.get(pKey, 0, null);
         if (Row.isTombStone(pRow)) {
             if (pResult == 0) {
                 return true;

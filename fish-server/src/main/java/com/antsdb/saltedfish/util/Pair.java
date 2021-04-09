@@ -28,4 +28,21 @@ public class Pair<X, Y> {
         this.x = x;
         this.y = y;
     }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public boolean equals(Object obj) {
+        Pair<X,Y> that = (Pair<X, Y>) obj;
+        return UberUtil.safeEqual(this.x, that.x) && UberUtil.safeEqual(this.y, that.y);
+    }
+
+    @Override
+    public int hashCode() {
+        return (x == null ? 0 : x.hashCode()) ^ (y == null ? 0 : y.hashCode());
+    }
+
+    @Override
+    public String toString() {
+        return "(" + String.valueOf(x) + "," + String.valueOf(y) + ")";
+    }
 }

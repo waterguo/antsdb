@@ -23,7 +23,7 @@ public class TypeBinary extends DataType {
     long max;
     
     public TypeBinary(String name, int sqlType, long max) {
-        super(name, 0, 0, sqlType, byte[].class, Value.TYPE_BYTES);
+        super(name, 0, 0, sqlType, byte[].class, Value.TYPE_BYTES, Weight.VARBINARY);
         this.max = max;
     }
 }

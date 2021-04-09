@@ -13,6 +13,12 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.server;
 
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+
+import java.sql.SQLException;
+import java.util.function.Supplier;
+
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
@@ -27,11 +33,6 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.AsciiString;
-import static io.netty.handler.codec.http.HttpResponseStatus.*;
-import static io.netty.handler.codec.http.HttpVersion.*;
-
-import java.sql.SQLException;
-import java.util.function.Supplier;
 
 /**
  * 

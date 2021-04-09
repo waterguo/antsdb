@@ -42,4 +42,9 @@ public class StringValue extends Operator {
         visitor.accept(this);
     }
 
+    @Override
+    public String toString() {
+        return this.value;
+    }
+
 }

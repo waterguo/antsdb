@@ -22,8 +22,8 @@ import com.antsdb.saltedfish.sql.DataType;
  * @author *-xguo0<@
  */
 public class OpInterval extends UnaryOperator {
-	long multiplier;
-	
+    long multiplier;
+    
     public OpInterval(Operator upstream, long multiplier) {
         super(upstream);
         this.multiplier = multiplier;
@@ -33,7 +33,7 @@ public class OpInterval extends UnaryOperator {
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pValue = upstream.eval(ctx, heap, params, pRecord);
         if (pValue == 0) {
-        	return 0;
+            return 0;
         }
         long value = AutoCaster.getLong(pValue);
         value = value * this.multiplier;
@@ -45,9 +45,9 @@ public class OpInterval extends UnaryOperator {
         return DataType.timestamp();
     }
 
-	@Override
-	public String toString() {
-		return "INTERVAL " + this.upstream.toString() + " * " + this.multiplier;
-	}
+    @Override
+    public String toString() {
+        return "INTERVAL " + this.upstream.toString() + " * " + this.multiplier;
+    }
 
 }

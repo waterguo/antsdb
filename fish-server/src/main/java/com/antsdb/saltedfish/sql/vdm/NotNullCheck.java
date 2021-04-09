@@ -32,12 +32,12 @@ public class NotNullCheck extends UnaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        if (this.upstream == null) {
-            throw new OrcaException("column {} is not nullable", column.getColumnName()) ;
+        long pValue = 0;
+        if (this.upstream != null) {
+            pValue = this.upstream.eval(ctx, heap, params, pRecord);
         }
-        long pValue = this.upstream.eval(ctx, heap, params, pRecord);
         if (pValue == 0) {
-            throw new OrcaException("column {} is not nullable", column.getColumnName()) ;
+            throw new OrcaException("column {} is not nullable", column.getColumnName());
         }
         return pValue;
     }

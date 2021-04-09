@@ -16,7 +16,6 @@ package com.antsdb.saltedfish.sql.vdm;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
-import com.google.gson.Gson;
 
 public class FieldMeta {
     private int matchWeight = 0;
@@ -120,7 +119,7 @@ public class FieldMeta {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        return getTableAlias() + "." + getName();
     }
 
     public int getMatchWeight() {

@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.slave;
 import static com.antsdb.saltedfish.util.UberFormatter.capacity;
 import static com.antsdb.saltedfish.util.UberFormatter.time;
 
+import java.io.File;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -26,44 +28,33 @@ import java.util.Properties;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.Speedometer;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
+import com.antsdb.saltedfish.nosql.DdlEntry;
+import com.antsdb.saltedfish.nosql.DeleteRowEntry2;
 import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.nosql.JdbcLog;
+import com.antsdb.saltedfish.nosql.LogEntry;
 import com.antsdb.saltedfish.nosql.Replicable;
-import com.antsdb.saltedfish.nosql.ReplicationHandler;
+import com.antsdb.saltedfish.nosql.ReplicationHandler2;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.nosql.TableType;
+import com.antsdb.saltedfish.nosql.TimestampEntry;
+import com.antsdb.saltedfish.nosql.Gobbler.EntryType;
 
 /**
  * replicates antsdb to a mysql slave
  * 
  * @author *-xguo0<@
  */
-public abstract class JdbcReplicator extends ReplicationHandler implements Replicable {
+public abstract class JdbcReplicator implements Replicable, ReplicationHandler2 {
     private static Logger _log = UberUtil.getThisLogger();
+    static JdbcLog _jdbclog;
     
     private Connection conn;
     protected Humpback humpback;
@@ -78,15 +69,30 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     protected String port;
     private String user;
     private String password;
-    private long lp;
-    private long lpCommited;
+    protected long lp;
+    protected long lpCommited;
+    private int opsSinceLastCommit;
 
     public JdbcReplicator(Humpback humpback, String host, String port, String user, String password) {
+        if (_jdbclog == null) {
+            initJdbcLog(humpback);
+        }
         this.humpback = humpback;
         this.host = host;
         this.port = port;
         this.user = user;
         this.password = password;
+    }
+
+    private void initJdbcLog(Humpback humpback) {
+        File file = new File(humpback.getHome(), "logs/jdbc-replication-log.dat");
+        _jdbclog = new JdbcLog(file);
+        try {
+            _jdbclog.open(false);
+        }
+        catch (IOException x) {
+            _log.warn("unable to open jdbc log", x);
+        }
     }
 
     public Connection createConnection() throws Exception {
@@ -110,27 +116,19 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     }
 
     @Override
-    public ReplicationHandler getReplayHandler() {
+    public ReplicationHandler2 getReplayHandler() {
         return this;
     }
 
     @Override
-    public void insert(InsertEntry entry) throws Exception {
-        insert(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    @Override
-    public void insert(InsertEntry2 entry) throws Exception {
-        insert(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    private void insert(long sp, long trxid, int tableId, long pRow) throws Exception {
+    public void putRow(int tableId, long pRow, long version, long pEntry, long lpEntry) throws Exception {
         if (detectMetadataChange(tableId)) {
             return;
         }
-        Row row = Row.fromMemoryPointer(pRow, 0);
+        EntryType type = LogEntry.getType(pEntry);
+        Row row = Row.fromMemoryPointer(pRow, version);
         if (_log.isTraceEnabled()) {
-            _log.trace("insert {} {}", sp, row.getKeySpec(tableId));
+            _log.trace("{} {} {}", type, lpEntry, row.getKeySpec(tableId));
         }
         CudHandler handler = getHandler(tableId);
         boolean isBlobRow = false;
@@ -138,78 +136,28 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
             isBlobRow = true;
             handler = getHandler(tableId-1);
         }
-        handler.insert(trxid, row, isBlobRow);
-        this.ninserts++;
+        switch (type) {
+        case INSERT2: {
+            handler.insert(version, row, isBlobRow, lpEntry, tableId);
+            this.ninserts++;
+            break;
+        }
+        case UPDATE2:
+        case PUT2: {
+            handler.update(version, row, isBlobRow, lpEntry, tableId);
+            this.nupdates++;
+            break;
+        }
+        default:
+            throw new IllegalArgumentException();
+        }
+        this.opsSinceLastCommit++;
         this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
-        this.lp = sp;
+        this.lp = lpEntry;
     }
 
     @Override
-    public void update(UpdateEntry entry) throws Exception {
-        update(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    @Override
-    public void update(UpdateEntry2 entry) throws Exception {
-        update(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    private void update(long sp, long trxid, int tableId, long pRow) throws Exception {
-        if (detectMetadataChange(tableId)) {
-            return;
-        }
-        Row row = Row.fromMemoryPointer(pRow, 0);
-        if (_log.isTraceEnabled()) {
-            _log.trace("update {} {}", sp, row.getKeySpec(tableId));
-        }
-        CudHandler handler = getHandler(tableId);
-        boolean isBlobRow = false;
-        if (handler.isBlobTable) {
-            isBlobRow = true;
-            handler = getHandler(tableId-1);
-        }
-        handler.update(trxid, row, isBlobRow);
-        this.nupdates++;
-        this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
-        this.lp = sp;
-    }
-
-    @Override
-    public void put(PutEntry entry) throws Exception {
-        put(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    @Override
-    public void put(PutEntry2 entry) throws Exception {
-        put(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    private void put(long sp, long trxid, int tableId, long pRow) throws Exception {
-        if (detectMetadataChange(tableId)) {
-            return;
-        }
-        Row row = Row.fromMemoryPointer(pRow, 0);
-        CudHandler handler = getHandler(tableId);
-        boolean isBlobRow = false;
-        if (handler.isBlobTable) {
-            isBlobRow = true;
-            handler = getHandler(tableId-1);
-        }
-        handler.update(trxid, row, isBlobRow);
-        this.lp = sp;
-    }
-
-    @Override
-    public void delete(DeleteEntry entry) throws Exception {
-        delete(entry.getTableId());
-    }
-    
-    @Override
-    public void delete(DeleteEntry2 entry) throws Exception {
-        delete(entry.getTableId());
-    }
-    
-    private void delete(int tableId) throws Exception {
+    public void deleteIndex(int tableId, long pKey, long version, long pEntry, long lpEntry) throws Exception {
         if (detectMetadataChange(tableId)) {
             return;
         }
@@ -220,39 +168,23 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     }
 
     @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        deleteRow(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    @Override
-    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
-        deleteRow(entry.getSpacePointer(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    private void deleteRow(long sp, int tableId, long pRow) throws Exception {
+    public void deleteRow(int tableId, long pKey, long version, long pEntry, long lpEntry) throws Exception {
         if (detectMetadataChange(tableId)) {
             return;
         }
-        Row row = Row.fromMemoryPointer(pRow, 0);
+        DeleteRowEntry2 entry = (DeleteRowEntry2) LogEntry.getEntry(lpEntry, pEntry);
+        Row row = Row.fromMemoryPointer(entry.getRowPointer(), 0);
         if (_log.isTraceEnabled()) {
-            _log.trace("delete {} {}", sp, row.getKeySpec(tableId));
+            _log.trace("delete {} {}", lpEntry, row.getKeySpec(tableId));
         }
         CudHandler handler = getHandler(tableId);
         if (!handler.isBlobTable) {
-            handler.delete(row);
+            handler.delete(row, lpEntry, tableId);
+            this.opsSinceLastCommit++;
             this.ndeletes++;
             this.speedometer.sample(this.ninserts + this.nupdates + this.ndeletes);
         }
-        this.lp = sp;
-    }
-
-    
-    @Override
-    public void index(IndexEntry entry) throws Exception {
-    }
-
-    @Override
-    public void index(IndexEntry2 entry) throws Exception {
+        this.lp = lpEntry;
     }
 
     @Override
@@ -261,26 +193,29 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     }
 
     @Override
-    public void flush() throws Exception {
-        if (this.lp != this.lpCommited) {
+    public void flush(long lpRows, long lpIndexes) throws Exception {
+        if (this.opsSinceLastCommit > 0) {
             String sql = "REPLACE INTO antsdb_.bookmarks VALUES (?, ?)";
             DbUtils.executeUpdate(this.conn, sql, getKey(), this.lp);
             boolean success = false;
             try {
                 this.conn.commit();
+                _log.trace("commit {} {}", this.lp, this.opsSinceLastCommit);
+                this.lpCommited = this.lp;
+                this.opsSinceLastCommit = 0;
                 success = true;
             }
             finally {
                 // if we failed at commit. we don't know how many rows have been updated. thus force 
                 // re-read log pointer;
-                if (success) {
-                    this.lpCommited = this.lp;
-                }
-                else {
+                if (!success) {
                     this.lpCommited = 0;
                     this.lp = 0;
                 }
             }
+        }
+        else {
+            this.lpCommited = this.lp;
         }
     }
 
@@ -295,44 +230,49 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     }
 
     @Override
-    public void commit(CommitEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
+    public void commit(long pEntry, long lpEntry) throws Exception {
+        this.lp = lpEntry;
     }
 
     @Override
-    public void timestamp(TimestampEntry entry) {
+    public void timestamp(long pEntry, long lpEntry) {
+        TimestampEntry entry = (TimestampEntry)LogEntry.getEntry(lpEntry, pEntry);
         this.latency = UberTime.getTime() - entry.getTimestamp();
     }
 
     @Override
-    public void ddl(DdlEntry entry) throws Exception {
+    public void ddl(long pEntry, long lpEntry) throws Exception {
+        // flush before ddl
+        flush(lpEntry, 0);
+        
+        // ddl
+        DdlEntry entry = (DdlEntry)LogEntry.getEntry(lpEntry, pEntry);
         String sql = entry.getDdl();
         int indexOfSemicolon = sql.indexOf(';');
         if (indexOfSemicolon > 0) {
-            DbUtils.execute(this.conn, sql.substring(0, indexOfSemicolon));
+            String sql1 = sql.substring(0, indexOfSemicolon);
+            DbUtils.execute(this.conn, sql1);
         }
         DbUtils.execute(this.conn, sql.substring(indexOfSemicolon + 1));
-        flush();
+        this.opsSinceLastCommit++;
         this.lp = entry.getSpacePointer();
-        flush();
+        
+        // flush after ddl
+        flush(lpEntry, 0);
     }
     
     @Override
-    public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+    public void transactionWindow(long pEntry, long lpEntry) throws Exception {
         // we want to flush here so that upstream handler can release resources used to track transaction.
         // such as TransactionalReplayer and BoblReorderReplayer
-        flush();
-        this.lp = entry.getSpacePointer();
+        this.opsSinceLastCommit++;
+        flush(lpEntry, 0);
+        this.lp = lpEntry;
     }
     
     @Override
-    public void message(MessageEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void message(MessageEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
+    public void message(long pEntry, long lpEntry) throws Exception {
+        this.lp = lpEntry;
     }
 
     private boolean isIndex(int tableId) {
@@ -385,11 +325,13 @@ public abstract class JdbcReplicator extends ReplicationHandler implements Repli
     public void connect() throws Exception {
         if (conn == null) {
             this.conn = createConnection();
+            this.opsSinceLastCommit = 0;
             this.handlers.clear();
             _log.info("connection to {} is established", this.url);
         }
         else if (!DbUtils.ping(this.conn)) {
             this.conn = createConnection();
+            this.opsSinceLastCommit = 0;
             this.handlers.clear();
             _log.info("connection to {} is resumed", this.url);
         }

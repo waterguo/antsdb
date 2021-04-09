@@ -15,25 +15,6 @@ package com.antsdb.saltedfish.nosql;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -49,17 +30,16 @@ class TrxRecoverer implements ReplayHandler {
     private long oldesTrx = Long.MIN_VALUE;
 
     public void run(TrxMan trxMan, Gobbler gobbler, long spStart) throws Exception {
-        
         // start recovering from the start given point
-        
         this.trxman = trxMan;
         _log.info("start recovering trx from {} ...", UberFormatter.hex(spStart));
         trxMan.setOldest(0);
-        long end = gobbler.replay(spStart, true, this);
-        _log.info("trx recovering stopped at {}", end);
+        SequentialLogReader reader = new SequentialLogReader(gobbler);
+        reader.setPosition(spStart, true);
+        reader.replay(this);
+        _log.info("trx recovering stopped at {}", reader.getLast());
         
         // ending
-        
         _log.info("{} transactions have been recovered", this.trxCount);
         if (oldesTrx != Long.MIN_VALUE) {
             trxMan.setOldest(this.oldesTrx);
@@ -90,17 +70,7 @@ class TrxRecoverer implements ReplayHandler {
     }
 
     @Override
-    public void insert(InsertEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
     public void insert(InsertEntry2 entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
         rowUpdate(entry);
     }
 
@@ -110,38 +80,13 @@ class TrxRecoverer implements ReplayHandler {
     }
 
     @Override
-    public void put(PutEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-    
-    @Override
     public void put(PutEntry2 entry) throws Exception {
         rowUpdate(entry);
     }
     
-    private void rowUpdate(RowUpdateEntry entry) throws Exception {
-        long pRow = entry.getRowPointer();
-        long trxid = Row.getVersion(pRow);
-        if (trxid >= 0) {
-            return;
-        }
-        this.trxman.rollback(trxid);
-        this.oldesTrx = Math.max(this.oldesTrx, trxid);
-    }
-
     private void rowUpdate(RowUpdateEntry2 entry) throws Exception {
         long pRow = entry.getRowPointer();
         long trxid = Row.getVersion(pRow);
-        if (trxid >= 0) {
-            return;
-        }
-        this.trxman.rollback(trxid);
-        this.oldesTrx = Math.max(this.oldesTrx, trxid);
-    }
-
-    @Override
-    public void index(IndexEntry entry) throws Exception {
-        long trxid = entry.getTrxid();
         if (trxid >= 0) {
             return;
         }
@@ -160,28 +105,8 @@ class TrxRecoverer implements ReplayHandler {
     }
 
     @Override
-    public void delete(DeleteEntry entry) throws Exception {
-        long trxid = entry.getTrxid();
-        if (trxid >= 0) {
-            return;
-        }
-        this.trxman.rollback(trxid);
-        this.oldesTrx = Math.max(this.oldesTrx, trxid);
-    }
-    
-    @Override
     public void delete(DeleteEntry2 entry) throws Exception {
         long trxid = entry.getTrxid();
-        if (trxid >= 0) {
-            return;
-        }
-        this.trxman.rollback(trxid);
-        this.oldesTrx = Math.max(this.oldesTrx, trxid);
-    }
-    
-    @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        long trxid = entry.getTrxId();
         if (trxid >= 0) {
             return;
         }

@@ -32,8 +32,8 @@ public class OpEqual extends BinaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        Integer result = ctx.compare(heap, params, pRecord, this.left, this.right);
-        if (result == null) {
+        int result = ctx.compare(heap, params, pRecord, this.left, this.right);
+        if (result == Integer.MIN_VALUE) {
             return 0;
         }
         return FishBool.allocSet(heap, result == 0);

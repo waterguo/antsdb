@@ -32,8 +32,8 @@ import static com.antsdb.saltedfish.util.UberFormatter.*;
  * @author wgu0
  */
 public class SystemViewTablets extends View {
-	Orca orca;
-	
+    Orca orca;
+    
     public static class Item {
         public String NAMESPACE;
         public String TABLE_NAME;
@@ -42,32 +42,32 @@ public class SystemViewTablets extends View {
         public String FILE;
         public String START_SP;
         public String END_SP;
-		public long START_TRXID;
-		public long END_TRXID;
-		public int CARBONFROZEN;
+        public long START_TRXID;
+        public long END_TRXID;
+        public int CARBONFROZEN;
     }
 
-	public SystemViewTablets(Orca orca) {
-	    super(CursorUtil.toMeta(Item.class));
-		this.orca = orca;
-	}
+    public SystemViewTablets(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
+        this.orca = orca;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Item> list = new ArrayList<>();
         for (GTable table:this.orca.getHumpback().getTables()) {
-        	for (MemTablet tablet:table.getTablets()) {
-        		addItem(list, table, tablet);
-        	}
+            for (MemTablet tablet:table.getTablets()) {
+                addItem(list, table, tablet);
+            }
         }
-		
-		// done
+        
+        // done
         Cursor c = CursorUtil.toCursor(meta, list);
         return c;
-	}
+    }
 
-	private void addItem(ArrayList<Item> list, GTable gtable, MemTablet tablet) {
-		TableMeta table = this.orca.getMetaService().getTable(Transaction.getSeeEverythingTrx(), gtable.getId());
+    private void addItem(ArrayList<Item> list, GTable gtable, MemTablet tablet) {
+        TableMeta table = this.orca.getMetaService().getTable(Transaction.getSeeEverythingTrx(), gtable.getId());
         Item item = new Item();
         list.add(item);
         item.NAMESPACE = gtable.getNamespace();
@@ -81,5 +81,5 @@ public class SystemViewTablets extends View {
         item.START_TRXID = tablet.getStartTrxId();
         item.END_TRXID = tablet.getEndTrxId();
         item.CARBONFROZEN = tablet.isCarbonfrozen() ? 1 : 0;
-	}
+    }
 }

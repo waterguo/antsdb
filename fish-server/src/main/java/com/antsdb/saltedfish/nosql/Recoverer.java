@@ -16,26 +16,6 @@ package com.antsdb.saltedfish.nosql;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.KeyBytes;
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberUtil;
 import static com.antsdb.saltedfish.util.UberFormatter.*;
@@ -72,6 +52,7 @@ class Recoverer implements ReplayHandler {
     }
 
     public void run() throws Exception {
+        // find the start point
         boolean inclusive;
         long start;
         LongLong span = this.humpback.getStorageEngine().getLogSpan();
@@ -86,27 +67,20 @@ class Recoverer implements ReplayHandler {
             start = this.gobbler.getStartSp();
             inclusive = true;
         }
+        
+        // start log replay
         _log.info("start recovering from {} to {}", hex(start), hex(this.humpback.spaceman.getAllocationPointer()));
-        this.gobbler.replay(start, inclusive, this);
+        SequentialLogReader reader = new SequentialLogReader(gobbler);
+        reader.setPosition(start, inclusive);
+        reader.replay(this);
 
         // ending
-
         _log.info("{} rows have been recovered", this.rowCount);
         _log.info("{} transactions have been recovered", this.trxCount);
     }
 
     @Override
-    public void insert(InsertEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
     public void insert(InsertEntry2 entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
         rowUpdate(entry);
     }
 
@@ -116,21 +90,8 @@ class Recoverer implements ReplayHandler {
     }
 
     @Override
-    public void put(PutEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-    
-    @Override
     public void put(PutEntry2 entry) throws Exception {
         rowUpdate(entry);
-    }
-    
-    private void rowUpdate(RowUpdateEntry entry) throws Exception {
-        rowUpdate(entry.getSpacePointer(), 
-                entry.getTrxId(), 
-                entry.getTableId(), 
-                entry.getRowSpacePointer(), 
-                entry.getRowPointer());
     }
     
     private void rowUpdate(RowUpdateEntry2 entry) throws Exception {
@@ -142,6 +103,10 @@ class Recoverer implements ReplayHandler {
     }
     
     private void rowUpdate(long sp, long trxid, int tableId, long spRow, long pRow) throws Exception {
+        if (tableId < 0) {
+            // dont recover temporary table
+            return;
+        }
         long version = Row.getVersion(pRow);
         if (this.tablesDeleted.contains(tableId)) {
             return;
@@ -162,8 +127,8 @@ class Recoverer implements ReplayHandler {
             _log.trace("put @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.memtable.recoverPut(version, pKey, spRow);
-        if (HumpbackError.SUCCESS != error) {
+        long error = table.memtable.recover(sp);
+        if (!HumpbackError.isSuccess(error)) {
             _log.warn("unable to recover row @ {} due to {}", sp, error);
             _log.warn("trxid = {}", trxid);
             _log.warn("table = {}", tableId);
@@ -173,13 +138,8 @@ class Recoverer implements ReplayHandler {
             return;
         }
 
-        syncSchema(sp, tableId);
+        syncSchema(sp, pRow, tableId);
         countRowUpdates();
-    }
-
-    @Override
-    public void delete(DeleteEntry entry) {
-        delete(entry.getSpacePointer(), entry.getTrxid(), entry.getTableId(), entry.getKeyAddress());
     }
     
     @Override
@@ -188,13 +148,6 @@ class Recoverer implements ReplayHandler {
     }
     
     @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        long pRow = entry.getRowPointer();
-        long pKey = Row.getKeyAddress(pRow);
-        delete(entry.getSpacePointer(), entry.getTrxId(), entry.getTableId(), pKey);
-    }
-
-    @Override
     public void deleteRow(DeleteRowEntry2 entry) throws Exception {
         long pRow = entry.getRowPointer();
         long pKey = Row.getKeyAddress(pRow);
@@ -202,9 +155,16 @@ class Recoverer implements ReplayHandler {
     }
 
     private void delete(long sp, long trxid, int tableId, long pKey) {
+        if (tableId < 0) {
+            // dont recover temporary table
+            return;
+        }
         if (_log.isTraceEnabled()) {
             _log.trace("delete @ {} tableId={} version={} key={}", sp, tableId, trxid,
                     KeyBytes.create(pKey).toString());
+        }
+        if (this.tablesDeleted.contains(tableId)) {
+            return;
         }
         GTable table = this.humpback.getTable(tableId);
         if (table == null) {
@@ -218,15 +178,15 @@ class Recoverer implements ReplayHandler {
             _log.trace("delete @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.memtable.recoverDelete(trxid, pKey, sp + Gobbler.ENTRY_HEADER_SIZE);
-        if (HumpbackError.SUCCESS != error) {
+        long error = table.memtable.recover(sp);
+        if (!HumpbackError.isSuccess(error)) {
             _log.warn("unable to recover row @ {} due to {}", sp, error);
             return;
         }
-        syncSchema(sp, tableId);
+        syncSchema(sp, 0, tableId);
         countRowUpdates();
     }
-
+    
     @Override
     public void commit(CommitEntry entry) {
         long sp = entry.getSpacePointer();
@@ -249,16 +209,6 @@ class Recoverer implements ReplayHandler {
     }
 
     @Override
-    public void index(IndexEntry entry) {
-        index(entry.getSpacePointer(), 
-              entry.getTrxid(), 
-              entry.getTableId(), 
-              entry.getIndexKeyAddress(), 
-              entry.getRowKeyAddress(), 
-              entry.getMisc());  
-    }
-    
-    @Override
     public void index(IndexEntry2 entry) {
         index(entry.getSpacePointer(), 
               entry.getTrxid(), 
@@ -269,12 +219,19 @@ class Recoverer implements ReplayHandler {
     }
     
     private void index(long sp, long trxid, int tableId, long pIndexKey, long pRowKey, byte misc) {
+        if (tableId < 0) {
+            // dont recover temporary table
+            return;
+        }
         if (_log.isTraceEnabled()) {
             _log.trace("index @ {} tableId={} version={} key={}", 
                        sp, 
                        tableId, 
                        trxid, 
                        KeyBytes.create(pIndexKey).toString());
+        }
+        if (this.tablesDeleted.contains(tableId)) {
+            return;
         }
         GTable table = this.humpback.getTable(tableId);
         if (table == null) {
@@ -288,8 +245,8 @@ class Recoverer implements ReplayHandler {
             _log.trace("index @ {} is ignored", sp);
             return;
         }
-        HumpbackError error = table.insertIndex_nologging(trxid, pIndexKey, pRowKey, sp, misc, 0);
-        if (HumpbackError.SUCCESS != error) {
+        long error = table.memtable.recover(sp);
+        if (!HumpbackError.isSuccess(error)) {
             _log.warn("unable to recover index @ {} due to {}", sp, error);
             return;
         }
@@ -301,6 +258,7 @@ class Recoverer implements ReplayHandler {
         long oldestTrxId = entry.getTrxid();
         render(oldestTrxId);
         this.humpback.trxMan.freeTo(oldestTrxId + 100);
+        _log.info("recovery progress: {}", hex(entry.getSpacePointer()));
     }
 
     @Override
@@ -322,11 +280,18 @@ class Recoverer implements ReplayHandler {
         this.rowCount++;
     }
     
-    private void syncSchema(long sp, int tableId) {
+    private void syncSchema(long sp, long pRow, int tableId) {
         // if system table is touched, synchronize with file system
         if (tableId == Humpback.SYSMETA_TABLE_ID) {
+            if (pRow != 0) {
+                SysMetaRow row = new SysMetaRow(SlowRow.fromRowPointer(pRow, 0));
+                if (row.getTableId() < 0) {
+                    // do nothing if the schema change is caused by temp. table
+                    return;
+                }
+            }
             try {
-                humpback.recoverTable();
+                humpback.recoverTables();
             }
             catch (Exception e) {
                 _log.warn("unable to recreate table {} @ {}.", sp, e);

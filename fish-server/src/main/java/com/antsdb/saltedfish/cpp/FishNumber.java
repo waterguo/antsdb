@@ -36,6 +36,14 @@ public class FishNumber extends Value {
         return addr;
     }
 
+    public static void set(Heap heap, long addr, BigDecimal value) {
+        int scale = value.scale();
+        byte[] bytes = value.unscaledValue().toByteArray();
+        Unsafe.putByte(addr, Value.FORMAT_DECIMAL);
+        Unsafe.putByte(addr+1, (byte)scale);
+        BigInt.set(heap, addr+2, bytes);
+    }
+    
     public static final long add(Heap heap, long addr1, long addr2) {
         int type1 = getFormat(heap, addr1);
         int type2 = getFormat(heap, addr2);
@@ -65,6 +73,10 @@ public class FishNumber extends Value {
         else if (type1 == Value.FORMAT_INT8) {
             long value = Int8.get(heap, addr1);
             return multiply_int8(heap, value, type2, addr2);
+        }
+        else if (type1 == Value.FORMAT_BIGINT) {
+            BigInteger value = BigInt.get(heap, addr1);
+            return multiply_bigint(heap, value, type2, addr2);
         }
         else if (type1 == Value.FORMAT_FAST_DECIMAL) {
             BigDecimal value = FastDecimal.get(heap, addr1);
@@ -179,6 +191,10 @@ public class FishNumber extends Value {
         else if (type1 == Value.FORMAT_INT8) {
             long value = Int8.get(heap, addr1);
             return add_int8(heap, value, type2, addr2);
+        }
+        else if (type1 == Value.FORMAT_BIGINT) {
+            BigInteger value = BigInt.get(heap, addr1);
+            return add_bigint(heap, value, type2, addr2);
         }
         else if (type1 == Value.FORMAT_FAST_DECIMAL) {
             int scale = FastDecimal.getScale(heap, addr1);
@@ -337,6 +353,10 @@ public class FishNumber extends Value {
         else if (type == Value.FORMAT_INT8) {
             return Int8.get(null, addr);
         }
+        else if (type == Value.FORMAT_BIGINT) {
+            BigInteger n = BigInt.get(null, addr);
+            return n.longValueExact();
+        }
         else if (type == Value.FORMAT_DECIMAL) {
             BigDecimal dec = FishDecimal.get(null, addr);
             return dec.longValueExact();
@@ -375,6 +395,8 @@ public class FishNumber extends Value {
             return Float4.compare(addr1, type2, addr2);
         case Value.FORMAT_FLOAT8:
             return Float8.compare(addr1, type2, addr2);
+        case Value.FORMAT_BIGINT:
+            return BigInt.compare(addr1, type2, addr2);
         default:
             throw new IllegalArgumentException();
         }

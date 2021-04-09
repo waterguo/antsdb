@@ -73,16 +73,19 @@ abstract class UpdateBase extends Statement {
     }
 
     protected boolean updateSingleRow(VdmContext ctx, Heap heap, Parameters params, long pKey) {
-            boolean success = false;
-            Transaction trx = ctx.getTransaction();
-            trx.getGuaranteedTrxId();
-            int timeout = ctx.getSession().getConfig().getLockTimeout();
-            long heapMark = heap.position();
+        if (ctx.getOrca().isSlave()) {
+            throw new OrcaException("database is not mutable in slave mode");
+        }
+        boolean success = false;
+        Transaction trx = ctx.getTransaction();
+        trx.getGuaranteedTrxId();
+        int timeout = ctx.getSession().getConfig().getLockTimeout();
+        long heapMark = heap.position();
         for (;;) {
             heap.reset(heapMark);
             // get the __latest__ version of the row 
 
-            Row oldRow = this.gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey);
+            Row oldRow = this.gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey, 0);
             if (oldRow == null) {
                 // row could be deleted between query and here
                 return false;
@@ -112,7 +115,7 @@ abstract class UpdateBase extends Statement {
                 else {
                     if (pValue != 0) {
                         BlobReference blobref = BlobReference.alloc(heap, pKey, pValue);
-                        newRow.setFieldAddress(column.getColumnId(), blobref.addr);
+                        newRow.setFieldAddress(column.getColumnId(), blobref.getAddress());
                         blobRow.setFieldAddress(column.getColumnId(), pValue);
                     }
                     else {
@@ -124,7 +127,7 @@ abstract class UpdateBase extends Statement {
             
             // update storage
 
-            HumpbackError error;
+            long error;
             boolean primaryKeyChange = false;
             if (this.isPrimaryKeyAffected) {
                 long pNewKey = this.table.getKeyMaker().make(heap, newRow);
@@ -133,8 +136,8 @@ abstract class UpdateBase extends Statement {
             }
             if (primaryKeyChange) {
                 error = this.gtable.deleteRow(ctx.getHSession(), trx.getTrxId(), oldRow.getAddress(), timeout);
-                if (error != HumpbackError.SUCCESS) {
-                    throw new OrcaException(error);
+                if (!HumpbackError.isSuccess(error)) {
+                    throw new OrcaException(HumpbackError.toString(error));
                 }
                 newRow.setVersion(trx.getTrxId());
                 error = this.gtable.insert(ctx.getHSession(), newRow, timeout);
@@ -143,7 +146,7 @@ abstract class UpdateBase extends Statement {
                 newRow.setVersion(trx.getTrxId());
                 error = this.gtable.update(ctx.getHSession(), newRow, oldRow.getTrxTimestamp(), timeout);
             }
-            if (error == HumpbackError.SUCCESS) {
+            if (HumpbackError.isSuccess(error)) {
                 if (blobRow != null) {
                     blobRow.setKey(newRow.getKeyAddress());
                     blobRow.setVersion(newRow.getVersion());
@@ -151,22 +154,26 @@ abstract class UpdateBase extends Statement {
                 // update blob
                 if (blobRow != null) {
                     if (primaryKeyChange) {
-                        long pOldBlobRow = this.blobTable.get(trx.getTrxId(), trx.getTrxTs(), oldRow.getKeyAddress());
+                        long pOldBlobRow = this.blobTable.get(
+                                trx.getTrxId(), 
+                                trx.getTrxTs(), 
+                                oldRow.getKeyAddress()
+                                ,0);
                         if (pOldBlobRow != 0) {
                             error = this.blobTable.deleteRow(ctx.getHSession(), trx.getTrxId(), pOldBlobRow, timeout);
-                            if (error != HumpbackError.SUCCESS) {
-                                throw new OrcaException(error);
+                            if (!HumpbackError.isSuccess(error)) {
+                                throw new OrcaException(HumpbackError.toString(error));
                             }
                         }
                         error = this.blobTable.insert(ctx.getHSession(), blobRow, timeout);
-                        if (error != HumpbackError.SUCCESS) {
-                            throw new OrcaException(error);
+                        if (!HumpbackError.isSuccess(error)) {
+                            throw new OrcaException(HumpbackError.toString(error));
                         }
                     }
                     else {
                         error = this.blobTable.put(ctx.getHSession(), blobRow, timeout);
-                        if (error != HumpbackError.SUCCESS) {
-                            throw new OrcaException(error);
+                        if (!HumpbackError.isSuccess(error)) {
+                            throw new OrcaException(HumpbackError.toString(error));
                         }
                     }
                 }
@@ -185,7 +192,7 @@ abstract class UpdateBase extends Statement {
                 continue;
             }
             else {
-                throw new OrcaException(error);
+                throw new OrcaException(HumpbackError.toString(error));
             }
         }
         return success;

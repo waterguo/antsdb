@@ -30,7 +30,6 @@ class PathRangeScan extends Path {
 
     @Override
     double getScore(Statistician stats) {
-        // TODO Auto-generated method stub
         return 0;
     }
 

@@ -135,4 +135,9 @@ public class UncertainScan extends CursorMaker implements Ordered {
         return result;
     }
 
+    @Override
+    public float getScore() {
+        return 10;
+    }
+
 }

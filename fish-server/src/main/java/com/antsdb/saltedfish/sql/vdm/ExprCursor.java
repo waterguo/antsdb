@@ -43,7 +43,6 @@ public class ExprCursor extends CursorWithHeap {
         }
         
         // buffering logic
-
         if (this.bufferedRecord != 0) {
             long pRecord = this.bufferedRecord;
             this.bufferedRecord = 0;
@@ -51,32 +50,13 @@ public class ExprCursor extends CursorWithHeap {
         }
 
         // pulling from upstream
-        
         long pRecUpstream = this.upstream.next();
         if (pRecUpstream == 0) {
             return 0;
         }
         
-        //  if this is group end, well it is getting complex
-        
-        if (Record.isGroupEnd(pRecUpstream)) {
-            	if (!this.isEmptyCursor) {
-                // group end record doesn't produce anything.
-                resetAggregationFunctions(pRecUpstream);
-                return pRecUpstream;
-            }
-            else {
-                // except if the cursor is empty, we need to product at least 1
-                // record
-                this.bufferedRecord = pRecUpstream;
-                long pResult = populateRecord(pRecUpstream);
-                return pResult;
-            }
-        }
-        
         // WARNING. newRecord() and newHeap() must be after _group_end detection
         // do the hard stuff
-        
         this.isEmptyCursor = false;
         long pResult = populateRecord(pRecUpstream);
         this.counter.incrementAndGet();
@@ -94,9 +74,10 @@ public class ExprCursor extends CursorWithHeap {
         return "Aggregator";
     }
 
-	private long populateRecord(long pRecord) {
+    private long populateRecord(long pRecord) {
         long pResult = newRecord();
         Heap heap = newHeap();
+        Record.setKey(pResult, Record.getKey(pRecord));
         for (int i=0; i<this.exprs.size(); i++) {
             Operator it = this.exprs.get(i);
             long pValue = it.eval(ctx, heap, params, pRecord);
@@ -105,13 +86,6 @@ public class ExprCursor extends CursorWithHeap {
         return pResult;
     }
     
-    private void resetAggregationFunctions(long pRecord) {
-        for (int i=0; i<this.exprs.size(); i++) {
-            Operator it = this.exprs.get(i);
-            it.eval(ctx, getHeap(), params, pRecord);
-        }
-    }
-
     public void setSource(Script source) {
         this.source = source;
     }

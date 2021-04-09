@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.backup;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -35,6 +36,8 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 import org.apache.commons.cli.Options;
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.BetterCommandLine;
 import com.antsdb.saltedfish.slave.DbUtils;
@@ -70,6 +73,8 @@ public class JdbcBackupMain extends BetterCommandLine {
     private String user;
     private String password;
     private long limit;
+    private String sql;
+    private String name;
     
     public JdbcBackupMain() {
     }
@@ -95,6 +100,9 @@ public class JdbcBackupMain extends BetterCommandLine {
         options.addOption(null, "file",  true, "dump file");
         options.addOption(null, "limit", true, "limit number of rows");
         options.addOption(null, "filter", true, "table filter using java patterns");
+        options.addOption(null, "sql", true, "backup the data from the specified query");
+        options.addOption(null, "name", true, "name of query result");
+        options.addOption(null, "db", true, "name of the database, optional");
     }
 
     @Override
@@ -108,13 +116,20 @@ public class JdbcBackupMain extends BetterCommandLine {
         if (this.cmdline.getArgs().length > 0) {
             this.filter = this.cmdline.getArgs()[0];
         }
+        this.sql = this.cmdline.getOptionValue("sql");
+        this.name = this.cmdline.getOptionValue("name");
         
         connect();
         
-        BackupFile backup = getBackupInfo();
+        if (this.sql != null) {
+            backupQuery();
+        }
+        else {
+            backupTable();
+        }
+    }
 
-        // save metadata
-        
+    private OutputStream createOutputStream() throws FileNotFoundException {
         OutputStream out;
         if (this.cmdline.hasOption("file")) {
             out = new FileOutputStream(this.cmdline.getOptionValue("file"));
@@ -123,10 +138,58 @@ public class JdbcBackupMain extends BetterCommandLine {
             out = System.out;
         }
         out = new BufferedOutputStream(out, 1024 * 1024);
+        return out;
+    }
+    
+    private void backupQuery() throws Exception {
+        if (this.name == null) {
+            println("error: -name option is mandator for query");
+            System.exit(-1);
+        }
+        
+        // save metadata
+        long start = System.currentTimeMillis();
+        Statement stmt = this.conn.createStatement();
+        stmt.setFetchSize(Integer.MIN_VALUE);
+        ResultSet rs = stmt.executeQuery(this.sql);
+        ResultSetMetaData rsmeta = rs.getMetaData();
+        OutputStream out = createOutputStream();
+        BackupFile backup = new BackupFile();
+        TableBackupInfo tbi = new TableBackupInfo();
+        tbi.create = this.sql;
+        String[] segments = StringUtils.split(this.name, '.');
+        ArrayUtils.reverse(segments);
+        tbi.table = segments[0];
+        if (segments.length >= 2) tbi.catalog = segments[1];
+        tbi.columns = new ColumnBackupInfo[rsmeta.getColumnCount()];
+        for (int i=1; i<=rsmeta.getColumnCount(); i++) {
+            ColumnBackupInfo cbi = new ColumnBackupInfo();
+            cbi.name = rsmeta.getColumnName(i);
+            tbi.columns[i-1] = cbi;
+        }
+        backup.addTable(tbi);
+        backup.save(out);
+        
+        // save query result
+        DataOutputStream dout = new DataOutputStream(out);
+        eprintln("saving " + tbi.getFullName() + " ... ");
+        dout.writeUTF(tbi.getFullName());
+        this.nRows = writeResultSet(dout, rs);
+        out.close();
+        rs.close();
+        stmt.close();
+        long end = System.currentTimeMillis();
+        report(backup, end - start);
+    }
+
+    private void backupTable() throws Exception {
+        BackupFile backup = getBackupInfo();
+
+        // save metadata
+        OutputStream out = createOutputStream();
         backup.save(out);
         
         // save table dump
-        
         long start = System.currentTimeMillis();
         writeDump(out, backup);
         out.close();
@@ -142,6 +205,17 @@ public class JdbcBackupMain extends BetterCommandLine {
         eprintln("throughput: %d rows/s", throughput);
     }
     
+    private long writeResultSet(DataOutputStream dout, ResultSet rs) throws Exception {
+        long count = 0;
+        ResultSetMetaData rsmeta = rs.getMetaData();
+        while (rs.next()) {
+            writeRow(dout, rsmeta, rs);
+            count++;
+        }
+        dout.writeInt(0);
+        return count;
+    }
+    
     private void writeDump(OutputStream out, BackupFile backup) throws Exception {
         DataOutputStream dout = new DataOutputStream(out);
         for (TableBackupInfo table:backup.tables) {
@@ -155,13 +229,8 @@ public class JdbcBackupMain extends BetterCommandLine {
             Statement stmt = this.conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
             stmt.setFetchSize(Integer.MIN_VALUE);
             try (ResultSet rs = stmt.executeQuery(sql)) {
-                ResultSetMetaData rsmeta = rs.getMetaData();
-                while (rs.next()) {
-                    writeRow(dout, rsmeta, rs);
-                    count++;
-                }
+                count += writeResultSet(dout, rs);
             }
-            dout.writeInt(0);
             this.nRows += count;
             System.err.println(count + " rows");
         }
@@ -268,7 +337,11 @@ public class JdbcBackupMain extends BetterCommandLine {
     private List<String> getDatabases() throws SQLException {
         List<String> result = new ArrayList<>();
         String url = MysqlJdbcUtil.getUrl(this.host, Integer.parseInt(this.port), null);
-        try (Connection conn = DriverManager.getConnection(url)) {
+        Properties props = new Properties();
+        props.setProperty("user", this.user==null ? "" : this.user);
+        props.setProperty("password", this.password==null ? "" : this.password);
+        props.setProperty("useServerPrepStmts", "true");
+        try (Connection conn = DriverManager.getConnection(url,props)) {
             ResultSet rs = conn.createStatement().executeQuery("show databases");
             while (rs.next()) {
                 result.add(rs.getString(1));
@@ -324,7 +397,8 @@ public class JdbcBackupMain extends BetterCommandLine {
     }
 
     public void connect() throws SQLException {
-        String url = MysqlJdbcUtil.getUrl(this.host, Integer.parseInt(this.port), null);
+        String db = this.cmdline.getOptionValue("db");
+        String url = MysqlJdbcUtil.getUrl(this.host, Integer.parseInt(this.port), db);
         Properties props = new Properties();
         props.setProperty("user", this.user);
         props.setProperty("password", this.password);

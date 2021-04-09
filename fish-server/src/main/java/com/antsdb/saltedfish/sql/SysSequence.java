@@ -60,7 +60,6 @@ public class SysSequence extends View {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         GTable table = ctx.getHumpback().getTable(TableId.SYSSEQUENCE);
         Cursor cursor = new DumbCursor(
-                ctx.getSpaceManager(),
                 this.meta, 
                 table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), true), 
                 mapping,

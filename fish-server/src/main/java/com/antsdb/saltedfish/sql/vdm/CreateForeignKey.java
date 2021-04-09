@@ -49,10 +49,12 @@ public class CreateForeignKey extends Statement {
         List<String> parentColumns;
         public String onDelete;
         public String onUpdate;
+        public String indexName;
     }
     
     public CreateForeignKey(ObjectName childTableName, 
                             String name, 
+                            String indexName,
                             ObjectName parentTableName,
                             List<String> childColumns, 
                             List<String> parentColumns,
@@ -60,6 +62,7 @@ public class CreateForeignKey extends Statement {
                             String onUpdateAction) {
         super();
         this.spec.name = name;
+        this.spec.indexName = indexName;
         this.spec.childTableName = childTableName;
         this.spec.parentTableName = parentTableName;
         this.spec.childColumns = childColumns;
@@ -71,13 +74,11 @@ public class CreateForeignKey extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         // find out columns from child
-
         TableMeta child = Checks.tableExist(ctx.getSession(), this.spec.childTableName);
         List<ColumnMeta> childColumns = getColumns(child, spec.childColumns);
         ctx.getSession().lockTable(child.getId(), LockLevel.EXCLUSIVE, false);
         try {
             // FOREIGN_KEY_CHECKS will make the logic go on even if there are errors
-            
             try {
                 checkParent(ctx, spec);
             }
@@ -88,15 +89,13 @@ public class CreateForeignKey extends Statement {
             }
             
             // create the foreign key metadata
-            
             createMeta(ctx, child, this.spec);
 
             // create index on child columns if there is none
-
             ArrayList<Integer> prefix = new ArrayList<>();
             childColumns.forEach((it) -> { prefix.add(null); });
             if (!isIndexed(child, this.spec.childColumns)) {
-                String indexName = getDefaultIndexName(child);
+                String indexName = this.spec.indexName != null ? this.spec.indexName : getDefaultIndexName(child);
                 CreateIndex.createIndex(ctx, child, indexName, false, false, childColumns, prefix, this.rebuildIndex);
             }
         }
@@ -121,7 +120,6 @@ public class CreateForeignKey extends Statement {
     
     private static boolean checkParent(VdmContext ctx, ForeignKeySpec spec) {
         // check table name
-        
         MetadataService meta = ctx.getMetaService();
         TableMeta table = meta.getTable(ctx.getTransaction(), spec.parentTableName);
         if (table == null) {
@@ -130,7 +128,6 @@ public class CreateForeignKey extends Statement {
         spec.parentTableName = table.getObjectName();
         
         // check column name
-        
         for (int i=0; i<spec.parentColumns.size(); i++) {
             ColumnMeta ii = table.getColumn(spec.parentColumns.get(i));
             if (ii == null) {
@@ -142,7 +139,6 @@ public class CreateForeignKey extends Statement {
         }
         
         // check key
-        
         for (;;) {
             PrimaryKeyMeta pk = table.getPrimaryKey();
             if (pk != null) {

@@ -93,15 +93,15 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
 
     private Instruction genSetNames(GeneratorContext ctx, Set_stmt_namesContext rule) {
         String name = rule.names_value().getText();
-		if (rule.names_value().STRING_LITERAL() != null) {
-			name = name.substring(1, name.length()-1);
-		}
-		else if (rule.names_value().DOUBLE_QUOTED_LITERAL() != null) {
-			name = name.substring(1, name.length()-1);
-		}
-		
-		Flow flow = new Flow();
-	    flow.add(new SetSystemParameter(Scope.SESSION, "character_set_client", name));
+        if (rule.names_value().STRING_LITERAL() != null) {
+            name = name.substring(1, name.length()-1);
+        }
+        else if (rule.names_value().DOUBLE_QUOTED_LITERAL() != null) {
+            name = name.substring(1, name.length()-1);
+        }
+        
+        Flow flow = new Flow();
+        flow.add(new SetSystemParameter(Scope.SESSION, "character_set_client", name));
         flow.add(new SetSystemParameter(Scope.SESSION, "character_set_results", name));
         flow.add(new SetSystemParameter(Scope.SESSION, "character_set_connection", name));
         return flow;
@@ -195,37 +195,37 @@ public class Set_stmtGenerator extends Generator<Set_stmtContext> {
 
     private SetSystemParameter createSetGlobalTransaction(GeneratorContext ctx,Variable_assignment_global_transactionContext rule) 
     throws OrcaException {
-        	// Transaction setting is not fully supported. 
-        	// We won't handle dirty read, etc
-        	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.GLOBAL, "TRANSACTION", "");
-        	return set;
+            // Transaction setting is not fully supported. 
+            // We won't handle dirty read, etc
+            SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.GLOBAL, "TRANSACTION", "");
+            return set;
     }
 
     private SetSystemParameter createSetSessionTransaction(GeneratorContext ctx, Variable_assignment_session_transactionContext rule) 
     throws OrcaException {
-        	// Transaction setting is not fully supported. 
-        	// We won't handle dirty read, etc
-        	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
-        	return set;
+            // Transaction setting is not fully supported. 
+            // We won't handle dirty read, etc
+            SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
+            return set;
     }
 
     private SetSystemParameter createSetTransaction(GeneratorContext ctx, Variable_assignment_transactionContext rule) 
     throws OrcaException {
-        	// Transaction setting is not fully supported. 
-        	// We won't handle dirty read, etc
-        	SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
-        	return set;
+            // Transaction setting is not fully supported. 
+            // We won't handle dirty read, etc
+            SetSystemParameter set = new SetSystemParameter(SetSystemParameter.Scope.SESSION, "TRANSACTION", "");
+            return set;
     }
     
     private String genNamesValue(Names_valueContext nmctx)
     {
         String nval = nmctx.getText();
-		if (nmctx.STRING_LITERAL() != null) {
-			nval = nval.substring(1, nval.length()-1);
-		}
-		else if (nmctx.DOUBLE_QUOTED_LITERAL() != null) {
-			nval = nval.substring(1, nval.length()-1);
-		}
-		return nval;
+        if (nmctx.STRING_LITERAL() != null) {
+            nval = nval.substring(1, nval.length()-1);
+        }
+        else if (nmctx.DOUBLE_QUOTED_LITERAL() != null) {
+            nval = nval.substring(1, nval.length()-1);
+        }
+        return nval;
     }
 }

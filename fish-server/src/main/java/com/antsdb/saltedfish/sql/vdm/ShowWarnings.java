@@ -29,21 +29,25 @@ public class ShowWarnings extends CursorMaker {
         meta.addColumn(new FieldMeta("Level", DataType.varchar()))
             .addColumn(new FieldMeta("Code", DataType.integer()))
             .addColumn(new FieldMeta("Message", DataType.longtype()));
-	}
+    }
     
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.meta;
-	}
+    @Override
+    public CursorMeta getCursorMeta() {
+        return this.meta;
+    }
 
-	@Override
-	public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
-		return new EmptyCursor(meta);
-	}
+    @Override
+    public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
+        return new EmptyCursor(meta);
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return false;
     }
 
+    @Override
+    public float getScore() {
+        return 0;
+    }
 }

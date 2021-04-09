@@ -38,7 +38,7 @@ public class Show_table_status_stmtGenerator extends Generator<Show_table_status
             throw new OrcaException("no database selected");
         }
         if (rule.K_FROM() != null) {
-            ns = rule.identifier().getText();
+            ns = Utils.getIdentifier(rule.identifier());
         }
         String like = null;
         if (rule.K_LIKE() != null) {

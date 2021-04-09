@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.antsdb.saltedfish.cpp.FishBool;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
@@ -57,7 +59,7 @@ public class OpInValues extends BinaryOperator {
 
     @Override
     public String toString() {
-        return "IN (...)";
+        return "IN (" + StringUtils.join(this.values, ',') + ")";
     }
 
     public List<Operator> getValues() {

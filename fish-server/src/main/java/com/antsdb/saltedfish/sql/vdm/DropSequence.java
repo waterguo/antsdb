@@ -19,20 +19,28 @@ import com.antsdb.saltedfish.sql.meta.SequenceMeta;
 
 public class DropSequence extends Statement {
     ObjectName name;
+    private boolean ifExist;
     
     public DropSequence(ObjectName name) {
+        this(name, false);
+    }
+    
+    public DropSequence(ObjectName name, boolean ifExist) {
         super();
         this.name = name;
+        this.ifExist = ifExist;
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         MetadataService metaService = ctx.getOrca().getMetaService();
         SequenceMeta seq = metaService.getSequence(ctx.getTransaction(), name);
-        if (seq == null) {
+        if (seq != null) {
+            metaService.dropSequence(ctx.getHSession(), ctx.getTransaction(), seq);
+        }
+        else if (!ifExist) {
             throw new OrcaException("sequence not found: " + this.name);
         }
-        metaService.dropSequence(ctx.getHSession(), ctx.getTransaction(), seq);
         return null;
     }
 

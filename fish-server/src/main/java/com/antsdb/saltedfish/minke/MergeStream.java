@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.minke;
 
 import com.antsdb.saltedfish.minke.MinkePage.RangeScanner;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 
@@ -53,10 +54,12 @@ class MergeStream {
     private long result_rowKey;
     private byte result_misc;
     private TableType tableType;
+    private long merge_version;
+    private long result_version;
     
     MergeStream(TableType tableType, MinkePage page) {
         this.ranges = page.getAllRanges();
-        this.scanner = page.scanAll();
+        this.scanner = page.scanAll(ScanOptions.SHOW_DELETE_MARK);
         this.range = this.ranges.next();
         if (this.scanner != null) {
             this.scanner.next();
@@ -78,7 +81,8 @@ class MergeStream {
         this.merge_dataType = RESULT_ROW;
     }
 
-    void setMergeIndexData(long pKey, long pRowKey, byte misc) {
+    void setMergeIndexData(long version, long pKey, long pRowKey, byte misc) {
+        this.merge_version = version;
         this.merge_pKey = pKey;
         this.merge_keyMark = BoundaryMark.NONE;
         this.merge_rowKey = pRowKey;
@@ -161,6 +165,7 @@ class MergeStream {
             this.result_rowKey = this.merge_rowKey;
             this.result_misc = this.merge_misc;
             this.result_object = this.merge_object;
+            this.result_version = this.merge_version;
             this.merge_pKey = 0;
             this.merge_pData = 0;
         }
@@ -188,7 +193,7 @@ class MergeStream {
             return page.put(TableType.DATA, this.result_pKey, this.result_pData, 0);
         }
         else if (this.result_dataType == RESULT_INDEX) {
-            return page.putIndex(this.result_pKey, this.result_rowKey, this.result_misc);
+            return page.putIndex(this.result_version, this.result_pKey, this.result_rowKey, this.result_misc);
         }
         else if (this.result_dataType == RESULT_RANGE) {
             return page.putRange((Range)this.result_object);

@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.FishBool;
+import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -31,11 +33,13 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class NestedJoin extends CursorMaker {
     final static Logger _log = UberUtil.getThisLogger();
     
-    CursorMaker left;
-    CursorMaker right;
+    public CursorMaker left;
+    public CursorMaker right;
     CursorMeta meta;
     boolean isOuter;
     Operator condition;
+    private int widthx;
+    private int widthy;
     
     class JoinedCursor extends CursorWithHeap {
 
@@ -49,7 +53,7 @@ public class NestedJoin extends CursorMaker {
         long pRecord;
 
         public JoinedCursor(VdmContext ctx, Parameters params, Cursor left, AtomicLong counter) {
-            super(NestedJoin.this.meta);
+            super(NestedJoin.this.meta, NestedJoin.this.widthx + NestedJoin.this.widthy);
             this.ctx = ctx;
             this.params = params;
             this.left = left;
@@ -99,10 +103,11 @@ public class NestedJoin extends CursorMaker {
                 this.counter.incrementAndGet();
                 long pRecord = makeJoinedRecord(this.pRecLeft, pRecRight);
                 if (NestedJoin.this.condition != null) {
-                    Boolean b = (Boolean)Util.eval(ctx, NestedJoin.this.condition, this.params, pRecord);
-                    if ( (b == null) || (!b)) {
-                        continue;
-                    }
+                    Heap heap = getHeap();
+                    long pBool = NestedJoin.this.condition.eval(ctx, heap, params, pRecord);
+                    if (pBool == 0) continue;
+                    boolean b = FishBool.get(heap, pBool);
+                    if (!b) continue;
                 }
                 return pRecord;
             }
@@ -112,19 +117,16 @@ public class NestedJoin extends CursorMaker {
             this.pRecLeft = this.left.next();
             if (this.right != null) {
                 this.right.close();
-                this.right = null;
             }
             if (this.pRecLeft != 0) {
-                Record.size(this.pRecLeft);
                 this.counter.incrementAndGet();
-                this.right = makeRightCursor(this.pRecLeft);
+                makeRightCursor(this.pRecLeft);
                 this.hasLeftMatched = false;
             }
         }
 
-        private Cursor makeRightCursor(long rec) {
-            Cursor c = NestedJoin.this.right.make(ctx, params, rec);
-            return c;
+        private void makeRightCursor(long rec) {
+            this.right = NestedJoin.this.right.make(ctx, params, rec, this.right);
         }
 
         @Override
@@ -134,6 +136,7 @@ public class NestedJoin extends CursorMaker {
             if (this.right != null) {
                 this.right.close();
             }
+            NestedJoin.this.right.demolish(this.right);
         }
 
         @Override
@@ -145,15 +148,14 @@ public class NestedJoin extends CursorMaker {
             check(pRecordLeft);
             check(pRecordRight);
             long pResult = newRecord();
-            int nFieldsLeft = Record.size(pRecordLeft);
-            for (int i=0; i<nFieldsLeft; i++) {
+            for (int i=0; i<NestedJoin.this.widthx; i++) {
                 long pValue = Record.get(pRecordLeft, i);
                 Record.set(pResult, i, pValue);
             }
             if (pRecordRight != 0) {
-                for (int i=0; i<Record.size(pRecordRight); i++) {
+                for (int i=0; i<NestedJoin.this.widthy; i++) {
                     long pValue = Record.get(pRecordRight, i);
-                    Record.set(pResult, nFieldsLeft + i, pValue);
+                    Record.set(pResult, NestedJoin.this.widthx + i, pValue);
                 }
             }
             return pResult;
@@ -171,11 +173,20 @@ public class NestedJoin extends CursorMaker {
         }
     }
     
-    public NestedJoin(CursorMaker left, CursorMaker right, Operator condition, boolean isOuter, int makerId) {
+    public NestedJoin(
+            CursorMaker x, 
+            CursorMaker y, 
+            int widthx, 
+            int widthy, 
+            Operator condition, 
+            boolean isOuter, 
+            int makerId) {
         super();
-        this.meta = CursorMeta.join(left.getCursorMeta(), right.getCursorMeta());
-        this.left = left;
-        this.right = right;
+        this.meta = CursorMeta.join(x.getCursorMeta(), y.getCursorMeta());
+        this.left = x;
+        this.right = y;
+        this.widthx = widthx;
+        this.widthy = widthy;
         this.condition = condition;
         this.isOuter = isOuter;
         setMakerId(makerId);
@@ -204,8 +215,7 @@ public class NestedJoin extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
-        records.add(rec);
+        super.explain(level, records);
         this.left.explain(level+1, records);
         this.right.explain(level+1, records);
     }
@@ -215,4 +225,12 @@ public class NestedJoin extends CursorMaker {
         return this.left.setSortingOrder(order);
     }
 
+    @Override
+    public float getScore() {
+        return this.left.getScore() * this.right.getScore();
+    }
+
+    public CursorMaker getLeft() { 
+        return this.left;
+    }
 }

@@ -38,7 +38,7 @@ public final class PacketWriter {
         this.addr = UberUtil.getAddress(this.buf);
     }
 
-    public Object getWrapped() {
+    public ByteBuffer getWrapped() {
         return this.buf;
     }
 
@@ -112,6 +112,11 @@ public final class PacketWriter {
         writeByte((byte) (value >>> 16));
     }
 
+    /**
+     * write a null terminated string
+     * 
+     * @param value
+     */
     public void writeString(String value) {
         writeStringNoNull(value);
         writeByte((byte)0);

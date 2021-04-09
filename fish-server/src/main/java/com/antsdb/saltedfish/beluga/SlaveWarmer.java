@@ -32,15 +32,19 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 public class SlaveWarmer extends Thread {
     private static final Logger _log = UberUtil.getThisLogger();
-
     private static final int MAX_QUEUE_SIE = 20;
     
     long totalError = 0;
     private Pod pod;
-    private ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
+    private ConcurrentLinkedQueue<Item> queue = new ConcurrentLinkedQueue<>();
     private HashMap<String, Connection> pool = new HashMap<>();  
     private RecentCounter counter = new RecentCounter(5);
 
+    private class Item {
+        String ns;
+        String sql;
+    }
+    
     public SlaveWarmer(Pod pod) {
         this.pod = pod;
         setDaemon(true);
@@ -63,22 +67,21 @@ public class SlaveWarmer extends Thread {
 
     private void run0() throws Exception {
         for (;;) {
-            String ns = this.queue.poll();
-            if (ns == null) {
+            Item item = this.queue.poll();
+            if (item == null) {
                 Thread.sleep(2000);
                 continue;
             }
-            String sql = this.queue.poll();
-            for (Member i:this.pod.members) {
+            for (Member i:this.pod.getMembers()) {
                 if (!i.warmer) {
                     break;
                 }
                 try {
                     Connection conn = getConnection(i);
-                    if (!StringUtils.isEmpty(ns)) {
-                        DbUtils.execute(conn, "use " + ns);
+                    if (!StringUtils.isEmpty(item.ns)) {
+                        DbUtils.execute(conn, "use " + item.ns);
                     }
-                    DbUtils.execute(conn, sql);
+                    DbUtils.execute(conn, item.sql);
                     this.counter.count(1);
                 }
                 catch (SQLException x) {
@@ -90,10 +93,10 @@ public class SlaveWarmer extends Thread {
     }
     
     private Connection getConnection(Member i) throws SQLException {
-        Connection conn = this.pool.get(i.endpoint);
+        Connection conn = this.pool.get(i.getEndpoint());
         if (conn == null) {
             conn = i.createConnection();
-            this.pool.put(i.endpoint, conn);
+            this.pool.put(i.getEndpoint(), conn);
         }
         else {
             DbUtils.ping(conn);
@@ -114,8 +117,10 @@ public class SlaveWarmer extends Thread {
         if (this.queue.size() > MAX_QUEUE_SIE) {
             return;
         }
-        this.queue.add(ns == null ? "" : ns);
-        this.queue.add(sql);
+        Item item = new Item();
+        item.ns = ns;
+        item.sql = sql;
+        this.queue.add(item);
     }
 
     public long getRecentHits() {

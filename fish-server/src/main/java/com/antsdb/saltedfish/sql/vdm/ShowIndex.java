@@ -56,9 +56,9 @@ public class ShowIndex extends View {
         PrimaryKeyMeta pk = table.getPrimaryKey();
         if (pk != null) {
             toItems(list, table, pk);
-            for (IndexMeta index: table.getIndexes()) {
-                toItems(list, table, index);
-            }
+        }
+        for (IndexMeta index: table.getIndexes()) {
+            toItems(list, table, index);
         }
         Cursor c = CursorUtil.toCursor(META, list);
         return c;

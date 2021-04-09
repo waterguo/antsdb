@@ -127,7 +127,7 @@ class Analyzer2 {
         }
         else if (expr instanceof OpMatch) {
             OpMatch match = (OpMatch) expr;
-            ColumnFilter cf = new ColumnFilter(null, FilterOp.MATCH, match, null);
+            ColumnFilter cf = new ColumnFilter(null, FilterOp.MATCH, match, null, scope!=null);
             Node node = ((OpMatch) expr).getColumns().get(0).getField().owner;
             addFilter(joins, node, cf);
             return true;
@@ -235,11 +235,11 @@ class Analyzer2 {
         PlannerField fieldLeft = (PlannerField) field.getField();
         ColumnFilter cf = null;
         if (fieldLeft.owner == scope) {
-            cf = new ColumnFilter(fieldLeft, op, value, source);
+            cf = new ColumnFilter(fieldLeft, op, value, source, scope!=null);
         }
         else if ((scope == null) && (this.nodes.contains(fieldLeft.owner))) {
             // don't touch parent planner.
-            cf = new ColumnFilter(fieldLeft, op, value, source);
+            cf = new ColumnFilter(fieldLeft, op, value, source, scope!=null);
         }
         else {
             // false means the specified condition cannot be translated to a column

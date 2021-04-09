@@ -42,61 +42,57 @@ public class TruncateTable extends Statement {
         Humpback humpback = ctx.getOrca().getHumpback();
         MetadataService meta = ctx.getMetaService();
         TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
+        try {
+            // acquire exclusive lock
+            Transaction trx = ctx.getTransaction(); 
+            trx.getGuaranteedTrxId();
+            ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
+            
+            // refetch the table metadata to avoid concurrency
+            table = ctx.getMetaService().getTable(trx, table.getId());
+            TableMeta clone = table.clone();
+        
+            // new indexes blah blah
+            createNewIndexes(ctx, clone, params);
+
+            // new table
+            boolean isTemporary = table.isTemproray();
+            clone.setHtableId((int)ctx.getOrca().getIdentityService().getNextGlobalId(0x10));
+            if (isTemporary) {
+                clone.setHtableId(-clone.getHtableId());
+            }
+            if (humpback.getTable(table.getBlobTableId()) != null) {
+                humpback.truncateTable(ctx.getHSession(), table.getBlobTableId(), clone.getBlobTableId());
+            }
+            humpback.truncateTable(ctx.getHSession(), table.getHtableId(), clone.getHtableId());
+            meta.updateTable(ctx.getHSession(), ctx.getTransaction(), clone);
+            TableMeta stub = new TableMeta(ctx.getOrca(), clone.getHtableId());
+            stub.setNamespace("#");
+            stub.setTableName(String.valueOf(stub.getId())  + "-" + String.valueOf(table.getId()));
+            stub.setHtableId(-table.getId());
+            meta.addTable(ctx.getHSession(), ctx.getTransaction(), stub);
+            
+            // delete old indexes
+            deleteOldIndexes(ctx, table);
+            
+            // reset auto increment
+            ObjectName seqname = table.getAutoIncrementSequenceName();
+            SequenceMeta seq = meta.getSequence(trx, seqname);
+            if (seq != null) {
+                seq.setNextNumber(seq.getSeed());
+                meta.updateSequence(ctx.getHSession(), trx.getTrxId(), seq);
+            }
+            
+            return null;
+        }
+        finally {
             try {
-                // acquire exclusive lock
-                
-                Transaction trx = ctx.getTransaction(); 
-                trx.getGuaranteedTrxId();
-                ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
-                
-                // refetch the table metadata to avoid concurrency
-                
-                table = ctx.getMetaService().getTable(trx, table.getId());
-                TableMeta clone = table.clone();
-            
-                // new indexes blah blah
-            
-                createNewIndexes(ctx, clone, params);
-    
-                // new table
-                
-                clone.setHtableId((int)ctx.getOrca().getIdentityService().getNextGlobalId(0x10));
-                if (humpback.getTable(table.getBlobTableId()) != null) {
-                    humpback.truncateTable(ctx.getHSession(), table.getBlobTableId(), clone.getBlobTableId());
-                }
-                humpback.truncateTable(ctx.getHSession(), table.getHtableId(), clone.getHtableId());
-                meta.updateTable(ctx.getHSession(), ctx.getTransaction(), clone);
-                TableMeta stub = new TableMeta(ctx.getOrca(), clone.getHtableId());
-                stub.setNamespace("#");
-                stub.setTableName(String.valueOf(stub.getId())  + "-" + String.valueOf(table.getId()));
-                stub.setHtableId(-table.getId());
-                meta.addTable(ctx.getHSession(), ctx.getTransaction(), stub);
-                
-                // delete old indexes
-    
-                deleteOldIndexes(ctx, table);
-                
-                // reset auto increment
-                
-                ObjectName seqname = table.getAutoIncrementSequenceName();
-                SequenceMeta seq = meta.getSequence(trx, seqname);
-                if (seq != null) {
-                    seq.setLastNumber(0);
-                    seq.setSeed(0);
-                    seq.setIncrement(1);
-                    meta.updateSequence(ctx.getHSession(), trx.getTrxId(), seq);
-                }
-                
-                return null;
+                ctx.getSession().unlockTable(table.getId());
             }
-            finally {
-                try {
-                    ctx.getSession().unlockTable(table.getId());
-                }
-                catch (Exception x) {
-                    _log.error("failed to unlock", x);
-                }
+            catch (Exception x) {
+                _log.error("failed to unlock", x);
             }
+        }
     }
 
     @Override
@@ -110,6 +106,9 @@ public class TruncateTable extends Statement {
         for (IndexMeta i:table.getIndexes()) {
             int id = (int)ctx.getOrca().getIdentityService().getNextGlobalId();
             i.setIndexTableId(id);
+            if (table.isTemproray()) {
+                i.setIndexTableId(-i.getIndexTableId());
+            }
             i.genUniqueExternalName(table, i.getName(), id);
             humpback.createTable(
                     ctx.getHSession(),

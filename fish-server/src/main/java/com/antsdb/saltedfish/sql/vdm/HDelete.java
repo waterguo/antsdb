@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql.vdm;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.HumpbackError;
+import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.OrcaException;
 
 /**
@@ -38,9 +39,9 @@ public class HDelete extends Statement {
         int count = 0;
         for (long pRecord = c.next();pRecord != 0;pRecord = c.next()) {
             long pKey = Record.getKey(pRecord);
-            long version = ctx.getHumpback().getTrxMan().getNewVersion();
-            HumpbackError error = this.gtable.delete(ctx.getHSession(), version, pKey, 0);
-            if (error != HumpbackError.SUCCESS) {
+            long version = TrxMan.getNewVersion();
+            long error = this.gtable.delete(ctx.getHSession(), version, pKey, 0);
+            if (!HumpbackError.isSuccess(error)) {
                 throw new OrcaException("unable to delete row {} due to {}", KeyBytes.toString(pKey), error); 
             }
             count++;

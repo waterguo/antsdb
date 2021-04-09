@@ -13,10 +13,14 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.cpp;
 
-public class Int8 {
+public class Int8 extends BrutalMemoryObject {
     //final static Heap _constants = new BluntHeap(1024);
     //public final static long ZERO = allocSet(_constants, 0);
     
+    public Int8(long addr) {
+        super(addr);
+    }
+
     public final static long get(Heap heap, long address) {
         long value = Unsafe.getLong(address+1);
         return value;
@@ -67,5 +71,15 @@ public class Int8 {
     public static long negate(Heap heap, long pValue) {
         long value = get(heap, pValue);
         return allocSet(heap, -value);
+    }
+
+    @Override
+    public int getByteSize() {
+        return getSize();
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_INT8;
     }
 }

@@ -13,16 +13,18 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.minke;
 
-import java.io.Closeable;
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.slf4j.Logger;
+
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.ConfigService;
+import com.antsdb.saltedfish.nosql.HColumnRow;
 import com.antsdb.saltedfish.nosql.LogSpan;
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.StorageEngine;
@@ -30,30 +32,35 @@ import com.antsdb.saltedfish.nosql.StorageTable;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
 import com.antsdb.saltedfish.util.LongLong;
 import com.antsdb.saltedfish.util.UberFormatter;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
  * @author *-xguo0<@
  */
-public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
+public final class MinkeCache implements LogSpan, StorageEngine {
+    static final Logger _log = UberUtil.getThisLogger();
+    
     /* an empty range goes from 0 to ff */
     static final Range EMPTY_RANGE = new Range(KeyBytes.getMinKey(),true, KeyBytes.getMaxKey(), true);
     
-    StorageEngine stoarge;
+    StorageEngine storage;
     Minke minke;
     long cacheMiss = 0;
     ConcurrentMap<Integer, MinkeCacheTable> tableById = new ConcurrentHashMap<>();
     boolean isMutable = true;
     private int verificationMode;
+    CacheStrategy strategy = new AllButBlobStrategy();
     
     public MinkeCache(StorageEngine storage) {
-        this.stoarge = storage;
+        this.storage = storage;
     }
     
     @Override
     public void open(File home, ConfigService config, boolean isMutable) throws Exception {
         this.minke = new Minke();
         this.isMutable = isMutable;
+        this.strategy = config.getCacheStrategy();
         config.getProperties().setProperty("minke.size", String.valueOf(config.getCacheSize()));
         this.verificationMode = config.getCacheVerificationMode();
         this.minke.open(home, config, isMutable);
@@ -63,18 +70,9 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
     public StorageTable getTable(int id) {
         MinkeCacheTable result = this.tableById.get(id);
         if (result == null) {
-            synchronized(this) {
-                MinkeTable mtable = (MinkeTable)this.minke.getTable(id);
-                if (mtable != null) {
-                    StorageTable stable = this.getStorage().getTable(id);
-                    if (stable != null) {
-                        result = new MinkeCacheTable(this, mtable, stable);
-                        this.tableById.put(id, result);
-                    }
-                    else {
-                        throw new MinkeException("minke and storage are out of sync: " + id);
-                    }
-                }
+            MinkeTable mtable = (MinkeTable)this.minke.getTable(id);
+            if (mtable != null) {
+                _log.warn("minke and humpback are out of sync for table: {}", id);
             }
         }
         return result;
@@ -82,9 +80,12 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public StorageTable createTable(SysMetaRow meta) {
-        StorageTable stable = this.stoarge.createTable(meta);
+        // we dont care temp. tables
+        if (meta.getTableId() < 0) return null;
+        
+        StorageTable stable = this.storage.createTable(meta);
         MinkeTable mtable = (MinkeTable)this.minke.createTable(meta);
-        MinkeCacheTable result = new MinkeCacheTable(this, mtable, stable);
+        MinkeCacheTable result = new MinkeCacheTable(this, mtable, stable, meta);
         this.tableById.put(meta.getTableId(), result);
         // set an empty range so following inserts doesn't hit hbase
         mtable.putRange(EMPTY_RANGE);
@@ -93,40 +94,45 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public boolean deleteTable(int id) {
-        boolean result = this.stoarge.deleteTable(id);
+        boolean result = true;
+        if (id >= 0) {
+            // only harass hbase when this is not a temporary table
+            this.storage.deleteTable(id);
+        }
         this.minke.deleteTable(id);
+        this.tableById.remove(id);
         return result;
     }
 
     @Override
     public void createNamespace(String name) {
-        this.stoarge.createNamespace(name);
+        this.storage.createNamespace(name);
         this.minke.createNamespace(name);
     }
 
     @Override
     public void deleteNamespace(String name) {
-        this.stoarge.deleteNamespace(name);
+        this.storage.deleteNamespace(name);
         this.minke.deleteNamespace(name);
     }
 
     @Override
     public boolean isTransactionRecoveryRequired() {
-        return this.stoarge.isTransactionRecoveryRequired();
+        return this.storage.isTransactionRecoveryRequired();
     }
 
     @Override
     public LongLong getLogSpan() {
         LongLong spanMinke = this.minke.getLogSpan();
-        LongLong spanStorage = this.stoarge.getLogSpan();
+        LongLong spanStorage = this.storage.getLogSpan();
         LongLong result = new LongLong(0, Math.min(spanMinke.y, spanStorage.y));
         return result;
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() throws Exception {
         this.minke.close();
-        this.stoarge.close();
+        this.storage.close();
     }
 
     void resetCacheHitRatio() {
@@ -163,7 +169,7 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
     }
 
     @Override
-    public synchronized void checkpoint() throws Exception {
+    public void checkpoint() throws Exception {
         this.minke.checkpoint();
     }
 
@@ -172,7 +178,7 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
         this.minke.gc(timestamp);
     }
 
-    public synchronized void checkpointIfNeccessary() throws Exception {
+    public void checkpointIfNeccessary() throws Exception {
         this.minke.checkpointIfNeccessary();
     }
     
@@ -209,7 +215,7 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
     }
 
     public StorageEngine getStorage() {
-        return this.stoarge;
+        return this.storage;
     }
 
     /**
@@ -222,24 +228,50 @@ public final class MinkeCache implements Closeable, LogSpan, StorageEngine {
 
     @Override
     public void syncTable(SysMetaRow row) {
-        this.minke.syncTable(row);
-        this.stoarge.syncTable(row);
-        if (row.isDeleted()) {
+        if (row.getTableId() < 0) {
+            // we dont care about temporary table
             return;
         }
-        MinkeTable mtable = (MinkeTable)this.minke.getTable(row.getTableId());
-        StorageTable stable = this.stoarge.getTable(row.getTableId());
-        MinkeCacheTable mctable = new MinkeCacheTable(this, mtable, stable);
-        this.tableById.put(row.getTableId(), mctable);
+        this.minke.syncTable(row);
+        this.storage.syncTable(row);
+        MinkeCacheTable mctable = this.tableById.get(row.getTableId());
+        if (row.isDeleted() && mctable != null) {
+            this.tableById.remove(row.getTableId());
+        }
+        else if (!row.isDeleted() && mctable == null) {
+            MinkeTable mtable = (MinkeTable)this.minke.getTable(row.getTableId());
+            StorageTable stable = this.storage.getTable(row.getTableId());
+            mctable = new MinkeCacheTable(this, mtable, stable, row);
+            this.tableById.put(row.getTableId(), mctable);
+        }
     }
 
     @Override
     public boolean exist(int tableId) {
-        return this.stoarge.exist(tableId);
+        return this.storage.exist(tableId);
     }
 
     @Override
     public Replicable getReplicable() {
-        return this.stoarge.getReplicable();
+        return this.storage.getReplicable();
+    }
+    
+     public void createColumn(int tableId, int columnId, String name, int type) {
+         storage.createColumn(tableId, columnId, name, type);
+    }
+    
+    /**
+     * called when antsdb trying to delete a column on a table
+     * @param tableId
+     * @param columnId
+     * @param columnName not null
+     */
+     public void deleteColumn(int tableId, int columnId, String columnName) {
+        storage.deleteColumn(tableId, columnId, columnName);
+    }
+
+    @Override
+    public void postSchemaChange(SysMetaRow table, List<HColumnRow> columns) {
+        this.storage.postSchemaChange(table, columns);
     }
 }

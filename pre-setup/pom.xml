@@ -4,7 +4,7 @@
     <parent>
         <groupId>com.antsdb</groupId>
         <artifactId>fish-root</artifactId>
-        <version>18.12.29-beyond</version>
+        <version>21.04.09</version>
     </parent>
     
     <modelVersion>4.0.0</modelVersion>
@@ -24,9 +24,30 @@
         </repository>
     </repositories>
 
+	<scm>
+		<connection>scm:git:ssh://git@bitbucket.org/waterguo/salted-fish.git</connection>
+	</scm>    
+
     <build>
         <plugins>
-            <plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>buildnumber-maven-plugin</artifactId>
+				<version>1.4</version>
+				<executions>
+					<execution>
+						<phase>validate</phase>
+						<goals>
+							<goal>create</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<doCheck>false</doCheck>
+					<doUpdate>false</doUpdate>
+				</configuration>
+			</plugin>
+			<plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>2.3</version>
@@ -34,9 +55,15 @@
 					<transformers>
 						<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 							<manifestEntries>
+								<Main-Class>com.antsdb.saltedfish.server.SaltedFishMain</Main-Class>
 								<Implementation-Version>${project.parent.version}</Implementation-Version>
+								<Implementation-Vendor>antsdb.com</Implementation-Vendor>
+								<Implementation-Title>AntsDB</Implementation-Title>
+								<Build-Number>${buildNumber}</Build-Number>
 						  	</manifestEntries>
 						</transformer>
+						<!-- No FileSystem for scheme: hdfs -->
+						<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
 					  </transformers>
                 </configuration>
                 <executions>
@@ -45,6 +72,18 @@
                         <goals>
                             <goal>shade</goal>
                         </goals>
+                        <configuration>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

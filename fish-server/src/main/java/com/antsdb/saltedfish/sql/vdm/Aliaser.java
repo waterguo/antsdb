@@ -75,4 +75,9 @@ public class Aliaser extends CursorMaker {
     public boolean setSortingOrder(List<SortKey> order) {
         return this.upstream.setSortingOrder(order);
     }
+
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
+    }
 }

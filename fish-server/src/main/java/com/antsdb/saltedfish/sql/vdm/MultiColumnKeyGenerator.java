@@ -41,8 +41,6 @@ public class MultiColumnKeyGenerator extends PrimaryKeyGenerator {
     }
 
     public byte[] generate(List<Object> values) {
-        
-        // TODO Auto-generated method stub
         return null;
     }
 }

@@ -174,7 +174,7 @@ public class ExpoHeap {
 				this.addr_64m = UberUtil.getAddress(buf) - currentCapacity;
 			}
 			else {
-				throw new OutOfHeapMemory();
+				throw new OutOfHeapException();
 			}
 			this.position.set(capacity);
 			this.capacity += delta;

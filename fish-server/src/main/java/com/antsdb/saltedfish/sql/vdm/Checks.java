@@ -14,12 +14,12 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
-import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 /**
@@ -44,8 +44,7 @@ public class Checks {
     public static TableMeta tableExist(Session session, String ns, String table) throws OrcaException {
         Orca orca = session.getOrca();
         namespaceExist(orca, ns);
-        MetadataService metaService = orca.getMetaService();
-        TableMeta tableMeta = metaService.getTable(session.getTransaction(), ns, table);
+        TableMeta tableMeta = session.getTable(ns, table);
         if (tableMeta == null) {
             throw new OrcaException("table doesn't exist: " + ns + "." + table);
         }
@@ -61,10 +60,8 @@ public class Checks {
     }
     
     public static void tableNotExist(Session session, String ns, String tableName) throws OrcaException {
-        Orca orca = session.getOrca();
-        TableMeta table = orca.getMetaService().getTable(session.getTransaction(), ns, tableName);
-        if (table != null) {
-            throw new OrcaException("table exist: " + table.getObjectName());
+        if (session.getTable(ns, tableName) != null) {
+            throw new OrcaException("table exist: {}.{}", ns, tableName);
         }
     }
 
@@ -79,7 +76,7 @@ public class Checks {
             return result;
         }
         else {
-            throw new OrcaException("namespace doesn't exist: " + ns);
+            throw new ErrorMessage(1049, "42000 Unknown database `" + ns + "`");
         }
     }
     

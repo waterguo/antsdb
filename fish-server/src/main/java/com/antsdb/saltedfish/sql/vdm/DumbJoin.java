@@ -74,7 +74,7 @@ public class DumbJoin extends CursorMaker {
                 
                 if (this.isOuterJoin && !recLeftMatched) {
                     // for outer join item without nothing matched on the right side, return record on the left
-                	pRec = makeJoinedRecord(this.pRecLeft, 0);
+                    pRec = makeJoinedRecord(this.pRecLeft, 0);
                     fetchNextLeft();
                     return pRec;
                 }
@@ -109,7 +109,7 @@ public class DumbJoin extends CursorMaker {
 
         @Override
         public void close() {
-        	super.close();
+            super.close();
             this.left.close();
             if (this.right != null) {
                 this.right.close();
@@ -128,19 +128,19 @@ public class DumbJoin extends CursorMaker {
         }
 
         long makeJoinedRecord(long pRecordLeft, long pRecordRight) {
-        	long pResult = newRecord();
-        	int nFieldsLeft = Record.size(pRecordLeft);
-        	for (int i=0; i<nFieldsLeft; i++) {
-        		long pValue = Record.get(pRecordLeft, i);
-        		Record.set(pResult, i, pValue);
-        	}
-        	if (pRecordRight != 0) {
-	        	for (int i=0; i<Record.size(pRecordRight); i++) {
-	        		long pValue = Record.get(pRecordRight, i);
-	        		Record.set(pResult, nFieldsLeft + i, pValue);
-	        	}
-        	}
-        	return pResult;
+            long pResult = newRecord();
+            int nFieldsLeft = Record.size(pRecordLeft);
+            for (int i=0; i<nFieldsLeft; i++) {
+                long pValue = Record.get(pRecordLeft, i);
+                Record.set(pResult, i, pValue);
+            }
+            if (pRecordRight != 0) {
+                for (int i=0; i<Record.size(pRecordRight); i++) {
+                    long pValue = Record.get(pRecordRight, i);
+                    Record.set(pResult, nFieldsLeft + i, pValue);
+                }
+            }
+            return pResult;
         }
     }
     
@@ -169,6 +169,11 @@ public class DumbJoin extends CursorMaker {
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return this.left.setSortingOrder(order);
+    }
+
+    @Override
+    public float getScore() {
+        return this.left.getScore() * this.right.getScore();
     }
 
 }

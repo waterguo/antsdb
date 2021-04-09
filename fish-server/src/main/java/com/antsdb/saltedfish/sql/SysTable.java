@@ -47,7 +47,7 @@ public class SysTable extends View {
     SysTable(Orca orca) {
         super(META);
         this.orca = orca;
-        this.mapping = new int[] {1, 2, 3, 4, 5, 6};
+        this.mapping = new int[] {1, 2, 3, 4, 5};
     }
     
     @Override
@@ -59,7 +59,6 @@ public class SysTable extends View {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         GTable table = ctx.getHumpback().getTable(TableId.SYSTABLE);
         Cursor cursor = new DumbCursor(
-                ctx.getSpaceManager(),
                 this.meta, 
                 table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), true), 
                 mapping,

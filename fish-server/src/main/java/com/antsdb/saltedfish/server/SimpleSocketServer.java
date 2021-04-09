@@ -16,17 +16,19 @@ package com.antsdb.saltedfish.server;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.beluga.QuorumNode;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -39,23 +41,12 @@ public class SimpleSocketServer extends TcpServer implements Runnable {
 
     private ServerSocketChannel serverChannel;
     private SaltedFish fish;
-    private ExecutorService pool = Executors.newCachedThreadPool(new MyThreadFactory());
+    private boolean isAux;
+    private ExecutorService pool = Executors.newCachedThreadPool(new FishWorkerFactory());
     
-    private static class MyThreadFactory implements ThreadFactory {
-        private final static AtomicInteger _threadNumber = new AtomicInteger(1);
-        
-        @Override
-        public Thread newThread(Runnable r) {
-            String name = "listener-" + _threadNumber.getAndIncrement();
-            Thread t = new Thread(r, name);
-            t.setDaemon(true);
-            t.setPriority(Thread.NORM_PRIORITY);
-            return t;
-        }
-    }
-    
-    public SimpleSocketServer(SaltedFish fish) {
+    public SimpleSocketServer(SaltedFish fish, boolean isAux) {
         this.fish = fish;
+        this.isAux = isAux;
     }
     
     @Override
@@ -84,12 +75,52 @@ public class SimpleSocketServer extends TcpServer implements Runnable {
                     channel.close();
                     continue;
                 }
-                this.pool.execute(new SimpleSocketWorker(this.fish, channel));
+                if (!this.isAux && orca.isSlave()) {
+                    channel.close();
+                    continue;
+                }
+                if (this.isAux && orca.isSlave()) {
+                    if (!isRemoteAllowed(channel.getRemoteAddress())) {
+                        channel.close();
+                        continue;
+                    }
+                }
+                this.pool.execute(new SimpleSocketWorker(this.fish, channel, this.isAux));
             }
         }
         catch (AsynchronousCloseException ignored) {}
         catch (Exception x) {
             _log.warn("", x);
+        }
+    }
+
+    private boolean isRemoteAllowed(SocketAddress remote) {
+        try {
+            InetSocketAddress remotetcp = (InetSocketAddress)remote;
+            InetAddress remoteIp = remotetcp.getAddress(); 
+            if (remoteIp.isAnyLocalAddress()) {
+                return true;
+            }
+            if (remoteIp.isLoopbackAddress()) {
+                return true;
+            }
+            Map<Long,QuorumNode> nodes = this.fish.orca.getBelugaPod().getQuorum().getNodes();
+            for (QuorumNode i:nodes.values()) {
+                String nodeDomainName = StringUtils.substringBefore(i.endpoint, ":");
+                try {
+                    InetAddress nodeIp = InetAddress.getByName(nodeDomainName);
+                    if (nodeIp.equals(remoteIp)) {
+                        return true;
+                    }
+                }
+                catch (Exception x) {
+                    continue;
+                }
+            }
+            return false;
+        }
+        catch (Exception x) {
+            return false;
         }
     }
 

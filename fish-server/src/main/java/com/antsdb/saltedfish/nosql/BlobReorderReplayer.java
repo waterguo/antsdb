@@ -20,34 +20,25 @@ import java.util.List;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.Gobbler.EntryType;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 
 /**
  * reorder the rows so that blob record is following the master record right behind
  * 
  * @author *-xguo0<@
  */
-public class BlobReorderReplayer extends ReplayRelay {
+public class BlobReorderReplayer extends ReplicationHandler2Relay {
     List<Entry> buf = new ArrayList<>();
+    volatile long lp = Long.MAX_VALUE;
     
     private static class Entry {
         long pEntry;
         long sp;
         long trxId;
-        long tableId;
+        int tableId;
         long pRow;
         EntryType type;
         
-        Entry(long p, long lp, long trxId, long tableId, long pRow, EntryType type) {
+        Entry(long p, long lp, long trxId, int tableId, long pRow, EntryType type) {
             this.pEntry = p;
             this.sp = lp;
             this.trxId = trxId;
@@ -57,38 +48,31 @@ public class BlobReorderReplayer extends ReplayRelay {
         }
     }
     
-    public BlobReorderReplayer(ReplayHandler downstream) {
+    public BlobReorderReplayer(ReplicationHandler2 downstream) {
         super(downstream);
     }
     
+    
     @Override
-    public void insert(InsertEntry entry) throws Exception {
-        handle(entry);
-    }
-
-    @Override
-    public void insert(InsertEntry2 entry) throws Exception {
-        handle(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
-        handle(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry2 entry) throws Exception {
-        handle(entry);
-    }
-
-    @Override
-    public void put(PutEntry entry) throws Exception {
-        handle(entry);
-    }
-
-    @Override
-    public void put(PutEntry2 entry) throws Exception {
-        handle(entry);
+    public void putRow(int tableId, long pRow, long version, long pEntry, long lpEntry) throws Exception {
+        LogEntry entry = new LogEntry(lpEntry, pEntry);
+        Row row = Row.fromMemoryPointer(pRow, 0);
+        if (hasBlobRef(row)) {
+            buf.add(new Entry(pEntry, lpEntry, version, tableId, pRow, entry.getType()));
+            updateLp();
+        }
+        else {
+            for (int i=0; i<this.buf.size(); i++) {
+                Entry ii = this.buf.get(i);
+                if (isPair(ii, entry.getType(), version, tableId, row.getKeyAddress())) {
+                    this.downstream.putRow(ii.tableId, ii.pRow, version, ii.pEntry, ii.sp);
+                    this.buf.remove(i);
+                    updateLp();
+                    break;
+                }
+            }
+            this.downstream.putRow(tableId, pRow, version, pEntry, lpEntry);
+        }
     }
 
     private boolean hasBlobRef(Row row) {
@@ -100,58 +84,6 @@ public class BlobReorderReplayer extends ReplayRelay {
             }
         }
         return false;
-    }
-
-    private void handle(RowUpdateEntry entry) throws Exception {
-        handle(entry, entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    private void handle(RowUpdateEntry2 entry) throws Exception {
-        handle(entry, entry.getTrxId(), entry.getTableId(), entry.getRowPointer());
-    }
-    
-    private void handle(LogEntry entry, long trxId, int tableId, long pRow) throws Exception {
-        long sp = entry.getSpacePointer();
-        Row row = Row.fromMemoryPointer(pRow, 0);
-        if (hasBlobRef(row)) {
-            buf.add(new Entry(entry.addr, sp, trxId, tableId, pRow, entry.getType()));
-            return;
-        }
-        else {
-            for (int i=0; i<this.buf.size(); i++) {
-                Entry ii = this.buf.get(i);
-                if (isPair(ii, entry.getType(), trxId, tableId, row.getKeyAddress())) {
-                    replay(LogEntry.getEntry(ii.sp, ii.pEntry));
-                    this.buf.remove(i);
-                    break;
-                }
-            }
-            replay(entry);
-        }
-    }
-
-    private void replay(LogEntry entry) throws Exception {
-        if (entry instanceof InsertEntry) {
-            this.downstream.insert((InsertEntry)entry);
-        }
-        else if (entry instanceof UpdateEntry) {
-            this.downstream.update((UpdateEntry)entry);
-        }
-        else if (entry instanceof PutEntry) {
-            this.downstream.put((PutEntry)entry);
-        }
-        else if (entry instanceof InsertEntry2) {
-            this.downstream.insert((InsertEntry2)entry);
-        }
-        else if (entry instanceof UpdateEntry2) {
-            this.downstream.update((UpdateEntry2)entry);
-        }
-        else if (entry instanceof PutEntry2) {
-            this.downstream.put((PutEntry2)entry);
-        }
-        else {
-            throw new IllegalArgumentException();
-        }
     }
 
     private boolean isPair(Entry parent, EntryType type, long trxid, int tableId, long pKey) {
@@ -172,17 +104,13 @@ public class BlobReorderReplayer extends ReplayRelay {
     }
 
     public long getLogPointer() {
-        long result = Long.MAX_VALUE;
-        for (Entry i:this.buf) {
-            long lpParentEntry = i.sp;
-            result = Math.min(result, lpParentEntry);
-        }
-        return result;
+        return this.lp;
     }
 
     @Override
-    public void transactionWindow(TransactionWindowEntry entry) throws Exception {
-        this.downstream.transactionWindow(entry);
+    public void transactionWindow(long pEntry, long lpEntry) throws Exception {
+        TransactionWindowEntry entry = new TransactionWindowEntry(lpEntry, pEntry);
+        this.downstream.transactionWindow(pEntry, lpEntry);
         long oldestTrxid = entry.getTrxid();
         for (Iterator<Entry> i=this.buf.iterator();;) {
             if (!i.hasNext()) {
@@ -193,5 +121,15 @@ public class BlobReorderReplayer extends ReplayRelay {
                 i.remove();
             }
         }
+        updateLp();
+    }
+    
+    private void updateLp() {
+        long minLp = Long.MAX_VALUE;
+        for (Entry i:this.buf) {
+            minLp = Math.min(minLp, i.sp); 
+        }
+        this.lp = minLp;
+        return;
     }
 }

@@ -49,7 +49,7 @@ public class Filter extends CursorMaker {
     @Override
     public void explain(int level, List<ExplainRecord> records) {
         String text = getClass().getSimpleName() + "(" + this.expr.toString() + ")";
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, text);
+        ExplainRecord rec = new ExplainRecord(getMakerid(), level, text, 0);
         records.add(rec);
         this.upstream.explain(level+1, records);
         this.expr.visit(it ->{
@@ -69,4 +69,8 @@ public class Filter extends CursorMaker {
         return this.upstream.setSortingOrder(order);
     }
 
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
+    }
 }

@@ -24,8 +24,8 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
  */
 public class Limiter extends CursorMaker {
     CursorMaker upstream;
-    int offset;
-    int limit;
+    long offset;
+    long limit;
     
     class LimiterCursor extends Cursor {
         Cursor upstream;
@@ -65,7 +65,7 @@ public class Limiter extends CursorMaker {
 
     }
     
-    public Limiter(CursorMaker upstream, int offset, int count) {
+    public Limiter(CursorMaker upstream, long offset, long count) {
         this.upstream = upstream;
         this.offset = offset;
         this.limit = count;
@@ -91,5 +91,10 @@ public class Limiter extends CursorMaker {
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return this.upstream.setSortingOrder(order);
+    }
+    
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
     }
 }

@@ -13,6 +13,16 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.meta;
 
-public class Constraint {
+import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.nosql.VaporizingRow;
+import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
+public abstract class Constraint {
+    /**
+     * 
+     * @param ctx
+     * @param row
+     * @throws OrcaException if check failed
+     */
+    public abstract void check(VdmContext ctx, Heap heap, VaporizingRow row);
 }

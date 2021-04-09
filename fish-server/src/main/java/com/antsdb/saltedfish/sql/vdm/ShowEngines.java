@@ -54,4 +54,9 @@ public class ShowEngines extends CursorMaker {
     public boolean setSortingOrder(List<SortKey> order) {
         return false;
     }
+    
+    @Override
+    public float getScore() {
+        return 0;
+    }
 }

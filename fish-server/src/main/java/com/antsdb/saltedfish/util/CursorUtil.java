@@ -37,7 +37,6 @@ import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.CursorWithHeap;
 import com.antsdb.saltedfish.sql.vdm.HashMapRecord;
-import com.antsdb.saltedfish.sql.vdm.Marker;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.Record;
 
@@ -98,9 +97,6 @@ public class CursorUtil {
                     return 0;
                 }
                 Object obj = iter.next();
-                if (Marker.GROUP_END == obj) {
-                    return Record.GROUP_END;
-                }
                 Heap heap = getHeap();
                 long pRecord = newRecord();
                 toRecord(heap, getMetadata(), pRecord, obj);
@@ -263,6 +259,15 @@ public class CursorUtil {
         }
         else if (field.getType() == BigDecimal.class) {
             result = DataType.number();
+        }
+        else if (field.getType() == float.class) {
+            result = DataType.floatType();
+        }
+        else if (field.getType() == Float.class) {
+            result = DataType.floatType();
+        }
+        else if (field.getType() == Double.class) {
+            result = DataType.doubleType();
         }
         else {
             throw new NotImplementedException();

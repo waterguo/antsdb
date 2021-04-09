@@ -55,4 +55,8 @@ public class ShowCollation extends CursorMaker {
         return false;
     }
 
+    @Override
+    public float getScore() {
+        return 0;
+    }
 }

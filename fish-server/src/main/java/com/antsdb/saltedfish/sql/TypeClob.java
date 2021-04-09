@@ -23,7 +23,7 @@ public class TypeClob extends DataType {
     long max;
     
     public TypeClob(String name, int sqlType, long max) {
-        super(name, 0, 0, sqlType, String.class, Value.TYPE_CLOB);
+        super(name, 0, 0, sqlType, String.class, Value.TYPE_CLOB, Weight.CLOB);
         this.max = max;
     }
 }

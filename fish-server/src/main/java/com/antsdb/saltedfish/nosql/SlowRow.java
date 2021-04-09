@@ -125,5 +125,11 @@ public class SlowRow extends HashMap<Integer, Object> {
         }
         this.isMutable = value;
     }
-    
+
+    public void copyTo(SlowRow that) {
+        that.maxColumnId = this.maxColumnId;
+        for (int i=0; i<=maxColumnId; i++) {
+            that.set(i, get(i));
+        }
+    }
 }

@@ -16,11 +16,13 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.SpaceManager;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.SortKey;
@@ -65,14 +67,12 @@ public class CursorIndexRangeScan extends CursorMaker {
                 }
 
                 // next scan
-
                 if (this.iter == null) {
                     nextScan();
                     continue;
                 }
 
                 // next record
-
                 if (!this.iter.next()) {
                     this.iter.close();
                     this.iter = null;
@@ -80,13 +80,21 @@ public class CursorIndexRangeScan extends CursorMaker {
                 }
 
                 // convert row to record
-
                 long pRecord = newRecord();
                 long pRowKey = iter.getRowKeyPointer();
                 if (pRowKey == 0) {
                     continue;
                 }
-                Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+                Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey, 0);
+                if (row == null) {
+                    long pIndexKey = this.iter.getKeyPointer();
+                    String msg = String.format("row not found indexKey=%d:%s rowKey=%d:%s", 
+                            this.gindex.getId(),
+                            KeyBytes.toString(pIndexKey),
+                            this.gtable.getId(),
+                            KeyBytes.toString(pRowKey));
+                    throw new OrcaException(msg);
+                }
                 Record.setKey(pRecord, row.getKeyAddress());
                 for (int i = 0; i < this.meta.getColumnCount(); i++) {
                     long pValue = row.getFieldAddress(CursorIndexRangeScan.this.mapping[i]);
@@ -99,7 +107,6 @@ public class CursorIndexRangeScan extends CursorMaker {
 
         private void nextScan() {
             // fetch next value from cursor
-
             long pRec = this.select.next();
             if (pRec == 0) {
                 close();
@@ -108,14 +115,12 @@ public class CursorIndexRangeScan extends CursorMaker {
             long pValue = Record.get(pRec, 0);
 
             // calculate key
-
             this.values[this.values.length - 1] = pValue;
             KeyMaker keymaker = CursorIndexRangeScan.this.index.getKeyMaker();
             long pFrom = keymaker.make(getHeap(), values);
             long pTo = keymaker.makeMax(getHeap(), values);
 
             // scan !!
-
             long options = CursorIndexRangeScan.this.isAsc ? 0 : ScanOptions.descending(0);
             this.iter = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, options);
         }
@@ -171,8 +176,7 @@ public class CursorIndexRangeScan extends CursorMaker {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
-        records.add(rec);
+        super.explain(level, records);
         this.select.explain(level + 1, records);
     }
 
@@ -195,4 +199,10 @@ public class CursorIndexRangeScan extends CursorMaker {
             return false;
         }
     }
+
+    @Override
+    public float getScore() {
+        return 3;
+    }
+
 }

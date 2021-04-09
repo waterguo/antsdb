@@ -20,11 +20,12 @@ import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FishBoundary;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 import com.antsdb.saltedfish.util.CursorUtil;
 
-public class TableSeek extends CursorMaker implements Seekable {
+public class TableSeek extends CursorMaker implements Seekable, Ordered {
     CursorMeta meta;
     int[] mapping;
     TableMeta table;
@@ -89,7 +90,7 @@ public class TableSeek extends CursorMaker implements Seekable {
             long pKey = boundary.getKeyAddress();
             GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
             Transaction trx = ctx.getTransaction();
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pKey, 0);
             if (pRow != 0) {
                 ctx.getCursorStats(makerId).incrementAndGet();
             }
@@ -100,12 +101,6 @@ public class TableSeek extends CursorMaker implements Seekable {
     @Override
     public String toString() {
         return "Table Seek (" + this.table.getObjectName() + ")";
-    }
-
-    @Override
-    public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
-        records.add(rec);
     }
 
     @Override
@@ -128,4 +123,13 @@ public class TableSeek extends CursorMaker implements Seekable {
         return false;
     }
 
+    @Override
+    public float getScore() {
+        return 1;
+    }
+
+    @Override
+    public List<ColumnMeta> getOrder() {
+        return this.table.getPrimaryKey().getColumns(this.table);
+    }
 }

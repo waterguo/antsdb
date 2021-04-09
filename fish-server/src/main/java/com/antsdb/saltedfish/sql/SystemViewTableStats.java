@@ -31,6 +31,7 @@ public class SystemViewTableStats extends View {
     private Orca orca;
 
     public static class Line {
+        public Long SERVER_ID;
         public Integer TABLE_ID;
         public Long ROW_COUNT;
         public Integer MIN_ROW_SIZE;
@@ -56,6 +57,7 @@ public class SystemViewTableStats extends View {
 
     private Line addLine(TableStats table) {
         Line result = new Line();
+        result.SERVER_ID = table.serverId;
         result.TABLE_ID = table.tableId;
         result.ROW_COUNT = table.count;
         result.MIN_ROW_SIZE = table.minRowSize;

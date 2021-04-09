@@ -13,8 +13,8 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
-import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 public class DropNamespace extends Statement {
     String name;
@@ -28,8 +28,10 @@ public class DropNamespace extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
+        if (ctx.getOrca().isSlave()) {
+            throw new ErrorMessage(0, "database is not mutable in slave mode");
+        }
         // sanity checks
-        
         if (ctx.getHumpback().getNamespace(this.name) == null) {
             if (this.ifExists) {
                 return null;
@@ -39,18 +41,16 @@ public class DropNamespace extends Statement {
             }
         }
         
-        // remove the physical namespace
-        
-        ctx.getHumpback().dropNamespace(ctx.getHSession(), this.name);
-        
         // remove all objects in the schema
-        
         Transaction trx = ctx.getTransaction();
         MetadataService metaService = ctx.getMetaService();
         for (String i:metaService.getTables(trx, this.name)) {
-            TableMeta table = metaService.getTable(trx, this.name, i);
-            metaService.dropTable(ctx.getHSession(), trx, table);
+            new DropTable(new ObjectName(this.name,  i), false).run(ctx, params);
         }
+        
+        // remove the physical namespace
+        ctx.getHumpback().dropNamespace(ctx.getHSession(), this.name);
+        
         return null;
     }
 

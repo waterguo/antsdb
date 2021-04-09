@@ -72,8 +72,9 @@ public class Row extends UberObject implements Map<Integer, Object> {
     long version;
     
     Row(long addr, long version) {
-        if (Unsafe.getByteVolatile(addr + OFFSET_FORMAT) != FILE_VERSION) {
-            String msg = String.format("invalid row @ p=0x%x", addr);
+        int type = Value.getFormat(null, addr + OFFSET_FORMAT);
+        if (type != FILE_VERSION) {
+            String msg = String.format("invalid row @%x=0x%x", addr, type);
             throw new IllegalArgumentException(msg);
         }
         this.version = version;

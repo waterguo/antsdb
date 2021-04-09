@@ -34,7 +34,8 @@ import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.MemoryManager;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
+import com.antsdb.saltedfish.nosql.GetInfo;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.InterruptException;
 import com.antsdb.saltedfish.nosql.Row;
@@ -80,6 +81,7 @@ public class HBaseTable implements StorageTable {
         private long pIndexRowKey;
         private byte misc;
         private TableType type;
+        private long version;
 
         public MyScanResult(TableMeta meta, ResultScanner rs, int tableId, TableType type) {
             this.rs = rs;
@@ -110,12 +112,14 @@ public class HBaseTable implements StorageTable {
                 if (this.type == TableType.DATA) {
                     this.pRow = Helper.toRow(heap, r, meta, this.tableId);
                     this.pKey = Row.getKeyAddress(this.pRow);
+                    this.version = Row.getVersion(this.pRow);
                 }
                 else {
                     IndexLine indexLine = new IndexLine(Helper.toIndexLine(heap, r));
                     this.pKey = indexLine.getKey();
                     this.pIndexRowKey = indexLine.getRowKey();
                     this.misc = indexLine.getMisc();
+                    this.version = indexLine.getVersion();
                 }
                 this.rowScanned++;
                 return true;
@@ -140,11 +144,7 @@ public class HBaseTable implements StorageTable {
 
         @Override
         public long getVersion() {
-            if (this.pRow == 0) {
-                return 0;
-            }
-            long version = Row.getVersion(this.pRow);
-            return version;
+            return this.version;
         }
 
         @Override
@@ -173,6 +173,11 @@ public class HBaseTable implements StorageTable {
 
         @Override
         public String toString() {
+            return getLocation();
+        }
+
+        @Override
+        public String getLocation() {
             return "hbase:" + KeyBytes.toString(getKeyPointer());
         }
     }
@@ -188,7 +193,7 @@ public class HBaseTable implements StorageTable {
     }
 
     @Override
-    public long get(long pKey) {
+    public long get(long pKey, long options, GetInfo info) {
         if (_log.isTraceEnabled()) {
             _log.trace("get {} {}", this.tn.toString(), KeyBytes.toString(pKey));
         }
@@ -208,9 +213,14 @@ public class HBaseTable implements StorageTable {
             }
             int size = Helper.getSize(r);
             long pRow = Helper.toRow(getHeap(size * 2 + 0x100), r, getTableMeta(), this.tableId);
+            if (info != null) {
+                info.pData = pRow;
+                // info.version = Helper.getVersion(r);
+                info.location = "hbase:" + this.tn + ":" + KeyBytes.toString(pKey);
+            }
             return pRow;
         }
-        catch (OutOfHeapMemory x) {
+        catch (OutOfHeapException x) {
             _log.error("error table={} key={}", this.tableId, KeyBytes.toString(pKey));
             throw x;
         }
@@ -220,7 +230,7 @@ public class HBaseTable implements StorageTable {
     }
 
     @Override
-    public long getIndex(long pKey) {
+    public long getIndex(long pKey, long options, GetInfo info) {
         if (_log.isTraceEnabled()) {
             _log.trace("getIndex {} {}", this.tn.toString(), KeyBytes.toString(pKey));
         }
@@ -240,7 +250,13 @@ public class HBaseTable implements StorageTable {
                 return 0;
             }
             IndexLine line = new IndexLine(pLine);
-            return line.getRowKey();
+            long result = line.getRowKey();
+            if (info != null) {
+                info.pData = result;
+                info.version = Helper.getVersion(r);
+                info.location = "hbase:" + this.tn + ":" + KeyBytes.toString(pKey);
+            }
+            return result;
         }
         catch (IOException x) {
             throw new OrcaHBaseException(x);
@@ -331,13 +347,18 @@ public class HBaseTable implements StorageTable {
     }
 
     @Override
+    public void putIndex(long version, long pIndexKey, long pRowKey, byte misc) {
+        throw new NotImplementedException();
+    }
+
+    @Override
     public void put(Row row) {
         throw new NotImplementedException();
     }
 
     @Override
     public boolean exist(long pKey) {
-        return get(pKey) != 0;
+        return get(pKey, 0, null) != 0;
     }
 
     @Override

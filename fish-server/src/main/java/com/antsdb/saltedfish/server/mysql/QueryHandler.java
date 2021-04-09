@@ -18,7 +18,11 @@ import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.charset.Decoder;
+import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.obs.ExternalQuerySession;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.server.mysql.util.MysqlErrorCode;
+import com.antsdb.saltedfish.sql.SqlLogger;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -28,7 +32,7 @@ public class QueryHandler {
 
     static Logger _log = UberUtil.getThisLogger();
     private MysqlSession mysession;
-    
+
     public QueryHandler(MysqlSession mysession) {
         this.mysession = mysession;
     }
@@ -40,13 +44,31 @@ public class QueryHandler {
         buf.flip();
         query(buf, Decoder.UTF8);
     }
-    
+
     public void query(ByteBuffer sql, Decoder decoder) throws Exception {
         if (sql == null) {
             throw new ErrorMessage(MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Empty query.");
-        } 
+        }
         else {
+            if (sql.limit() > 0 && '!' == sql.get(0)) {
+                Humpback humpback = this.mysession.session.getOrca().getHumpback();
+                ExternalQuerySession.getInstance().run(
+                        String.valueOf(this.mysession.session.getId()), 
+                        humpback, 
+                        sql, 
+                        null, 
+                        (result) -> {
+                            HelperExternal.writeExternalResonpse(humpback,this.mysession.out, this.mysession, result);
+                });
+                return;
+            }
+            HumpbackSession hsession = this.mysession.session.getHSession();
+            long startLp = hsession.getLastLp();
             mysession.session.run(sql, null, (result)-> {
+                if (hsession.getLastLp() != startLp) {
+                    SqlLogger logger = this.mysession.session.getOrca().getSqlLogger();
+                    logger.logWrite(mysession.session, "query", result, sql);
+                }
                 Helper.writeResonpse(this.mysession.out, this.mysession, result, true);
             });
         }

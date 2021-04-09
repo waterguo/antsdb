@@ -22,6 +22,7 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.Statistician;
 import com.antsdb.saltedfish.nosql.TableStats;
+import com.antsdb.saltedfish.sql.meta.OrcaTableType;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.OpLike;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
@@ -118,14 +119,21 @@ public class ShowTableStatus extends View {
     private Line toLine(VdmContext ctx, SysTableRow table) {
         Line result = new Line();
         result.Name = table.getTableName();
-        result.Engine = "InnoDB";
-        result.Version = 10;
-        result.Row_format = "Compact";
-        result.Auto_increment = getAutoIncrement(ctx, table);
-        result.Collation = "utf8_general_ci";
-        result.Create_options = "";
-        result.Comment = "";
-        fillStats(ctx, table, result);
+        if (table.getType() == OrcaTableType.TABLE) {
+            result.Engine = "InnoDB";
+            result.Version = 10;
+            result.Row_format = "Compact";
+            result.Auto_increment = getAutoIncrement(ctx, table);
+            result.Collation = "utf8_general_ci";
+            result.Create_options = "";
+            result.Comment = table.getComment();
+            // sqlyog requires comment to be empty if nothing specified
+            result.Comment = result.Comment == null ? "" : result.Comment;
+            fillStats(ctx, table, result);
+        }
+        else if (table.getType() == OrcaTableType.VIEW) {
+            result.Comment = "VIEW";
+        }
         return result;
     }
 

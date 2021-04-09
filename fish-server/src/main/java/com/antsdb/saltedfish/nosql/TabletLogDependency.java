@@ -57,7 +57,7 @@ public class TabletLogDependency implements LogDependency {
             List<LogDependency> result = new ArrayList<>();
             for (GTable i:humpback.getTables(this.name)) {
                 TableDependency ii = new TableDependency();
-                ii.name = humpback.getTableInfo(i.getId()).getTableName();
+                ii.name = i.getName();
                 ii.gtable = i;
                 if (ii.getChildren().size() > 0) {
                     result.add(ii);

@@ -51,8 +51,11 @@ public class View extends CursorMaker {
     }
 
     public Object run(VdmContext ctx, Parameters params) {
-        // TODO Auto-generated method stub
         return null;
     }
 
+    @Override
+    public float getScore() {
+        return 0;
+    }
 }

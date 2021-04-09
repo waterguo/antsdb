@@ -155,9 +155,6 @@ final class Range {
     }
 
     boolean isSeek() {
-        if (isFromNullable || isToNullable) {
-            return false;
-        }
         for (int i = 0; i < this.from.length; i++) {
             if ((this.from[i] == null) || (this.to[i] == null)) {
                 return false;

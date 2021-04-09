@@ -22,7 +22,7 @@ import com.antsdb.saltedfish.sql.vdm.AutoCaster;
 import com.antsdb.saltedfish.sql.vdm.BlobReference;
 import com.antsdb.saltedfish.sql.vdm.ToTimestampRelaxed;
 
-public class FishObject {
+public final class FishObject {
 
     public final static Object get(Heap heap, long addr) {
         if (addr == 0) {
@@ -35,6 +35,9 @@ public class FishObject {
         }
         else if (type == Value.FORMAT_INT8) {
             result = Int8.get(heap, addr);
+        }
+        else if (type == Value.FORMAT_BIGINT) {
+            result = BigInt.get(heap, addr);
         }
         else if (type == Value.FORMAT_NULL) {
         }
@@ -129,6 +132,9 @@ public class FishObject {
         }
         else if (value instanceof int[]) {
             addr = Int4Array.alloc(heap, (int[])value).getAddress();
+        }
+        else if (value instanceof BigInteger) {
+            addr = BigInt.allocSet(heap, (BigInteger)value);
         }
         else {
             throw new IllegalArgumentException();
@@ -280,6 +286,61 @@ public class FishObject {
         }
     }
     
+    public static BigInteger toBigInteger(Heap heap, long addr) {
+        byte format = Value.getFormat(heap, addr);
+        switch (format) {
+        case Value.FORMAT_INT4:
+            return BigInteger.valueOf(Int4.get(addr));
+        case Value.FORMAT_INT8:
+            return BigInteger.valueOf(Int8.get(heap, addr));
+        case Value.FORMAT_BIGINT:
+            return BigInt.get(heap, addr);
+        case Value.FORMAT_DECIMAL:
+            BigDecimal bd = FishDecimal.get(heap, addr);
+            return bd.toBigIntegerExact();
+        case Value.FORMAT_DATE:
+            return BigInteger.valueOf(FishDate.getEpochMillisecond(heap, addr));
+        case Value.FORMAT_TIMESTAMP:
+            return BigInteger.valueOf(FishTimestamp.getEpochMillisecond(heap, addr));
+        case Value.FORMAT_UTF8:
+            try {
+                return new BigInteger(FishUtf8.get(addr));
+            }
+            catch (Exception x) {
+                // mysql treats illegal string literal as 0
+                return BigInteger.ZERO;
+            }
+        case Value.FORMAT_UNICODE16:
+            try {
+                return new BigInteger(Unicode16.get(null, addr));
+            }
+            catch (Exception x) {
+                // mysql treats illegal string literal as 0
+                return BigInteger.ZERO;
+            }
+        default:
+            throw new IllegalArgumentException(String.valueOf(format));
+        }
+    }
+    
+    public static BigDecimal toBigDecimal(Heap heap, long addr) {
+        if (addr == 0) return null;
+        byte format = Value.getFormat(heap, addr);
+        if (format == Value.FORMAT_DECIMAL) {
+            return FishDecimal.get(heap, addr);
+        }
+        if (format == Value.FORMAT_FAST_DECIMAL) {
+            return FastDecimal.get(heap, addr);
+        }
+        if (format == Value.FORMAT_FLOAT4) {
+            return BigDecimal.valueOf(Float4.get(heap, addr));
+        }
+        if (format == Value.FORMAT_FLOAT8) {
+            return BigDecimal.valueOf(Float8.get(heap, addr));
+        }
+        return new BigDecimal(toBigInteger(heap, addr));
+    }
+    
     public static long toLong(Heap heap, long addr) {
         byte format = Value.getFormat(heap, addr);
         switch (format) {
@@ -287,6 +348,11 @@ public class FishObject {
             return Int4.get(addr);
         case Value.FORMAT_INT8:
             return Int8.get(heap, addr);
+        case Value.FORMAT_BIGINT:
+            return BigInt.get(heap, addr).longValueExact();
+        case Value.FORMAT_FAST_DECIMAL:
+            BigDecimal bd1 = FastDecimal.get(heap, addr);
+            return bd1.longValueExact();
         case Value.FORMAT_DECIMAL:
             BigDecimal bd = FishDecimal.get(heap, addr);
             return bd.longValueExact();
@@ -330,6 +396,51 @@ public class FishObject {
         }
     }
 
+    public final static BrutalMemoryObject getBrutalObject(long pValue) {
+        if (pValue == 0) {
+            return null;
+        }
+        byte format = Value.getFormat(null, pValue);
+        switch (format) {
+        case Value.FORMAT_INT4:
+            return new Int4(pValue);
+        case Value.FORMAT_INT8:
+            return new Int8(pValue);
+        case Value.FORMAT_BIGINT:
+            return new BigInt(pValue);
+        case Value.FORMAT_UTF8:
+            return new FishUtf8(pValue);
+        case Value.FORMAT_UNICODE16:
+            return new Unicode16(pValue);
+        case Value.FORMAT_KEY_BYTES:
+            return new KeyBytes(pValue);
+        case Value.FORMAT_BYTES:
+            return new Bytes(pValue);
+        case Value.FORMAT_BOOL:
+            return new FishBool(pValue);
+        case Value.FORMAT_DECIMAL:
+            return new FishDecimal(pValue);
+        case Value.FORMAT_TIMESTAMP:
+            return new FishTimestamp(pValue);
+        case Value.FORMAT_TIME:
+            return new FishTime(pValue);
+        case Value.FORMAT_FLOAT4:
+            return new Float4(pValue);
+        case Value.FORMAT_FLOAT8:
+            return new Float8(pValue);
+        case Value.FORMAT_DATE:
+            return new FishDate(pValue);
+        case Value.FORMAT_NULL:
+            return null;
+        case Value.FORMAT_INT4_ARRAY:
+            return new Int4Array(pValue);
+        case Value.FORMAT_BLOB_REF:
+            return new BlobReference(pValue);
+        default:
+            throw new IllegalArgumentException();
+        }
+    }
+    
     public final static int getSize(long pValue) {
         if (pValue == 0) {
             return 0;
@@ -369,7 +480,13 @@ public class FishObject {
         case Value.FORMAT_BLOB_REF:
             return new BlobReference(pValue).getSize();
         default:
-            throw new IllegalArgumentException();
+            BrutalMemoryObject bmo = getBrutalObject(pValue);
+            if (bmo != null) {
+                return bmo.getByteSize();
+            }
+            else {
+                throw new IllegalArgumentException();
+            }
         }
     }
 
@@ -436,4 +553,13 @@ public class FishObject {
         return buf.toString();
     }
 
+    public static long clone(Heap heap, long pValue) {
+        if (pValue == 0) {
+            return 0;
+        }
+        int size = FishObject.getSize(pValue);
+        long pResult = heap.alloc(size);
+        Unsafe.copyMemory(pValue, pResult, size);
+        return pResult;
+    }
 }

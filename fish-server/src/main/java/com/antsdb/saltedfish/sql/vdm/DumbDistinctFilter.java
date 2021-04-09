@@ -107,4 +107,9 @@ public class DumbDistinctFilter extends CursorMaker {
         this.upstream.explain(level+1, records);
     }
 
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
+    }
+
 }

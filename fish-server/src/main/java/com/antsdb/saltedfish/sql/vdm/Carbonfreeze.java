@@ -26,7 +26,7 @@ public class Carbonfreeze extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        long lastClosedTrxId = ctx.getOrca().getLastClosedTransactionId();
+        long lastClosedTrxId = ctx.getOrca().getHumpback().getLastClosedTransactionId();
         Humpback humpback = ctx.getHumpback();
         try {
             humpback.carbonfreeze(lastClosedTrxId, true);

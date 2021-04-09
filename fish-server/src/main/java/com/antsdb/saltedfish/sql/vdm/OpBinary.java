@@ -21,23 +21,26 @@ import com.antsdb.saltedfish.sql.OrcaException;
 
 public class OpBinary extends UnaryOperator {
 
-	public OpBinary(Operator upstream) {
-		super(upstream);
-	}
+    public OpBinary(Operator upstream) {
+        super(upstream);
+    }
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		long addrObj = this.upstream.eval(ctx, heap, params, pRecord);
-		if (Value.getType(heap, addrObj) != Value.TYPE_STRING) {
-			throw new OrcaException("BINARY opeartor only works on string");
-		}
-		long pBytes = FishObject.toBytes(heap, addrObj);
-		return pBytes;
-	}
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pValue = this.upstream.eval(ctx, heap, params, pRecord);
+        if (pValue == 0) {
+            return 0;
+        }
+        if (Value.getType(heap, pValue) != Value.TYPE_STRING) {
+            throw new OrcaException("BINARY opeartor only works on string");
+        }
+        long pBytes = FishObject.toBytes(heap, pValue);
+        return pBytes;
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return DataType.blob();
-	}
+    @Override
+    public DataType getReturnType() {
+        return DataType.blob();
+    }
 
 }

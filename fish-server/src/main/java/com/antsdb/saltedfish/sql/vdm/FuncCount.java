@@ -15,57 +15,46 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Int8;
+import com.antsdb.saltedfish.cpp.RecyclableHeap;
+import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.sql.DataType;
 
-public class FuncCount extends Function {
-	int variableId;
+public class FuncCount extends AggregationFunction {
+    int variableId;
 
-	private static class Data {
-		long counter = 0;
-	}
-	
     public FuncCount(int variableId) {
         this.variableId = variableId;
     }
 
     @Override
+    public void feed(VdmContext ctx, RecyclableHeap rheap, Heap theap, Parameters params, long pRecord) {
+        long pCounter = ctx.getGroupVariable(this.variableId);
+        if (pCounter == 0) {
+            rheap.createUnit(8);
+            pCounter = rheap.alloc(8);
+            ctx.setGroupVariable(this.variableId, pCounter);
+        }
+        if (pRecord != 0) {
+            Operator expr = this.getParameter();
+            if (expr != null) {
+                long pValue = expr.eval(ctx, theap, params, pRecord);
+                // null check
+                if (pValue != 0) {
+                    Unsafe.getAndAddLong(pCounter, 1);
+                }
+            }
+            else {
+                // count(*)
+                Unsafe.getAndAddLong(pCounter, 1);
+            }
+        }
+    }
+
+    @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	// initialize
-    	
-    	Data data = (Data)ctx.getVariable(this.variableId);
-    	if (data == null) {
-    		data = new Data();
-    		ctx.setVariable(variableId, data);
-    	}
-    	
-    	// logic to deal with group end
-    	
-        if (Record.isGroupEnd(pRecord)) {
-            data.counter = 0;
-            if (this.getParameter() != null) {
-                // pass the group end marker to deeper level
-                this.getParameter().eval(ctx, heap, params, pRecord);
-            }
-            return Int8.allocSet(heap, 0);
-        }
-        
-        // if this is a count(*)
-        
-        if (this.getParameter() == null) {
-            if (pRecord != 0) {
-                data.counter++;
-            }
-        }
-        
-        // if this is a count(<expression>), do a null check 
-        
-        else {
-            long addrValue = this.getParameter().eval(ctx, heap, params, pRecord);
-            if (addrValue != 0) {
-                data.counter++;
-            }
-        }
-        return Int8.allocSet(heap, data.counter);
+        long pCounter = ctx.getGroupVariable(this.variableId);
+        long count = pCounter == 0 ? 0 : Unsafe.getLong(pCounter);
+        return Int8.allocSet(heap, count);
     }
 
     @Override
@@ -77,8 +66,8 @@ public class FuncCount extends Function {
         return this.parameters.get(0);
     }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 }

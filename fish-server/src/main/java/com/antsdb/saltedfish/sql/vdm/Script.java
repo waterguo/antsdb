@@ -40,7 +40,7 @@ public class Script extends Instruction {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         long start = 0;
         if (_log.isTraceEnabled()) {
-            _log.trace("run {}-{}: {}", ctx.getSession().getId(), hashCode(), params.toString());
+            _log.trace("run {}-{}: {}", ctx.getSession().getId(), hashCode(), params);
             start = System.currentTimeMillis();
         }
         if ((params != null) && (params.size() < this.nParameters)) {

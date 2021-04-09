@@ -96,12 +96,13 @@ public class TABLES extends View {
 
     private Item toItem(Row row) {
         Item item = new Item();
-        item.TABLE_SCHEMA = (String) row.get(ColumnId.systable_namespace.getId());
-        item.TABLE_NAME = (String) row.get(ColumnId.systable_table_name.getId());
+        item.TABLE_SCHEMA = (String)row.get(ColumnId.systable_namespace.getId());
+        item.TABLE_NAME = (String)row.get(ColumnId.systable_table_name.getId());
         item.TABLE_TYPE = "BASE TABLE";
         item.ENGINE = "InnoDB";
         item.VERSION = 10;
         item.TABLE_COLLATION = "utf8_general_ci";
+        item.TABLE_COMMENT = (String)row.get(ColumnId.systable_comment.getId());
         return item;
     }
 }

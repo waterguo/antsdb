@@ -14,6 +14,9 @@
 package com.antsdb.saltedfish.storage;
 
 import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.util.Bytes;
 
 /**
  * 
@@ -27,5 +30,15 @@ public final class HBaseUtil {
             }
         }
         catch (Exception ignored) {}
+    }
+    
+    public static Long getLong(Result r, String family, String column) {
+        if (r == null) return null;
+        byte[] bytes = r.getValue(Bytes.toBytes(family), Bytes.toBytes(column));
+        return bytes != null ? Bytes.toLong(bytes) : null;
+    }
+    
+    public static void set(Put put, String family, String column, Long value) {
+        put.addColumn(Bytes.toBytes(family), Bytes.toBytes(column), value != null ? Bytes.toBytes(value) : null);
     }
 }

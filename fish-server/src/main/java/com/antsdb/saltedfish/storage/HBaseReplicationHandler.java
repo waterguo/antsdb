@@ -19,29 +19,8 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.Replicable;
-import com.antsdb.saltedfish.nosql.ReplicationHandler;
+import com.antsdb.saltedfish.nosql.ReplicationHandler2;
 import com.antsdb.saltedfish.nosql.Row;
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.RowUpdateEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -49,7 +28,7 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author *-xguo0<@
  */
-public class HBaseReplicationHandler extends ReplicationHandler implements Replicable {
+public class HBaseReplicationHandler implements Replicable, ReplicationHandler2 {
     static Logger _log = UberUtil.getThisLogger();
     
     Humpback humpback;
@@ -71,6 +50,11 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     }
 
     @Override
+    public void setLogPointer(long value) {
+        this.hbase.cp.setLogPointer(value);
+    }
+
+    @Override
     public void connect() throws IOException {
         this.buffer.connect();
     }
@@ -81,7 +65,7 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     }
 
     @Override
-    public ReplicationHandler getReplayHandler() {
+    public ReplicationHandler2 getReplayHandler() {
         return this;
     }
 
@@ -90,8 +74,9 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
         return this.hbase.cp.getCurrentSp();
     }
 
+    
     @Override
-    public void flush() throws Exception {
+    public void flush(long lpRows, long lpIndexes) throws Exception {
         this.buffer.flush();
         long hbaseLp = this.hbase.cp.getCurrentSp();
         if (this.sp > hbaseLp) {
@@ -103,146 +88,68 @@ public class HBaseReplicationHandler extends ReplicationHandler implements Repli
     }
     
     @Override
-    public void insert(InsertEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
-    public void insert(InsertEntry2 entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry2 entry) throws Exception {
-        rowUpdate(entry);
-    }
-
-    @Override
-    public void put(PutEntry entry) throws Exception {
-        rowUpdate(entry);
-    }
-    
-    @Override
-    public void put(PutEntry2 entry) throws Exception {
-        rowUpdate(entry);
-    }
-    
-    private void rowUpdate(RowUpdateEntry entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pRow = entry.getRowPointer();
-        Row row = Row.fromMemoryPointer(pRow, 0);
-        this.buffer.addRow(tableId, row.getKeyAddress(), row.getAddress());
-        this.sp = entry.getSpacePointer();
-        flushIfFull(tableId);
-    }
-
-    private void rowUpdate(RowUpdateEntry2 entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pRow = entry.getRowPointer();
-        Row row = Row.fromMemoryPointer(pRow, 0);
-        this.buffer.addRow(tableId, row.getKeyAddress(), row.getAddress());
-        this.sp = entry.getSpacePointer();
+    public void putRow(int tableId, long pRow, long version, long pEntry, long lpEntry) throws Exception {
+        Row row = Row.fromMemoryPointer(pRow, version);
+        this.buffer.addRow(tableId, row.getKeyAddress(), lpEntry, version);
+        this.sp = lpEntry;
         flushIfFull(tableId);
     }
 
     @Override
-    public void delete(DeleteEntry entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pKey = entry.getKeyAddress();
-        this.buffer.addDelete(tableId, pKey);
-        this.sp = entry.getSpacePointer();
-        flushIfFull(tableId);
-    }
-
-    @Override
-    public void delete(DeleteEntry2 entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pKey = entry.getKeyAddress();
-        this.buffer.addDelete(tableId, pKey);
-        this.sp = entry.getSpacePointer();
-        flushIfFull(tableId);
-    }
-
-    @Override
-    public void deleteRow(DeleteRowEntry entry) throws IOException {
-        int tableId = entry.getTableId();
-        long pRow = entry.getRowPointer();
-        long pKey = Row.getKeyAddress(pRow);
-        this.buffer.addDelete(tableId, pKey);
-        this.sp = entry.getSpacePointer();
+    public void deleteRow(int tableId, long pKey, long version, long pEntry, long lpEntry) throws Exception {
+        this.buffer.addDelete(tableId, pKey, lpEntry, version);
+        this.sp = lpEntry;
         flushIfFull(tableId);
     }
     
     @Override
-    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pRow = entry.getRowPointer();
-        long pKey = Row.getKeyAddress(pRow);
-        this.buffer.addDelete(tableId, pKey);
-        this.sp = entry.getSpacePointer();
-        flushIfFull(tableId);
-    }
-    
-    @Override
-    public void index(IndexEntry entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pKey = entry.getIndexKeyAddress();
-        this.buffer.addIndexLine(tableId, pKey, entry.getIndexLineAddress());
-        this.sp = entry.getSpacePointer();
+    public void deleteIndex(int tableId, long pKey, long version, long pEntry, long lpEntry) throws Exception {
+        this.buffer.addDelete(tableId, pKey, lpEntry, version);
+        this.sp = lpEntry;
         flushIfFull(tableId);
     }
 
     @Override
-    public void index(IndexEntry2 entry) throws Exception {
-        int tableId = entry.getTableId();
-        long pKey = entry.getIndexKeyAddress();
-        this.buffer.addIndexLine(tableId, pKey, entry.getIndexLineAddress());
-        this.sp = entry.getSpacePointer();
+    public void putIndex(int tableId, long pIndexKey, long pIndex, long version, long pEntry, long lpEntry)
+    throws Exception {
+        this.buffer.addIndexLine(tableId, pIndexKey, lpEntry, version);
+        this.sp = lpEntry;
         flushIfFull(tableId);
     }
 
     @Override
-    public void commit(CommitEntry entry) throws Exception {
-        this.sp = entry.getSpacePointer();
+    public void commit(long pEntry, long lpEntry) throws Exception {
+        this.sp = lpEntry;
     }
 
     @Override
-    public void rollback(RollbackEntry entry) throws Exception {
-        this.sp = entry.getSpacePointer();
+    public void rollback(long pEntry, long lpEntry) throws Exception {
+        this.sp = lpEntry;
     }
 
     @Override
-    public void message(MessageEntry entry) throws Exception {
-        this.sp = entry.getSpacePointer();
+    public void message(long pEntry, long lpEntry) throws Exception {
+        this.sp = lpEntry;
     }
 
     @Override
-    public void message(MessageEntry2 entry) throws Exception {
-        this.sp = entry.getSpacePointer();
+    public void transactionWindow(long pEntry, long lpEntry) throws Exception {
+        this.sp = lpEntry;
     }
 
     @Override
-    public void transactionWindow(TransactionWindowEntry entry) throws Exception {
-        this.sp = entry.getSpacePointer();
+    public void timestamp(long pEntry, long lpEntry) {
+        this.sp = lpEntry;
     }
 
     @Override
-    public void timestamp(TimestampEntry entry) {
-        this.sp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void ddl(DdlEntry entry) {};
+    public void ddl(long pEntry, long lpEntry) {
+    };
     
     private void flushIfFull(int tableId) throws IOException {
         if (this.buffer.flushIfFull(tableId)) {
             this.hbase.updateLogPointer(this.sp);
-            _log.debug("hbase checkpoint is updated with lp={}", UberFormatter.hex(this.sp));
+            _log.trace("hbase checkpoint is updated with lp={}", UberFormatter.hex(this.sp));
         }
     }
 }

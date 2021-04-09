@@ -18,6 +18,7 @@ import java.util.Calendar;
 import java.util.Locale;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.FishTimestamp;
@@ -31,292 +32,272 @@ import com.antsdb.saltedfish.sql.DataType;
  */
 public class FuncDateFormat extends Function {
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pDate = this.parameters.get(0).eval(ctx, heap, params, pRecord);
         if (pDate == 0) {
-        	return 0;
+            return 0;
         }
         pDate = AutoCaster.toTimestamp(heap, pDate);
-        Timestamp time = FishTimestamp.isAllZero(pDate) ? null : (Timestamp)FishObject.get(heap, pDate);
+        if (pDate == 0) {
+            return 0;
+        }
+        Timestamp time = (Timestamp)FishObject.get(heap, pDate);
         long pFormat = this.parameters.get(1).eval(ctx, heap, params, pRecord);
         String format = AutoCaster.getString(heap, pFormat);
-		String result = format(format, time);
-		return FishObject.allocSet(heap, result);
-	}
+        String result = format(format, time);
+        return FishObject.allocSet(heap, result);
+    }
 
-	static String format(String format, Timestamp time) {
-		StringBuilder buf = new StringBuilder();
-		for (int i=0; i<format.length(); i++) {
-			char ch = format.charAt(i);
-			if (ch != '%') {
-				buf.append(ch);
-				continue;
-			}
-			if (i >= (format.length()-1)) {
-				buf.append(ch);
-				continue;
-			}
-			char specifier = format.charAt(++i);
-			Calendar calendar = (time == null) ? null : Calendar.getInstance();
-			if (time != null) {
-			    calendar.setTimeInMillis(time.getTime());
-			}
-			if (specifier == 'a') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'b') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'c') {
-			    if (calendar != null) {
-			        buf.append(calendar.get(Calendar.MONTH) + 1);
-			    }
-			    else {
-			        buf.append("0");
-			    }
-			}
-			else if (specifier == 'd') {
-                if (calendar != null) {
-                    int day = calendar.get(Calendar.DAY_OF_MONTH);
-                    if (day < 10) {
-                        buf.append('0');
-                    }
-                    buf.append(day);
-                }
-                else {
-                    buf.append("00");
-                }
-			}
-			else if (specifier == 'D') {
-                if (calendar != null) {
-                    int day = calendar.get(Calendar.DAY_OF_MONTH);
-                    buf.append(day);
-                    switch (day) {
-                    case 1: buf.append("st");
-                    case 2: buf.append("nd");
-                    case 3: buf.append("rd");
-                    default: buf.append("th");
-                    }
-                }
-                else {
-                    buf.append("00");
-                }
-			}
-			else if (specifier == 'e') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.DAY_OF_MONTH));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'f') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.MILLISECOND * 1000));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'H') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.HOUR));
-                }
-                else {
-                    buf.append("00");
-                }
-			}
-			else if (specifier == 'h') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.HOUR) % 13);
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'i') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.MINUTE));
-                }
-                else {
-                    buf.append("00");
-                }
-			}
-			else if (specifier == 'I') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.HOUR) % 13);
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'j') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.DAY_OF_YEAR));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'k') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.HOUR));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'l') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.HOUR) % 13);
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'm') {
-                if (calendar != null) {
-                    int month = calendar.get(Calendar.MONTH) + 1;
-                    if (month < 10) {
-                        buf.append('0');
-                    }
-                    buf.append(calendar.get(Calendar.MONTH) + 1);
-                }
-                else {
-                    buf.append("00");
-                }
-			}
-			else if (specifier == 'M') {
-                if (calendar != null) {
-                    buf.append(calendar.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault()));
-                }
-                else {
-                    buf.append("");
-                }
-			}
-			else if (specifier == 'p') {
-                if (calendar != null) {
-                    int hour = calendar.get(Calendar.HOUR);
-                    buf.append(hour < 12 ? "AM" : "PM");
-                }
-                else {
-                    buf.append("AM");
-                }
-			}
-			else if (specifier == 'r') {
-                if (calendar != null) {
-                    int hour = calendar.get(Calendar.HOUR);
-                    hour = hour % 13;
-                    if (hour < 10) {
-                        buf.append('0');
-                    }
-                    buf.append(hour);
-                    buf.append(':');
-                    int minute = calendar.get(Calendar.MINUTE);
-                    if (minute < 10) {
-                        buf.append('0');
-                    }
-                    buf.append(minute);
-                    buf.append(':');
-                    int second = calendar.get(Calendar.SECOND);
-                    if (second < 10) {
-                        buf.append('0');
-                    }
-                    buf.append(second);
-                    buf.append(hour < 12 ? " AM" : " PM");
-                }
-                else {
-                    buf.append("00 AM");
-                }
-			}
-			else if (specifier == 's') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.SECOND));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'S') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.SECOND));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'T') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'u') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.WEEK_OF_YEAR));
-                }
-                else {
-                    buf.append("0");
-                }
-			}
-			else if (specifier == 'U') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'v') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'V') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'w') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'W') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'x') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.YEAR));
-                }
-                else {
-                    buf.append("0000");
-                }
-			}
-			else if (specifier == 'X') {
-				throw new NotImplementedException();
-			}
-			else if (specifier == 'y') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.YEAR) % 100);
-                }
-                else {
-                    buf.append("00");
-                }
-			}
-			else if (specifier == 'Y') {
-                if (calendar != null) {
-                    buf.append(calendar.get(Calendar.YEAR));
-                }
-                else {
-                    buf.append("0000");
-                }
-			}
-			else if (specifier == '%') {
-				buf.append('%');
-			}
-			else {
-				buf.append(specifier);
-			}
-		}
-		return buf.toString();
-	}
+    static String format(String format, Timestamp time) {
+        StringBuilder buf = new StringBuilder();
+        for (int i=0; i<format.length(); i++) {
+            char ch = format.charAt(i);
+            if (ch != '%') {
+                buf.append(ch);
+                continue;
+            }
+            if (i >= (format.length()-1)) {
+                buf.append(ch);
+                continue;
+            }
+            char specifier = format.charAt(++i);
+            if (FishTimestamp.isAllZero(time)) {
+                formatZeroTimestamp(buf, specifier);
+            }
+            else {
+                Calendar calendar = Calendar.getInstance();
+                calendar.setTimeInMillis(time.getTime());
+                format(buf, specifier, calendar);
+            }
+        }
+        return buf.toString();
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return DataType.varchar();
-	}
+    private static void formatZeroTimestamp(StringBuilder buf, char specifier) {
+        if (specifier == 'd') {
+            buf.append("00");
+        }
+        else if (specifier == 'D') {
+            buf.append("00");
+        }
+        else if (specifier == 'f') {
+            buf.append("000000");
+        }
+        else if (specifier == 'H') {
+            buf.append("00");
+        }
+        else if (specifier == 'h' || specifier == 'I') {
+            buf.append("00");
+        }
+        else if (specifier == 'i') {
+            buf.append("00");
+        }
+        else if (specifier == 'j') {
+            buf.append("00");
+        }
+        else if (specifier == 'k') {
+            buf.append("00");
+        }
+        else if (specifier == 'm') {
+            buf.append("00");
+        }
+        else if (specifier == 'p') {
+            buf.append("AM");
+        }
+        else if (specifier == 'r') {
+            buf.append("00 AM");
+        }
+        else if (specifier == 's' || specifier == 'S') {
+            buf.append("00");
+        }
+        else if (specifier == 'T') {
+            buf.append("00 AM");
+        }
+        else if (specifier == 'u') {
+            buf.append("00");
+        }
+        else if (specifier == 'U') {
+            buf.append("00");
+        }
+        else if (specifier == 'x') {
+            buf.append("0000");
+        }
+        else if (specifier == 'y') {
+            buf.append("00");
+        }
+        else if (specifier == 'Y') {
+            buf.append("0000");
+        }
+        else {
+            buf.append("0");
+        }
+    }
 
-	@Override
-	public int getMinParameters() {
-		return 2;
-	}
+    private static void format(StringBuilder buf, char specifier, Calendar calendar) {
+        if (specifier == 'a') {
+            String value = calendar.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT, Locale.getDefault());
+            buf.append(value);
+        }
+        else if (specifier == 'b') {
+            throw new NotImplementedException();
+        }
+        else if (specifier == 'c') {
+            int value = calendar.get(Calendar.MONTH) + 1;
+            buf.append(String.valueOf(value));
+        }
+        else if (specifier == 'd') {
+            int value = calendar.get(Calendar.DAY_OF_MONTH);
+            buf.append(StringUtils.leftPad(String.valueOf(value), 2, '0'));
+        }
+        else if (specifier == 'D') {
+            int day = calendar.get(Calendar.DAY_OF_MONTH);
+            buf.append(day);
+            switch (day) {
+            case 1: buf.append("st");
+            case 2: buf.append("nd");
+            case 3: buf.append("rd");
+            default: buf.append("th");
+            }
+        }
+        else if (specifier == 'e') {
+            int value = calendar.get(Calendar.DAY_OF_MONTH);
+            buf.append(String.valueOf(value));
+        }
+        else if (specifier == 'f') {
+            int value = calendar.get(Calendar.MILLISECOND);
+            buf.append(StringUtils.leftPad(String.valueOf(value), 6, '0'));
+        }
+        else if (specifier == 'H') {
+            int value = calendar.get(Calendar.HOUR_OF_DAY);
+            buf.append(StringUtils.leftPad(String.valueOf(value), 2, '0'));
+        }
+        else if (specifier == 'h' || specifier == 'I') {
+            int value = calendar.get(Calendar.HOUR) % 12;
+            if (calendar != null && value == 0) value = 12;
+            buf.append(StringUtils.leftPad(String.valueOf(value), 2, '0'));
+        }
+        else if (specifier == 'i') {
+            int value = calendar.get(Calendar.MINUTE);
+            buf.append(StringUtils.leftPad(String.valueOf(value), 2, '0'));
+        }
+        else if (specifier == 'j') {
+            int day = calendar.get(Calendar.DAY_OF_YEAR);
+            buf.append(StringUtils.leftPad(String.valueOf(day), 3, '0'));
+        }
+        else if (specifier == 'k') {
+            int hour = calendar.get(Calendar.HOUR_OF_DAY);
+            buf.append(StringUtils.leftPad(String.valueOf(hour), 2, '0'));
+        }
+        else if (specifier == 'l') {
+            int value = calendar.get(Calendar.HOUR) % 12;
+            if (calendar != null && value == 0) value = 12;
+            buf.append(String.valueOf(value));
+        }
+        else if (specifier == 'm') {
+            int month = calendar.get(Calendar.MONTH) + 1;
+            buf.append(StringUtils.leftPad(String.valueOf(month), 2, '0'));
+        }
+        else if (specifier == 'M') {
+            String value = calendar.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault());
+            buf.append(value);
+        }
+        else if (specifier == 'p') {
+            int hour = calendar.get(Calendar.AM_PM);
+            buf.append(hour < 1  ? "AM" : "PM");
+        }
+        else if (specifier == 'r') {
+            format(buf, 'h', calendar);
+            buf.append(':');
+            format(buf, 'i', calendar);
+            buf.append(':');
+            format(buf, 's', calendar);
+            buf.append(' ');
+            format(buf, 'p', calendar);
+        }
+        else if (specifier == 's' || specifier == 'S') {
+            int second = calendar.get(Calendar.SECOND);
+            buf.append(StringUtils.leftPad(String.valueOf(second), 2, '0'));
+        }
+        else if (specifier == 'T') {
+            format(buf, 'k', calendar);
+            buf.append(':');
+            format(buf, 'i', calendar);
+            buf.append(':');
+            format(buf, 's', calendar);
+        }
+        else if (specifier == 'u') {
+            calendar.setFirstDayOfWeek(Calendar.MONDAY);
+            calendar.setMinimalDaysInFirstWeek(4);
+            // mysql week starts with 0, java week starts with 1
+            int week;
+            if (calendar.getWeekYear() != calendar.get(Calendar.YEAR)) {
+                week = 0;
+            }
+            else {
+                week = calendar.get(Calendar.WEEK_OF_YEAR);
+            }
+            buf.append(StringUtils.leftPad(String.valueOf(week), 2, '0'));
+            calendar.setFirstDayOfWeek(Calendar.MONDAY);
+        }
+        else if (specifier == 'U') {
+            calendar.setFirstDayOfWeek(Calendar.SUNDAY);
+            calendar.setMinimalDaysInFirstWeek(7);
+            // mysql week starts with 0, java week starts with 1
+            int week;
+            if (calendar.getWeekYear() != calendar.get(Calendar.YEAR)) {
+                week = 0;
+            }
+            else {
+                week = calendar.get(Calendar.WEEK_OF_YEAR);
+            }
+            buf.append(StringUtils.leftPad(String.valueOf(week), 2, '0'));
+        }
+        else if (specifier == 'v') {
+            throw new NotImplementedException();
+        }
+        else if (specifier == 'V') {
+            throw new NotImplementedException();
+        }
+        else if (specifier == 'w') {
+            throw new NotImplementedException();
+        }
+        else if (specifier == 'W') {
+            throw new NotImplementedException();
+        }
+        else if (specifier == 'x') {
+            calendar.setFirstDayOfWeek(Calendar.MONDAY);
+            int year = calendar.get(Calendar.YEAR);
+            if (calendar.get(Calendar.WEEK_OF_YEAR) == 1) year--;
+            buf.append(StringUtils.leftPad(String.valueOf(year), 4, '0'));
+        }
+        else if (specifier == 'X') {
+            throw new NotImplementedException();
+        }
+        else if (specifier == 'y') {
+            int year = calendar.get(Calendar.YEAR) % 100;
+            buf.append(StringUtils.leftPad(String.valueOf(year), 2, '0'));
+        }
+        else if (specifier == 'Y') {
+            int year = calendar.get(Calendar.YEAR);
+            buf.append(StringUtils.leftPad(String.valueOf(year), 4, '0'));
+        }
+        else if (specifier == '%') {
+            buf.append('%');
+        }
+        else {
+            buf.append(specifier);
+        }
+    }
+    
+    @Override
+    public DataType getReturnType() {
+        return DataType.varchar();
+    }
+
+    @Override
+    public int getMinParameters() {
+        return 2;
+    }
 
 }

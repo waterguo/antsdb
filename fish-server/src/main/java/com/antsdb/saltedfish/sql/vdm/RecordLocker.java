@@ -26,7 +26,7 @@ import com.antsdb.saltedfish.util.CodingError;
 public class RecordLocker extends CursorMaker {
     CursorMaker upstream;
     GTable gtable;
-	TableMeta table;
+    TableMeta table;
     int[] mapping;
     
     class MyCursor extends CursorWithHeap {
@@ -43,23 +43,23 @@ public class RecordLocker extends CursorMaker {
         public long next() {
             long pRecord = this.upstream.next();
             if (pRecord == 0) {
-            	return 0;
+                return 0;
             }
             long pKey = Record.getKey(pRecord);
             if (pKey != 0) {
-            	int timeout = ctx.getSession().getConfig().getLockTimeout();
+                int timeout = ctx.getSession().getConfig().getLockTimeout();
                 Transaction trx = ctx.getTransaction();
-            	HumpbackError error = gtable.lock(trx.getGuaranteedTrxId(), pKey, timeout);
-            	if (error != HumpbackError.SUCCESS) {
-            		throw new OrcaException(error);
-            	}
-            	// get the latest version of the row, required by select for update
-                Row row = gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey);
+                long error = gtable.lock(trx.getGuaranteedTrxId(), pKey, timeout);
+                if (!HumpbackError.isSuccess(error)) {
+                    throw new OrcaException(HumpbackError.toString(error));
+                }
+                // get the latest version of the row, required by select for update
+                Row row = gtable.getRow(trx.getTrxId(), Long.MAX_VALUE, pKey, 0);
                 pRecord = newRecord();
                 Record.setKey(pRecord, row.getKeyAddress());
                 for (int i=0; i<this.meta.getColumnCount(); i++) {
-                	long pValue = row.getFieldAddress(RecordLocker.this.mapping[i]);
-                	Record.set(pRecord, i, pValue);
+                    long pValue = row.getFieldAddress(RecordLocker.this.mapping[i]);
+                    Record.set(pRecord, i, pValue);
                 }
             }
             return pRecord;
@@ -67,7 +67,7 @@ public class RecordLocker extends CursorMaker {
 
         @Override
         public void close() {
-        	super.close();
+            super.close();
             this.upstream.close();
         }
 
@@ -106,4 +106,9 @@ public class RecordLocker extends CursorMaker {
         return this.upstream;
     }
 
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
+    }
+    
 }

@@ -18,6 +18,7 @@ import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.KillQuery;
 import com.antsdb.saltedfish.sql.vdm.KillSession;
 
 /**
@@ -29,7 +30,7 @@ public class Kill_stmtGenerator extends Generator<Kill_stmtContext> {
     @Override
     public Instruction gen(GeneratorContext ctx, Kill_stmtContext rule) throws OrcaException {
         int sessionId = Integer.parseInt(rule.number_value().getText());
-        return new KillSession(sessionId);
+        return rule.K_QUERY() != null ?  new KillQuery(sessionId) : new KillSession(sessionId);
     }
 
 }

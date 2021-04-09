@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 import com.antsdb.saltedfish.sql.OrcaException;
 
 public class CreateNamespace extends Statement {
@@ -29,6 +30,9 @@ public class CreateNamespace extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
+        if (ctx.getOrca().isSlave()) {
+            throw new ErrorMessage(0, "database is not mutable in slave mode");
+        }
         Humpback humpback = ctx.getOrca().getHumpback();
         if (humpback.getNamespace(this.name) != null) {
             if (this.ifNotExists) {

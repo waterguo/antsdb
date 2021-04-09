@@ -27,54 +27,47 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author wgu0
  */
 class Carbonfreezer implements Runnable {
-	static Logger _log = UberUtil.getThisLogger();
-	
-	Humpback humpback;
-	
-	public Carbonfreezer(Humpback humpback) {
-		super();
-		this.humpback = humpback;
-	}
+    static Logger _log = UberUtil.getThisLogger();
+    
+    Humpback humpback;
+    
+    public Carbonfreezer(Humpback humpback) {
+        super();
+        this.humpback = humpback;
+    }
 
-	@Override
-	public synchronized void run() {
-		// carbonfreeze tablets
-		
-		try {
-		    long oldestTrxId = this.humpback.getLastClosedTransactionId();
-		    run(oldestTrxId, false);
-		}
-		catch (Exception x) {
-			_log.error("unexpected exception", x);
-		}
-		
-		// release unused transactions
-
-		TransactionCollector.collect(humpback);
-	}
-	
-	public synchronized int run(long oldestTrxId, boolean force) throws IOException {
-	    _log.trace("starting carbonfreezing with trxid={} force={}", oldestTrxId, force);
-	    
-	    // carbonfreeze all ready tablets
-	    
-        int count = 0;
-        for (GTable table:this.humpback.getTables()) {
-            for (MemTablet i:table.memtable.getTablets()) {
-                if (i.carbonfreeze(oldestTrxId, force)) {
-                    count++;
-                }
-            }
+    @Override
+    public synchronized void run() {
+        // carbonfreeze tablets
+        try {
+            long oldestTrxId = this.humpback.getLastClosedTransactionId();
+            run(oldestTrxId, false);
         }
-        // if there is no matured tablets, carbonfreeze one that holds more athan 2gb log data
+        catch (Exception x) {
+            _log.error("unexpected exception", x);
+        }
         
+        // release unused transactions
+        TransactionCollector.collect(humpback);
+    }
+    
+    public synchronized int run(long oldestTrxId, boolean force) throws IOException {
+        _log.trace("starting carbonfreezing with trxid={} force={}", oldestTrxId, force);
+        
+        int count = 0;
         for (GTable table:this.humpback.getTables()) {
             for (MemTablet i:table.memtable.getTablets()) {
                 if (i.isCarbonfrozen()) {
                     continue;
                 }
+                // carbonfreeze ones that are filled up
+                if (i.carbonfreeze(oldestTrxId, force)) {
+                    count++;
+                    continue;
+                }
                 long holdSize = TabletUtil.getHoldDataSize(i);
                 if (holdSize >= gb(2)) {
+                    // carbonfreeze one that holds more than 2gb log data
                     if (i.carbonfreeze(oldestTrxId, true)) {
                         count++;
                     }
@@ -83,11 +76,10 @@ class Carbonfreezer implements Runnable {
         }
         
         // done
-        
         if (count != 0) {
             _log.debug("{} tablets have been carbonfrozen", count);
         }
         _log.trace("carbonfreezing is finished");
         return count;
-	}
+    }
 }

@@ -28,7 +28,7 @@ public class Delete_node_stmtGenerator extends Generator<Delete_node_stmtContext
 
     @Override
     public Instruction gen(GeneratorContext ctx, Delete_node_stmtContext rule) throws OrcaException {
-        return new DeleteNode(Utils.getLiteralValue(rule.STRING_LITERAL()));
+        return new DeleteNode(Long.parseLong(rule.number_value().getText()));
     }
 
 }

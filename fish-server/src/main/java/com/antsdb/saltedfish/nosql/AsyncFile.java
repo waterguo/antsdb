@@ -116,7 +116,6 @@ class AsyncFile {
             this.ch.force(true);
         }
         catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         this.pos += bytesToWrite;

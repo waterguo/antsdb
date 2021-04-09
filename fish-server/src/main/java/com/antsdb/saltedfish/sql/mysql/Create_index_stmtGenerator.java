@@ -30,6 +30,12 @@ import com.antsdb.saltedfish.util.Pair;
 public class Create_index_stmtGenerator extends DdlGenerator<Create_index_stmtContext>{
 
     @Override
+    public boolean isTemporaryTable(GeneratorContext ctx, Create_index_stmtContext rule) {
+        ObjectName tableName = TableName.parse(ctx, rule.table_name_());
+        return isTemporaryTable(ctx, tableName);
+    }
+
+    @Override
     public Instruction gen(GeneratorContext ctx, Create_index_stmtContext rule)
     throws OrcaException {
         String indexName = Utils.getIdentifier(rule.index_name().identifier());

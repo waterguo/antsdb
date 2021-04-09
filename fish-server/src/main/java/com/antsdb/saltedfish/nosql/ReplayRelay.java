@@ -13,27 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.nosql;
 
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.TimestampEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
-
 /**
  * 
  * @author *-xguo0<@
@@ -44,31 +23,6 @@ public class ReplayRelay implements ReplayHandler {
     @Override
     public void all(LogEntry entry) throws Exception {
         this.downstream.all(entry);
-    }
-
-    @Override
-    public void insert(InsertEntry entry) throws Exception {
-        this.downstream.insert(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
-        this.downstream.update(entry);
-    }
-
-    @Override
-    public void put(PutEntry entry) throws Exception {
-        this.downstream.put(entry);
-    }
-
-    @Override
-    public void index(IndexEntry entry) throws Exception {
-        this.downstream.index(entry);
-    }
-
-    @Override
-    public void delete(DeleteEntry entry) throws Exception {
-        this.downstream.delete(entry);
     }
 
     @Override
@@ -92,13 +46,8 @@ public class ReplayRelay implements ReplayHandler {
     }
 
     @Override
-    public void timestamp(TimestampEntry entry) {
+    public void timestamp(TimestampEntry entry) throws Exception {
         this.downstream.timestamp(entry);
-    }
-
-    @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        this.downstream.deleteRow(entry);
     }
 
     public ReplayRelay(ReplayHandler downstream) {

@@ -38,7 +38,6 @@ public abstract class ScanResult implements AutoCloseable {
         public void close() {
         }
 
-        @Override
         public long getVersion() {
             return 0;
         }
@@ -65,6 +64,11 @@ public abstract class ScanResult implements AutoCloseable {
 
         @Override
         public void rewind() {
+        }
+
+        @Override
+        public String getLocation() {
+            return null;
         }
     }
     
@@ -122,6 +126,13 @@ public abstract class ScanResult implements AutoCloseable {
     public abstract void rewind();
     
     /**
+     * get the log pointer 
+     * 
+     * @return 0 if there no corresponding log entry
+     */
+    public long getLogPointer() {return 0;};
+    
+    /**
      * index suffix. only applicable to non-unique index
      * 
      * @return
@@ -147,6 +158,12 @@ public abstract class ScanResult implements AutoCloseable {
         }
         return Row.fromMemoryPointer(pRow, getVersion());
     }
+    
+    /**
+     * get the location of the row
+     * @return
+     */
+    abstract public String getLocation();
     
     public static ScanResult emptyResult() {
         return _empty;

@@ -18,9 +18,7 @@ package com.antsdb.saltedfish.beluga;
  * @author *-xguo0<@
  */
 public enum BelugaState {
-    DISCONNECTED,
+    STANDBY,
     LOADING,
-    LIVE,
-    ERROR, 
-    STOPPED,
+    ACTIVE,
 }

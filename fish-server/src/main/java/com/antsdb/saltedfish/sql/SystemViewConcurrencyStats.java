@@ -31,63 +31,63 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * @author wgu0
  */
 public class SystemViewConcurrencyStats extends View {
-	Orca orca;
-	
+    Orca orca;
+    
     public static class Item {
         public int TABLE_ID;
         public String NAMESPACE;
         public String TABLE_NAME;
         public long CAS_RETRIES;
         public long LOCK_WAITS;
-		public long CONCONRRENT_UPDATES;
-		
-		public boolean isAllZero() {
-			if (this.CAS_RETRIES != 0) return false;
-			if (this.LOCK_WAITS != 0) return false;
-			if (this.CONCONRRENT_UPDATES != 0) return false;
-			return true;
-		}
+        public long CONCONRRENT_UPDATES;
+        
+        public boolean isAllZero() {
+            if (this.CAS_RETRIES != 0) return false;
+            if (this.LOCK_WAITS != 0) return false;
+            if (this.CONCONRRENT_UPDATES != 0) return false;
+            return true;
+        }
     }
 
-	public SystemViewConcurrencyStats(Orca orca) {
-	    super(CursorUtil.toMeta(Item.class));
-		this.orca = orca;
-	}
+    public SystemViewConcurrencyStats(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
+        this.orca = orca;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		Map<Integer, Item> itemByTableId = new HashMap<>();
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        Map<Integer, Item> itemByTableId = new HashMap<>();
         for (GTable table:this.orca.getHumpback().getTables()) {
-        	for (MemTablet tablet:table.getTablets()) {
-        		add(itemByTableId, table, tablet);
-        	}
+            for (MemTablet tablet:table.getTablets()) {
+                add(itemByTableId, table, tablet);
+            }
         }
 
-		// done
+        // done
         
         Cursor c = CursorUtil.toCursor(meta, itemByTableId.values());
         return c;
-	}
+    }
 
-	private void add(Map<Integer, Item> itemByTableId, GTable gtable, MemTablet tablet) {
-		Item item = itemByTableId.get(gtable.getId());
-		boolean isNew = false;
-		if (item == null) {
-			item = new Item();
-			isNew = true;
-		}
-		item.CAS_RETRIES += tablet.getCasRetries();
-		item.LOCK_WAITS += tablet.getLockWaits();
-		item.CONCONRRENT_UPDATES += tablet.getCurrentUpdates();
-		if (item.isAllZero()) {
-			return;
-		}
-		TableMeta table = this.orca.getMetaService().getTable(Transaction.getSeeEverythingTrx(), gtable.getId());
-		item.TABLE_ID = gtable.getId();
-		item.NAMESPACE = table.getNamespace();
-		item.TABLE_NAME = table.getTableName();
-		if (isNew) {
-			itemByTableId.put(gtable.getId(), item);
-		}
-	}
+    private void add(Map<Integer, Item> itemByTableId, GTable gtable, MemTablet tablet) {
+        Item item = itemByTableId.get(gtable.getId());
+        boolean isNew = false;
+        if (item == null) {
+            item = new Item();
+            isNew = true;
+        }
+        item.CAS_RETRIES += tablet.getCasRetries();
+        item.LOCK_WAITS += tablet.getLockWaits();
+        item.CONCONRRENT_UPDATES += tablet.getCurrentUpdates();
+        if (item.isAllZero()) {
+            return;
+        }
+        TableMeta table = this.orca.getMetaService().getTable(Transaction.getSeeEverythingTrx(), gtable.getId());
+        item.TABLE_ID = gtable.getId();
+        item.NAMESPACE = table.getNamespace();
+        item.TABLE_NAME = table.getTableName();
+        if (isNew) {
+            itemByTableId.put(gtable.getId(), item);
+        }
+    }
 }

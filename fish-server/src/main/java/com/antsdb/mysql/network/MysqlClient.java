@@ -31,7 +31,7 @@ import com.antsdb.saltedfish.server.mysql.PacketEncoder;
  * 
  * @author *-xguo0<@
  */
-public class MysqlClient {
+public class MysqlClient implements AutoCloseable {
     private String host;
     private int port;
     private SocketChannel ch;
@@ -48,12 +48,13 @@ public class MysqlClient {
     public PacketHandshake connect() throws IOException {
         this.ch = SocketChannel.open(new InetSocketAddress(host, port));
         this.out = new ChannelWriterNio(this.ch);
-        this.encoder = new PacketEncoder(()->{ return Charsets.UTF_8;});
+        this.encoder = new PacketEncoder(()->{ return Charsets.UTF_8;}, ()->{ return Charsets.UTF_8;});
         readPacket();
         PacketHandshake packet = new PacketHandshake(this.buf);
         return packet;
     }
     
+    @Override
     public void close() {
         MemoryManager.freeImmortal(AllocPoint.MYSQL_CLIENT, this.buf);
     }
@@ -149,4 +150,25 @@ public class MysqlClient {
         this.out.flush();
     }
 
+    /** 
+     * send a request to the remote server
+     * @param request 
+     */
+    public void send(MysqlRequest request) {
+        this.encoder.writePacket(this.out, (packet)->{
+            request.write(packet);
+        });
+        this.out.flush();
+    }
+    
+    public boolean ping() {
+        try {
+            send(new PingRequest());
+            ByteBuffer response = readPacket();
+            return isOk(response);
+        }
+        catch (Exception x) {
+            return false;
+        }
+    }
 }

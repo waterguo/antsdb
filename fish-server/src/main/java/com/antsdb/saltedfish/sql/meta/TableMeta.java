@@ -277,4 +277,33 @@ public class TableMeta extends MetaObject {
     public String getEngine() {
         return (String)row.get(ColumnId.systable_engine.getId());
     }
+    
+    public boolean isTemproray() {
+        return !getNamespace().equals("#") && getHtableId() < 0;
+    }
+
+    public void setType(int value) {
+        row.set(ColumnId.systable_table_type.getId(), value);
+    }
+    
+    public int getType() {
+        Integer result = (Integer)row.get(ColumnId.systable_table_type.getId());
+        return result == null ? OrcaTableType.TABLE : result.intValue();
+    }
+    
+    public void setViewSql(String value) {
+        row.set(ColumnId.systable_sql.getId(), value);
+    }
+    
+    public String getViewSql() {
+        return (String)row.get(ColumnId.systable_sql.getId());
+    }
+
+    public void setComment(String value) {
+        row.set(ColumnId.systable_comment.getId(), value);
+    }
+    
+    public String getComment() {
+        return (String)row.get(ColumnId.systable_comment.getId());
+    }
 }

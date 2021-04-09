@@ -15,11 +15,6 @@ package com.antsdb.saltedfish.minke;
 
 import org.slf4j.Logger;
 
-import static com.antsdb.saltedfish.util.UberFormatter.*;
-
-import java.util.Map;
-
-import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -51,71 +46,50 @@ public class LRUEvictor {
         if (bucketSize <= 0) {
             return 0;
         }
+        
+        // add evictable objects to bucket
+        _log.debug("page counts: current={} free={} used={} garbage={} zombie={}",
+                this.cache.minke.getCurrentPageCount(), 
+                this.cache.minke.getFreePageCount(),
+                this.cache.minke.getUsedPageCount(),
+                this.cache.minke.getGarbagePageCount(),
+                this.cache.minke.getZombiePageCount());
         EvictionBucket bucket = new EvictionBucket(bucketSize);
-        for (MinkeTable mtable:this.cache.minke.tableById.values()) {
-            if (mtable.tableId < 0x100) {
-                // we don't want to evict system tables
+        for (MinkeCacheTable mctable:this.cache.tableById.values()) {
+            if (mctable.getId() < 0x100) {
+                // skip system or temporary tables
                 continue;
             }
-            for (MinkePage page:mtable.getPages()) {
-                bucket.add(mtable, page);
+            if (mctable.isFullCache() && mctable.mtable.getPageCount()>0) {
+                // we want to evict table as whole if it is fully cached
+                bucket.add(new EvictableTable(mctable));
+            }
+            else {
+                MinkeTable mtable = mctable.mtable;
+                for (MinkePage page:mtable.getPages()) {
+                    bucket.add(new EvictablePage(mctable, page));
+                }
             }
         }
+        
+        // evict pages 
         _log.debug("{} pages in bucket", bucket.getResult().size());
-        for (MinkePage page:bucket.getResult()) {
-            if (page.copyLastAccess != page.lastAccess.get()) {
-                _log.debug("release page {} from evition {} {}", 
-                        hex(page.id), 
-                        page.copyLastAccess, 
-                        page.lastAccess.get());
-                continue;
+        for (EvictableObject i:bucket.getResult()) {
+            count += i.evict();
+            if (count >= bucketSize) {
+                break;
             }
-            MinkeTable table = (MinkeTable)this.cache.minke.getTable(page.tableId);
-            if (!table.deletePage(page)) {
-                printDebug(page);
-                continue;
-            }
-            count++;
-        }
-        if (count != bucket.getResult().size()) {
-            
         }
         _log.debug("{} pages have been evicted", count);
+        _log.debug("page counts: current={} free={} used={} garbage={} zombie={}",
+                this.cache.minke.getCurrentPageCount(), 
+                this.cache.minke.getFreePageCount(),
+                this.cache.minke.getUsedPageCount(),
+                this.cache.minke.getGarbagePageCount(),
+                this.cache.minke.getZombiePageCount());
         return count;
     }
     
-    private String safeGetKeyString(long pKey) {
-        try {
-            return KeyBytes.toString(pKey);
-        }
-        catch (Exception x) {
-            return x.getMessage();
-        }
-    }
-    private void printDebug(MinkePage page) {
-        MinkeTable table = (MinkeTable)this.cache.minke.getTable(page.tableId);
-        _log.debug("unable to delete page {} {} from table {}", hex(page.id), hex(page.pStartKey), table.tableId);
-        MinkePage that = table.pages.get(page.getStartKeyPointer());
-        if (that == null) {
-            _log.error("that = null");
-        }
-        else {
-            _log.error("that page {} {} {}", hex(that.id), hex(that.pStartKey), safeGetKeyString(that.pStartKey));
-        }
-        for (Map.Entry<KeyBytes, MinkePage> i:table.pages.entrySet()) {
-            long pKey = i.getKey().getAddress();
-            MinkePage ii = i.getValue();
-            if (ii == page) {
-                _log.debug("{} {} {} {} {}", 
-                        hex(ii.id), 
-                        hex(pKey), 
-                        hex(ii.getStartKeyPointer()), 
-                        hex(ii.getStartKey().getAddress()),
-                        safeGetKeyString(pKey));
-            }
-        }
-    }
-
     int getBucketSize() {
         long pageSize = this.cache.minke.getPageSize();
         long freeBytes = this.cache.getMinke().getFreePageCount() * pageSize;

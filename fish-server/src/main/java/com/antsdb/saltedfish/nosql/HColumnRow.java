@@ -22,6 +22,7 @@ public class HColumnRow {
     final static int COLUMN__POS = 2;
     final static int COLUMN_NAME = 3;
     final static int DELETE_MARK = 4;
+    final static int COLUMN_TYPE = 5;
 
     SlowRow row;
 
@@ -66,5 +67,17 @@ public class HColumnRow {
     
     public void setDeleted(boolean value) {
         this.row.set(DELETE_MARK, value);
+    }
+
+    public void setType(int value) {
+        this.row.set(COLUMN_TYPE, value);
+    }
+    
+    public int getType() {
+        return (int)this.row.get(COLUMN_TYPE);
+    }
+    
+    public SlowRow getRow() {
+        return this.row;
     }
 }

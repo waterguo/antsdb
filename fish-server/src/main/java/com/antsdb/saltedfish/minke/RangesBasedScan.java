@@ -109,4 +109,9 @@ public class RangesBasedScan extends ScanResult {
         }
         return false;
     }
+
+    @Override
+    public String getLocation() {
+        return this.upstream.getLocation();
+    }
 }

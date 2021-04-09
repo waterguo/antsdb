@@ -27,12 +27,28 @@ import com.antsdb.saltedfish.sql.vdm.ObjectName;
 public class Drop_table_stmtGenerator extends DdlGenerator<Drop_table_stmtContext>{
 
     @Override
+    public boolean isTemporaryTable(GeneratorContext ctx, Drop_table_stmtContext rule) {
+        List<ObjectName> list = new ArrayList<>();
+        rule.table_names_().table_name_().forEach(it -> list.add(TableName.parse(ctx, it)));
+        if (list.size() < 1) {
+            return false;
+        }
+        for (ObjectName i:list) {
+            if (!isTemporaryTable(ctx, i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
     public Instruction gen(GeneratorContext ctx, Drop_table_stmtContext rule) throws OrcaException {
-    	List<ObjectName> list = new ArrayList<>();
-    	rule.table_names_().table_name_().forEach(it -> list.add(TableName.parse(ctx, it)));;
-        
+        List<ObjectName> list = new ArrayList<>();
+        rule.table_names_().table_name_().forEach(it -> list.add(TableName.parse(ctx, it)));;
         boolean ifExist = rule.K_EXISTS() != null;
-        DropTable drop = new DropTable(list, ifExist);
+        DropTable drop = new DropTable(list, ifExist, it -> {
+            return true;
+        });
         return drop;
     }
 

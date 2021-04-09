@@ -16,20 +16,18 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-import com.antsdb.saltedfish.cpp.FishObject;
+import com.antsdb.saltedfish.cpp.FishNumber;
+import com.antsdb.saltedfish.cpp.Float8;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.RecyclableHeap;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.util.CodingError;
 
-public class FuncSum extends Function {
+public class FuncSum extends AggregationFunction {
     Operator expr;
     DataType returnType;
     int variableId;
 
-    private static class Data {
-            Object sum;
-    }
-    
     public FuncSum(int variableId, Operator expr) {
         super();
         this.variableId = variableId;
@@ -65,94 +63,51 @@ public class FuncSum extends Function {
     }
 
     @Override
-    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        Data data = (Data)ctx.getVariable(this.variableId);
-        if (data == null) {
-            data = init(ctx);
-        }
-        if (Record.isGroupEnd(pRecord)) {
-            if (data.sum instanceof Float) {
-                data.sum = Float.valueOf(0);
+    public void feed(VdmContext ctx, RecyclableHeap rheap, Heap theap, Parameters params, long pRecord) {
+        long pExistValue = ctx.getGroupVariable(this.variableId);
+        long pValue = this.expr.eval(ctx, theap, params, pRecord);
+        if (pValue != 0 || pExistValue != 0) {
+            if (pExistValue == 0) {
+                rheap.markNewUnit(50);
+                pExistValue = rheap.alloc(50);
+                ctx.setGroupVariable(this.variableId, pExistValue);
+                if (this.returnType.getJavaType() == Double.class) {
+                    Float8.set(pExistValue, 0);
+                }
+                else if (this.returnType.getJavaType() == BigDecimal.class) {
+                    FishNumber.set(rheap, pExistValue, BigDecimal.ZERO);
+                }
+                else {
+                    throw new IllegalArgumentException();
+                }
             }
-            else if (data.sum instanceof Double) {
-                data.sum = Double.valueOf(0);
+            if (this.returnType.getJavaType() == Double.class) {
+                double sum = 0;
+                if (pExistValue != 0) {
+                    sum += AutoCaster.getDouble(pExistValue);
+                }
+                if (pValue != 0) {
+                    sum += AutoCaster.getDouble(pValue);
+                }
+                Float8.set(pExistValue, sum);
             }
-            else if (data.sum instanceof BigDecimal) {
-                data.sum = BigDecimal.ZERO;
-            }
-            else {
-                throw new CodingError();
-            }
-            this.expr.eval(ctx, heap, params, pRecord);
-            return FishObject.allocSet(heap, data.sum);
-        }
-        long addrValue = this.expr.eval(ctx, heap, params, pRecord);
-        addrValue = AutoCaster.toNumber(heap, addrValue);
-        Object value = FishObject.get(heap, addrValue);
-        if (addrValue == 0) {
-            // do nothing
-        }
-        else if (data.sum instanceof Float) {
-            if (value instanceof Float) {
-                data.sum = ((Float)data.sum) + ((Float)value);
-            }
-            else {
-                throw new CodingError();
-            }
-        }
-        else if (data.sum instanceof Double) {
-            if (value instanceof Float) {
-                data.sum = ((Double)data.sum) + ((Float)value);
-            }
-            else if (value instanceof Double) {
-                data.sum = ((Double)data.sum) + ((Double)value);
-            }
-            else {
-                throw new CodingError();
+            else if (this.returnType.getJavaType() == BigDecimal.class) {
+                BigDecimal sum = BigDecimal.ZERO;
+                if (pExistValue != 0) {
+                    sum = sum.add(AutoCaster.getDecimal(pExistValue));
+                }
+                if (pValue != 0) {
+                    sum = sum.add(AutoCaster.getDecimal(pValue));
+                }
+                FishNumber.set(rheap, pExistValue, sum);
             }
         }
-        else if (data.sum instanceof BigDecimal) {
-            if (value instanceof Integer) {
-                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Integer)value));
-            }
-            else if (value instanceof Long) {
-                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((Long)value));
-            }
-            else if (value instanceof BigInteger) {
-                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((BigInteger)value));
-            }
-            else if (value instanceof BigDecimal) {
-                    data.sum = ((BigDecimal)data.sum).add((BigDecimal)value);
-            }
-            else if (value instanceof String) {
-                    data.sum = ((BigDecimal)data.sum).add(new BigDecimal((String)value));
-            }
-            else {
-                throw new CodingError();
-            }
-        }
-        else {
-            throw new CodingError();
-        }
-        return FishObject.allocSet(heap, data.sum);
     }
 
-    private Data init(VdmContext ctx) {
-        Data data = new Data();
-        ctx.setVariable(variableId, data);
-        if (this.returnType.getJavaType() == Double.class) {
-            data.sum = Double.valueOf(0);
-        }
-        else if (this.returnType.getJavaType() == Float.class) {
-            data.sum = Float.valueOf(0);
-        }
-        else if (this.returnType.getJavaType() == BigDecimal.class) {
-            data.sum = BigDecimal.ZERO;
-        }
-        else {
-            throw new CodingError();
-        }
-        return data;
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pValue = ctx.getGroupVariable(this.variableId);
+        return pValue;
     }
 
     @Override

@@ -21,12 +21,19 @@ import com.antsdb.saltedfish.sql.vdm.Script;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 
 public abstract class SqlParserFactory {
-    public abstract Script parse(Session session, CharStream cs);
+    /**
+     * 
+     * @param ctx nullable
+     * @param session
+     * @param text
+     * @return
+     */
+    public abstract Script parse(GeneratorContext ctx, Session session, CharStream cs);
     public abstract Object run(VdmContext ctx, Parameters params, CharStream cs);
     
     public Script parse(Session session, String text) {
         CharStream cs = new ANTLRInputStream(text);
-        return parse(session, cs);
+        return parse(null, session, cs);
     }
     
     public Object run(VdmContext ctx, Parameters params, String sql) {

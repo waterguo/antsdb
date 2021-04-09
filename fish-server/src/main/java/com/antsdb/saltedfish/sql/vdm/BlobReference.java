@@ -13,6 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.cpp.BrutalMemoryObject;
 import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Heap;
@@ -25,17 +26,15 @@ import com.antsdb.saltedfish.cpp.Value;
  * 
  * @author *-xguo0<@
  */
-public class BlobReference {
+public final class BlobReference extends BrutalMemoryObject {
     private static final int OFFSET_SIZE = 1;
     private static final int OFFSET_ROWKEY = 5;
     
-    long addr;
-    
     public BlobReference(long addr) {
+        super(addr);
         if (Unsafe.getByteVolatile(addr) != Value.FORMAT_BLOB_REF) {
             throw new IllegalArgumentException();
         }
-        this.addr = addr;
     }
     
     public static BlobReference alloc(Heap heap, long pKey, int dataSize) {
@@ -98,7 +97,13 @@ public class BlobReference {
         return "BLOB|" + getDataSize();
     }
 
-    public long getAddress() {
-        return this.addr;
+    @Override
+    public int getByteSize() {
+        return getSize();
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_BLOB_REF;
     }
 }

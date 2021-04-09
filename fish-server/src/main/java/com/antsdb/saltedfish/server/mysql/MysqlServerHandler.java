@@ -52,7 +52,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
         this.fish = fish;
         this.channel=ch;
         this.out = new ChannelWriterNetty(ch);
-        this.mysession = new MysqlSession(fish, this.out, ch.remoteAddress());
+        this.mysession = new MysqlSession(fish, this.out, ch.remoteAddress(), true);
         this.packetEncoder = this.mysession.encoder;
     }
 
@@ -149,7 +149,7 @@ public class MysqlServerHandler extends ChannelInboundHandlerAdapter implements 
             String password = getFish().getConfig().getSSLPassword();
             try (FileInputStream keyIn = new FileInputStream(keyFile)) {
                 SSLContext serverContext;
-                KeyStore ks = KeyStore.getInstance("JKS");
+                KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
 
                 byte[] sslKeyVal = IOUtils.toByteArray(keyIn);
 

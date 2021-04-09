@@ -41,12 +41,14 @@ public class SimpleSocketWorker implements Runnable {
     private MysqlSession mysession;
     private ChannelWriterNio out;
     private ByteBuffer buf = MemoryManager.allocImmortal(AllocPoint.LISTENER, 1024 * 16);
+    private boolean isAux;
     
-    public SimpleSocketWorker(SaltedFish fish, SocketChannel channel) {
+    public SimpleSocketWorker(SaltedFish fish, SocketChannel channel, boolean isAux) {
         this.buf.order(ByteOrder.LITTLE_ENDIAN);
         this.fish = fish;
         this.channel = channel;
         this.out = new ChannelWriterNio(channel);
+        this.isAux = isAux;
         SocketAddress remote = null;
         try {
             remote = channel.getRemoteAddress();
@@ -54,7 +56,7 @@ public class SimpleSocketWorker implements Runnable {
         catch (IOException x) {
             _log.warn("something is wrong", x);
         }
-        this.mysession = new MysqlSession(fish, out, remote);
+        this.mysession = new MysqlSession(fish, out, remote, !this.isAux);
     }
 
     @Override
@@ -74,8 +76,8 @@ public class SimpleSocketWorker implements Runnable {
             _log.error("error", x);
         }
         finally {
-            this.mysession.close();
-            this.out.close();
+            UberUtil.quiet(()->{this.mysession.close();});
+            UberUtil.quiet(()->{this.out.close();});
             HBaseTable.freeMemory();
             MemoryManager.freeImmortal(AllocPoint.LISTENER, this.buf);
             MemoryManager.threadEnd();
@@ -95,7 +97,9 @@ public class SimpleSocketWorker implements Runnable {
             readBody();
             try {
                 this.buf.flip();
-                this.mysession.run(this.buf);
+                if (this.mysession.run(this.buf) == -2) {
+                    break;
+                }
             }
             finally {
                 this.buf.clear();

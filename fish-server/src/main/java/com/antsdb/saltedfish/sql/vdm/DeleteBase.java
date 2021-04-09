@@ -41,19 +41,22 @@ abstract class DeleteBase extends Statement {
     }
 
     protected boolean deleteSingleRow(VdmContext ctx, Parameters params, long pKey) {
-            Transaction trx = ctx.getTransaction();
-            int timeout = ctx.getSession().getConfig().getLockTimeout();
+        if (ctx.getOrca().isSlave()) {
+            throw new OrcaException("database is not mutable in slave mode");
+        }
+        Transaction trx = ctx.getTransaction();
+        int timeout = ctx.getSession().getConfig().getLockTimeout();
         try (Heap heap = new BluntHeap()) {
             heap.reset(0);
             Row row = null;
             long trxid = trx.getGuaranteedTrxId();
-            row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey);
-            HumpbackError error = this.gtable.deleteRow(ctx.getHSession(), trxid, row.getAddress(), timeout);
-            if (error == HumpbackError.SUCCESS) {
+            row = this.gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pKey, 0);
+            long error = this.gtable.deleteRow(ctx.getHSession(), trxid, row.getAddress(), timeout);
+            if (HumpbackError.isSuccess(error)) {
                 if (this.blobTable != null) {
                     error = this.blobTable.deleteRow(ctx.getHSession(), trxid, row.getAddress(), timeout);
-                    if ((error != HumpbackError.SUCCESS) && (error != HumpbackError.MISSING)) {
-                        throw new OrcaException(error);
+                    if (!HumpbackError.isSuccess(error) && (error != HumpbackError.MISSING)) {
+                        throw new OrcaException(HumpbackError.toString(error));
                     }
                 }
                 this.indexHandlers.delete(heap, ctx.getHSession(), trx, row, timeout);
@@ -64,9 +67,8 @@ abstract class DeleteBase extends Statement {
                 return false;
             }
             else {
-                throw new OrcaException(error);
+                throw new OrcaException(HumpbackError.toString(error));
             }
         }
     }
-
 }

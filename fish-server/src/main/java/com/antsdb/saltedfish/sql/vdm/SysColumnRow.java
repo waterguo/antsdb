@@ -21,63 +21,67 @@ import com.antsdb.saltedfish.sql.meta.ColumnId;
  * @author wgu0
  */
 public class SysColumnRow {
-	Row row;
+    Row row;
 
     public SysColumnRow(Row row) {
         this.row = row;
     }
 
     public String getNamespace() {
-    	return (String)row.get(ColumnId.syscolumn_namespace.getId());
+        return (String)row.get(ColumnId.syscolumn_namespace.getId());
     }
     
     public String getTableName() {
-    	return (String)row.get(ColumnId.syscolumn_table_name.getId());
+        return (String)row.get(ColumnId.syscolumn_table_name.getId());
     }
 
     public String getColumnName() {
-    	return (String)row.get(ColumnId.syscolumn_column_name.getId());
+        return (String)row.get(ColumnId.syscolumn_column_name.getId());
     }
 
     public String getTypeName() {
-    	return (String)row.get(ColumnId.syscolumn_type_name.getId());
+        return (String)row.get(ColumnId.syscolumn_type_name.getId());
     }
 
     public Integer getLength() {
-    	return (Integer)row.get(ColumnId.syscolumn_type_length.getId());
+        return (Integer)row.get(ColumnId.syscolumn_type_length.getId());
     }
     
     public Integer getScale() {
-    	return (Integer)row.get(ColumnId.syscolumn_type_scale.getId());
+        return (Integer)row.get(ColumnId.syscolumn_type_scale.getId());
     }
     
     public Integer getColumnId() {
-    	return (Integer)row.get(ColumnId.syscolumn_column_id.getId());
+        return (Integer)row.get(ColumnId.syscolumn_column_id.getId());
     }
 
     public Boolean isNullable() {
-    	return (Boolean)row.get(ColumnId.syscolumn_nullable.getId());
+        return (Boolean)row.get(ColumnId.syscolumn_nullable.getId());
     }
 
     public String getDefaultValue() {
-    	return (String)row.get(ColumnId.syscolumn_default_value.getId());
+        return (String)row.get(ColumnId.syscolumn_default_value.getId());
     }
 
-	@Override
-	public String toString() {
-		String string = String.format("%s [columnId=%d type=%s length=%s scale=%d nullable=%b default=%s]",
-				getColumnName(),
-				getColumnId(),
-				getTypeName(),
-				getLength(),
-				getScale(),
-				isNullable(),
-				getDefaultValue());
-		return string;
-	}
+    public int getTableId() {
+        return (int)row.get(ColumnId.syscolumn_table_id.getId());
+    }
+    
+    @Override
+    public String toString() {
+        String string = String.format("%s [columnId=%d type=%s length=%s scale=%d nullable=%b default=%s]",
+                getColumnName(),
+                getColumnId(),
+                getTypeName(),
+                getLength(),
+                getScale(),
+                isNullable(),
+                getDefaultValue());
+        return string;
+    }
 
-	public Integer getId() {
-    	return (Integer)row.get(ColumnId.syscolumn_id.getId());
-	}
+    public Integer getId() {
+        return (Integer)row.get(ColumnId.syscolumn_id.getId());
+    }
 
 }

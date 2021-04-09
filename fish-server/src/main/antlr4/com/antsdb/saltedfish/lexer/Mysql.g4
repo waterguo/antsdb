@@ -38,11 +38,13 @@ sql_stmt
  | create_table_stmt
  | create_table_like_stmt
  | create_user_stmt
+ | create_view_stmt
  | delete_stmt
  | drop_database_stmt
  | drop_index_stmt
  | drop_table_stmt
  | drop_user_stmt
+ | drop_view_stmt
  | explain_stmt
  | insert_stmt
  | kill_stmt
@@ -115,11 +117,12 @@ alter_table_options
  | alter_table_add_index 
  | alter_table_add_primary_key
  | alter_table_disable_keys
+ | alter_table_drop
+ | alter_table_drop_constraint
+ | alter_table_drop_index
  | alter_table_enable_keys
  | alter_table_modify
  | alter_table_rename
- | alter_table_drop
- | alter_table_drop_index
  ;
 
 alter_table_add
@@ -140,9 +143,9 @@ alter_table_add_constraint
  ;
 
 alter_table_add_constraint_fk
- : K_FOREIGN K_KEY '(' child_columns ')' K_REFERENCES table_name_ '(' parent_columns ')' cascade_option*
+ : K_FOREIGN K_KEY index_name? '(' child_columns ')' K_REFERENCES table_name_ '(' parent_columns ')' cascade_option*
  ;
- 
+
 alter_table_add_constraint_pk
  : K_PRIMARY K_KEY '(' columns ')' 
  ;
@@ -162,6 +165,8 @@ parent_columns: columns;
 columns: identifier (',' identifier)*;
 
 alter_table_disable_keys: K_DISABLE K_KEYS;
+
+alter_table_drop_constraint : K_DROP K_CONSTRAINT identifier;
 
 alter_table_enable_keys: K_ENABLE K_KEYS;
 
@@ -206,7 +211,8 @@ commit_stmt
  ;
  
 create_database_stmt
- : K_CREATE (K_DATABASE | K_SCHEMA) (K_IF K_NOT K_EXISTS)? identifier (K_DEFAULT? K_CHARACTER K_SET any_name)?  
+ : K_CREATE (K_DATABASE | K_SCHEMA) (K_IF K_NOT K_EXISTS)? identifier 
+   (K_DEFAULT? K_CHARACTER K_SET any_name)? (K_COLLATE any_name)?  
  ;
  
 create_index_stmt:
@@ -218,7 +224,13 @@ indexed_column_def
  : indexed_column ('(' signed_number ')')?
  ;
   
-create_table_stmt: K_CREATE K_TABLE (K_IF K_NOT K_EXISTS)? table_name_ '(' create_defs  ','? ')' table_options;
+create_table_stmt 
+ : K_CREATE K_TEMPORARY? K_TABLE (K_IF K_NOT K_EXISTS)? 
+   table_name_ 
+   ('(' create_defs  ','? ')')? 
+   table_options
+   select_or_values?
+ ;
 
 create_defs
  : create_def (',' create_def)*
@@ -230,9 +242,11 @@ create_def
  | index_def
  | constraint_def
  ;
- 
+
+commment: K_COMMENT (STRING_LITERAL | DOUBLE_QUOTED_LITERAL);
+
 column_def
- : column_name data_type K_BINARY? K_ZEROFILL? column_constraint* (K_ON K_UPDATE K_CURRENT_TIMESTAMP)?
+ : column_name data_type K_BINARY? K_ZEROFILL? column_constraint* (K_ON K_UPDATE current_timestamp_value)?
    (K_AFTER identifier)? 
    (K_COMMENT (STRING_LITERAL | DOUBLE_QUOTED_LITERAL))? 
  ;
@@ -278,8 +292,8 @@ column_constraint
  
 column_constraint_nullable: K_NOT? K_NULL;
 
-column_constraint_default: K_DEFAULT (signed_number | literal_value | K_CURRENT_TIMESTAMP);
-  
+column_constraint_default: K_DEFAULT literal_value;
+
 column_constraint_auto_increment: K_AUTO_INCREMENT; 
  
 column_constraint_primary_key: K_PRIMARY K_KEY;
@@ -295,7 +309,7 @@ primary_key_def
 index_type : K_USING WORD;
  
 index_def
- : K_UNIQUE? K_FULLTEXT? (K_INDEX | K_KEY) identifier? '(' index_columns ')' index_type?
+ : K_UNIQUE? K_FULLTEXT? (K_INDEX | K_KEY) identifier? '(' index_columns ')' index_type? commment?
  ;
  
 index_columns
@@ -312,8 +326,8 @@ constraint_def
  ;
 
 cascade_option
- : K_ON K_DELETE (K_CASCADE | K_NO K_ACTION)
- | K_ON K_UPDATE (K_CASCADE | K_NO K_ACTION)
+ : K_ON K_DELETE (K_CASCADE | K_NO K_ACTION | K_RESTRICT | K_NO K_ACTION | K_SET K_DEFAULT | K_SET K_NULL)
+ | K_ON K_UPDATE (K_CASCADE | K_NO K_ACTION | K_RESTRICT | K_NO K_ACTION | K_SET K_DEFAULT | K_SET K_NULL)
  ;
   
 table_options
@@ -347,20 +361,33 @@ create_table_like_stmt
 create_user_stmt
  : K_CREATE K_USER (K_IF K_NOT K_EXISTS)? string_value K_IDENTIFIED K_BY string_value
  ;
-  
+ 
+create_view_stmt
+ : K_CREATE (K_OR K_REPLACE)? create_view_algorithm? create_view_definer? create_view_security?   
+   K_VIEW table_name_ ('(' columns ')')? K_AS (select_stmt | '(' select_stmt ')') 
+ ;
+
+create_view_algorithm: K_ALGORITHM '=' WORD;
+
+create_view_definer: K_DEFINER '=' BACKTICK_QUOTED_IDENTIFIER '@' BACKTICK_QUOTED_IDENTIFIER;
+
+create_view_security: K_SQL K_SECURITY (K_DEFINER | K_INVOKER);
+
 delete_stmt
  : K_DELETE table_name_? from_clause ( K_WHERE expr )? limit_clause?
  ;
 
 drop_database_stmt: K_DROP (K_DATABASE | K_SCHEMA) (K_IF K_EXISTS)? identifier;
 
-drop_table_stmt: K_DROP K_TABLE (K_IF K_EXISTS)? table_names_ ;
+drop_table_stmt: K_DROP K_TEMPORARY? K_TABLE (K_IF K_EXISTS)? table_names_ ;
 
 drop_user_stmt : K_DROP K_USER (K_IF K_EXISTS)? string_value;
 
+drop_view_stmt : K_DROP K_VIEW (K_IF K_EXISTS)? table_names_;
+
 drop_index_stmt: K_DROP K_INDEX index_name K_ON table_name_ ;
 
-explain_stmt: K_EXPLAIN K_PROFILE? sql_stmt;
+explain_stmt: (K_DESCRIBE | K_EXPLAIN) (K_PROFILE | K_ANALYZE)? (table_name_ | sql_stmt);
  
 kill_stmt: K_KILL (K_CONNECTION | K_QUERY) number_value; 
 
@@ -389,7 +416,7 @@ insert_stmt_values_columns
  ;
  
 insert_stmt_values_row
- : '(' expr ( ',' expr )* ')'
+ : '(' (expr ( ',' expr )*)? ')'
  ;
  
 insert_duplicate_clause
@@ -459,9 +486,16 @@ from_clause
  ;
  
 from_clause_standard
- : K_FROM  from_item ( ',' from_item )* join_clause?
+ : K_FROM  join_expr?
  ;
 
+join_expr
+ : from_item
+ | join_expr COMMA join_expr
+ | join_expr join_operator join_expr join_constraint
+ | OPEN_PAR join_expr CLOSE_PAR
+ ;
+ 
 from_clause_odbc
  : K_FROM '{' K_OJ from_item_odbc '}'
  ;
@@ -497,9 +531,7 @@ having_clause
  ;
  
 result_column
- : result_column_star
- | result_column_expr
- ;
+ : K_BINARY? (result_column_star | result_column_expr);
 
 result_column_star
  : ( table_name_ '.')? '*'
@@ -548,8 +580,7 @@ join_operator
  ;
 
 join_constraint
- : ( K_ON expr
-   | K_USING '(' column_name ( ',' column_name )* ')' )?
+ : ( K_ON expr | K_USING '(' column_name ( ',' column_name )* ')' )?
  ;
 
 show_charset
@@ -607,7 +638,7 @@ show_tables_stmt
  ;
   
 show_triggers_stmt
- : K_SHOW K_FULL? K_TRIGGERS ( K_FROM identifier )? (K_LIKE string_value)?
+ : K_SHOW K_FULL? K_TRIGGERS ( K_FROM identifier )? (K_LIKE string_value)? where_clause?
  ;
  
 show_columns_stmt
@@ -819,7 +850,7 @@ bind_parameter
  ;
  
 expr_cast
- : K_CAST '(' expr  K_AS expr_cast_data_type ')' ?
+ : K_CAST '(' expr  K_AS expr_cast_data_type K_CHARACTER? K_SET? identifier?')' ?
  ;
 
 expr_cast_data_type
@@ -911,9 +942,10 @@ any_name
 name
  : WORD | K_DATABASE | K_DATABASES | K_ENGINES | K_COLLATION | K_DATA | K_LEVEL | K_DESC | K_READ | K_COMMENT 
  | K_MATCH | K_BINARY | K_TABLES | K_AUTO_INCREMENT | K_GRANTS | K_COLUMNS | K_SESSION | K_ATTACH | K_PROFILE
- | K_MATCH | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
+ | K_AGAINST | K_BOOLEAN | K_MODE | K_STATUS | K_PROCESSLIST | K_PRIVILEGES | K_LOCAL | K_USER
  | K_IDENTIFIED | K_PERMANENT | K_KILL | K_CONNECTION | K_QUERY | K_DUPLICATE | K_FORCE | K_OPTION | K_SHARE
- | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION | K_OJ
+ | K_ZEROFILL | K_PROCEDURE | K_TRIGGERS | K_VARIABLES | K_ACTION | K_NO | K_FUNCTION | K_OJ | K_ANALYZE
+ | K_ALGORITHM | K_DEFINER | K_SQL | K_SECURITY | K_DESCRIBE
  ;
  
 identifier
@@ -934,24 +966,22 @@ hex_value:HEX_LITERAL;
 
 null_value:K_NULL;
 
-current_time_value:K_CURRENT_TIME;
+current_time_value:K_CURRENT_TIME ('(' NUMERIC_LITERAL ')')?;
 
 current_date_value:K_CURRENT_DATE;
 
-current_timestamp_value:K_CURRENT_TIMESTAMP;
+current_timestamp_value:K_CURRENT_TIMESTAMP ('(' NUMERIC_LITERAL ')')?;
 
 literal_value
- : NUMERIC_LITERAL
- | STRING_LITERAL
- | DOUBLE_QUOTED_LITERAL
+ : signed_number
  | BLOB_LITERAL
  | HEX_LITERAL
- | literal_value_binary
+ | current_timestamp_value
+ | literal_string
  | literal_interval
  | K_NULL
- | K_CURRENT_TIME
+ | current_time_value
  | K_CURRENT_DATE
- | K_CURRENT_TIMESTAMP
  | K_TRUE
  | K_FALSE
  ;
@@ -960,10 +990,10 @@ literal_interval
  : K_INTERVAL expr WORD
  ;
  
-literal_value_binary
- : K__BINARY STRING_LITERAL
+literal_string
+ : CHARSET_NAME? (STRING_LITERAL | DOUBLE_QUOTED_LITERAL) (K_COLLATE collation_name) ?
  ;
- 
+
 EXCLAIMATION : '!';
 SCOL : ';';
 DOT : '.';
@@ -996,6 +1026,7 @@ K_ACTION : A C T I O N;
 K_ADD : A D D;
 K_AFTER : A F T E R;
 K_AGAINST : A G A I N S T;
+K_ALGORITHM : A L G O R I T H M;
 K_ALL : A L L;
 K_ALTER : A L T E R;
 K_ANALYZE : A N A L Y Z E;
@@ -1007,7 +1038,6 @@ K_AUTO_INCREMENT : A U T O '_' I N C R E M E N T;
 K_BEFORE : B E F O R E;
 K_BEGIN : B E G I N;
 K_BETWEEN : B E T W E E N;
-K__BINARY : '_' B I N A R Y;
 K_BINARY : B I N A R Y;
 K_BOOLEAN : B O O L E A N;
 K_BY : B Y;
@@ -1038,8 +1068,10 @@ K_DATABASES : D A T A B A S E S;
 K_DEFAULT : D E F A U L T;
 K_DEFERRABLE : D E F E R R A B L E;
 K_DEFERRED : D E F E R R E D;
+K_DEFINER : D E F I N E R;
 K_DELETE : D E L E T E;
 K_DESC : D E S C;
+K_DESCRIBE : D E S C R I B E;
 K_DETACH : D E T A C H;
 K_DISABLE : D I S A B L E;
 K_DISTINCT : D I S T I N C T;
@@ -1086,6 +1118,7 @@ K_INSTEAD : I N S T E A D;
 K_INTERSECT : I N T E R S E C T;
 K_INTERVAL : I N T E R V A L;
 K_INTO : I N T O;
+K_INVOKER : I N V O K E R;
 K_IS : I S;
 K_ISNULL : I S N U L L;
 K_JOIN : J O I N;
@@ -1141,6 +1174,7 @@ K_ROW : R O W;
 K_ROWNUM : R O W N U M;
 K_SAVEPOINT : S A V E P O I N T;
 K_SCHEMA : S C H E M A;
+K_SECURITY : S E C U R I T Y;
 K_SELECT : S E L E C T;
 K_SEPARATOR : S E P A R A T O R; 
 K_SEQUENCE: S E Q U E N C E;
@@ -1149,6 +1183,7 @@ K_SET : S E T;
 K_SHARE : S H A R E;
 K_SHOW : S H O W;
 K_SIGNED : S I G N E D;
+K_SQL : S Q L;
 K_SQL_NO_CACHE : S Q L '_' N O '_' C A C H E;
 K_START : S T A R T;
 K_STATUS : S T A T U S;
@@ -1157,7 +1192,6 @@ K_STRAIGHT_JOIN : S T R A I G H T '_' J O I N;
 K_SLAVE : S L A V E;
 K_TABLE : T A B L E;
 K_TABLES : T A B L E S;
-K_TEMP : T E M P;
 K_TEMPORARY : T E M P O R A R Y;
 K_THEN : T H E N;
 K_TO : T O;
@@ -1201,6 +1235,8 @@ USER_VARIABLE: '@' [a-zA-Z_] [a-zA-Z_0-9]* ;
  
 SESSION_VARIABLE: '@' '@' [$.a-zA-Z_] [$.a-zA-Z_0-9]* ;
  
+CHARSET_NAME : '_' [_a-zA-Z0-9]*;
+ 
 WORD
  : [a-zA-Z_] [a-zA-Z_0-9\u00c0-\u00ff]*
  ;
@@ -1208,7 +1244,7 @@ WORD
 BACKTICK_QUOTED_IDENTIFIER
  : '`' (~'`' | '``')* '`' 
  ;
-    
+
 NUMERIC_LITERAL
  : DIGIT+ ( '.' DIGIT* )? ( E [-+]? DIGIT+ )?
  | '.' DIGIT+ ( E [-+]? DIGIT+ )?

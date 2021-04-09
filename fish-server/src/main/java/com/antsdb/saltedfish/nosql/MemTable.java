@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.FileOffset;
-import com.antsdb.saltedfish.cpp.OutOfHeapMemory;
+import com.antsdb.saltedfish.cpp.OutOfHeapException;
 import com.antsdb.saltedfish.cpp.VariableLengthLongComparator;
 import com.antsdb.saltedfish.nosql.ConcurrentLinkedList.Node;
 import com.antsdb.saltedfish.util.LongLong;
@@ -54,7 +54,6 @@ public final class MemTable extends ScalableData implements LogSpan {
     File ns;
     private SpaceManager spaceman;
     private StorageEngine storage;
-    private volatile int ticket;
     private int nextTabletId = 0;
     
     static class Scanner implements RowIterator {
@@ -66,6 +65,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         boolean eof = false;
         SpaceManager spaceman;
         boolean isAscending = true;
+        long lp = 0;
         
         @Override
         public boolean next() {
@@ -81,7 +81,6 @@ public final class MemTable extends ScalableData implements LogSpan {
             }
             
             // 1 step forward
-            
             if (lastFetched != null) {
                 lastFetched.next();
             }
@@ -92,7 +91,6 @@ public final class MemTable extends ScalableData implements LogSpan {
             }
             
             // find the smallest key in ascending order. or the greatest in descending order 
-            
             long pKey = 0;
             for (ScanResult i:upstreams) {
                 if (i.eof()) {
@@ -103,6 +101,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                     this.pRow = i.getRowPointer();
                     this.lastFetched = i;
                     this.version = i.getVersion();
+                    this.lp = i.getLogPointer();
                     pKey = pKeyI;
                     continue;
                 }
@@ -111,6 +110,7 @@ public final class MemTable extends ScalableData implements LogSpan {
                     this.pRow = i.getRowPointer();
                     this.lastFetched = i;
                     this.version = i.getVersion();
+                    this.lp = i.getLogPointer();
                     pKey = pKeyI;
                 }
                 else if (cmp == 0) {
@@ -120,16 +120,15 @@ public final class MemTable extends ScalableData implements LogSpan {
             }
             
             // eof detection
-            
             if (pKey == 0) {
                 this.eof = true;
                 this.pRow = 0;
                 this.lastFetched = null;
+                this.lp = 0;
                 return false;
             }
             
             // valid value found
-            
             return true;
         }
 
@@ -211,12 +210,102 @@ public final class MemTable extends ScalableData implements LogSpan {
 
         @Override
         public String toString() {
+            return getLocation();
+        }
+
+        @Override
+        public String getLocation() {
             if (this.lastFetched == null) {
                 return "null";
             }
             return this.lastFetched.toString();
         }
+
+        @Override
+        public long getLogPointer() {
+            return this.lp;
+        }
+    }
+    
+    static class VersionFilter extends ScanResult {
+        long version;
+        ScanResult upstream;
         
+        VersionFilter(long version, ScanResult upstream) {
+            this.version = version;
+            this.upstream = upstream;
+        }
+
+        @Override
+        public boolean next() {
+            for (;;) {
+                boolean result = this.upstream.next();
+                if (!result) return false;
+                if (this.upstream.getVersion() <= this.version) {
+                    return true;
+                }
+            }
+        }
+
+        @Override
+        public boolean eof() {
+            return this.upstream.eof();
+        }
+
+        @Override
+        public void close() {
+            this.upstream.close();
+        }
+
+        @Override
+        public long getVersion() {
+            return this.upstream.getVersion();
+        }
+
+        @Override
+        public long getKeyPointer() {
+            return this.upstream.getKeyPointer();
+        }
+
+        @Override
+        public long getIndexRowKeyPointer() {
+            return this.upstream.getIndexRowKeyPointer();
+        }
+
+        @Override
+        public long getRowPointer() {
+            return this.upstream.getRowPointer();
+        }
+
+        @Override
+        public byte getMisc() {
+            return this.upstream.getMisc();
+        }
+
+        @Override
+        public void rewind() {
+            this.upstream.rewind();
+        }
+
+        @Override
+        public long getLogPointer() {
+            return this.upstream.getLogPointer();
+        }
+
+        @Override
+        public long getIndexSuffix() {
+            return this.upstream.getIndexSuffix();
+        }
+
+        @Override
+        public Row getRow() {
+            return this.upstream.getRow();
+        }
+
+        @Override
+        public String getLocation() {
+            return this.upstream.getLocation();
+        }
     }
     
     public MemTable(Humpback owner, File ns, int tableId, int tabletSize) {
@@ -256,9 +345,13 @@ public final class MemTable extends ScalableData implements LogSpan {
      * @param key
      * @return space pointer to the row. 0 means not found
      */
-    public long get(long trxid, long version, long pKey) {
+    public long get(long trxid, long version, long pKey, long options) {
+        return get(trxid, version, pKey, options, null);
+    }
+    
+    public long get(long trxid, long version, long pKey, long options, GetInfo call) {
         for (MemTablet ii:this.tablets) {
-            long pRow = ii.get(trxid, version, pKey, 0);
+            long pRow = ii.get(trxid, version, pKey, 0, options, call);
             if (pRow != 0) {
                 return Row.isTombStone(pRow) ? 0 : pRow;
             }
@@ -267,11 +360,11 @@ public final class MemTable extends ScalableData implements LogSpan {
         if (mtable == null) {
             return 0;
         }
-        long pResult = mtable.get(pKey);
+        long pResult = mtable.get(pKey, options, call);
         return pResult;
     }
     
-    public Row getRow(long trxid, long version, long pKey) {
+    public Row getRow(long trxid, long version, long pKey, long options) {
         RowKeeper keeper = new RowKeeper();
         for (MemTablet ii:this.tablets) {
             int result = ii.getRow(keeper, trxid, version, pKey);
@@ -287,7 +380,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         if (mtable == null) {
             return null;
         }
-        long pResult = mtable.get(pKey);
+        long pResult = mtable.get(pKey, options, null);
         if (Row.isTombStone(pResult)) {
             return null;
         }
@@ -295,8 +388,12 @@ public final class MemTable extends ScalableData implements LogSpan {
     }
     
     public long getIndex(long trxid, long version, long pKey) {
+        return getIndex(trxid, version, pKey, 0, null);
+    }
+    
+    public long getIndex(long trxid, long version, long pKey, long options, GetInfo call) {
         for (MemTablet ii:this.tablets) {
-            long pRowKey = ii.getIndex(trxid, version, pKey);
+            long pRowKey = ii.getIndex(trxid, version, pKey, options, call);
             if (pRowKey != 0) {
                 return Row.isTombStone(pRowKey) ? 0 : pRowKey;
             }
@@ -305,7 +402,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         if (mtable == null) {
             return 0;
         }
-        long pResult = mtable.getIndex(pKey);
+        long pResult = mtable.getIndex(pKey, options, call);
         return pResult;
     }
     
@@ -321,7 +418,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         scanner.isAscending = true;
         scanner.spaceman = this.spaceman;
         for (MemTablet i:this.tablets) {
-            MemTablet.Scanner upstream;
+            MemTablet.DeltaScanner upstream;
             upstream = i.scanDelta(spStart, spEnd);
             if (upstream != null) {
                 scanner.upstreams.add(upstream);
@@ -335,7 +432,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         scanner.isAscending = ScanOptions.isAscending(options);
         scanner.spaceman = this.spaceman;
         for (MemTablet i:this.tablets) {
-            MemTablet.Scanner upstream;
+            MemTablet.VersionScanner upstream;
             upstream = i.scan(trxid, version, pKeyStart, pKeyEnd, options);
             if (upstream != null) {
                 scanner.upstreams.add(upstream);
@@ -345,7 +442,7 @@ public final class MemTable extends ScalableData implements LogSpan {
         if (mtable != null) {
             ScanResult upstream = mtable.scan(pKeyStart, pKeyEnd, options);
             if (upstream != null) {
-                scanner.upstreams.add(upstream);
+                scanner.upstreams.add(new VersionFilter(version, upstream));
             }
         }
         return scanner;
@@ -408,8 +505,10 @@ public final class MemTable extends ScalableData implements LogSpan {
      */
     public void open() throws IOException {
         // find the matching files
-        
         List<File> files = new ArrayList<>();
+        if(ns ==null || ns.listFiles()== null) {
+            return;
+        }
         for (File i:ns.listFiles()) {
             int fileTableId = MemTablet.getTableId(i);
             if (fileTableId != this.tableId) {
@@ -419,14 +518,15 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
         
         // must ordered by tablet id
-        
         Collections.sort(files);
         Collections.reverse(files);
         
         // load tablets
-
         for (File i:files) {
             if (!i.getName().endsWith(".tbl")) {
+                continue;
+            }
+            if (i.length() == 0) {
                 continue;
             }
             MemTablet tablet = new MemTablet(i);
@@ -449,17 +549,15 @@ public final class MemTable extends ScalableData implements LogSpan {
         }
         
         // set next tablet id
-        
         if (this.tablets.size() != 0) {
             this.nextTabletId = this.tablets.getFirst().getTabletId() + 1;
         }
         
         // done
-        
         this.isClosed = false;
     }
 
-    public HumpbackError insertIndex(
+    public long insertIndex(
             HumpbackSession hsession, 
             long trxid, 
             long pIndexKey, 
@@ -469,163 +567,141 @@ public final class MemTable extends ScalableData implements LogSpan {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
+                grow(-1);
                 continue;
             }
             try {
                 return current.insertIndex(hsession, pIndexKey, trxid, pRowKey, this.tablets, misc, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError recoverIndexInsert(
-            long trxid, 
-            long pIndexKey, 
-            long pRowKey, 
-            long sp, 
-            byte misc, 
-            int timeout) {
+    public long insert(HumpbackSession hsession, VaporizingRow row, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
-                continue;
-            }
-            try {
-                return current.recoverIndexInsert(pIndexKey, trxid, pRowKey, this.tablets, sp, misc, timeout);
-            }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
-            }
-        }
-    }
-
-    public HumpbackError insert(HumpbackSession hsession, VaporizingRow row, int timeout) {
-        for (;;) {
-            MemTablet current = this.tablet;
-            if (current == null) {
-                grow(this.ticket);
+                grow(-1);
                 continue;
             }
             try {
                 return current.insert(hsession, row, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError update(HumpbackSession hsession, VaporizingRow row, long oldVersion, int timeout) {
+    public long update(HumpbackSession hsession, VaporizingRow row, long oldVersion, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
+                grow(-1);
                 continue;
             }
             try {
                 return current.update(hsession, row, oldVersion, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError delete(HumpbackSession hsession, long trxid, long pKey, int timeout) {
+    public long delete(HumpbackSession hsession, long trxid, long pKey, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
+                grow(-1);
                 continue;
             }
             try {
                 return current.delete(hsession, pKey, trxid, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError deleteRow(HumpbackSession hsession, long trxid, long pRow, int timeout) {
+    public long deleteRow(HumpbackSession hsession, long trxid, long pRow, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
+                grow(-1);
                 continue;
             }
             try {
                 return current.deleteRow(hsession, pRow, trxid, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError recoverDelete(long trxid, long pKey, long sprow) {
+    public long put(HumpbackSession hsession, VaporizingRow row, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
-                continue;
-            }
-            try {
-                return current.recoverDelete(pKey, trxid, this.tablets, sprow);
-            }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
-            }
-        }
-    }
-    
-    public HumpbackError put(HumpbackSession hsession, VaporizingRow row, int timeout) {
-        for (;;) {
-            MemTablet current = this.tablet;
-            if (current == null) {
-                grow(this.ticket);
+                grow(-1);
                 continue;
             }
             try {
                 return current.put(hsession, row, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError recoverPut(long trxid, long pKey, long spRow) {
+    public long recover(long lpLogEntry) {
         for (;;) {
             MemTablet current = this.tablet;
             if (current == null) {
-                grow(this.ticket);
+                grow(-1);
+                continue;
+            }
+            try {
+                return current.recover(lpLogEntry);
+            }
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
+            }
+        }
+    }
+    
+    long recoverPut(long trxid, long pKey, long spRow) {
+        for (;;) {
+            MemTablet current = this.tablet;
+            if (current == null) {
+                grow(-1);
                 continue;
             }
             try {
                 return current.recoverPut(pKey, trxid, spRow, this.tablets);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
     
-    public HumpbackError lock(long trxid, long pKey, int timeout) {
-        if (this.tablet == null) {
-            grow(this.ticket);
-        }
+    public long lock(long trxid, long pKey, int timeout) {
         for (;;) {
             MemTablet current = this.tablet;
+            if (this.tablet == null) {
+                grow(-1);
+            }
             try {
                 return current.lock(trxid, pKey, this.tablets, timeout);
             }
-            catch (OutOfHeapMemory x) {
-                grow(this.ticket);
+            catch (OutOfHeapException x) {
+                grow(current.getTabletId());
             }
         }
     }
@@ -659,13 +735,13 @@ public final class MemTable extends ScalableData implements LogSpan {
     }
 
     @Override
-    protected void extend(int requestTicket, int nextTicket) {
+    protected void extend() {
         if (!this.isMutable) {
             throw new IllegalArgumentException();
         }
+        int tabletId = this.nextTabletId++;
+        MemTablet newone = null;
         try {
-            int tabletId = this.nextTabletId++;
-            MemTablet newone;
             int filesize = (this.tablet == null) ? INITIAL_FILE_SIZE : this.tabletSize;
             newone = new MemTablet(owner, this.ns, this.tableId, tabletId, filesize);
             newone.setMinkeTable(getStorageTable());
@@ -673,22 +749,41 @@ public final class MemTable extends ScalableData implements LogSpan {
             newone.setSpaceManager(this.owner.getSpaceManager());
             newone.setTransactionManager(this.owner.getTrxMan());
             newone.open();
-            this.tablet = newone;
-            this.tablets.addFirst(newone);
-            this.ticket = nextTicket;
         }
         catch (IOException x) {
+            // clean up the file if we have problems opening it. this could happen during shutdown
+            cleanup(newone);
             throw new HumpbackException(x);
         }
+        this.tablet = newone;
+        this.tablets.addFirst(newone);
     }
     
-    public void render(long endTrxId) {
+    private void cleanup(MemTablet tablet) {
+        if (tablet == null) {
+            return;
+        }
+        try {
+            tablet.drop();
+        }
+        catch (Exception ignored) {}
+    }
+
+    /**
+     * render tablets 
+     * 
+     * @param lastClosedTrxId start id of active transactions 
+     * @return number of tablets being rendered
+     */
+    public int render(long lastClosedTrxId) {
+        int result = 0;
         for (MemTablet tablet:getTabletsReadOnly()) {
             if (!(tablet instanceof MemTablet)) {
                 continue;
             }
-            ((MemTablet)tablet).render(endTrxId);
+            if (((MemTablet)tablet).render(lastClosedTrxId)) result++;
         }
+        return result;
     }
 
     /**
@@ -877,6 +972,9 @@ public final class MemTable extends ScalableData implements LogSpan {
             getTablets().remove(i);
             this.owner.gc.free(i);
             _log.debug("tablet {} is freed", i);
+        }
+        if (getTablets().isEmpty()) {
+            super.resetTicket();
         }
     }
 

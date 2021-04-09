@@ -25,6 +25,7 @@ import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_add_constraint_pkCont
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_add_indexContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_add_primary_keyContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_dropContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_drop_constraintContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_drop_indexContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_modifyContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Alter_table_optionsContext;
@@ -42,12 +43,14 @@ import com.antsdb.saltedfish.sql.vdm.CreateForeignKey;
 import com.antsdb.saltedfish.sql.vdm.CreateIndex;
 import com.antsdb.saltedfish.sql.vdm.CreatePrimaryKey;
 import com.antsdb.saltedfish.sql.vdm.DeleteColumn;
+import com.antsdb.saltedfish.sql.vdm.DropConstraint;
 import com.antsdb.saltedfish.sql.vdm.DropIndex;
 import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ModifyColumn;
 import com.antsdb.saltedfish.sql.vdm.MysqlUpgradeIndexToPrimaryKey;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.sql.vdm.PostSchemaChange;
 import com.antsdb.saltedfish.sql.vdm.RunScript;
 import com.antsdb.saltedfish.util.Pair;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -55,6 +58,12 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtContext> {
     static Logger _log = UberUtil.getThisLogger();
     
+    @Override
+    public boolean isTemporaryTable(GeneratorContext ctx, Alter_table_stmtContext rule) {
+        ObjectName name = TableName.parse(ctx, rule.table_name_());
+        return isTemporaryTable(ctx, name);
+    }
+
     @Override
     public Instruction gen(GeneratorContext ctx, Alter_table_stmtContext rule)
     throws OrcaException {
@@ -91,6 +100,9 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
                 else if (it.alter_table_drop() != null) {
                     flow.add(dropColumn(ctx, it.alter_table_drop(), tableName));
                 }
+                else if (it.alter_table_drop_constraint() != null) {
+                    flow.add(dropConstraint(ctx, it.alter_table_drop_constraint(), tableName));
+                }
                 else if (it.alter_table_disable_keys() != null) {
                     _log.warn("ALTER TABLE DISABLE KEYS has not been implemented");
                 }
@@ -108,10 +120,17 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
                 }
             }
         );
-                
-                
         flow.add(new SyncTableSequence(tableName, null));
+        flow.add(new Commit());
+        flow.add(new PostSchemaChange(tableName));
         return flow;
+    }
+
+    private Instruction 
+    dropConstraint(GeneratorContext ctx, Alter_table_drop_constraintContext rule, ObjectName tableName) {
+        String indexName = Utils.getIdentifier(rule.identifier());
+        Instruction result = new DropConstraint(tableName, indexName);
+        return result;
     }
 
     private Instruction dropIndex(GeneratorContext ctx, Alter_table_drop_indexContext rule, ObjectName tableName) {
@@ -241,7 +260,16 @@ public class Alter_table_stmtGenerator extends DdlGenerator<Alter_table_stmtCont
         List<String> parentColumns = Utils.getColumns(rule.parent_columns().columns());
         String onDelete = getOnAction(true, rule.cascade_option());
         String onUpdate = getOnAction(false, rule.cascade_option());
-        return new CreateForeignKey(tableName, name, parentTable, childColumns, parentColumns, onDelete, onUpdate);
+        String indexName = rule.index_name()!=null ? Utils.getIdentifier(rule.index_name().identifier()) : null;
+        return new CreateForeignKey(
+                tableName, 
+                name, 
+                indexName, 
+                parentTable, 
+                childColumns, 
+                parentColumns, 
+                onDelete, 
+                onUpdate);
     }
 
     static private String getAction(Cascade_optionContext rule) {

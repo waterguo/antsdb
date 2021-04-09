@@ -20,14 +20,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author wgu0
  */
 public class OffsetMemory {
-	long address;
-	long pEnd;
-	AtomicLong pFreeBytes;
-	
-	@Override
-	protected void finalize() throws Throwable {
-		// TODO Auto-generated method stub
-		super.finalize();
-	}
-	
+    long address;
+    long pEnd;
+    AtomicLong pFreeBytes;
+    
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+    }
+    
 }

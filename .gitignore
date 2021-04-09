@@ -1,6 +1,8 @@
 .idea
 /target/
 /target
+*/target
+*/target/*
 saltedfish.iml
 sonar-project.properties
 sonar.dump
@@ -15,3 +17,8 @@ db
 /hbase-db/
 /mysql-cluster-node1
 /mysql-cluster-node2
+<<<<<<< HEAD
+/fish-server/runtime
+=======
+fish-spark
+>>>>>>> master

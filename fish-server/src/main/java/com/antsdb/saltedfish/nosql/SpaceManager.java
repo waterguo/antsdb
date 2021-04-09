@@ -127,15 +127,15 @@ public final class SpaceManager {
         this.addresses[space.id] = space.addr;
     }
 
-    public final long toMemory(long spRow) {
-        int spaceId = (int)(spRow >> 32);
-        int offset = (int)spRow & 0x7fffffff;
+    public final long toMemory(long lp) {
+        int spaceId = (int)(lp >> 32);
+        int offset = (int)lp & 0x7fffffff;
         Space space = this.spaces[spaceId];
         if (space == null) {
             throw new IllegalArgumentException("invalid space id: " + spaceId);
         }
         if ((offset < 0) || (offset >= space.getCapacity())) {
-            throw new IllegalArgumentException(hex(spRow));
+            throw new IllegalArgumentException(hex(lp));
         }
         long base = addresses[spaceId];
         long address = base + offset;
@@ -163,7 +163,11 @@ public final class SpaceManager {
         return result;
     }
     
+    // TODO fix this when it goes over more than one file
     public final long plus(long sp, long length, int bytes) {
+        if (length == Long.MAX_VALUE) {
+            return ((long)Integer.MAX_VALUE) << 32 | Integer.MAX_VALUE;
+        }
         int spaceId = (int)(sp >> 32);
         int offset = (int)sp & 0x7fffffff;
         Space space = this.spaces[spaceId];
@@ -271,6 +275,9 @@ public final class SpaceManager {
     }
 
     public final long getAllocationPointer() {
+        if (this.top == -1) {
+            return 0;
+        }
         Space space = this.spaces[this.top];
         long spEnd = makeSpacePointer(space.id, space.allocPointer.get());
         return spEnd;

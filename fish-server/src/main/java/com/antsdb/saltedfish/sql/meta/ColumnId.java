@@ -23,7 +23,9 @@ public enum ColumnId {
     systable_htable_id(6),
     systable_charset(7),
     systable_engine(8),
-    systable_end_of_columns(9),
+    systable_sql(9),
+    systable_comment(10),
+    systable_end_of_columns(11),
     /* syscolumn */
     syscolumn_id(1),
     syscolumn_column_id(2),

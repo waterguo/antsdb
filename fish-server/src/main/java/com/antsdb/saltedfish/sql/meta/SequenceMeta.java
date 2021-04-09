@@ -25,7 +25,7 @@ import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
 public class SequenceMeta {
     SlowRow row;
-    AtomicLong last;
+    AtomicLong next;
     
     public SequenceMeta(ObjectName name, int id) {
         this.row = new SlowRow(getKey(name));
@@ -40,7 +40,7 @@ public class SequenceMeta {
     public SequenceMeta(SlowRow row) {
         super();
         this.row = row;
-        this.last = new AtomicLong(getLastNumber());
+        this.next = new AtomicLong(getNextNumber());
     }
 
     public byte[] getKey() {
@@ -77,18 +77,18 @@ public class SequenceMeta {
         return this;
     }
     
-    public long getLastNumber() {
+    public long getNextNumber() {
         return (Long)row.get(ColumnId.syssequence_last_number.getId());
     }
     
-    public SequenceMeta setLastNumber(long n) {
+    public SequenceMeta setNextNumber(long n) {
         row.set(ColumnId.syssequence_last_number.getId(), n);
         return this;
     }
 
     public long getSeed() {
-    	Long value = (Long)row.get(ColumnId.syssequence_seed.getId());
-    	return (value != null) ? value : 0;
+        Long value = (Long)row.get(ColumnId.syssequence_seed.getId());
+        return (value != null) ? value : 0;
     }
     
     public SequenceMeta setSeed(long value) {
@@ -122,32 +122,35 @@ public class SequenceMeta {
     }
 
     public long next(HumpbackSession hsession, GTable table, TrxMan trxman, int increment) {
-        long result = this.last.addAndGet(increment);
-        if (result > getLastNumber()) {
+        for (;;) {
+            long result = this.next.getAndAdd(increment);
+            if (result < getNextNumber()) {
+                return result;
+            }
             alloc(hsession, table, trxman, result);
         }
-        return result;
     }
     
     private synchronized void alloc(HumpbackSession hsession, GTable table, TrxMan trxman, long target) {
-        long last = getLastNumber();
-        if (target <= last) {
+        long last = getNextNumber();
+        if (target < last) {
             return;
         }
-        setLastNumber(last + 1000);
-        long version = trxman.getNewVersion();
-        HumpbackError error = table.update(hsession, version, this.row, 0);
-        if (error != HumpbackError.SUCCESS) {
+        this.next.set(last);
+        setNextNumber(last + 1000);
+        long version = TrxMan.getNewVersion();
+        long error = table.update(hsession, version, this.row, 0);
+        if (!HumpbackError.isSuccess(error)) {
             throw new IllegalArgumentException();
         }
         this.row.setTrxTimestamp(version);
     }
     
     public synchronized void closeAndUpdate(HumpbackSession hsession, GTable table, TrxMan trxman) {
-        AtomicLong temp = this.last;
-        this.last = null;
-        setLastNumber(temp.get() - 1);
-        table.update(hsession, trxman.getNewVersion(), this.row, 0);
+        AtomicLong temp = this.next;
+        this.next = null;
+        setNextNumber(temp.get());
+        table.update(hsession, TrxMan.getNewVersion(), this.row, 0);
     }
 
     public SlowRow getRow() {

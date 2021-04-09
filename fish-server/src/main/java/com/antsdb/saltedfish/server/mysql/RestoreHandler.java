@@ -48,7 +48,7 @@ public class RestoreHandler {
         this.table = Checks.tableExist(this.session, name);
         this.gtable = this.session.getOrca().getHumpback().getTable(table.getId());
         this.heap = new FlexibleHeap();
-        this.trxid = this.session.getOrca().getHumpback().getTrxMan().getNewTrxId();
+        this.trxid = TrxMan.getNewTrxId();
     }
 
     public void restore(PacketFishRestore packet) {
@@ -72,8 +72,7 @@ public class RestoreHandler {
             this.heap = null;
         }
         if (this.trxid != 0) {
-            TrxMan trxman = this.session.getOrca().getHumpback().getTrxMan();
-            this.session.getOrca().getHumpback().getTrxMan().commit(this.trxid, trxman.getNewVersion());
+            this.session.getOrca().getHumpback().getTrxMan().commit(this.trxid, TrxMan.getNewVersion());
             this.trxid = 0;
         }
     }

@@ -15,13 +15,18 @@ package com.antsdb.saltedfish.storage;
 
 import java.io.IOException;
 import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
 
@@ -33,63 +38,67 @@ import com.antsdb.saltedfish.sql.Orca;
  */
 public class CheckPoint {
     final static byte[] COLUMN_FAMILY = Bytes.toBytes("d");
-    final static byte[] KEY = Bytes.toBytes(0);
     final static byte[] TRUNCATE_KEY = Bytes.toBytes(1);
     
     /** space pointer that has been synchronized */
     volatile long currentSp;
-    
-    /** should be same as serverId from Humpback. used to prevent accidental sync*/
     long serverId;
-    
     private boolean isMutable;
-    private TableName tn;
     private long createTimestamp;
     private long updateTimestamp;
     private String createOrcaVersion;
     private String updateorcaVersion;
     private boolean isActive;
     
-    CheckPoint(TableName tn, boolean isMutable) throws IOException {
+    CheckPoint(boolean isMutable) throws IOException {
         this.isMutable = isMutable;
-        this.tn = tn;
     }
     
     public long getCurrentSp() {
         return currentSp;
     }
 
-    public void updateLogPointer(Connection conn, long lp) throws IOException {
-        if (!this.isMutable) {
-            throw new OrcaHBaseException("failed to update since it is realy only mode");
+    public static Map<Long, CheckPoint> loadAll(Connection conn, String ns) throws Exception {
+        // Get table object
+        Table table = conn.getTable(TableName.valueOf(ns, HBaseStorageService.TABLE_SYNC_PARAM));
+        
+        // scan
+        Map<Long, CheckPoint> result = new TreeMap<>();
+        Scan scan = new Scan();
+        ResultScanner scanner = table.getScanner(scan);
+        for (;;) {
+            Result r = scanner.next();
+            if (r == null) break;
+            if (Arrays.equals(r.getRow(), Bytes.toBytes(0))) {
+                // this is the anchor row
+                continue;
+            }
+            CheckPoint i = new CheckPoint(true);
+            i.read(r);
+            result.put(i.serverId, i);
         }
-        this.currentSp = lp;
-        updateHBase(conn);
+        return result;
     }
     
-    public long getServerId() {
-        return serverId;
+    private void read(Result result) {
+        this.currentSp = Bytes.toLong(get(result, "currentSp"));
+        this.createTimestamp = Optional.ofNullable(get(result, "createTimestamp")).map(Bytes::toLong).orElse(0l);
+        this.updateTimestamp = Optional.ofNullable(get(result, "updateTimestamp")).map(Bytes::toLong).orElse(0l);
+        this.createOrcaVersion = Bytes.toString(get(result, "createOrcaVersion"));
+        this.updateorcaVersion = Bytes.toString(get(result, "updateOrcaVersion"));
+        this.isActive = Optional.ofNullable(get(result, "isActive")).map(Bytes::toBoolean).orElse(Boolean.FALSE);
     }
 
-    public void setServerId(long value) {
-        this.serverId = value;
-    }
-    
-    public void readFromHBase(Connection conn) throws IOException {
+    public void load(Connection conn, String ns, long serverId) throws IOException {
         // Get table object
-        Table table = conn.getTable(this.tn);
+        Table table = conn.getTable(TableName.valueOf(ns, HBaseStorageService.TABLE_SYNC_PARAM));
         
         // Query row
-        Get get = new Get(KEY);
+        this.serverId = serverId;
+        Get get = new Get(Bytes.toBytes(serverId));
         Result result = table.get(get);
         if (!result.isEmpty()) {
-            this.currentSp = Bytes.toLong(get(result, "currentSp"));
-            this.serverId = Bytes.toLong(get(result, "serverId"));
-            this.createTimestamp = Optional.ofNullable(get(result, "createTimestamp")).map(Bytes::toLong).orElse(0l);
-            this.updateTimestamp = Optional.ofNullable(get(result, "updateTimestamp")).map(Bytes::toLong).orElse(0l);
-            this.createOrcaVersion = Bytes.toString(get(result, "createOrcaVersion"));
-            this.updateorcaVersion = Bytes.toString(get(result, "updateOrcaVersion"));
-            this.isActive = Optional.ofNullable(get(result, "isActive")).map(Bytes::toBoolean).orElse(Boolean.FALSE);
+            read(result);
         }
     }
     
@@ -97,17 +106,16 @@ public class CheckPoint {
      * save changes to hbase
      * @throws IOException 
      */
-    public void updateHBase(Connection conn) throws IOException {
+    public void save(Connection conn, String ns) throws IOException {
         if (!this.isMutable) {
             throw new OrcaHBaseException("failed to update since it is realy only mode");
         }
         // Get table object
-        Table table = conn.getTable(tn);
+        Table table = conn.getTable(TableName.valueOf(ns, HBaseStorageService.TABLE_SYNC_PARAM));
         
         // Generate put data
-        Put put = new Put(KEY);
+        Put put = new Put(Bytes.toBytes(this.serverId));
         set(put, "currentSp", this.currentSp);
-        set(put, "serverId", this.serverId);
         if (this.createTimestamp == 0l) {
             this.createTimestamp = System.currentTimeMillis();
         }
@@ -151,7 +159,7 @@ public class CheckPoint {
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();
-        buf.append(String.format("sever id: %d", getServerId()));
+        buf.append(String.format("sever id: %d", this.serverId));
         buf.append(String.format("\nlog pointer: %x", getCurrentSp()));
         buf.append(String.format("\ncreate orca version: %s", this.createOrcaVersion));
         buf.append(String.format("\nupdate orca version: %s", this.updateorcaVersion));

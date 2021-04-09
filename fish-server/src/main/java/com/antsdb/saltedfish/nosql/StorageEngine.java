@@ -14,7 +14,7 @@
 package com.antsdb.saltedfish.nosql;
 
 import java.io.File;
-import java.io.IOException;
+import java.util.List;
 
 /**
  * 
@@ -40,6 +40,7 @@ public interface StorageEngine extends Synchronizable  {
      * gc garbages that is older than the specified time stamp
      * @param timestamp
      */
+    
     public void gc(long timestamp);
     /**
      * determines if we need to recover transaction at boot time. required by real-time replication
@@ -47,5 +48,33 @@ public interface StorageEngine extends Synchronizable  {
      * @return
      */
     public boolean isTransactionRecoveryRequired();
-    public void close() throws IOException;
+    
+    public void close() throws Exception;
+
+    /**
+     * called when antsdb trying to create a new column on a table
+     * 
+     * @param tableId
+     * @param columnId
+     * @param name not null
+     * @param type see class Value
+     */
+    default public void createColumn(int tableId, int columnId, String name, int type) {
+    }
+    
+    /**
+     * called when antsdb trying to delete a column on a table
+     * @param tableId
+     * @param columnId
+     * @param columnName not null
+     */
+    default public void deleteColumn(int tableId, int columnId, String columnName) {
+    }
+    
+    /**
+     * called after CREATE TABLE or ALTER TABLE statements
+     * @param table not null
+     * @param columns not null
+     */
+    default public void postSchemaChange(SysMetaRow table, List<HColumnRow> columns) {};
 }

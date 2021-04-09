@@ -39,7 +39,7 @@ public class OpEqualNull extends BinaryOperator {
         long xAddr = this.left.eval(ctx, heap, params, pRecord);
         long yAddr = this.right.eval(ctx, heap, params, pRecord);
         if ((xAddr == 0) && (yAddr == 0)) {
-        	return FishBool.allocSet(heap, true);
+            return FishBool.allocSet(heap, true);
         }
         boolean result = AutoCaster.equals(heap, xAddr, yAddr);
         return FishBool.allocSet(heap, result);
@@ -50,8 +50,8 @@ public class OpEqualNull extends BinaryOperator {
         return DataType.bool();
     }
 
-	@Override
-	public String toString() {
-		return this.left.toString() + " == " + this.right.toString();
-	}
+    @Override
+    public String toString() {
+        return this.left.toString() + " == " + this.right.toString();
+    }
 }

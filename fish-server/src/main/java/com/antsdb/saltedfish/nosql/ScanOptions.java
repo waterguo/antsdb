@@ -17,11 +17,12 @@ package com.antsdb.saltedfish.nosql;
  * 
  * @author *-xguo0<@
  */
-public class ScanOptions {
+public final class ScanOptions {
     public static final long EXCLUDE_START = 0x1;
     public static final long EXCLUDE_END = 0x2;
     public static final long DESCENDING = 0x4;
     public static final long NO_CACHE = 0x8;
+    public static final long SHOW_DELETE_MARK = 0x10;
 
     public static long excludeStart(long options) {
         return options | EXCLUDE_START;
@@ -39,6 +40,10 @@ public class ScanOptions {
         return options | NO_CACHE;
     }
 
+    public static boolean hasNoCache(long options) {
+        return (options & NO_CACHE) != 0;
+    }
+    
     public static boolean has(long value, long flag) {
         return (value & flag) != 0;
     }
@@ -53,5 +58,9 @@ public class ScanOptions {
     
     public static boolean isAscending(long value) {
         return !has(value, DESCENDING);
+    }
+    
+    public static boolean isShowDeleteMarkOn(long value) {
+        return (value & SHOW_DELETE_MARK) != 0;
     }
 }

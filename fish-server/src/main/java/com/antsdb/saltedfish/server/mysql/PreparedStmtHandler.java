@@ -24,6 +24,7 @@ import com.antsdb.mysql.network.PacketPrepare;
 import com.antsdb.saltedfish.charset.Decoder;
 import com.antsdb.saltedfish.cpp.FlexibleHeap;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.server.mysql.packet.StmtClosePacket;
 import com.antsdb.saltedfish.server.mysql.packet.StmtPreparePacket;
@@ -33,8 +34,10 @@ import com.antsdb.saltedfish.server.mysql.util.Fields;
 import com.antsdb.saltedfish.server.mysql.util.MysqlErrorCode;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.PreparedStatement;
+import com.antsdb.saltedfish.sql.SqlLogger;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
+import com.antsdb.saltedfish.util.AntiCrashCrimeScene;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -80,25 +83,22 @@ public class PreparedStmtHandler {
         }
         
         // read null bitmap
-
         int nullCount = (pstmt.getParameterCount() + 7) / 8;
         byte[] bytes = new byte[nullCount];
         in.get(bytes);
         BitSet nullBits = BitSet.valueOf(bytes);
 
         // type information
-
         int sentTypes = in.get();
         if (sentTypes != 0) {
-            int[] types = new int[pstmt.getParameterCount()];
+            byte[] types = new byte[pstmt.getParameterCount()];
             for (int i = 0; i < pstmt.getParameterCount(); i++) {
-                types[i] = BufferUtils.readInt(in);
+                types[i] = (byte)BufferUtils.readInt(in);
             }
             pstmt.types = types;
         }
 
         // bind values
-
         if (pstmt.types == null) {
             // type information is supposed to be sent in the first execution.
         }
@@ -117,33 +117,48 @@ public class PreparedStmtHandler {
         }
     }
 
+    public String getSql(int statementId) {
+        MysqlPreparedStatement pstmt = this.mysession.getPrepared().get(statementId);
+        return (pstmt == null) ? null : pstmt.getSql().toString();
+    }
+    
     public void execute(ByteBuffer packet) {
         int statementId = (int) BufferUtils.readUB4(packet);
         MysqlPreparedStatement pstmt = this.mysession.getPrepared().get(statementId);
         if (pstmt == null) {
             throw new ErrorMessage(MysqlErrorCode.ER_ERROR_WHEN_EXECUTING_COMMAND, "Unknown prepared statement ID");
         }
+        AntiCrashCrimeScene.log(pstmt.script.getSql(), packet);
         try (Heap heap = new FlexibleHeap()) {
             VaporizingRow row = pstmt.createRow(heap);
+            packet.mark();
             setParameters(heap, pstmt, packet, row);
             pstmt.preExecute(row);
-            execute(pstmt, row);
+            packet.reset();
+            execute(pstmt, row, pstmt.types, packet);
         }
     }
     
-    private void execute(MysqlPreparedStatement pstmt, VaporizingRow row) {
+    private void execute(MysqlPreparedStatement pstmt, VaporizingRow row, byte[] types, ByteBuffer input) {
         boolean success = false;
         try {
             // Using column definition to parse detail info in packet
             // packet.readFull(pstmt);
             // packet.values hold BindValue, should we use it or convert it to Parameter?
+            HumpbackSession hsession = this.mysession.session.getHSession();
+            long startLp = hsession.getLastLp();
             pstmt.run(this.mysession.session, row, (result)-> {
+                if (hsession.getLastLp() != startLp) {
+                    SqlLogger logger = this.mysession.session.getOrca().getSqlLogger();
+                    logger.logWrite(mysession.session, "execute", result, pstmt.script.getSql(), types, input);
+                }
                 writeResult(pstmt, result);
             });
             success = true;
         }
         finally {
             if (!success) {
+                _log.debug("sql: {}", pstmt.script.getSql().toString());
                 _log.debug("statement parameters:\n{}", row);
             }
             pstmt.clear();
@@ -153,18 +168,31 @@ public class PreparedStmtHandler {
     private void writeResult(MysqlPreparedStatement pstmt, Object result) {
         if (result instanceof Cursor) {
             Cursor c = (Cursor)result;
-            if (pstmt.meta == null) {
-                ChannelWriterMemory buf = new ChannelWriterMemory();
-                Helper.writeCursorMeta(buf,
-                                       this.mysession.session, 
-                                       this.mysession.encoder, 
-                                       (Cursor)result);
-                pstmt.meta = (ByteBuffer)buf.getWrapped();
-                pstmt.packetSequence = this.mysession.encoder.packetSequence;
+            try {
+                if (pstmt.meta == null) {
+                    ChannelWriterMemory buf = null;
+                    try {
+                        buf = new ChannelWriterMemory();
+                        Helper.writeCursorMeta(buf,
+                                               this.mysession.session, 
+                                               this.mysession.encoder, 
+                                               (Cursor)result);
+                        pstmt.meta = (ByteBuffer)buf.getWrapped();
+                        pstmt.packetSequence = this.mysession.encoder.packetSequence;
+                    }
+                    finally {
+                        if (pstmt.meta == null && buf != null) {
+                            buf.close();
+                        }
+                    }
+                }
+                pstmt.meta.flip();
+                this.mysession.encoder.packetSequence = pstmt.packetSequence;
+                Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
             }
-            pstmt.meta.flip();
-            this.mysession.encoder.packetSequence = pstmt.packetSequence;
-            Helper.writeCursor(mysession.out, mysession, c, pstmt.meta, false);
+            finally {
+                c.close();
+            }
         }
         else {
             Helper.writeResonpse(mysession.out, mysession, result, false);

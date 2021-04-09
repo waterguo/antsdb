@@ -15,43 +15,48 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.RecyclableHeap;
 import com.antsdb.saltedfish.sql.DataType;
-import com.antsdb.saltedfish.util.TypeSafeUtil;
+import com.antsdb.saltedfish.sql.GeneratorContext;
 
-public class FuncMax extends Function {
-	int variableId;
-	
-    private static class Data {
-    	Object max;
-    }
+public class FuncMax extends AggregationFunction {
+    private int varidValue;
     
-    public FuncMax(int variableId) {
-    	this.variableId = variableId;
+    public FuncMax(GeneratorContext ctx) {
+        this.varidValue = ctx.allocVariable();
     }
     
     @Override
-    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	Data data = (Data)ctx.getVariable(this.variableId);
-    	if (data == null) {
-    		data = new Data();
-    		ctx.setVariable(variableId, data);
-    	}
-        if (Record.isGroupEnd(pRecord)) {
-            data.max = null;
-            return 0;
-        }
-        long addrVal = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-        Object val = FishObject.get(heap, addrVal);
-        if (data.max == null) {
-            data.max = val;
-        }
-        else {
-            int result = TypeSafeUtil.compare(data.max, val);
-            if (result < 0) {
-                data.max = val;
+    public void feed(VdmContext ctx, RecyclableHeap rheap, Heap theap, Parameters params, long pRecord) {
+        long pCurrentUnit = rheap.getCurrentUnit();
+        long pUnit2Free = 0;
+        try {
+            long pExistValue = ctx.getGroupVariable(this.varidValue);
+            long pValue = this.parameters.get(0).eval(ctx, theap, params, pRecord);
+            long pResult = pExistValue;
+            if (pValue != 0) {
+                int comp = ctx.compare(theap, pExistValue, pValue);
+                if (comp == Integer.MIN_VALUE || comp < 0) {
+                    pResult = pValue;
+                }
+            }
+            if (pResult != pExistValue) {
+                rheap.markNewUnit(100);
+                pResult = FishObject.clone(rheap, pResult);
+                ctx.setGroupVariable(this.varidValue, pResult);
+                pUnit2Free = pExistValue;
             }
         }
-        return FishObject.allocSet(heap, data.max);
+        finally {
+            rheap.restoreUnit(pCurrentUnit);
+            if (pUnit2Free != 0) rheap.freeUnit(pUnit2Free);
+        }
+    }
+
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pResult = ctx.getGroupVariable(this.varidValue);
+        return pResult;
     }
 
     @Override
@@ -59,9 +64,9 @@ public class FuncMax extends Function {
         return this.parameters.get(0).getReturnType();
     }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 
 }

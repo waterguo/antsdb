@@ -19,10 +19,14 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.cpp.FileOffset;
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.nosql.GetInfo;
+import com.antsdb.saltedfish.nosql.GetOptions;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.nosql.ScanResult;
 import com.antsdb.saltedfish.nosql.StorageTable;
+import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.nosql.TableType;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -35,37 +39,62 @@ public class MinkeCacheTable implements StorageTable {
     MinkeTable mtable;
     StorageTable stable;
     MinkeCache cache;
+    boolean cacheFull;
 
-    MinkeCacheTable(MinkeCache minke, MinkeTable mtable, StorageTable stable) {
+    MinkeCacheTable(MinkeCache minke, MinkeTable mtable, StorageTable stable, SysMetaRow meta) {
         this.mtable = mtable;
         this.stable = stable;
         this.cache = minke;
+        this.cacheFull = (this.mtable.tableId < 0x100) ? true : minke.strategy.cacheFull(meta);
     }
     
     @Override
-    public long get(long pKey) {
-        long pResult = this.mtable.get(pKey);
+    public long get(long pKey, long options, GetInfo info) {
+        if (isFullCache()) {
+            return get_full(pKey, options, info);
+        }
+        else {
+            return get_partial(pKey, options, info); 
+        }
+    }
+    
+    private long get_full(long pKey, long options, GetInfo info) {
+        if (this.mtable.getPageCount() <= 0) {
+            if (GetOptions.hasNoCache(options)) {
+                return this.stable.get(pKey, options, info);
+            }
+            else {
+                loadTable();
+            }
+        }
+        long pResult = this.mtable.get(pKey, options, info);
+        if (pResult == 1) {
+            // delete mark
+            return 0;
+        }
+        return pResult;
+    }
+
+    private long get_partial(long pKey, long options, GetInfo info) {
+        long pResult = this.mtable.get(pKey, options, info);
         if (pResult == 1) {
             // delete mark
             verifyCacheGet(pKey, 0, -1, false);
             return 0;
         }
+        // dont harass hbase when this is a temporary table
+        if (this.getId() < 0) {
+            return pResult;
+        }
         if ((pResult == 0) && this.cache.isMutable) {
-            pResult = this.stable.get(pKey);
-            if (pResult != 0) {
-                // the following code might throw OutofMinkeSpace exception. it is expected. we cannot use the memory
-                // address from HBaseTable because it will be reset in next get() call. it is not perfect. but until
-                // i find the perfect solution let's live with it
-                Row row = Row.fromMemoryPointer(pResult, Row.getVersion(pResult));
-                pResult = this.mtable.put_(row);
+            pResult = this.stable.get(pKey, options, info);
+            pResult = GetOptions.hasNoCache(options) ? pResult : cache(pKey, pResult);
+            if (_log.isTraceEnabled()) {
+                _log.trace("fetched {} from storage count={} tableId={}", 
+                        KeyBytes.toString(pKey), 
+                        (pResult != 0) ? 1 : 0,
+                        getId());
             }
-            else {
-                this.mtable.putDeleteMark(pKey);
-            }
-            _log.debug("fetched {} from storage count={} tableId={}", 
-                    KeyBytes.toString(pKey), 
-                    (pResult != 0) ? 1 : 0,
-                    getId());
             verifyCacheGet(pKey, -1, pResult, true);
             this.cache.cacheMiss();
         }
@@ -75,26 +104,70 @@ public class MinkeCacheTable implements StorageTable {
         return pResult;
     }
 
+    private long cache(long pKey, long pRow) {
+        try {
+            // the following code might throw OutofMinkeSpace exception. it is expected. we cannot use the memory
+            // address from HBaseTable because it will be reset in next get() call. it is not perfect. but until
+            // i find the perfect solution let's live with it
+            if (pRow != 0) {
+                Row row = Row.fromMemoryPointer(pRow, Row.getVersion(pRow));
+                this.mtable.put(row);
+                pRow = this.mtable.get(row.getKeyAddress(), false);
+            }
+            else {
+                this.mtable.putDeleteMark(pKey);
+            }
+        }
+        catch (OutOfMinkeSpace ignored) {
+        }
+        return pRow;
+    }
+    
     @Override
-    public long getIndex(long pKey) {
-        long pResult = this.mtable.get(pKey);
+    public long getIndex(long pKey, long options, GetInfo info) {
+        if (this.isFullCache()) {
+            return getIndex_full(pKey, options, info);
+        }
+        else {
+            return getIndex_partial(pKey, options, info);
+        }
+    }
+    
+    private long getIndex_full(long pKey, long options, GetInfo info) {
+        if (this.mtable.getPageCount() <= 0) {
+            if (GetOptions.hasNoCache(options)) {
+                return this.stable.getIndex(pKey, options, info);
+            }
+            else {
+                loadTable();
+            }
+        }
+        return this.mtable.getIndex(pKey, options, info);
+    }
+
+    private long getIndex_partial(long pKey, long options, GetInfo info) {
+        long pResult = this.mtable.getIndex(pKey, 0, info);
         if (pResult == 1) {
             // delete mark
             verifyCacheGetIndex(pKey, 0, -1, false);
             return 0;
         }
+        // dont harass hbase when this is a temporary table
+        if (this.getId() < 0) {
+            return pResult;
+        }
         if ((pResult == 0) && this.cache.isMutable) {
-            pResult = this.stable.getIndex(pKey);
+            pResult = this.stable.getIndex(pKey, options, info);
             if (pResult != 0) {
                 // the following code might throw OutofMinkeSpace exception. it is expected. we cannot use the memory
                 // address from HBaseTable because it will be reset in next get() call. it is not perfect. but until
                 // i find the perfect solution let's live with it
-                pResult = this.mtable.putIndex_(pKey, pResult, (byte)0);
+                pResult = this.mtable.putIndex_(0, pKey, pResult, (byte)0);
             }
             else {
                 this.mtable.putDeleteMark(pKey);
             }
-            _log.debug("fetched {} from storage count={} tableId={}", 
+            _log.trace("fetched {} from storage count={} tableId={}", 
                     KeyBytes.toString(pKey), 
                     (pResult != 0) ? 1 : 0,
                     getId());
@@ -109,35 +182,101 @@ public class MinkeCacheTable implements StorageTable {
     
     @Override
     public ScanResult scan(long pKeyStart, long pKeyEnd, long options) {
-        boolean includeStart = ScanOptions.includeStart(options);
-        boolean includeEnd = ScanOptions.includeEnd(options);
-        boolean ascending = ScanOptions.isAscending(options);
-        MinkeCacheTableScanner result = new MinkeCacheTableScanner(this);
-        if (ScanOptions.has(options, ScanOptions.NO_CACHE)) {
-            result.setCacheResult(false);
+        if (isFullCache()) {
+            return scan_full(pKeyStart, pKeyEnd, options);
         }
-        result.setRange(pKeyStart, includeStart, pKeyEnd, includeEnd, ascending);
-        return result;
+        else {
+            return scan_partial(pKeyStart, pKeyEnd, options);
+        }
+    }
+    
+    private ScanResult scan_full(long pKeyStart, long pKeyEnd, long options) {
+        if (this.mtable.getPageCount() <= 0) {
+            if (ScanOptions.hasNoCache(options)) {
+                return this.stable.scan(pKeyStart, pKeyEnd, options);
+            }
+            else {
+                loadTable();
+            }
+        }
+        return this.mtable.scan(pKeyStart, pKeyEnd, options);
+    }
+
+    private ScanResult scan_partial(long pKeyStart, long pKeyEnd, long options) {
+        if (getId() < 0) {
+            // dont harass hbase when this is a temporary table
+            return this.mtable.scan(pKeyStart, pKeyEnd, options);
+        }
+        else {
+            boolean includeStart = ScanOptions.includeStart(options);
+            boolean includeEnd = ScanOptions.includeEnd(options);
+            boolean ascending = ScanOptions.isAscending(options);
+            MinkeCacheTableScanner result = new MinkeCacheTableScanner(this);
+            if (ScanOptions.has(options, ScanOptions.NO_CACHE)) {
+                result.setCacheResult(false);
+            }
+            result.setRange(pKeyStart, includeStart, pKeyEnd, includeEnd, ascending);
+            return result;
+        }
     }
 
     @Override
-    public void delete(long pKey) {
-        this.mtable.putDeleteMark(pKey);
+    public synchronized void delete(long pKey) {
+        if (isFullCache()) {
+            if (this.mtable.getPageCount() <= 0) {
+                loadTable();
+            }
+            this.mtable.delete(pKey);
+        }
+        else {
+            this.mtable.putDeleteMark(pKey);
+        }
     }
 
     @Override
-    public void putIndex(long pIndexKey, long pRowKey, byte misc) {
+    public synchronized  void putIndex(long pIndexKey, long pRowKey, byte misc) {
+        putIndex(0, pIndexKey, pRowKey, misc);
+    }
+    
+    @Override
+    public synchronized  void putIndex(long version, long pIndexKey, long pRowKey, byte misc) {
+        if (isFullCache()) {
+            if (this.mtable.getPageCount() <= 0) {
+                loadTable();
+            }
+        }
         this.mtable.putIndex(pIndexKey, pRowKey, misc);
     }
 
     @Override
-    public void put(Row row) {
+    public synchronized void put(Row row) {
+        if (isFullCache()) {
+            if (this.mtable.getPageCount() <= 0) {
+                loadTable();
+            }
+        }
         this.mtable.put(row);
     }
 
     @Override
     public boolean exist(long pKey) {
-        long pResult = this.mtable.get(pKey);
+        if (isFullCache()) {
+            return exist_full(pKey);
+        }
+        else {
+            return exist_partial(pKey); 
+        }
+    }
+    
+    private boolean exist_full(long pKey) {
+        if (this.mtable.getPageCount() <= 0) {
+            loadTable();
+        }
+        return this.mtable.exist(pKey);
+    }
+
+    public boolean exist_partial(long pKey) {
+        long pResult = this.mtable.get(pKey, 0, null);
         if (pResult > 1) {
             // found it
             return true;
@@ -192,7 +331,7 @@ public class MinkeCacheTable implements StorageTable {
                 range.endMark = BoundaryMark.NONE;
             }
             this.mtable.putRange(range);
-            _log.debug("fetched {} from storage count={} tableId={}", 
+            _log.trace("fetched {} from storage count={} tableId={}", 
                     range.toString(), 
                     count,
                     getId());
@@ -213,10 +352,10 @@ public class MinkeCacheTable implements StorageTable {
             return;
         }
         if (pResultFromStorage == -1) {
-            pResultFromStorage = this.stable.get(pKey); 
+            pResultFromStorage = this.stable.get(pKey, 0, null); 
         }
         if (pResultFromCache == -1) {
-            pResultFromCache = this.mtable.get(pKey);
+            pResultFromCache = this.mtable.get(pKey, 0, null);
         }
         if (Long.compareUnsigned(pResultFromCache, 1) <= 0) {
             if (pResultFromStorage == 0) {
@@ -239,10 +378,10 @@ public class MinkeCacheTable implements StorageTable {
             return;
         }
         if (pResultFromStorage == -1) {
-            pResultFromStorage = this.stable.get(pKey); 
+            pResultFromStorage = this.stable.get(pKey, 0, null); 
         }
         if (pResultFromCache == -1) {
-            pResultFromCache = this.mtable.get(pKey);
+            pResultFromCache = this.mtable.get(pKey, 0, null);
         }
         if (Long.compareUnsigned(pResultFromCache, 1) <= 0) {
             if (pResultFromStorage == 0) {
@@ -262,6 +401,22 @@ public class MinkeCacheTable implements StorageTable {
 
     @Override
     public String getLocation(long pKey) {
+        if (isFullCache()) {
+            return getLocation_full(pKey);
+        }
+        else {
+            return getLocation_partial(pKey);
+        }
+    }
+
+    private String getLocation_full(long pKey) {
+        if (this.mtable.getPageCount() <= 0) {
+            loadTable();
+        }
+        return this.mtable.getLocation(pKey);
+    }
+
+    private String getLocation_partial(long pKey) {
         String result = this.mtable.getLocation(pKey);
         if (result != null) {
             result = this.stable.getLocation(pKey);
@@ -280,5 +435,72 @@ public class MinkeCacheTable implements StorageTable {
     
     public MinkeTable getMinkeTable() {
         return this.mtable;
+    }
+    
+    /**
+     * full cache means the entire table should be kept in minke
+     * 
+     * @return
+     */
+    public boolean isFullCache() {
+        return this.cacheFull;
+    }
+    
+    /**
+     * load the entire table content from backend
+     */
+    private synchronized void loadTable() {
+        // prevents racing condition
+        if (this.mtable.getPageCount() > 0) {
+            return;
+        }
+        
+        // make sure we at least have one page
+        ScanResult sr = this.stable.scan(0, 0, 0);
+        this.mtable.grow(KeyBytes.getMinKey());
+        
+        // load table content
+        long count = 0;
+        while (sr.next()) {
+            if (this.mtable.getType() == TableType.DATA) {
+                Row row = sr.getRow();
+                this.mtable.put(row);
+            }
+            else {
+                long pIndexKey = sr.getKeyPointer();
+                long pRowKey = sr.getIndexRowKeyPointer();
+                byte misc = sr.getMisc();
+                this.mtable.putIndex(pIndexKey, pRowKey, misc);
+            }
+            count++;
+        }
+        sr.close();
+        this.cache.cacheMiss();
+        _log.debug("{} records are fully cached for table {}", count, getId());
+    }
+
+    public synchronized int evictPage(MinkePage page) {
+        int result = this.mtable.deletePage(page) ? 1 : 0;
+        _log.debug("page {} of table {} is evicted {} {}", 
+                page.id,
+                getId(),
+                page.copyLastAccess, 
+                page.lastAccess.get());
+        return result;
+    }
+    
+    public synchronized int evictAllPages() {
+        int count = 0;
+        synchronized (this.mtable) {
+            for (MinkePage i:this.mtable.getPages()) {
+                count += evictPage(i);
+            }
+        }
+        _log.debug("table {} is evicted", getId()); 
+        return count;
+    }
+    
+    public boolean isLoaded() {
+        return this.mtable.getPageCount() > 0;
     }
 }

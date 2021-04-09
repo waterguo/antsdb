@@ -24,8 +24,14 @@ import com.antsdb.saltedfish.sql.vdm.ObjectName;
 public class Drop_index_stmtGenerator extends DdlGenerator<Drop_index_stmtContext>{
 
     @Override
+    public boolean isTemporaryTable(GeneratorContext ctx, Drop_index_stmtContext rule) {
+        ObjectName tableName = TableName.parse(ctx,rule.table_name_());
+        return isTemporaryTable(ctx, tableName);
+    }
+
+    @Override
     public Instruction gen(GeneratorContext ctx, Drop_index_stmtContext rule) throws OrcaException {
-    	ObjectName tableName = TableName.parse(ctx,rule.table_name_());
+        ObjectName tableName = TableName.parse(ctx,rule.table_name_());
         String indexName = Utils.getIdentifier(rule.index_name().identifier());
         
         DropIndex drop = new DropIndex(tableName, indexName);

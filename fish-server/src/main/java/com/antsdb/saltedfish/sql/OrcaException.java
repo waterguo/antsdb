@@ -38,7 +38,7 @@ public class OrcaException extends RuntimeException {
     }
 
     public OrcaException(String message) {
-            super(message);
+        super(message);
     }
     
     public OrcaException(Exception x, String message, Object... params) {

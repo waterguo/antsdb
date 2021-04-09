@@ -25,8 +25,8 @@ import com.antsdb.saltedfish.cpp.Value;
  */
 public class TypeTimestamp extends DataType {
 
-	public TypeTimestamp(String name, int precision) {
-		super(name, precision, 0, Types.TIMESTAMP, Timestamp.class, Value.TYPE_TIMESTAMP);
-	}
+    public TypeTimestamp(String name, int precision) {
+        super(name, precision, 0, Types.TIMESTAMP, Timestamp.class, Value.FORMAT_TIMESTAMP, Weight.DATETIME);
+    }
 
 }

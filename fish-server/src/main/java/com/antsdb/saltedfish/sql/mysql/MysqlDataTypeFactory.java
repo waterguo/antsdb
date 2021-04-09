@@ -13,6 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.mysql;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.sql.Types;
 
 import com.antsdb.saltedfish.cpp.Value;
@@ -34,24 +38,22 @@ import com.antsdb.saltedfish.sql.TypeTimestamp;
 
 /**
  * factory of mysql data types
- *  
+ *
  * @author wgu0
  */
 public class MysqlDataTypeFactory extends DataTypeFactory {
-    
+
     @Override
     public DataType newDataType(String name, int length, int scale) {
         DataType type = super.newDataType(name, length, scale);
         if (type == null) {
             type = newDataType_(name, length, scale);
         }
-        if (name.endsWith(" unsigned")) {
-            type.setUnsigned(true);
-        }
         return type;
     }
 
     public static DataType newDataType_(String name, int length, int scale) {
+        boolean isUnsigned = name.endsWith(" unsigned");
         name = name.toLowerCase();
         DataType type = null;
         if ("char".equals(name)) {
@@ -122,32 +124,32 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
         }
         else if ("bool".equals(name) || "boolean".equals(name)) {
             type = new TypeInteger(
-                    "tinyint", 
-                    Types.TINYINT, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER,
+                    "tinyint",
+                    Types.TINYINT,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     0,
-                    127, 
+                    127,
                     -128);
             type.setLength(1);
         }
         else if ("tinyint".equals(name)) {
             type = new TypeInteger(
-                    "tinyint", 
-                    Types.TINYINT, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER,
+                    "tinyint",
+                    Types.TINYINT,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
-                    127, 
+                    127,
                     -128);
             type.setLength(length);
         }
         else if ("tinyint unsigned".equals(name)) {
             type = new TypeInteger(
-                    "tinyint unsigned", 
-                    Types.TINYINT, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER,
+                    "tinyint unsigned",
+                    Types.TINYINT,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
                     255,
                     0);
@@ -155,95 +157,117 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
         }
         else if ("smallint".equals(name)) {
             type = new TypeInteger(
-                    "smallint", 
-                    Types.SMALLINT, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    "smallint",
+                    Types.SMALLINT,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
-                    32767, 
-                    -32768); 
+                    32767,
+                    -32768);
         }
         else if ("smallint unsigned".equals(name)) {
             type = new TypeInteger(
-                    "smallint unsigned", 
-                    Types.SMALLINT, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    "smallint unsigned",
+                    Types.SMALLINT,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
-                    0, 
-                    65535); 
+                    0,
+                    65535);
         }
         else if ("mediumint".equals(name)) {
             type = new TypeInteger(
-                    "mediumint", 
-                    Types.INTEGER, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    "mediumint",
+                    Types.INTEGER,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
-                    8388607, 
-                    -8388608); 
+                    8388607,
+                    -8388608);
         }
         else if ("mediumint unsigned".equals(name)) {
             type = new TypeInteger(
-                    "mediumint unsigned", 
-                    Types.INTEGER, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    "mediumint unsigned",
+                    Types.INTEGER,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
                     16777215,
-                    0); 
+                    0);
         }
         else if ("int".equals(name) || "integer".equals(name)) {
+            if (length == 0) length = 11;
             type = new TypeInteger(
-                    "int", 
-                    Types.INTEGER, 
-                    Integer.class, 
-                    Value.TYPE_NUMBER, 
+                    "int",
+                    Types.INTEGER,
+                    Integer.class,
+                    Value.FORMAT_INT4,
                     length,
-                    Integer.MAX_VALUE, 
-                    Integer.MIN_VALUE + 1); 
+                    Integer.MAX_VALUE,
+                    Integer.MIN_VALUE + 1);
             type.setLength(length);
         }
         else if ("int unsigned".equals(name) || "integer unsigned".equals(name)) {
+            if (length == 0) length = 10;
             type = new TypeInteger(
-                    "int unsigned", 
-                    Types.BIGINT, 
-                    Long.class, 
-                    Value.TYPE_NUMBER, 
+                    "int unsigned",
+                    Types.BIGINT,
+                    Long.class,
+                    Value.FORMAT_INT8,
                     length,
                     4294967295l,
-                    0); 
+                    0);
             type.setLength(length);
         }
         else if ("bigint".equals(name)) {
+            if (length == 0) length = 20;
             type = new TypeInteger(
-                    "bigint", 
-                    Types.BIGINT, 
-                    Long.class, 
-                    Value.TYPE_NUMBER, 
+                    "bigint",
+                    Types.BIGINT,
+                    Long.class,
+                    Value.FORMAT_INT8,
                     length,
-                    Long.MAX_VALUE, 
-                    Long.MIN_VALUE + 1); 
+                    Long.MAX_VALUE,
+                    Long.MIN_VALUE + 1);
         }
         else if ("bigint unsigned".equals(name)) {
             type = new TypeInteger(
-                    "bigint unsigned", 
-                    Types.BIGINT, 
-                    Long.class, 
-                    Value.TYPE_NUMBER, 
+                    "bigint unsigned",
+                    Types.BIGINT,
+                    BigInteger.class,
+                    Value.FORMAT_BIGINT,
                     length,
-                    Long.MAX_VALUE, 
-                    Long.MIN_VALUE + 1); 
+                    Long.MAX_VALUE,
+                    Long.MIN_VALUE + 1);
         }
         else if ("date".equals(name)) {
             type = new TypeDate("date");
         }
+        else if ("year".equals(name)) {
+            type = new TypeDate("year");
+            type.setLength(4);
+        }
         else if ("enum".equals(name)) {
-            type = new TypeString("enum", length, Types.VARCHAR);
+            type = new TypeString("enum",  Types.VARCHAR,length);
+        }
+        else if ("set".equals(name)) {
+            type = new TypeString("set",Types.VARCHAR, length);
+        }
+        else if ("bit".equals(name)) {
+            type = new TypeInteger(
+                    "bit",
+                    Types.BIT,
+                    Integer.class,
+                    Value.FORMAT_INT4,
+                    0,
+                    127,
+                    -128);
+            type.setLength(1);
         }
         else {
             throw new OrcaException(902, "invalid data type: " + name);
         }
+        type.setUnsigned(isUnsigned);
         return type;
     }
 
@@ -264,6 +288,42 @@ public class MysqlDataTypeFactory extends DataTypeFactory {
             scale = Integer.parseInt(rule.data_type_length_scale().signed_number(1).getText());
         }
         return newDataType_(typeName, length, scale);
+    }
+
+    @Override
+    public DataType findDefaultType(Class<?> klass) {
+        DataType result = null;
+        if (klass == Integer.class) {
+            result = newDataType("int", 0, 0);
+        }
+        else if (klass == Long.class) {
+            result = newDataType("bigint", 0, 0);
+        }
+        else if (klass == BigInteger.class) {
+            result = newDataType("decimal", 38, 0);
+        }
+        else if (klass == BigDecimal.class) {
+            result = newDataType("decimal", 38, 5);
+        }
+        else if (klass == Float.class) {
+            result = newDataType("float", 38, 5);
+        }
+        else if (klass == Double.class) {
+            result = newDataType("double", 38, 5);
+        }
+        else if (klass == String.class) {
+            result = newDataType("varchar", 1000, 0);
+        }
+        else if (klass == Date.class) {
+            result = newDataType("date", 0, 0);
+        }
+        else if (klass == Timestamp.class) {
+            result = newDataType("timestamp", 1000, 0);
+        }
+        else if (klass == byte[].class) {
+            result = newDataType("longblob", 0xffffffff, 0);
+        }
+        return result;
     }
 
 }

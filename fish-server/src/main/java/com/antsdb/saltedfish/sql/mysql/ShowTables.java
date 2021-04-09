@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.meta.OrcaTableType;
 import com.antsdb.saltedfish.sql.vdm.Checks;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
@@ -102,6 +103,9 @@ public class ShowTables extends View {
         }
         while (iter.next()) {
             SysTableRow row = new SysTableRow(iter.getRow());
+            if (row.isTemproray()) {
+                continue;
+            }
             if (!row.getNamespace().equalsIgnoreCase(ns)) {
                 continue;
             }
@@ -126,7 +130,7 @@ public class ShowTables extends View {
     private LineFull toFullLine(SysTableRow row) {
         LineFull result = new LineFull();
         result.TABLE_NAME = row.getTableName();
-        result.TABLE_TYPE = "BASE TABLE";
+        result.TABLE_TYPE = row.getType() == OrcaTableType.VIEW ? "VIEW" : "BASE TABLE";
         return result;
     }
     

@@ -15,8 +15,19 @@ package com.antsdb.saltedfish.sql;
 
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
+import com.antsdb.saltedfish.sql.vdm.ObjectName;
 
 public abstract class Generator<T extends ParseTree> {
     public abstract Instruction gen(GeneratorContext ctx, T rule) throws OrcaException;
+
+    public boolean isTemporaryTable(GeneratorContext ctx, T rule) {
+        return false;
+    }
+    
+    protected static boolean isTemporaryTable(GeneratorContext ctx, ObjectName name) {
+        TableMeta table = ctx.getSession().getTable(name);
+        return table != null ? table.isTemproray() : false;
+    }
 }

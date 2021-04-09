@@ -44,6 +44,8 @@ public class SystemViewPages extends View {
         public String STATE;
         public long HITS;
         public Timestamp LAST_READ;
+        public float USAGE;
+        public int WASTE;
         public String START_KEY;
         public String END_KEY;
     }
@@ -57,13 +59,14 @@ public class SystemViewPages extends View {
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         ArrayList<Line> list = new ArrayList<>();
         Minke minke = getMinke(); 
-        if (orca.getHumpback().getStorageEngine() instanceof Minke)
-        for (MinkeFile file:minke.getFiles()) {
-            if (file == null) {
-                continue;
-            }
-            for (MinkePage page:file.getPages()) {
-                list.add(toLine(page));
+        if (minke != null) {
+            for (MinkeFile file:minke.getFiles()) {
+                if (file == null) {
+                    continue;
+                }
+                for (MinkePage page:file.getPages()) {
+                    list.add(toLine(page));
+                }
             }
         }
         
@@ -82,6 +85,8 @@ public class SystemViewPages extends View {
         result.END_KEY = KeyBytes.toString(page.getEndKeyPointer());
         long lastRead = page.getLastRead();
         result.LAST_READ = (lastRead == 0) ? null : new Timestamp(lastRead);
+        result.USAGE = page.getUsageRatio();
+        result.WASTE = page.getWastedBytes();
         return result;
     }
 

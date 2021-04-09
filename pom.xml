@@ -1,10 +1,10 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
  
     <groupId>com.antsdb</groupId>
     <artifactId>fish-root</artifactId>
-    <version>18.12.29-beyond</version>
+    <version>21.04.09</version>
     <packaging>pom</packaging>
     
     <properties>
@@ -13,8 +13,11 @@
     </properties>
 
 	<modules>
+        <module>fish-spark</module>
         <module>fish-server</module>
+        <module>oracle-jdbc</module>
+        <module>oracle-compat</module>
         <module>pre-setup</module>
         <module>setup</module>
-    </modules>
+  </modules>
 </project>

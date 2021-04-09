@@ -15,7 +15,7 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.List;
 
-import com.antsdb.saltedfish.lexer.MysqlParser.Limit_clauseContext;
+import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.planner.SortKey;
 
 public abstract class CursorMaker extends Instruction {
@@ -23,9 +23,28 @@ public abstract class CursorMaker extends Instruction {
     
     public abstract CursorMeta getCursorMeta();
     public abstract boolean setSortingOrder(List<SortKey> order);
+
+    /**
+     * give the maker last chance to dosomething
+     * @param c
+     */
+    public void demolish(Cursor c) {
+    }
+    
+    /**
+     * 
+     * @param ctx
+     * @param params
+     * @param pMaster
+     * @param last nullable, last cursor returned from the same maker for recycling purpose
+     * @return
+     */
+    public Cursor make(VdmContext ctx, Parameters params, long pMaster, Cursor last) {
+        return (Cursor)run(ctx, params, pMaster);
+    }
     
     public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
-        return (Cursor)run(ctx, params, pMaster);
+        return make(ctx, params, pMaster, null);
     }
 
     @Override
@@ -35,7 +54,19 @@ public abstract class CursorMaker extends Instruction {
 
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(),  level, toString());
+        ExplainRecord rec = new ExplainRecord(getMakerid(),  level, toString(), getScore());
+        if (this instanceof Ordered) {
+            List<ColumnMeta> order = ((Ordered)this).getOrder();
+            if (order != null && !order.isEmpty()) {
+                StringBuilder buf = new StringBuilder();
+                for (ColumnMeta i:order) {
+                    buf.append(i.getColumnName());
+                    buf.append(',');
+                }
+                buf.deleteCharAt(buf.length()-1);
+                rec.order = buf.toString();
+            }
+        }
         records.add(rec);
     }
     
@@ -52,20 +83,15 @@ public abstract class CursorMaker extends Instruction {
         this.makerId = value;
     }
     
-    public static CursorMaker createLimiter(CursorMaker maker, Limit_clauseContext rule) {
-        int offset = 0;
-        int count = Integer.parseInt(rule.number_value(0).getText());
-        if (rule.K_OFFSET() != null) {
-            offset = Integer.parseInt(rule.number_value(1).getText());
-        }
-        else {
-            if (rule.number_value(1) != null) {
-                offset = count;
-                count = Integer.parseInt(rule.number_value(1).getText());
-            }
-        }
-        maker = new Limiter(maker, offset, count);
-        return maker;
-    }
-
+    /**
+     * the smaller the faster, the bigger the slower. a single get is 1, a index seek is 1.1, a table scan is 100
+     * @return
+     */
+    public abstract float getScore();
+    
+    /**
+     * return the order of rows from the cursor
+     * 
+     * @return nullable, array of position of the record fields from the cursor
+     */
 }

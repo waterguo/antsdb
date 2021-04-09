@@ -15,9 +15,13 @@ package com.antsdb.saltedfish.cpp;
 
 import java.time.Duration;
 
-public final class FishTime {
+public final class FishTime extends BrutalMemoryObject {
     static final int SIZE = 9;
     
+    public FishTime(long addr) {
+        super(addr);
+    }
+
     /*
      * use duration here because java.sql.Time only goes up to 23:59:59 while mysql time can go up to 838:59:59
      */
@@ -63,6 +67,16 @@ public final class FishTime {
 
     public static int getSize(long pValue) {
         return SIZE;
+    }
+
+    @Override
+    public int getByteSize() {
+        return SIZE;
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_TIME;
     }
 
 }

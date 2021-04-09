@@ -17,13 +17,16 @@ public class ExplainRecord {
     public Integer id;
     public Integer level;
     public String plan;
+    public Float score;
+    public String order;
     
     ExplainRecord() {
     }
     
-    ExplainRecord(int id, int level, String plan) {
+    ExplainRecord(int id, int level, String plan, float score) {
         this.id = id;
         this.level = level;
         this.plan = plan;
+        this.score = score;
     }
 }

@@ -26,20 +26,6 @@ import org.apache.commons.lang.time.DurationFormatUtils;
 
 import com.antsdb.saltedfish.cpp.FishSkipList;
 import com.antsdb.saltedfish.cpp.Unsafe;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.sql.FishCommandLine;
 
 /**
@@ -197,21 +183,12 @@ public class Validator extends FishCommandLine {
         if (!this.doesValidateReplay) {
             return;
         }
-        Gobbler gobbler = this.humpback.getGobbler();
-        gobbler.replay(SpaceManager.HEADER_SIZE, true, new ReplayHandler(){
-
-            @Override
-            public void insert(InsertEntry entry) throws Exception {
-                positions.remove(entry.getSpacePointer());
-            }
+        SequentialLogReader reader = new SequentialLogReader(this.humpback.getGobbler());
+        reader.setPosition(SpaceManager.HEADER_SIZE, true);
+        reader.replay(new ReplayHandler(){
 
             @Override
             public void insert(InsertEntry2 entry) throws Exception {
-                positions.remove(entry.getSpacePointer());
-            }
-
-            @Override
-            public void update(UpdateEntry entry) throws Exception {
                 positions.remove(entry.getSpacePointer());
             }
 
@@ -221,17 +198,7 @@ public class Validator extends FishCommandLine {
             }
 
             @Override
-            public void put(PutEntry entry) throws Exception {
-                positions.remove(entry.getSpacePointer());
-            }
-
-            @Override
             public void put(PutEntry2 entry) throws Exception {
-                positions.remove(entry.getSpacePointer());
-            }
-
-            @Override
-            public void index(IndexEntry entry) {
                 positions.remove(entry.getSpacePointer());
             }
 
@@ -241,19 +208,7 @@ public class Validator extends FishCommandLine {
             }
 
             @Override
-            public void delete(DeleteEntry entry) {
-                long sp = entry.getSpacePointer();
-                positions.remove(sp);
-            }
-            
-            @Override
             public void delete(DeleteEntry2 entry) {
-                long sp = entry.getSpacePointer();
-                positions.remove(sp);
-            }
-            
-            @Override
-            public void deleteRow(DeleteRowEntry entry) {
                 long sp = entry.getSpacePointer();
                 positions.remove(sp);
             }

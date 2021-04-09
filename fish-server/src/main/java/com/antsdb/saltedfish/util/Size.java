@@ -24,15 +24,15 @@ public final class Size {
         }
         value = value.toLowerCase();
         long unit = 1;
-        if (value.endsWith("k")) {
+        if (value.toLowerCase().endsWith("k")) {
             unit = 1024;
             value = value.substring(0, value.length()-1);
         }
-        else if (value.endsWith("m")) {
+        else if (value.toLowerCase().endsWith("m")) {
             unit = 1024*1024;
             value = value.substring(0, value.length()-1);
         }
-        else if (value.endsWith("g")) {
+        else if (value.toLowerCase().endsWith("g")) {
             unit = 1024*1024*1024;
             value = value.substring(0, value.length()-1);
         }

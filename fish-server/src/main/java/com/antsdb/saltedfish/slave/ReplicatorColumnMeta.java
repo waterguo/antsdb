@@ -18,12 +18,10 @@ package com.antsdb.saltedfish.slave;
  * @author *-xguo0<@
  */
 final class ReplicatorColumnMeta {
-
     public String columnName;
     public int nullable;
     public String defaultValue;
     public String typeName;
     public int dataType;
     public int hcolumnPos;
-
 }

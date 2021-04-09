@@ -14,6 +14,9 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -21,6 +24,7 @@ import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 
+import com.antsdb.saltedfish.cpp.BigInt;
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FishObject;
@@ -48,45 +52,37 @@ public final class KeyMaker {
     static KeyMaker _fullIndexKeyMaker = null;
     static KeyMaker _integerMaker;
     static KeyMaker _stringMaker;
+    static DateField _dataField = new DateField();
+    static FloatField _floatField = new FloatField();
+    static RowidField _rowidField = new RowidField();
+    static DateField _dateField = new DateField();
+    static TimestampField _timestampField = new TimestampField();
+    static VariableLengthIntegerField _integerField = new VariableLengthIntegerField();
+    static VariableLengthBigIntegerField _bigIntegerField = new VariableLengthBigIntegerField();
+    static VariableLengthBinaryField _binaryField = new VariableLengthBinaryField();
+    static VariableLengthStringField _stringField = new VariableLengthStringField();
+    static BigDecimalField _bigDecimalField = new BigDecimalField();
+    static MathContext _mc = new MathContext(0, RoundingMode.FLOOR);
     
-    List<ColumnMeta> columns;
     List<KeyField> keyFields = new ArrayList<>();
     boolean isVariableLength = false;
     boolean isUnique;
     private int maxSize;
+    private int[] columnIds;
+    private boolean[] negates;
 
     static {
-        /*
-        _rowid.setColumnName("rowid");
-        _rowid.setType(DataType.longtype());
-        _rowid.setColumnId(0);
-        */
-        _integerMaker = new KeyMaker(new VariableLengthIntegerField(0));
-        _stringMaker = new KeyMaker(new VariablLengthStringField(0));
-        _fullIndexKeyMaker = new KeyMaker(
-                new VariablLengthStringField(1),
-                new RowidField());
+        _integerMaker = new KeyMaker(_integerField);
+        _stringMaker = new KeyMaker(_stringField);
+        _fullIndexKeyMaker = new KeyMaker(_stringField, _rowidField);
+        _fullIndexKeyMaker.columnIds = new int[] {1, 0}; 
     }
     
     private static interface Callback {
-        long getValue(int index, KeyField field);
+        long getValue(int index);
     }
     
     public static abstract class KeyField {
-        int columnId;
-        
-        KeyField(int columnId) {
-            this.columnId = columnId;
-        }
-        
-        KeyField(ColumnMeta column) {
-            this.columnId = column.getColumnId();
-        }
-        
-        int getColumndId() {
-            return this.columnId;
-        }
-        
         abstract int writeValue(Heap heap, long pTarget, long pEnd, long pValue);
         abstract int writeMaxValue(Heap heap, long pTarget, long pEnd);
         abstract int writeMinValue(Heap heap, long pTarget, long pEnd);
@@ -96,18 +92,9 @@ public final class KeyMaker {
     static class VariableLengthIntegerField extends KeyField {
         int length;
         
-        VariableLengthIntegerField(int columnId) {
-            super(columnId);
-        }
-        
-        VariableLengthIntegerField(ColumnMeta column) {
-            super(column);
-        }
-
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
             // null
-            
             if (pValue == 0) {
                 ensureCapacity(pTarget, pEnd, 1);
                 UnsafeBigEndian.putByte(pTarget, (byte)0);
@@ -115,7 +102,6 @@ public final class KeyMaker {
             }
             
             // not null
-            
             long n = FishObject.toLong(heap, pValue);
             if (n >= 0) {
                 if (n <= 0xff) {
@@ -244,24 +230,114 @@ public final class KeyMaker {
         }
     }
     
-    static class RowidField extends VariableLengthIntegerField {
-
-        RowidField() {
-            super(0);
+    static class VariableLengthBigIntegerField extends KeyField {
+        @Override
+        int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
+            // null
+            if (pValue == 0) {
+                ensureCapacity(pTarget, pEnd, 1);
+                UnsafeBigEndian.putByte(pTarget, (byte)0);
+                return -1;
+            }
+            
+            // not null
+            BigInteger n = (BigInteger)FishObject.toBigInteger(heap, pValue);
+            byte[] bytes = n.toByteArray();
+            ensureCapacity(pTarget, pEnd, bytes.length + 1);
+            if (n.compareTo(BigInteger.ZERO) > 0) {
+                UnsafeBigEndian.putByte(pTarget, (byte)(bytes.length | 0x80));
+                for (int i=0; i<bytes.length; i++) {
+                    UnsafeBigEndian.putByte(pTarget+i+1, bytes[i]);
+                }
+            }
+            else {
+                UnsafeBigEndian.putByte(pTarget, (byte)(-bytes.length & 0x7f));
+                for (int i=0; i<bytes.length; i++) {
+                    UnsafeBigEndian.putByte(pTarget+i+1, bytes[i]);
+                }
+            }
+            return 1 + bytes.length;
         }
 
         @Override
-        int getColumndId() {
-            return 0;
+        int writeMaxValue(Heap heap, long pTarget, long pEnd) {
+            ensureCapacity(pTarget, pEnd, 1);
+            UnsafeBigEndian.putByte(pTarget, (byte)0xff);
+            return 1;
+        }
+
+        @Override
+        int writeMinValue(Heap heap, long pTarget, long pEnd) {
+            ensureCapacity(pTarget, pEnd, 1);
+            UnsafeBigEndian.putByte(pTarget, (byte)0);
+            return 1;
+        }
+
+        @Override
+        int getMaxSize() {
+            return 16;
         }
     }
     
-    static class DateField extends KeyField {
-
-        DateField(ColumnMeta column) {
-            super(column);
+    static class BigDecimalField extends KeyField {
+        @Override
+        int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
+            // null
+            if (pValue == 0) {
+                ensureCapacity(pTarget, pEnd, 1);
+                UnsafeBigEndian.putByte(pTarget, (byte)0);
+                return -1;
+            }
+            
+            // not null
+            BigDecimal n = (BigDecimal)FishObject.toBigDecimal(heap, pValue);
+            String s = n.toPlainString();
+            int idxOfDot = s.indexOf('.');
+            int digitsBeforeDot = idxOfDot >= 0 ? idxOfDot : s.length();
+            int length;
+            if (n.signum() >= 0) {
+                length = 1 + s.length() + 1;
+                UnsafeBigEndian.putByte(pTarget, (byte)(digitsBeforeDot | 0x80));
+                for (int i=0; i<s.length(); i++) {
+                    UnsafeBigEndian.putByte(pTarget+i+1, (byte)s.charAt(i));
+                }
+                UnsafeBigEndian.putByte(pTarget + length - 1, (byte)0);
+            }
+            else {
+                length = 1 + s.length() - 1 + 1;
+                UnsafeBigEndian.putByte(pTarget, (byte)(-(digitsBeforeDot-1) & 0x7f));
+                for (int i=0; i<s.length()-1; i++) {
+                    UnsafeBigEndian.putByte(pTarget+i+1, (byte)(0x30 + '9' - s.charAt(i+1)));
+                }
+                UnsafeBigEndian.putByte(pTarget + length - 1, (byte)0xff);
+            }
+            return length;
         }
 
+        @Override
+        int writeMaxValue(Heap heap, long pTarget, long pEnd) {
+            ensureCapacity(pTarget, pEnd, 1);
+            UnsafeBigEndian.putByte(pTarget, (byte)0xff);
+            return 1;
+        }
+
+        @Override
+        int writeMinValue(Heap heap, long pTarget, long pEnd) {
+            ensureCapacity(pTarget, pEnd, 1);
+            UnsafeBigEndian.putByte(pTarget, (byte)0);
+            return 1;
+        }
+
+        @Override
+        int getMaxSize() {
+            return 64;
+        }
+    }
+    
+    static class RowidField extends VariableLengthIntegerField {
+    }
+    
+    static class DateField extends KeyField {
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
             if (pValue == 0) {
@@ -307,11 +383,6 @@ public final class KeyMaker {
     }
     
     static class TimestampField extends KeyField {
-
-        TimestampField(ColumnMeta column) {
-            super(column);
-        }
-
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
             if (pValue == 0) {
@@ -346,14 +417,9 @@ public final class KeyMaker {
         int getMaxSize() {
             return 8;
         }
-        
     }
     
     static class FloatField extends KeyField {
-        FloatField(ColumnMeta column) {
-            super(column);
-        }
-        
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
             if (pValue == 0) {
@@ -390,17 +456,11 @@ public final class KeyMaker {
         }
     }
     
-    static final class VariablLengthBinaryField extends KeyField {
-
-        VariablLengthBinaryField(ColumnMeta column) {
-            super(column);
-        }
-
+    static final class VariableLengthBinaryField extends KeyField {
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
             
             // null
-            
             if (pValue == 0) {
                 ensureCapacity(pTarget, pEnd, 2);
                 Unsafe.putShort(pTarget, (short)0);
@@ -408,7 +468,6 @@ public final class KeyMaker {
             }
             
             // empty 
-            
             int length = Bytes.getLength(pValue);
             if (length == 0) {
                 ensureCapacity(pTarget, pEnd, 2);
@@ -417,7 +476,6 @@ public final class KeyMaker {
             }
             
             // normal
-            
             long pStart = pTarget;
             for (int i=0; i<length; i++) {
                 byte value = Bytes.get(pValue, i);
@@ -439,13 +497,11 @@ public final class KeyMaker {
             }
             
             // separator
-            
             ensureCapacity(pTarget, pEnd, 2);
             Unsafe.putShort(pTarget, (short)0);
             pTarget += 2;
             
             // done
-            
             return (int)(pTarget - pStart);
         }
 
@@ -469,24 +525,10 @@ public final class KeyMaker {
         }
     }
     
-    static final class VariablLengthStringField extends KeyField {
-
-        /**
-         * 
-         * @param capacity number of characters
-         */
-        VariablLengthStringField(int columnId) {
-            super(columnId);
-        }
-        
-        VariablLengthStringField(ColumnMeta column) {
-            super(column);
-        }
-
+    static final class VariableLengthStringField extends KeyField {
         @Override
         int writeValue(Heap heap, long pTarget, long pEnd, long pValue) {
             // null?
-            
             if (pValue == 0) {
                 ensureCapacity(pTarget, pEnd, 1);
                 Unsafe.putByte(pTarget, (byte)0);
@@ -494,7 +536,6 @@ public final class KeyMaker {
             }
             
             // empty string ?
-            
             pValue = FishObject.toUtf8(heap, pValue);
             int size = FishUtf8.getStringSize(Value.FORMAT_UTF8, pValue);
             if (size == 0) {
@@ -503,10 +544,16 @@ public final class KeyMaker {
                 return 2;
             }
             
-            // neither
-            
+            // neither, make the key case insensitive. it is the default in mysql. we will worry about case sensitive 
+            // later
             ensureCapacity(pTarget, pEnd, size + 1);
-            Unsafe.copyMemory(pValue + FishUtf8.HEADER_SIZE, pTarget, size);
+            for (int i=0; i<size; i++) {
+                int ch = Unsafe.getByte(pValue + FishUtf8.HEADER_SIZE + i);
+                if (ch > 0) {
+                    ch = Character.toUpperCase(ch);
+                }
+                Unsafe.putByte(pTarget + i, (byte)ch);
+            }
             Unsafe.putByte(pTarget + size, (byte)0);
             return size + 1;
         }
@@ -545,28 +592,40 @@ public final class KeyMaker {
     }
     
     public KeyMaker(List<ColumnMeta> columns, boolean isUnique) {
-            this.columns = columns;
-            this.isUnique = isUnique;
-            if (columns.size() == 0) {
+        this.isUnique = isUnique;
+        if (columns.size() == 0) {
+            this.columnIds = new int[1];
+            KeyField field = new RowidField();
+            this.keyFields.add(field);
+            this.columnIds[0] = 0;
+        }
+        else {
+            this.columnIds = new int[columns.size() + (isUnique ? 0 : 1)];
+            for (int i=0; i<columns.size(); i++) {
+                ColumnMeta ii = columns.get(i);
+                KeyField field = createKeyField(ii.getDataType());
+                this.keyFields.add(field);
+                this.columnIds[i] = ii.getColumnId();
+            }
+            
+            // append rowid if the index is not unique
+            if (!isUnique) {
                 KeyField field = new RowidField();
                 this.keyFields.add(field);
+                this.columnIds[this.columnIds.length-1] = 0;
             }
-            else {
-                for (ColumnMeta i:columns) {
-                    KeyField field = createKeyField(i);
-                    this.keyFields.add(field);
-                }
-                
-                // append rowid if the index is not unique
-            
-                if (!isUnique) {
-                    KeyField field = new RowidField();
-                        this.keyFields.add(field);
-                }
-            }
+        }
         calculateMaxLength();
     }
-
+    
+    public KeyMaker(DataType[] types) {
+        for (int i=0; i<types.length; i++) {
+            KeyField field = createKeyField(types[i]);
+            this.keyFields.add(field);
+        }
+        calculateMaxLength();
+    }
+    
     private void calculateMaxLength() {
         int size = 0;
         for (KeyField i:this.keyFields) {
@@ -576,37 +635,36 @@ public final class KeyMaker {
         this.maxSize = size;
     }
     
-    private KeyField createKeyField(ColumnMeta i) {
-        DataType type = i.getDataType();
+    private KeyField createKeyField(DataType type) {
         if (type.getJavaType() == Integer.class) {
-            return new VariableLengthIntegerField(i);
+            return _integerField;
         }
         else if (type.getJavaType() == Long.class) {
-            return new VariableLengthIntegerField(i);
+            return _integerField;
         }
         else if (type.getJavaType() == String.class) {
-            return new VariablLengthStringField(i);
+            return _stringField;
+        }
+        else if (type.getJavaType() == BigInteger.class) {
+            return _bigIntegerField;
         }
         else if (type.getJavaType() == BigDecimal.class) {
-            if ((type.getScale() != 0) || (type.getLength() > 19)) {
-                throw new NotImplementedException();
-            }
-            return new VariableLengthIntegerField(i);
+            return _bigDecimalField;
         }
         else if (type.getJavaType() == Date.class) {
-            return new DateField(i);
+            return _dateField;
         }
         else if (type.getJavaType() == Timestamp.class) {
-            return new TimestampField(i);
+            return _timestampField;
         }
         else if (type.getJavaType() == Float.class) {
-            return new FloatField(i);
+            return _floatField;
         }
         else if (type.getJavaType() == Double.class) {
-            return new FloatField(i);
+            return _floatField;
         }
         else if (type.getJavaType() == byte[].class) {
-            return new VariablLengthBinaryField(i);
+            return _binaryField;
         }
         else {
             throw new NotImplementedException();
@@ -621,12 +679,11 @@ public final class KeyMaker {
         boolean hasNull = false;
         
         // key fields
-        
         int posRowid = 0;
         int sizeRowid = 0;
         for (int i=0; i<nFields; i++) {
             KeyField ii = this.keyFields.get(i);
-            long pValue = callback.getValue(i, ii);
+            long pValue = callback.getValue(i);
             if (pValue == 1) {
                 // value is null and caller doesnt want key
                 return 0;
@@ -640,6 +697,13 @@ public final class KeyMaker {
                 posRowid = (int)(p - pStart);
                 sizeRowid = nBytes;
             }
+            if (this.negates != null && this.negates[i] && nBytes > 0) {
+                for (int j=0; j<nBytes; j++) {
+                    byte bt = Unsafe.getByte(p + j);
+                    bt = (byte)(bt ^ 0xff);
+                    Unsafe.putByte(p + j, bt);
+                }
+            }
             if (nBytes < 0) {
                 // meaning it is null
                 hasNull = true;
@@ -649,7 +713,6 @@ public final class KeyMaker {
         }
         
         // fillers
-        
         if (nFields < this.keyFields.size()) {
             if (fillMax || fillMin) {
                 for (int i=nFields; i<this.keyFields.size(); i++) {
@@ -667,7 +730,6 @@ public final class KeyMaker {
         }
         else {
             // append rowid if an unique index has null value on one of its fields
-            
             if (this.isUnique && hasNull) {
                 // 0 means this is part of expression, it is generating the key value for a row. append rowid
                 if (pRowid != 0) {
@@ -685,7 +747,6 @@ public final class KeyMaker {
         }
         
         // 8 bytes alignment
-        
         int length = (int)(p - pStart);
         int mod = length % 8;
         if (mod != 0) {
@@ -695,23 +756,20 @@ public final class KeyMaker {
         }
         
         // flip to little endian
-        
         flipEndian(key.getAddress() + 4, length);
 
         // tell the keybytes position of rowid suffix
-        
         key.resize(length);
         if (!this.isUnique) {
             key.setSuffixPostion(posRowid, sizeRowid);
         }
         
         // done
-        
         return key.getAddress();
     }
     
     public long make(Heap heap, long ... values) {
-        long pResult = make(heap, values.length, 0, false, true, (int i, KeyField field) -> {
+        long pResult = make(heap, values.length, 0, false, true, (int i) -> {
             long pValue = values[i];
             return pValue;
         });
@@ -719,7 +777,7 @@ public final class KeyMaker {
     }
     
     public long makeMax(Heap heap, long ... values) {
-        long pResult = make(heap, values.length, 0, true, false, (int i, KeyField field) -> {
+        long pResult = make(heap, values.length, 0, true, false, (int i) -> {
             long pValue = values[i];
             return pValue;
         });
@@ -727,9 +785,18 @@ public final class KeyMaker {
     }
     
     public long make(VdmContext ctx, Heap heap, List<Operator> exprs, Parameters params, long pRecord) {
-        Callback callback = (int i, KeyField field) -> {
+        Callback callback = (int i) -> {
             Operator expr = exprs.get(i);
             long pValue = expr.eval(ctx, heap, params, pRecord);
+            return pValue;
+        };
+        long pResult = make(heap, this.keyFields.size(), 0, false, false, callback);
+        return pResult;
+    }
+    
+    public long make(VdmContext ctx, Heap heap, long[] values) {
+        Callback callback = (int i) -> {
+            long pValue = values[i];
             return pValue;
         };
         long pResult = make(heap, this.keyFields.size(), 0, false, false, callback);
@@ -743,7 +810,7 @@ public final class KeyMaker {
             Parameters params, 
             long pRecord, 
             boolean isNullable) {
-        long pResult = make(heap, exprs.size(), 0, true, false, (int i, KeyField field) -> {
+        long pResult = make(heap, exprs.size(), 0, true, false, (int i) -> {
             Operator expr = exprs.get(i);
             long pValue = expr.eval(ctx, heap, params, pRecord);
             if ((pValue == 0) && !isNullable) {
@@ -761,7 +828,7 @@ public final class KeyMaker {
                         Parameters params, 
                         long pRecord, 
                         boolean isNullable) {
-        long pResult = make(heap, exprs.size(), 0, false, true, (int i, KeyField field) -> {
+        long pResult = make(heap, exprs.size(), 0, false, true, (int i) -> {
             Operator expr = exprs.get(i);
             long pValue = expr.eval(ctx, heap, params, pRecord);
             if ((pValue == 0) && !isNullable) {
@@ -776,19 +843,26 @@ public final class KeyMaker {
     public long make(Heap heap, Row row) {
         long pRowid = row.getFieldAddress(0);
         long pResult;
-        Callback callback = (int i, KeyField field) -> {
-            long pValue = row.getFieldAddress(field.getColumndId());
+        Callback callback = (int i) -> {
+            long pValue = row.getFieldAddress(this.columnIds[i]);
             return pValue;
         };
         pResult = make(heap, this.keyFields.size(), pRowid, false, false, callback);
         return pResult;
     }
     
+    public boolean isNull(VaporizingRow row) {
+        for (int i:this.columnIds) {
+            if (row.getFieldAddress(i) != 0) return false;
+        }
+        return true;
+    }
+    
     public long make(Heap heap, VaporizingRow row) {
         long pRowid = row.getFieldAddress(0);
         long pResult;
-        pResult = make(heap, this.keyFields.size(), pRowid, false, false, (int i, KeyField field) -> {
-            long pValue = row.getFieldAddress(field.getColumndId());
+        pResult = make(heap, this.keyFields.size(), pRowid, false, false, (int i) -> {
+            long pValue = row.getFieldAddress(this.columnIds[i]);
             return pValue;
         });
         return pResult;
@@ -849,15 +923,19 @@ public final class KeyMaker {
                 KeyField field;
                 if (value instanceof Integer) {
                     pValue = Int4.allocSet(heap, (Integer)value);
-                    field = new VariableLengthIntegerField(i);
+                    field = _integerField;
                 }
                 else if (value instanceof Long) {
                     pValue = Int8.allocSet(heap, (Long)value);
-                    field = new VariableLengthIntegerField(i);
+                    field = _integerField;
                 }
                 else if (value instanceof String) {
                     pValue = FishUtf8.allocSet(heap, (String)value);
-                    field = new VariablLengthStringField(i);
+                    field = _stringField;
+                }
+                else if (value instanceof BigInteger) {
+                    pValue = BigInt.allocSet(heap, (BigInteger)value);
+                    field = _bigIntegerField;
                 }
                 else {
                     throw new IllegalArgumentException();
@@ -920,4 +998,22 @@ public final class KeyMaker {
         }
     }
 
+    public static int decodeInt(long pKey) {
+        int prefix = Unsafe.getByte(pKey + 7) & 0xff;
+        if (prefix < 0x80) {
+            // negative number is not supported for now forgive my laziness.
+            throw new IllegalArgumentException();
+        }
+        int size = prefix & 0x7f;
+        if (size > 3) {
+            // anything larger than 0xffffff is not supported. forgive my laziness.
+            throw new IllegalArgumentException();
+        }
+        long value = (Unsafe.getLong(pKey) & 0xffffffffffffffl) >> (7 - size) * 8;
+        return (int)value;
+    }
+    
+    public void setNegate(boolean[] values) {
+        this.negates = values;
+    }
 }

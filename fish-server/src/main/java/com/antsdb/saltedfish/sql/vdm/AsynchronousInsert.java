@@ -87,8 +87,9 @@ public class AsynchronousInsert implements AutoCloseable {
             // the heavy lift
             CharBuffer chars = toCharBuffer(this.sql);
             try {
+                AsynchronousInsert.this.session.getOrca().getScheduler().getUserLoadCounter().incrementAndGet();
                 MysqlParserFactory parser = (MysqlParserFactory)session.getParserFactory();
-                Script script = parser.parse(session, new CharBufferStream(chars), 1);
+                Script script = parser.parse(null, session, new CharBufferStream(chars), 1);
                 Instruction step = script.getRoot();
                 VdmContext ctx = new VdmContext(session, script.getVariableCount()); 
                 step.run(ctx, new Parameters(), 0);
@@ -97,6 +98,9 @@ public class AsynchronousInsert implements AutoCloseable {
                 if (AsynchronousInsert.this.error.compareAndSet(null, x)) {
                     AsynchronousInsert.this.errorSql = chars.toString();
                 }
+            }
+            finally {
+                AsynchronousInsert.this.session.getOrca().getScheduler().getUserLoadCounter().decrementAndGet();
             }
         }
     }

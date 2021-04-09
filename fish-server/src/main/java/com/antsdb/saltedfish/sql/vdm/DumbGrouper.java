@@ -13,80 +13,61 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
+import com.antsdb.saltedfish.cpp.FileBasedHeap;
+import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.OffHeapSkipList;
+import com.antsdb.saltedfish.cpp.OffHeapSkipListScanner;
+import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.planner.SortKey;
-import com.antsdb.saltedfish.util.UberUtil;
 
 public class DumbGrouper extends CursorMaker {
-    static final long GROUP_END = Record.GROUP_END;
+    static final long GROUP_END = 0;
     CursorMaker upstream;
     List<Operator> exprs;
-    
-    private static class MyCursor extends Cursor {
-        private List<Long> items;
-        private Cursor upstream;
-        int i=0;
+    private KeyMaker keyMaker;
 
-        public MyCursor(Cursor upstream, List<Long> items) {
-            super(upstream.getMetadata());
-            this.items = items;
-            this.upstream = upstream;
+    private static class MyCursor extends Cursor {
+        private Heap heap;
+        private OffHeapSkipListScanner scanner;
+        private long pNextGroupItem = 1;
+
+        public MyCursor(Heap heap, OffHeapSkipList sl, CursorMeta cursorMeta) {
+            super(cursorMeta);
+            this.heap = heap;
+            this.scanner = new OffHeapSkipListScanner(sl);
+            this.scanner.reset(0, 0, 0);
         }
 
         @Override
         public long next() {
-            if (i >= this.items.size()) {
+            if (this.pNextGroupItem != 0 && this.pNextGroupItem != 1) {
+                long pResult = Unsafe.getLong(this.pNextGroupItem);
+                this.pNextGroupItem = Unsafe.getLong(this.pNextGroupItem + 8);
+                return pResult;
+            }
+            if (this.pNextGroupItem == 0) {
+                this.pNextGroupItem = 1;
+                return GROUP_END;
+            }
+            long pEntry = this.scanner.next();
+            if (pEntry == 0) {
                 return 0;
             }
-            long pResult = items.get(this.i);
-            this.i++;
+            long pGroupItem = Unsafe.getLong(pEntry);
+            long pResult = Unsafe.getLong(pGroupItem);
+            this.pNextGroupItem = Unsafe.getLong(pGroupItem + 8);
             return pResult;
         }
 
         @Override
         public void close() {
-            this.upstream.close();
-        }
-        
-    }
-    
-    static class GroupKey {
-        List<Object> values = new ArrayList<Object>();
-
-        @Override
-        public int hashCode() {
-            int hash = 0;
-            for (int i=0; i<this.values.size(); i++) {
-                Object value = this.values.get(i);
-                if (value == null) {
-                    continue;
-                }
-                hash = hash ^ value.hashCode();
+            if (this.heap != null) {
+                this.heap.close();
+                this.heap = null;
             }
-            return hash;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            GroupKey another = (GroupKey)obj;
-            if (another == null) {
-                return false;
-            }
-            if (another.values.size() != this.values.size()) {
-                return false;
-            }
-            
-            for (int i=0; i<this.values.size(); i++) {
-                if (!UberUtil.safeEqual(this.values.get(i), another.values.get(i))) {
-                    return false;
-                }
-            }
-            return true;
         }
     }
     
@@ -95,6 +76,13 @@ public class DumbGrouper extends CursorMaker {
         this.upstream = upstream;
         this.exprs = exprs;
         setMakerId(makerId);
+        
+        // build key maker
+        DataType[] types = new DataType[exprs.size()];
+        for (int i=0; i<exprs.size(); i++) {
+            types[i] = exprs.get(i).getReturnType();
+        }
+        this.keyMaker = new KeyMaker(types);
     }
 
     @Override
@@ -104,58 +92,57 @@ public class DumbGrouper extends CursorMaker {
 
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        
         // fetch all rows in memory and group them by group key
+        Cursor result = null;
+        Heap heap = new FileBasedHeap(ctx.getHumpback().geTemp(), ctx.getConfig().getMaxHeapSize());
         
-    	AtomicLong counter = ctx.getCursorStats(makerId);
-        Map<GroupKey, List<Long>> recordsByGroupKey = new LinkedHashMap<DumbGrouper.GroupKey, List<Long>>();
-        Cursor c = this.upstream.make(ctx, params, pMaster);
-        c = new RecordBuffer(c);
-        for (;;) {
-            long pRec = c.next();
-            if (pRec == 0) {
-                break;
-            }
-            counter.incrementAndGet();
-            GroupKey key = new GroupKey();
-            if (this.exprs != null) { 
-                for (Operator i:this.exprs) {
-                    Object val = Util.eval(ctx, i, params, pRec);
-                    key.values.add(val);
+        try (Cursor cc = this.upstream.make(ctx, params, pMaster)) {
+            long counter = 0;
+            long[] keyValues = new long[this.exprs.size()];
+            OffHeapSkipList sl = OffHeapSkipList.alloc(heap);
+            for (long pRecord = cc.next(); pRecord != 0; pRecord = cc.next()) {
+                pRecord = Record.clone(heap, pRecord);
+                getGroupKey(ctx, heap, params, pRecord, keyValues);
+                long pKey = this.keyMaker.make(heap, keyValues);
+                long pEntry = sl.put(pKey);
+                long pGroupItem = Unsafe.getLong(pEntry);
+                if (pGroupItem == 0) {
+                    pGroupItem = heap.alloc(16);
+                    Unsafe.putLong(pGroupItem, pRecord);
+                    Unsafe.putLong(pGroupItem + 8, 0);
                 }
+                else {
+                    long pNextGroupItem = pGroupItem;
+                    pGroupItem = heap.alloc(16);
+                    Unsafe.putLong(pGroupItem, pRecord);
+                    Unsafe.putLong(pGroupItem + 8, pNextGroupItem);
+                }
+                Unsafe.putLong(pEntry, pGroupItem);
+                counter++;
             }
-            List<Long> list = recordsByGroupKey.get(key);
-            if (list == null) {
-                list = new ArrayList<Long>();
-                recordsByGroupKey.put(key, list);
+            result = counter != 0 ? new MyCursor(heap, sl, getCursorMeta()) : new EmptyCursor(getCursorMeta());
+            ctx.getCursorStats(makerId).addAndGet(counter);
+            heap = null;
+            return result;
+        }
+        finally {
+            if (heap != null) {
+                heap.close();
             }
-            list.add(pRec);
         }
-        
-        // store the grouped records in list
-        
-        List<Long> records = new ArrayList<Long>();
-        for (List<Long> i:recordsByGroupKey.values()) {
-            records.addAll(i);
-            records.add(GROUP_END);
-        }
-
-        // prevent empty result. there are cases like select count(*) from empty_table
-        
-        if (records.size() == 0 && (this.exprs.size() == 0)) {
-            records.add(GROUP_END);
-        }
-        
-        // done convert the list to the cursor
-        
-        Cursor result = new MyCursor(c, records);
-        return result;
     }
 
+    void getGroupKey(VdmContext ctx, Heap heap, Parameters params, long pRecord, long[] values) {
+        for (int i=0; i<this.exprs.size(); i++) {
+            Operator expr = this.exprs.get(i);
+            long pValue = expr.eval(ctx, heap, params, pRecord);
+            values[i] = pValue;
+        }
+    }
+    
     @Override
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, getClass().getSimpleName());
-        records.add(rec);
+        super.explain(level, records);
         this.upstream.explain(level+1, records);
     }
 
@@ -164,4 +151,17 @@ public class DumbGrouper extends CursorMaker {
         return false;
     }
 
+    public CursorMaker getUpstream() {
+        return this.upstream;
+    }
+
+    @Override
+    public float getScore() {
+        return this.upstream.getScore();
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName();    
+    }
 }

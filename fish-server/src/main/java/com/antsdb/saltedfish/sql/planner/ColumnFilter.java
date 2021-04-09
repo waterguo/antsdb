@@ -25,16 +25,22 @@ class ColumnFilter {
     PlannerField field;
     FilterOp op;
     Object operand;
+    /** 
+     * false if this is a join condition or not. join condition means it has FieldValue coming from two or more 
+     * nodes 
+     */
     boolean isConstant;
     Operator source;
     int version;
+    boolean isJoin = false;
 
-    public ColumnFilter(PlannerField field, FilterOp op, Object operand, Operator source) {
+    public ColumnFilter(PlannerField field, FilterOp op, Object operand, Operator source, boolean isJoin) {
         super();
         this.field = field;
         this.op = op;
         this.operand = operand;
         this.source = source;
+        this.isJoin = isJoin;
     }
 
     public boolean isRangeScan() {
@@ -55,9 +61,28 @@ class ColumnFilter {
         return false;
     }
 
+    private String getOpString() {
+        switch (this.op) {
+        case LESS:
+            return "<";
+        case LESSEQUAL:
+            return "<=";
+        case LARGER:
+            return ">";
+        case LARGEREQUAL:
+            return ">=";
+        case EQUAL:
+            return "=";
+        case EQUALNULL:
+            return "==";
+        default:
+            return " " + this.op.toString() + " ";
+        }
+    }
+    
     @Override
     public String toString() {
-        return this.source.toString();
+        return this.field + getOpString() + this.operand.toString();
     }
     
 }

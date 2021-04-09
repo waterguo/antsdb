@@ -54,5 +54,15 @@ public class Flow extends Instruction {
             i.explain(level, records);
         }
     }
+
+    public List<Instruction> getInstructions() {
+        return this.instructions;
+    }
+
+    public void addAll(List<Instruction> constrains) {
+        for (Instruction i:constrains) {
+            add(i);
+        }
+    }
     
 }

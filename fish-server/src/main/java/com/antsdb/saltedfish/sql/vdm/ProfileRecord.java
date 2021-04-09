@@ -13,49 +13,11 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-class ProfileRecord extends HashMapRecord {
-    ProfileRecord() {
-    }
-    
-    ProfileRecord(int level, String plan, String stats) {
-        this.setLevel(level)
-            .setPlan(plan)
-            .setStats(stats);
-    }
-    
-    int getMakerId() {
-    	return (int)this.get(0);
-    }
-    
-    ProfileRecord setMakerId(int value) {
-    	this.set(0, value);
-    	return this;
-    }
-    
-    int getLevel() {
-        return (int)this.get(1);
-    }
-    
-    ProfileRecord setLevel(int level) {
-        this.set(1, level);
-        return this;
-    }
-    
-    String getPlan() {
-        return (String)this.get(2);
-    }
-    
-    ProfileRecord setPlan(String plan) {
-        this.set(2, plan);
-        return this;
-    }
-    
-    String getStats() {
-        return (String)this.get(3);
-    }
-    
-    ProfileRecord setStats(String stats) {
-        this.set(3, stats);
-        return this;
-    }
+public class ProfileRecord {
+    public Integer id;
+    public Integer level;
+    public String plan;
+    public Float score;
+    public long input_count;
+    public String other;
 }

@@ -16,6 +16,8 @@ package com.antsdb.saltedfish.sql;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.util.TimeConstants;
+import com.antsdb.saltedfish.util.UberTime;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -25,7 +27,9 @@ import com.antsdb.saltedfish.util.UberUtil;
  */
 public class SessionSweeper implements Runnable {
     static Logger _log = UberUtil.getThisLogger();
-
+    
+    long lastWindowTrxId;
+    long lastWindowTime;
     Orca orca;
     
     SessionSweeper(Orca orca) {
@@ -35,11 +39,14 @@ public class SessionSweeper implements Runnable {
     @Override
     public synchronized void run() {
         try {
-            long lastClosed = this.orca.getLastClosedTransactionId();
             Humpback humpback = this.orca.getHumpback();
-            if (lastClosed < humpback.getLastClosedTransactionId()) {
-                humpback.setLastClosedTransactionId(lastClosed);
+            long lastClosed = humpback.getLastClosedTransactionId();
+            long now = UberTime.getTime();
+            // log trx window when there are enough transactions or long enough
+            if ((lastClosed - this.lastWindowTrxId >= 1000) || (now - lastWindowTime >= TimeConstants.minute(5))) {
                 humpback.getGobbler().logTransactionWindow(lastClosed);
+                this.lastWindowTime = now;
+                this.lastWindowTrxId = lastClosed;
                 _log.trace("session sweeper found last trx: {}", lastClosed);
             }
         }

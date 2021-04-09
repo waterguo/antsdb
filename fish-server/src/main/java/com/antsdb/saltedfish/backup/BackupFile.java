@@ -23,7 +23,9 @@ import java.util.List;
 
 import org.apache.commons.codec.Charsets;
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.util.UberUtil;
 import com.google.gson.Gson;
 
 /**
@@ -31,6 +33,7 @@ import com.google.gson.Gson;
  * @author *-xguo0<@
  */
 public class BackupFile {
+    static final Logger _log = UberUtil.getThisLogger();
     List<TableBackupInfo> tables = new ArrayList<>(); 
     
     public void save(OutputStream out) throws IOException {
@@ -56,6 +59,8 @@ public class BackupFile {
     
     private static String readUtf(DataInputStream in) throws IOException {
         int length = in.readInt();
+        _log.debug("data length={}",length);
+        System.out.println("data length="+length);
         byte[] bytes = new byte[length];
         IOUtils.readFully(in, bytes);
         String result = new String(bytes, Charsets.UTF_8);

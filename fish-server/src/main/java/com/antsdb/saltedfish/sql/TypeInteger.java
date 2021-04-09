@@ -23,7 +23,7 @@ public class TypeInteger extends DataType {
     long min;
     
     public TypeInteger(String name, int sqlType, Class<?> klass, byte fishType, int length, long max, long min) {
-        super(name, length, 0, sqlType, klass, fishType);
+        super(name, length, 0, sqlType, klass, fishType, Weight.INT8);
         this.max = max;
         this.min = min;
     }

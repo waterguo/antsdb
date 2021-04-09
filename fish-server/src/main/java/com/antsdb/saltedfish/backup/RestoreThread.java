@@ -86,6 +86,7 @@ class RestoreThread extends Thread {
     }
     
     private void run0() throws Exception {
+        boolean useAutoCommit = this.conn.getAutoCommit();
         this.count = 0;
         for (;;) {
             List<Object[]> rows = this.queue.take();
@@ -101,9 +102,11 @@ class RestoreThread extends Thread {
                         stmt.setObject(i+1, value);
                     }
                     stmt.addBatch();
-                    count++;
                 }
                 stmt.executeBatch();
+                if (!useAutoCommit) {
+                    this.conn.commit();
+                }
                 this.count += rows.size();
             }
             finally {

@@ -73,8 +73,8 @@ public abstract class FishCommandLine extends CommandLineHelper {
             System.exit(-1);
         }
         File file = new File(home);
-        if (!new File(file, "data").isDirectory()) {
-            println("error: home directory '%s' is invalid", file.getAbsolutePath());
+        if (!new File(file, "conf").isDirectory()) {
+            println("error: home directory '%s' is invalid, configuration is not found", file.getAbsolutePath());
             System.exit(-1);
         }
         return file;

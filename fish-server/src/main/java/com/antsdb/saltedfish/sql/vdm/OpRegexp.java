@@ -26,45 +26,45 @@ import com.antsdb.saltedfish.sql.DataType;
  * @author wgu0
  */
 public class OpRegexp extends Operator {
-	Operator expr;
-	Operator pattern;
+    Operator expr;
+    Operator pattern;
     private int variableId;
-	
-	public OpRegexp(Operator expr, Operator pattern, int variableId) {
-		this.expr = expr;
-		this.pattern = pattern;
-		this.variableId = variableId;
-	}
+    
+    public OpRegexp(Operator expr, Operator pattern, int variableId) {
+        this.expr = expr;
+        this.pattern = pattern;
+        this.variableId = variableId;
+    }
 
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		long pValue = AutoCaster.toString(heap, this.expr.eval(ctx, heap, params, pRecord));
-		if (pValue == 0) {
-			return 0;
-		}
-		Pattern ptn = (Pattern)ctx.getVariable(this.variableId);
-		if (ptn == null) {
-		    long pPattern = this.pattern.eval(ctx, heap, params, pRecord);
-		    String patternString = AutoCaster.getString(heap, pPattern);
-		    if (patternString == null) {
-		        return 0;
-		    }
-		    ptn = Pattern.compile(patternString);
-		    ctx.setVariable(this.variableId, ptn);
-		}
-		String s = (String)FishObject.get(heap, pValue);
-		boolean result = ptn.matcher(s).find();
-		return FishBool.allocSet(heap, result);
-	}
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pValue = AutoCaster.toString(heap, this.expr.eval(ctx, heap, params, pRecord));
+        if (pValue == 0) {
+            return 0;
+        }
+        Pattern ptn = (Pattern)ctx.getVariable(this.variableId);
+        if (ptn == null) {
+            long pPattern = this.pattern.eval(ctx, heap, params, pRecord);
+            String patternString = AutoCaster.getString(heap, pPattern);
+            if (patternString == null) {
+                return 0;
+            }
+            ptn = Pattern.compile(patternString);
+            ctx.setVariable(this.variableId, ptn);
+        }
+        String s = (String)FishObject.get(heap, pValue);
+        boolean result = ptn.matcher(s).find();
+        return FishBool.allocSet(heap, result);
+    }
 
-	@Override
-	public DataType getReturnType() {
-		return DataType.bool();
-	}
+    @Override
+    public DataType getReturnType() {
+        return DataType.bool();
+    }
 
-	@Override
-	public void visit(Consumer<Operator> visitor) {
-		visitor.accept(this);
-		this.expr.visit(visitor);
-	}
+    @Override
+    public void visit(Consumer<Operator> visitor) {
+        visitor.accept(this);
+        this.expr.visit(visitor);
+    }
 }

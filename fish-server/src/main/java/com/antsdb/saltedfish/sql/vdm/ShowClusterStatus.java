@@ -58,11 +58,11 @@ public class ShowClusterStatus extends View {
             
             ctx.getOrca().getBelugaPod().getMembers().forEach((it)->{
                Line ii = new Line();
-               ii.ENDPOINT = it.endpoint;
+               ii.ENDPOINT = it.getEndpoint();
                ii.STATE = it.getState().toString();
                ii.GOSSIP = it.getGossip();
                ii.LOG_POINTER = it.getLogPointer();
-               ii.SERVER_ID = it.serverId;
+               ii.SERVER_ID = it.getServerId();
                ii.OPTIONS = it.getOptions();
                result.add(ii);
             });

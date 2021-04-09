@@ -29,76 +29,81 @@ import com.antsdb.saltedfish.sql.planner.SortKey;
 public class FullTextIndexScan extends CursorMaker {
 
     private TableMeta table;
-	private IndexMeta index;
-	private CursorMeta meta;
-	private int[] mapping;
-	private Operator term;
-	private KeyMaker keyMaker;
-	
-	public FullTextIndexScan(TableMeta table, IndexMeta index, int makerId) {
-    	this.table = table;
-    	this.index = index;
+    private IndexMeta index;
+    private CursorMeta meta;
+    private int[] mapping;
+    private Operator term;
+    private KeyMaker keyMaker;
+    
+    public FullTextIndexScan(TableMeta table, IndexMeta index, int makerId) {
+        this.table = table;
+        this.index = index;
         this.meta = CursorMeta.from(table);
         this.mapping = this.meta.getHumpbackMapping();
         setMakerId(makerId);
         this.keyMaker = KeyMaker.getFullTextIndexKeyMaker();
     }
 
-	@Override
-	public CursorMeta getCursorMeta() {
-		return this.meta;
-	}
+    @Override
+    public CursorMeta getCursorMeta() {
+        return this.meta;
+    }
 
-	@Override
-	public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
-		RowIterator it = makeRowIterator(ctx, params, pMaster);
-		if (it == null) {
-			return new EmptyCursor(getCursorMeta());
-		}
+    @Override
+    public Cursor make(VdmContext ctx, Parameters params, long pMaster) {
+        RowIterator it = makeRowIterator(ctx, params, pMaster);
+        if (it == null) {
+            return new EmptyCursor(getCursorMeta());
+        }
         GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
         Transaction trx = ctx.getTransaction();
         IndexCursor cursor = new IndexCursor(
-        		ctx.getSpaceManager(), 
-        		this.meta, 
-        		it, 
-        		mapping, 
-        		gtable, 
-        		trx,
-        		ctx.getCursorStats(makerId));
+                ctx.getSpaceManager(), 
+                this.meta, 
+                it, 
+                mapping, 
+                gtable, 
+                trx,
+                ctx.getCursorStats(makerId));
         cursor.setName(this.toString());
         return cursor;
-	}
+    }
 
-	RowIterator makeRowIterator(VdmContext ctx, Parameters params, long pMaster) {
-		if (this.term == null) {
-			return null;
-		}
-		try (BluntHeap heap = new BluntHeap()) {
-        	// calculate boundary
-        	
-        	long pTerm = this.term.eval(ctx, heap, params, pMaster);
-        	if (pTerm == 0) {
-        		return null;
-        	}
-        	long pFrom = this.keyMaker.make(heap, pTerm);
-        	long pTo = this.keyMaker.makeMax(heap, pTerm);
+    RowIterator makeRowIterator(VdmContext ctx, Parameters params, long pMaster) {
+        if (this.term == null) {
+            return null;
+        }
+        try (BluntHeap heap = new BluntHeap()) {
+            // calculate boundary
+            
+            long pTerm = this.term.eval(ctx, heap, params, pMaster);
+            if (pTerm == 0) {
+                return null;
+            }
+            long pFrom = this.keyMaker.make(heap, pTerm);
+            long pTo = this.keyMaker.makeMax(heap, pTerm);
 
-        	// create index scanner
-	        
-	        GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
-	        Transaction trx = ctx.getTransaction();
-	        RowIterator it = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
-	        return it;
-		}
-	}
-	
-	public void setQueryTerm(Operator term) {
-		this.term = term;
-	}
+            // create index scanner
+            
+            GTable gindex = ctx.getHumpback().getTable(index.getIndexTableId());
+            Transaction trx = ctx.getTransaction();
+            RowIterator it = gindex.scan(trx.getTrxId(), trx.getTrxTs(), pFrom, pTo, 0);
+            return it;
+        }
+    }
+    
+    public void setQueryTerm(Operator term) {
+        this.term = term;
+    }
 
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return false;
+    }
+
+    @Override
+    public float getScore() {
+        return 1.1f;
     }
 
 }

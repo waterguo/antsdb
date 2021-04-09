@@ -18,8 +18,9 @@ import java.util.List;
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
-import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.GetInfo;
 import com.antsdb.saltedfish.util.CursorUtil;
+import static com.antsdb.saltedfish.nosql.GetOptions.*;
 
 /**
  * 
@@ -44,23 +45,20 @@ public class HSeek extends HSelect {
         try {
             heap = new BluntHeap();
             Transaction trx = ctx.getTransaction();
-            long pKey = this.keyExpr.eval(ctx, heap, params, pMaster);
-            KeyBytes key = KeyBytes.fromHexDump(AutoCaster.getString(heap, pKey));
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), key.getAddress());
+            long pKeyString = this.keyExpr.eval(ctx, heap, params, pMaster);
+            KeyBytes key = KeyBytes.fromHexDump(AutoCaster.getString(heap, pKeyString));
+            long pKey = key.getAddress();
+            GetInfo info = new GetInfo();
+            long pRow = gtable.getMemTable().get(trx.getTrxId(), trx.getTrxTs(), pKey, NO_CACHE, info);
             if (pRow != 0) {
                 long pRecord = Record.alloc(heap, this.meta.getColumnCount());
-                Row row = Row.fromMemoryPointer(pRow, 0);
-                Record.setKey(pRecord, row.getKeyAddress());
-                for (int i=0; i<this.meta.getColumnCount(); i++) {
-                    long pValue = row.getFieldAddress(this.mapping[i]);
-                    Record.set(pRecord, i, pValue);
-                }
+                Record.copy(heap, info, pRecord, this.mapping);
                 result = CursorUtil.toCursor(meta, heap, pRecord);
+                heap = null;
             }
             else {
                 result = new EmptyCursor(meta);
             }
-            heap = null;
         }
         finally {
             if (heap != null) {

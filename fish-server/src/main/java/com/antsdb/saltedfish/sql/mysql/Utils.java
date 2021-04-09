@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.lexer.MysqlParser.Column_constraintContext;
@@ -32,7 +33,9 @@ import com.antsdb.saltedfish.lexer.MysqlParser.String_valueContext;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.DataTypeFactory;
 import com.antsdb.saltedfish.sql.GeneratorContext;
+import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
+import com.antsdb.saltedfish.sql.planner.OutputField;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.vdm.ColumnAttributes;
 import com.antsdb.saltedfish.sql.vdm.ExprUtil;
@@ -45,6 +48,9 @@ class Utils {
     static Logger _log = UberUtil.getThisLogger();
 
     static List<String> getColumns(ColumnsContext columns) {
+        if (columns == null) {
+            return null;
+        }
         List<String> list = new ArrayList<>();
         columns.identifier().forEach(it -> list.add(Utils.getIdentifier(it)));
         return list;
@@ -143,7 +149,14 @@ class Utils {
                 }
             }
             else if (i.column_constraint_character_set() != null) {
-                _log.warn("character set is ignored for column {}", columnName);
+                String cs = i.column_constraint_character_set().any_name().getText();
+                if (cs.equalsIgnoreCase("utf8")) {
+                }
+                else if (cs.equalsIgnoreCase("utf8mb4")) {
+                } 
+                else {
+                    _log.warn("character set is ignored for column {}", columnName);
+                }
             }
             else {
                 throw new NotImplementedException(i.getText());
@@ -157,20 +170,12 @@ class Utils {
     }
 
     private static void setColumnDefault(ColumnAttributes attrs, Column_constraint_defaultContext rule) {
-        if (rule.literal_value() != null) {
-            String value = rule.literal_value().getText();
-            if (value.equalsIgnoreCase("null")) {
-                attrs.setDefaultValue(null);
-            }
-            else {
-                attrs.setDefaultValue(value);
-            }
-        }
-        else if (rule.signed_number() != null) {
-            attrs.setDefaultValue(rule.signed_number().getText());
+        String value = rule.literal_value().getText();
+        if (value.equalsIgnoreCase("null")) {
+            attrs.setDefaultValue(null);
         }
         else {
-            throw new NotImplementedException();
+            attrs.setDefaultValue(value);
         }
     }
 
@@ -199,7 +204,18 @@ class Utils {
         return fac.newDataType(typeName, length, scale);
     }
 
-    static Operator findInPlannerOutputFields(Planner planner, String name) {
+    static Operator findInPlannerOutputFieldsForOrderBy(Planner planner, String name) {
+        // field position
+        if (StringUtils.isNumeric(name)) {
+            int pos = Integer.parseInt(name);
+            List<OutputField> fields = planner.getOutputFields();
+            if ((pos < 1) || (pos > fields.size())) {
+                throw new OrcaException("Unknown column '{}' in 'order/group by clause'", pos);
+            }
+            return fields.get(pos-1).getExpr();
+        }
+        
+        // try field name
         if (name.startsWith("`") || name.startsWith("\"")) {
             name = name.substring(1, name.length() - 1);
         }
@@ -217,12 +233,18 @@ class Utils {
     }
     
     static String getQuotedLiteralValue(String_valueContext rule) {
-        if (rule == null) {
+        return (rule == null) ? null : strip(rule.getText());
+    }
+    
+    /** strip the quotation mark */
+    static String strip(String value) {
+        if (value == null) {
             return null;
         }
-        String value = rule.getText();
-        value = value.substring(1, value.length() - 1);
-        value = ExprUtil.unescape(value);
+        if (value.startsWith("'") || value.startsWith("\"")) {
+            value = value.substring(1, value.length() - 1);
+            value = ExprUtil.unescape(value);
+        }
         return value;
     }
 }

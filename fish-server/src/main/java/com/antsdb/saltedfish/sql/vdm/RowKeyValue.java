@@ -26,8 +26,8 @@ public class RowKeyValue extends Operator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-            long pResult = Record.getKey(pRecord);
-            return pResult;
+        long pResult = Record.getKey(pRecord);
+        return pResult;
     }
 
     @Override

@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -22,6 +23,7 @@ import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.vdm.NullIfEmpty;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.ToBigDecimal;
+import com.antsdb.saltedfish.sql.vdm.ToBigInteger;
 import com.antsdb.saltedfish.sql.vdm.ToBytes;
 import com.antsdb.saltedfish.sql.vdm.ToDate;
 import com.antsdb.saltedfish.sql.vdm.ToDouble;
@@ -74,6 +76,9 @@ public class Util {
         }
         else if (type == Timestamp.class) {
             newone = new ToTimestamp(new NullIfEmpty(expr));
+        }
+        else if (type == BigInteger.class) {
+            newone = new ToBigInteger(new NullIfEmpty(expr));
         }
         else {
             throw new CodingError();

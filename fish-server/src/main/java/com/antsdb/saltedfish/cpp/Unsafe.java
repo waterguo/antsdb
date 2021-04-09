@@ -182,7 +182,7 @@ public final class Unsafe {
         return unsafe.allocateMemory(size);
     }
 
-    public static boolean compareAndSwapLong(long addr, int expected, long value) {
+    public static boolean compareAndSwapLong(long addr, long expected, long value) {
         return unsafe.compareAndSwapLong(null, ix(addr), expected, value);
     }
     

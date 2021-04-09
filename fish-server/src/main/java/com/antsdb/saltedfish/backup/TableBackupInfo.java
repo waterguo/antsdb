@@ -25,6 +25,9 @@ public class TableBackupInfo {
     public ColumnBackupInfo[] columns;
     
     public String getFullName() {
-        return this.catalog + "." + this.table;
+        String result = this.table;
+        if (this.schema != null) result = this.schema + "." + result;
+        if (this.catalog != null) result = this.catalog + "." + result;
+        return result;
     }
 }

@@ -472,7 +472,7 @@ public final class FishSkipList implements ConsoleHelper {
         try {
             buildIndex(pKey, z);
         }
-        catch (OutOfHeapMemory x) {
+        catch (OutOfHeapException x) {
             // failed to add index node doesnt hurt
         }
         
@@ -966,6 +966,17 @@ public final class FishSkipList implements ConsoleHelper {
             return 0;
         }
         return Node.getValuePointer(this.base, node);
+    }
+    
+    public long higherKey(long pKey) {
+        if (pKey == 0) {
+            return 0;
+        }
+        int node = findNode(pKey, OP_GT);
+        if (node == 0) {
+            return 0;
+        }
+        return Node.getKeyPointer(this.base, node);
     }
     
     public long floor(long pKey) {

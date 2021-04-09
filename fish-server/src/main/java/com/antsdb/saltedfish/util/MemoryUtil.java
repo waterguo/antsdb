@@ -37,6 +37,11 @@ public final class MemoryUtil {
         return rt.totalMemory() - rt.freeMemory();
     }
     
+    public static long getHeapMaxSize() {
+        Runtime rt = Runtime.getRuntime();
+        return rt.maxMemory();
+    }
+    
     public static BufferPoolMXBean getDirectMemoryMXBean() {
         List<BufferPoolMXBean> pools = ManagementFactory.getPlatformMXBeans(BufferPoolMXBean.class);
         for (BufferPoolMXBean pool:pools) {

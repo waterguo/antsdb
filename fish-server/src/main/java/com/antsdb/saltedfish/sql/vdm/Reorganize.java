@@ -57,7 +57,7 @@ public class Reorganize extends Statement {
     }
 
     private void carbonfreeze(VdmContext ctx) {
-        long lastClosedTrxId = ctx.getOrca().getLastClosedTransactionId();
+        long lastClosedTrxId = ctx.getOrca().getHumpback().getLastClosedTransactionId();
         Humpback humpback = ctx.getHumpback();
         try {
             humpback.carbonfreeze(lastClosedTrxId, true);

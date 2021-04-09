@@ -21,5 +21,6 @@ public interface Replicable {
     default public void connect() throws Exception {};
     public long getReplicateLogPointer();
     public long getCommittedLogPointer();
-    public ReplicationHandler getReplayHandler();
+    public ReplicationHandler2 getReplayHandler();
+    public default void setLogPointer(long value) {};
 }

@@ -65,22 +65,23 @@ public class FishBackupMain extends JdbcBackupMain {
     private void saveDump(OutputStream out, BackupFile backup) throws Exception {
         DataOutputStream dout = new DataOutputStream(out);
         WritableByteChannel ch = Channels.newChannel(dout);
-        MysqlClient client = new MysqlClient(this.host, Integer.parseInt(this.port));
-        client.connect();
-        client.login("test", "test");
-        for (TableBackupInfo table:backup.tables) {
-            client.backup(table.getFullName());
-            dout.writeUTF(table.getFullName());
-            for (;;) {
-                ByteBuffer packet = client.readPacketErrorCheck();
-                if (client.isEof(packet)) {
-                    break;
+        try (MysqlClient client = new MysqlClient(this.host, Integer.parseInt(this.port))) {
+            client.connect();
+            client.login("test", "test");
+            for (TableBackupInfo table:backup.tables) {
+                client.backup(table.getFullName());
+                dout.writeUTF(table.getFullName());
+                for (;;) {
+                    ByteBuffer packet = client.readPacketErrorCheck();
+                    if (client.isEof(packet)) {
+                        break;
+                    }
+                    packet.position(4);
+                    ch.write(packet);
                 }
-                packet.position(4);
-                ch.write(packet);
+                dout.writeInt(0);
             }
-            dout.writeInt(0);
+            dout.flush();
         }
-        dout.flush();
     }
 }

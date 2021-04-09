@@ -23,18 +23,20 @@ import java.util.regex.Pattern;
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.obs.ExternalQuerySession;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.util.UberUtil;
 
 public class SaltedFish {
     static Logger _log = UberUtil.getThisLogger();
     static SaltedFish _singleton;
-    
+
     Orca orca;
     ConfigService config;
     File home;
     boolean isClosed;
     TcpServer listener;
+    TcpServer auxListener;
 
     public SaltedFish(File home) {
         _singleton = this;
@@ -49,8 +51,17 @@ public class SaltedFish {
             startLogging();
             // MUST start listener before starting database. use the port to lock out database instance. otherwise, the
             // 2nd database will corrupt the database files.
-            this.listener = createTcpServer(); 
+            this.listener = createMainTcpServer();
             listener.start(getConfig().getPort());
+            if (this.config.getClusterName() != null) {
+                this.auxListener = createAuxTcpServer();
+                Integer port = this.config.getAuxPort();
+                this.auxListener.start(port == null ? 2007 : (int) port);
+            }
+            else if (this.config.getAuxPort() != null) {
+                this.auxListener = createAuxTcpServer();
+                this.auxListener.start(this.config.getAuxPort());
+            }
             startDatabase();
             startWeb();
         }
@@ -59,18 +70,27 @@ public class SaltedFish {
             throw x;
         }
     }
-    
-    private TcpServer createTcpServer() {
+
+    private TcpServer createMainTcpServer() {
         String provider = this.config.getTcpServerProvider();
-        
+        try {
+            ExternalQuerySession.getInstance().init(home,
+                    new com.antsdb.saltedfish.nosql.ConfigService(new File(getConfigFolder(home), "conf.properties")));
+        }
+        catch (Exception e) {
+            _log.warn(e.getMessage(), e);
+        }
         if ("netty".equals(provider)) {
-            return new NettyServer(this, 
-                                   this.config.getBossGroupSize(), 
-                                   this.config.getNettyWorkerThreadPoolSize());
+            return new NettyServer(this, this.config.getBossGroupSize(), this.config.getNettyWorkerThreadPoolSize());
         }
         else {
-            return new SimpleSocketServer(this); 
+            return new SimpleSocketServer(this, false);
         }
+
+    }
+
+    private TcpServer createAuxTcpServer() {
+        return new SimpleSocketServer(this, true);
     }
 
     private void startWeb() {
@@ -80,32 +100,32 @@ public class SaltedFish {
 
     public void startOrcaOnly() throws Exception {
         startLogging();
-        
+
         this.config = new ConfigService(new File(getConfigFolder(home), "conf.properties"));
-        
+
         // disable hbase service by removing hbase conf
         Properties props = this.config.getProperties();
         props.remove("hbase_conf");
-        
+
         startDatabase();
     }
 
     void startLogging() {
         Pattern ptn = Pattern.compile("log4j\\.appender\\..+\\.file");
         Properties props = getLoggingConf();
-        for (Map.Entry<Object, Object> i:props.entrySet()) {
-            String key = (String)i.getKey();
+        for (Map.Entry<Object, Object> i : props.entrySet()) {
+            String key = (String) i.getKey();
             if (!ptn.matcher(key).matches()) {
                 continue;
             }
-            String value = (String)i.getValue();
+            String value = (String) i.getValue();
             File file = new File(this.home, value);
             i.setValue(file.getAbsolutePath());
-                System.out.println("log file: " + file.getAbsolutePath());
+            System.out.println("log file: " + file.getAbsolutePath());
         }
         PropertyConfigurator.configure(props);
     }
-    
+
     Properties getLoggingConf() {
         File logConf = new File(getConfigFolder(home), "log4j.properties");
         if (!logConf.exists()) {
@@ -114,30 +134,36 @@ public class SaltedFish {
         Properties props = new Properties();
         if (logConf.exists()) {
             System.out.println("using log configuration: " + logConf.getAbsolutePath());
-            try (FileInputStream in=new FileInputStream(logConf)) {
+            try (
+                    FileInputStream in = new FileInputStream(logConf)
+                    ) {
                 props.load(in);
                 return props;
-            } 
-            catch (Exception ignored) {}
+            }
+            catch (Exception ignored) {
+            }
         }
-        try (InputStream in=getClass().getResourceAsStream("/log4j.properties")) {
+        try (
+                InputStream in = getClass().getResourceAsStream("/log4j.properties")
+                ) {
             System.out.println("using log configuration: " + getClass().getResource("/log4j.properties"));
             props.load(in);
-                return props;
+            return props;
         }
-        catch (Exception ignored) {}
+        catch (Exception ignored) {
+        }
         return props;
     }
-    
+
     public void run() throws Exception {
         start();
     }
-    
-    void startDatabase() throws Exception {        
+
+    void startDatabase() throws Exception {
         Orca orca = new Orca(this.home, this.config.getProperties());
         this.orca = orca;
     }
-    
+
     public void shutdown() {
         try {
             this.listener.shutdown();
@@ -152,7 +178,7 @@ public class SaltedFish {
             _log.error("unable to shutdown orca gracefully", x);
         }
     }
-    
+
     public Orca getOrca() {
         return this.orca;
     }
@@ -169,7 +195,7 @@ public class SaltedFish {
         File conf = new File(home, "conf");
         return (conf.exists()) ? conf : home;
     }
-    
+
     public void close() {
         this.isClosed = true;
         try {
@@ -178,9 +204,14 @@ public class SaltedFish {
         catch (Exception x) {
             _log.warn("unable to close tcp server", x);
         }
-        this.orca.shutdown();
+        try {
+            this.orca.shutdown();
+        }
+        catch (Exception x) {
+            _log.warn("unable to shutdown orca", x);
+        }
     }
-    
+
     public boolean isClosed() {
         return this.isClosed;
     }

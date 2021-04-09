@@ -19,29 +19,30 @@ package com.antsdb.saltedfish.util;
  * @author *-xguo0<@
  */
 public abstract class ScalableData {
-	private volatile int ticket;
-	
-	/**
-	 * grow the current storage 
-	 * 
-	 * @param filled the storage object that is full 
-	 * @return
-	 */
-	protected synchronized void grow(int requestTicket) {
-		if (this.ticket != requestTicket) {
-			// caller should try again because a new storage object is created
-			return;
-		}
-		int next = this.ticket + 1;
-		extend(requestTicket, next);
-		this.ticket = next;
-	}
-	
-	/**
-	 * Overridden by subclass to extend the storage object. this method will be called in a single thread context
-	 * 
-	 * @param current the current filled up storage object
-	 * @return new object that extends the filled up one
-	 */
-	protected abstract void extend(int requestTicket, int nextTicket);
+    private volatile long ticket = Long.MIN_VALUE;
+    
+    protected synchronized void resetTicket() {
+        this.ticket = Long.MIN_VALUE;
+    }
+    
+    /**
+     * grow the current storage 
+     * 
+     * @param filled the storage object that is full 
+     * @return
+     */
+    protected synchronized boolean grow(long requestTicket) {
+        if (requestTicket <= this.ticket) {
+            // caller should try again because a new storage object is created
+            return false;
+        }
+        this.ticket = requestTicket;
+        extend();
+        return true;
+    }
+    
+    /**
+     * Overridden by subclass to extend the storage object. this method will be called in a single thread context
+     */
+    protected abstract void extend();
 }

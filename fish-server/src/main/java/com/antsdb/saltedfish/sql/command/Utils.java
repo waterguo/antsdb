@@ -17,8 +17,13 @@ import java.util.List;
 import java.util.Properties;
 
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.lexer.FishParser.AssignmentContext;
+import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.Humpback;
+import com.antsdb.saltedfish.sql.OrcaException;
+import com.antsdb.saltedfish.sql.Session;
 
 /**
  * 
@@ -38,5 +43,35 @@ final class Utils {
             props.put(key.toLowerCase(), value);
         }
         return props;
+    }
+
+    static int tableExists(Session session, String name) {
+        name = removeQuotes(name);
+        Humpback humpback = session.getOrca().getHumpback();
+        
+        // if the table name is a number
+        GTable gtable = null;
+        if (StringUtils.isNumeric(name)) {
+            gtable = humpback.getTable(Integer.parseInt(name)); 
+        }
+        
+        // find the table by literal name
+        if (gtable == null) {
+            String ns = session.getCurrentNamespace();
+            gtable = humpback.findTable(ns, name);
+        }
+        
+        // error out or done
+        if (gtable == null) {
+            throw new OrcaException("table {} is not found", name); 
+        }
+        return gtable.getId();
+    }
+
+    private static String removeQuotes(String text) {
+        if (text.startsWith("`") || text.startsWith("\"")) {
+            text = text.substring(1, text.length() - 1);
+        }
+        return text;
     }
 }

@@ -27,9 +27,13 @@ public abstract class CursorWithHeap extends Cursor {
     private long heapMark;
     
     public CursorWithHeap(CursorMeta meta) {
+        this(meta, meta.getColumnCount());
+    }
+
+    public CursorWithHeap(CursorMeta meta, int width) {
         super(meta);
         this.heap = new FlexibleHeap();
-        this.pRecord = Record.alloc(heap, meta.getColumnCount());
+        this.pRecord = Record.alloc(heap, width);
         this.heapMark = this.heap.position();
     }
 

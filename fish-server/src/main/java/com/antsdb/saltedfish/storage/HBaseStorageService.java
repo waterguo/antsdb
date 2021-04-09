@@ -96,7 +96,7 @@ public class HBaseStorageService implements StorageEngine {
         
         // save current SP to hBase
         this.cp.setActive(false);
-        this.cp.updateHBase(getConnection());
+        this.cp.save(getConnection(), this.sysns);
         
         // HBase connection
         this.hbaseConnection.close();
@@ -115,7 +115,8 @@ public class HBaseStorageService implements StorageEngine {
     }
     
     public void updateLogPointer(long currentSP) throws IOException {
-        this.cp.updateLogPointer(getConnection(), currentSP);
+        this.cp.currentSp = currentSP;
+        this.cp.save(this.hbaseConnection, this.sysns);
     }
 
     public int getConfigBufferSize() {
@@ -143,7 +144,6 @@ public class HBaseStorageService implements StorageEngine {
         this.tnCheckpoint = TableName.valueOf(this.sysns, TABLE_SYNC_PARAM);
         
         // Configuration object, first try to find hbase-site.xml, then the embedded hbase/zookeeper settings
-        
         try {
             this.hbaseConfig = getHBaseConfig(antsdbConfig);
             getConnection();
@@ -153,7 +153,9 @@ public class HBaseStorageService implements StorageEngine {
             init();
         }
         catch (Throwable x) {
-            this.hbaseConnection.close();
+            if (this.hbaseConnection != null) {
+                this.hbaseConnection.close();
+            }
             throw x;
         }
     }
@@ -165,40 +167,30 @@ public class HBaseStorageService implements StorageEngine {
     static Connection createConnection(Configuration config) throws IOException {
         // we want the hbase client to throw error right away instead of waiting infinitely when the hbase
         // cluster is down
+        // explanation of timeout is below
+        // @link https://stackoverflow.com/questions/30923351/hbase-client-rpc-timeout
+        // @link http://hbasefly.com/2016/06/11/hbase-client-2/?egjmzi=i52jv
+        // hbase.client.scanner.timeout.period could also affect this
         
         config.set("hbase.client.retries.number", "2");
-        config.set("hbase.client.operation.timeout", "10000");
+        config.set("hbase.client.operation.timeout", "20000");
+        config.set("hbase.client.scanner.timeout.period", "20000");
+        config.set("hbase.rpc.timeout", "20000");
         
         // continue
-        
         Connection result;
-        if (User.isHBaseSecurityEnabled(config)) {
-            
-            System.setProperty("java.security.krb5.realm", "BLUE-ANTS.CLOUDAPP.NET");
-            System.setProperty("java.security.krb5.kdc", "blue-ants.cloudapp.net");
-
-            String hbasePrinc = config.get("hbase.master.kerberos.principal", "");
-            String hbaseKeytabFile = config.get("hbase.master.keytab.file", "");
-            
-            UserGroupInformation.setConfiguration(config);            
-            UserGroupInformation userGroupInformation = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
-                    hbasePrinc, 
-                    hbaseKeytabFile);
-            UserGroupInformation.setLoginUser(userGroupInformation);
-            User hbaseUser = User.create(userGroupInformation);
-            result = ConnectionFactory.createConnection(config, hbaseUser);
-        }
-        else {
-            result = ConnectionFactory.createConnection(config);
-        }
+        result = ConnectionFactory.createConnection(config);
         return result;
     }
 
-    public static Configuration getHBaseConfig(ConfigService config) {
+    public static Configuration getHBaseConfig(ConfigService config) throws IOException {
         Configuration result = HBaseConfiguration.create();
         if (config.getHBaseConf() != null) {
-            Path path = new Path(config.getHBaseConf());
-            result.addResource(path);
+            String path = config.getHBaseConf();
+            if (!new File(path).exists()) {
+                throw new OrcaHBaseException("hbase configuration file is not found {}", path);
+            }
+            result.addResource(new Path(path));
         }
         else if (config.getProperty("hbase.zookeeper.quorum", null) != null) {
             for (Map.Entry<Object, Object> i:config.getProperties().entrySet()) {
@@ -211,21 +203,34 @@ public class HBaseStorageService implements StorageEngine {
         else {
             throw new OrcaHBaseException("quorum is not set");
         }
+        if (config.isKerberosEnabled()) {
+            String krbconf = config.getKerberosConf();
+            String principal = config.getKerberosPrincipal();
+            String keytab = config.getKerberosKeytab();
+            if (!new File(keytab).exists()) {
+                throw new OrcaHBaseException("keytab file is not found {}", keytab);
+            }
+            if (!new File(krbconf).exists()) {
+                throw new OrcaHBaseException("kerberos configuration file is not found {}", krbconf);
+            }
+            _log.info("kerberos is enabled with krb={} principal={} keytab={}", krbconf, principal, keytab);
+            System.setProperty("java.security.krb5.conf", krbconf);
+            result.set("hadoop.security.authentication", "kerberos");
+            UserGroupInformation.setConfiguration(result);
+            UserGroupInformation.loginUserFromKeytab(principal, keytab);
+        }
         return result;
     }
     
     private void init() throws Exception {
         // create antsdb namespaces and tables if they are missing
-        
         setup();
         
         // load checkpoint
-        
-        this.cp = new CheckPoint(TableName.valueOf(this.sysns, TABLE_SYNC_PARAM), this.isMutable);
-        this.cp.readFromHBase(getConnection());
+        this.cp = new CheckPoint(this.isMutable);
+        this.cp.load(this.hbaseConnection, this.sysns, this.humpback.getServerId());
         
         // load system tables
-        
         Admin admin = this.hbaseConnection.getAdmin();
         TableName[] tables = admin.listTableNamesByNamespace(this.sysns);
         for (TableName i:tables) {
@@ -243,23 +248,31 @@ public class HBaseStorageService implements StorageEngine {
         }
         
         // validations
-        
-        if (this.cp.serverId != this.humpback.getServerId()) {
-            throw new OrcaHBaseException("hbase is currently linked to a different antsdb instance {}", cp.serverId);
+        Anchor anchor = Anchor.load(this.hbaseConnection, this.sysns);
+        if (anchor != null) {
+            if (anchor.instanceId != this.humpback.getInstanceId()) {
+                throw new OrcaHBaseException("hbase is currently linked to a different antsdb instance {}", 
+                                             anchor.instanceId);
+            }
         }
+        this.cp = new CheckPoint(this.isMutable);
+        this.cp.load(this.hbaseConnection, this.sysns, this.humpback.getServerId());
         if (this.cp.getCurrentSp() > this.humpback.getSpaceManager().getAllocationPointer()) {
             throw new OrcaHBaseException("hbase synchronization pointer is ahead of local log");
         }
         
         // update checkpoint
-        
         if (this.isMutable) {
+            if (anchor == null) {
+                anchor = new Anchor();
+                anchor.instanceId = this.humpback.getInstanceId();
+                anchor.save(this.hbaseConnection, this.sysns);
+            }
             this.cp.setActive(true);
-            this.cp.updateHBase(getConnection());
+            this.cp.save(getConnection(), this.sysns);
         }
         
         // misc
-        
         this.replicationHandler = new HBaseReplicationHandler(this.humpback, this);
     }
     
@@ -274,9 +287,12 @@ public class HBaseStorageService implements StorageEngine {
         if (!Helper.existsTable(this.hbaseConnection, this.tnCheckpoint)) {
             _log.info("checkpoint table {} is not found in HBase, creating ...", this.tnCheckpoint);
             createTable(this.sysns, TABLE_SYNC_PARAM);
-            CheckPoint cp = new CheckPoint(this.tnCheckpoint, isMutable);
-            cp.setServerId(this.humpback.getServerId());
-            cp.updateHBase(getConnection());
+            Anchor anchor = new Anchor();
+            anchor.instanceId = this.humpback.getInstanceId();
+            anchor.save(this.hbaseConnection, this.sysns);
+            CheckPoint cp = new CheckPoint(this.isMutable);
+            cp.serverId = this.humpback.getServerId();
+            cp.save(getConnection(), this.sysns);
         }
     }
 
@@ -298,6 +314,10 @@ public class HBaseStorageService implements StorageEngine {
     
     @Override
     public synchronized  StorageTable createTable(SysMetaRow meta) throws OrcaHBaseException {
+        if (meta.getTableId() < 0) {
+            // we dont care about temporary table in minke
+            return null;
+        }
         if (!this.isMutable) {
             throw new OrcaHBaseException("hbase storage is in read-only mode");
         }
@@ -319,7 +339,7 @@ public class HBaseStorageService implements StorageEngine {
     }
     
     public boolean existsTable(String namespace, String tableName) {
-            return Helper.existsTable(this.hbaseConnection, namespace, tableName);
+        return Helper.existsTable(this.hbaseConnection, namespace, tableName);
     }
     
     @Override
@@ -643,6 +663,10 @@ public class HBaseStorageService implements StorageEngine {
 
     @Override
     public void syncTable(SysMetaRow meta) {
+        if (meta.getTableId() < 0) {
+            // we dont care about temporary table in minke
+            return;
+        }
         if (this.tableById.get(meta.getTableId()) != null) {
             return;
         }

@@ -35,11 +35,20 @@ public class VdmComparator {
         this.ctx = ctx;
     }
 
-    public Integer comp(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
+    /**
+     * 
+     * @param heap
+     * @param params
+     * @param pRecord
+     * @param x
+     * @param y
+     * @return Integer.MIN_VALUE if one of the two values is null
+     */
+    public int comp(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
         long px = x.eval(ctx, heap, params, pRecord);
         long py = y.eval(ctx, heap, params, pRecord);
         if ((px == 0) || (py == 0)) {
-            return null;
+            return Integer.MIN_VALUE;
         }
         int typex = getType(heap, px, x);
         int typey = getType(heap, py, y);
@@ -49,30 +58,29 @@ public class VdmComparator {
             py = AutoCaster.cast(heap, type, typey, py);
         }
         if ((px == 0) || (py == 0)) {
-            return null;
+            return Integer.MIN_VALUE;
         }
-        return comp(heap, px, py, x, y);
+        return comp(heap, px, py);
     }
 
     private int getType(Heap heap, long p, Operator op) {
         /* mysql string literal is actually binary, we need to treat them as string in comparison */
         int result;
-        if (op instanceof BinaryString) {
-            BinaryString bs = (BinaryString)op;
-            result = bs.isBinary() ? Value.TYPE_BYTES : Value.TYPE_STRING;
-        }
-        else {
-            result = Value.getType(heap, p);
-        }
+        result = Value.getType(heap, p);
         return result;
     }
 
-    private int comp(Heap heap, long px, long py, Operator x, Operator y) {
-        byte typex = Unsafe.getByte(px);
-        byte typey = Unsafe.getByte(py);
-        if ((typex == 0) || (typey == 0)) {
-            throw new IllegalArgumentException();
+    /**
+     * @param heap
+     * @param px
+     * @param py
+     * @return Integer.MIN_VALUE if one of the two values is null
+     */
+    public int comp(Heap heap, long px, long py) {
+        if ((px == 0) || (py == 0)) {
+            return Integer.MIN_VALUE;
         }
+        byte typex = Unsafe.getByte(px);
         
         byte kind = Value.getType(typex);
         
@@ -82,7 +90,7 @@ public class VdmComparator {
         case Value.TYPE_NUMBER:
             return FishNumber.compare(px, py);
         case Value.TYPE_STRING:
-            return compString(px, py, x, y);
+            return compString(px, py);
         case Value.TYPE_BYTES:
             return Bytes.compare(px, py);
         case Value.TYPE_DATE:
@@ -95,7 +103,7 @@ public class VdmComparator {
     }
 
     /* string comparison in sql is special, we need to ignore trailing spaces */
-    private int compString(long px, long py, Operator x, Operator y) {
+    private int compString(long px, long py) {
         IntSupplier scanX = FishString.scan(px);
         IntSupplier scanY = FishString.scan(py);
         for (;;) {
@@ -115,7 +123,7 @@ public class VdmComparator {
                     continue;
                 }
             }
-            int result = chx - chy;
+            int result = Character.toUpperCase(chx) - Character.toUpperCase(chy);
             if (result != 0) {
                 return result;
             }

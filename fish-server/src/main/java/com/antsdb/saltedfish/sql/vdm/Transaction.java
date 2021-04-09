@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 
 import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.TableLock;
-import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.UberUtil;
 
 /**
@@ -34,9 +33,7 @@ public final class Transaction {
     private volatile long trxid;
     long trxts;
     boolean isDdl = false;
-    TrxMan trxman;
     TableLock tableLock;
-    long spStart;
 
     /* debug code below
     @Override
@@ -50,8 +47,7 @@ public final class Transaction {
     }
     */
 
-    public Transaction(TrxMan trxman) {
-        this.trxman = trxman;
+    public Transaction() {
     }
     
     public Transaction(long trxid, long trxts) {
@@ -61,15 +57,12 @@ public final class Transaction {
     }
 
     public void makeAutonomous() {
-        this.trxid = this.trxman.getNewVersion();
+        this.trxid = TrxMan.getNewVersion();
     }
     
     public long getGuaranteedTrxId() {
         if (this.trxid == 0) {
-            if (this.trxman == null) {
-                throw new CodingError();
-            }
-            this.trxid = this.trxman.getNewTrxId();
+            this.trxid = TrxMan.getNewTrxId();
         }
         return this.trxid;
     }
@@ -85,10 +78,8 @@ public final class Transaction {
     }
     
     public long getTrxTs() {
-        if (this.trxman != null) {
-            if (this.trxts == 0) {
-                this.trxts = this.trxman.getNewVersion();
-            }
+        if (this.trxts == 0) {
+            this.trxts = TrxMan.getNewVersion();
         }
         return this.trxts;
     }
@@ -121,7 +112,6 @@ public final class Transaction {
 
     public void releaseAllLocks() {
         // release all table locks
-        
         if (this.tableLock != null) {
             this.tableLock.releaseAll();
         }
@@ -139,7 +129,7 @@ public final class Transaction {
     }
 
     public void newTrxTs() {
-        this.trxts = this.trxman.getNewVersion();
+        this.trxts = TrxMan.getNewVersion();
     }
 
     public void addLock(TableLock lock) {
@@ -150,11 +140,6 @@ public final class Transaction {
     public void reset() {
         this.trxid = 0;
         this.trxts = 0;
-        this.spStart = 0;
         this.isDdl = false;
-    }
-    
-    public long getStartSp() {
-        return this.spStart;
     }
 }

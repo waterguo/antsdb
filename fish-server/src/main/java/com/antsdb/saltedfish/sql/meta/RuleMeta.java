@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.meta;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.antsdb.saltedfish.nosql.SlowRow;
@@ -61,6 +62,10 @@ public abstract class RuleMeta<T> extends UberObject {
     
     void setTableId(int id) {
         row.set(ColumnId.sysrule_table_id.getId(), id);
+    }
+    
+    public int getTableId() {
+        return (int)row.get(ColumnId.sysrule_table_id.getId());
     }
     
     @SuppressWarnings("unchecked")
@@ -129,5 +134,9 @@ public abstract class RuleMeta<T> extends UberObject {
             }
         }
         return true;
+    }
+    
+    public boolean conform(TableMeta table, String[] columns) {
+        return conform(table, Arrays.asList(columns));
     }
 }

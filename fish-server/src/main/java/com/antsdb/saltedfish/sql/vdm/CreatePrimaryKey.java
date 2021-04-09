@@ -24,7 +24,7 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 
 public class CreatePrimaryKey extends Statement {
     ObjectName name;
-    List<String> columns;
+    public List<String> columns;
     
     public CreatePrimaryKey(ObjectName name, List<String> columns) {
         super();
@@ -38,14 +38,14 @@ public class CreatePrimaryKey extends Statement {
         
         TableMeta table = Checks.tableExist(ctx.getSession(), name);
         try {
-        	ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
-            // make the meta data change
+            ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
             
+            // make the meta data change
             create(ctx, params);
             return null;
         }
         finally {
-        	ctx.getSession().unlockTable(table.getId());
+            ctx.getSession().unlockTable(table.getId());
         }
     }
 

@@ -14,6 +14,7 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -24,6 +25,7 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 
+import com.antsdb.saltedfish.cpp.BigInt;
 import com.antsdb.saltedfish.cpp.Bytes;
 import com.antsdb.saltedfish.cpp.FastDecimal;
 import com.antsdb.saltedfish.cpp.FishBool;
@@ -53,6 +55,7 @@ import com.google.common.base.Charsets;
  * @author wgu0
  */
 public class AutoCaster {
+    static Pattern _ptnYear = Pattern.compile("(\\d+)");
     static Pattern _ptnDate = Pattern.compile("(\\d+)-(\\d+)-(\\d+)");
     static Pattern _ptnTimestamp = Pattern.compile(
             "(\\d+)[-|/](\\d+)[-|/](\\d+)( (\\d+)[:|/](\\d+)[:|/](\\d+))?(\\.(\\d{1,6}))?");
@@ -159,7 +162,6 @@ public class AutoCaster {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private static long toNumber(Heap heap, int currentType, long pValue) {
         switch (currentType) {
         case Value.TYPE_NUMBER:
@@ -170,33 +172,12 @@ public class AutoCaster {
             return Int4.allocSet(heap, value);
         case Value.TYPE_BYTES:
             return toNumber(heap, Value.TYPE_STRING, toString(heap, pValue));
-        case Value.TYPE_STRING: {
+        case Value.TYPE_STRING:
             return parseNumber(heap, pValue);
-        }
-        case Value.FORMAT_TIMESTAMP: {
-            Timestamp val = FishTimestamp.get(heap, pValue);
-            if (val == null) {
-                return 0;
-            }
-            if (val.getTime() == Long.MIN_VALUE) {
-                // mysql 0000-00-00 00:00:00
-                return 0;
-            }
-            long result = val.getYear() + 1900;
-            result = result * 100 + val.getMonth() + 1;
-            result = result * 100 + val.getDate();
-            result = result * 100 + val.getHours();
-            result = result * 100 + val.getMinutes();
-            result = result * 100 + val.getSeconds();
-            return Int8.allocSet(heap, result);
-        }
-        case Value.FORMAT_DATE: {
-            long val = FishDate.getEpochMillisecond(heap, pValue);
-            if (val == Long.MIN_VALUE) {
-                val = 0;
-            }
-            return val;
-        }
+        case Value.FORMAT_TIMESTAMP:
+            return Int8.allocSet(heap, getLong(pValue));
+        case Value.FORMAT_DATE:
+            return Int8.allocSet(heap, getLong(pValue));
         default:
             return FishObject.toNumber(heap, pValue);    
         }
@@ -225,6 +206,15 @@ public class AutoCaster {
         return Int4.allocSet(heap, 0);
     }
 
+    public static long toUnicode(Heap heap, long pValue) {
+        long pResult = toString(heap, pValue);
+        if (pResult == 0) return 0;
+        byte format = Value.getFormat(null, pResult);
+        if (format == Value.FORMAT_UNICODE16) return pResult;
+        pResult = new FishUtf8(pResult).toUnicode16(heap);
+        return pResult;
+    }
+    
     public static long toString(Heap heap, long pValue) {
         if (pValue == 0) {
             return 0;
@@ -242,6 +232,19 @@ public class AutoCaster {
         case Value.FORMAT_INT8: {
             long value = Int8.get(heap, pValue);
             return Unicode16.allocSet(heap, String.valueOf(value));
+        }
+        case Value.FORMAT_BIGINT: {
+            BigInteger value = BigInt.get(heap, pValue);
+            return Unicode16.allocSet(heap, String.valueOf(value));
+        }
+        case Value.FORMAT_DATE: {
+            return FishUtf8.allocSet(heap, FishDate.get(heap, pValue).toString());
+        }
+        case Value.FORMAT_TIME: {
+            return FishUtf8.allocSet(heap, FishTime.get(heap, pValue).toString());
+        }
+        case Value.FORMAT_TIMESTAMP: {
+            return FishUtf8.allocSet(heap, FishTimestamp.get(heap, pValue).toString());
         }
         case Value.FORMAT_DECIMAL: {
             BigDecimal value = FishDecimal.get(heap, pValue);
@@ -267,6 +270,12 @@ public class AutoCaster {
             String temp = StringUtils.join(ArrayUtils.toObject(array.toArray()), ",");
             return Unicode16.allocSet(heap, temp);
         }
+        case Value.FORMAT_CLOB_REF: {
+            return Unicode16.allocSet(heap, "CLOB");
+        }
+        case Value.FORMAT_BLOB_REF: {
+            return Unicode16.allocSet(heap, "BLOB");
+        }
         default:
             throw new IllegalArgumentException(String.valueOf(format));
         }
@@ -290,6 +299,7 @@ public class AutoCaster {
         return (int)result;
     }
     
+    @SuppressWarnings("deprecation")
     public static Long getLong(long pValue) {
         byte format = Value.getFormat(null, pValue);
         switch (format) {
@@ -297,15 +307,45 @@ public class AutoCaster {
             return (long)Int4.get(pValue);
         case Value.FORMAT_INT8:
             return Int8.get(null, pValue);
+        case Value.FORMAT_BIGINT:
+            return BigInt.get(null, pValue).longValue();
         case Value.FORMAT_DECIMAL:
             BigDecimal bd = FishDecimal.get(null, pValue);
             return bd.longValueExact();
-        case Value.FORMAT_DATE:
-            Date dt = FishDate.get(null, pValue);
-            return dt.getTime();
-        case Value.FORMAT_TIMESTAMP:
-            Timestamp ts = FishTimestamp.get(null, pValue);
-            return ts.getTime();
+        case Value.FORMAT_DATE: {
+            Date val = FishDate.get(null, pValue);
+            long result;
+            if (val.getTime() == Long.MIN_VALUE) {
+                // mysql 0000-00-00
+                result = 0;
+            }
+            else {
+                result = val.getYear() + 1900;
+                result = result * 100 + val.getMonth() + 1;
+                result = result * 100 + val.getDate();
+            }
+            return result;
+        }
+        case Value.FORMAT_TIMESTAMP: {
+            Timestamp val = FishTimestamp.get(null, pValue);
+            if (val == null) {
+                return null;
+            }
+            long result;
+            if (val.getTime() == Long.MIN_VALUE) {
+                // mysql 0000-00-00 00:00:00
+                result = 0;
+            }
+            else {
+                result = val.getYear() + 1900;
+                result = result * 100 + val.getMonth() + 1;
+                result = result * 100 + val.getDate();
+                result = result * 100 + val.getHours();
+                result = result * 100 + val.getMinutes();
+                result = result * 100 + val.getSeconds();
+            }
+            return result;
+        }
         case Value.FORMAT_UTF8:
             // mysql converts illegal string to 0
             try {
@@ -481,6 +521,13 @@ public class AutoCaster {
                 return new Date(year - 1900, month-1, day);
             }
         }
+        else {
+            Matcher y = _ptnYear.matcher(text);
+            if (y.find()) {
+                int year = Integer.parseInt(y.group(1));
+                return new Date(year - 1900, 0, 1);
+            }
+        }
         return null;
     }
 
@@ -604,6 +651,8 @@ public class AutoCaster {
             return (double)Int4.get(pValue);
         case Value.FORMAT_INT8:
             return (double)Int8.get(null, pValue);
+        case Value.FORMAT_FLOAT4:
+            return (double)Float4.get(null, pValue);
         case Value.FORMAT_FLOAT8:
             return (double)Float8.get(null, pValue);
         case Value.FORMAT_DECIMAL:
@@ -693,6 +742,9 @@ public class AutoCaster {
         case Value.FORMAT_INT8:
             result = BigDecimal.valueOf(Int8.get(null, pValue));
             break;
+        case Value.FORMAT_BIGINT:
+            result = new BigDecimal(BigInt.get(null, pValue));
+            break;
         case Value.FORMAT_FAST_DECIMAL:
             result = FastDecimal.get(null, pValue);
             break;
@@ -713,6 +765,7 @@ public class AutoCaster {
             catch (Exception x) {
                 result = BigDecimal.valueOf(0);
             }
+            break;
         case Value.FORMAT_UNICODE16:
             // mysql converts illegal string to 0
             try {
@@ -721,6 +774,10 @@ public class AutoCaster {
             catch (Exception x) {
                 result = BigDecimal.valueOf(0);
             }
+            break;
+        case Value.FORMAT_BOOL:
+            result = FishBool.get(null, pValue) ? BigDecimal.ONE : BigDecimal.ZERO;
+            break;
         default:
             throw new IllegalArgumentException(String.valueOf(format));
         }
@@ -743,6 +800,9 @@ public class AutoCaster {
         return result;
     }
 
+    /**
+     * DO NOT USE. NOT FULLY IMPLEMNETED YET
+     */
     public static long cast(Heap heap, long pValue, int format) {
         // input checks
         
@@ -786,5 +846,17 @@ public class AutoCaster {
             default:
                 throw new IllegalArgumentException(String.valueOf(format));
         }
+    }
+
+    public static Boolean getBoolean(long pValue) {
+        if (pValue == 0) {
+            return null;
+        }
+        byte format = Value.getFormat(null, pValue);
+        if (format == Value.FORMAT_BOOL) {
+            return FishBool.get(null, pValue);
+        }
+        Long result = getLong(pValue);
+        return result != null ? result==1 : null;
     }
 }

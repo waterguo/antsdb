@@ -111,7 +111,7 @@ public class IndexSeek extends CursorMaker implements Seekable {
             // find the row 
             
             GTable gtable = ctx.getHumpback().getTable(table.getHtableId());
-            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+            long pRow = gtable.get(trx.getTrxId(), trx.getTrxTs(), pRowKey, 0);
             if (pRow != 0) {
                 ctx.getCursorStats(makerId).incrementAndGet();
             }
@@ -122,12 +122,6 @@ public class IndexSeek extends CursorMaker implements Seekable {
     @Override
     public String toString() {
         return "Index Seek (" + this.table.getObjectName() + ")";
-    }
-
-    @Override
-    public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(getMakerid(), level, toString());
-        records.add(rec);
     }
 
     @Override
@@ -144,5 +138,10 @@ public class IndexSeek extends CursorMaker implements Seekable {
     @Override
     public boolean setSortingOrder(List<SortKey> order) {
         return false;
+    }
+
+    @Override
+    public float getScore() {
+        return 1.1f;
     }
 }

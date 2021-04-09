@@ -46,7 +46,15 @@ public class MysqlDialect extends SqlDialect {
         orca.registerSystemView("information_schema", "FILES", new FILES());
         orca.registerSystemView("information_schema", "PARAMETERS", new PARAMETERS());
         orca.registerSystemView("information_schema", "PROFILING", new PROFILING());
+        orca.registerSystemView("information_schema", "ENGINES", new ENGINES());
         orca.registerSystemView(Orca.SYSNS, "mysql_slave", new MysqlSlaveView());
+        
+        // empty performance schema views
+        final String NS_PERF = "performance_schema";
+        orca.registerSystemView(NS_PERF, "events_stages_history_long", new PerfStagesHistoryLong());
+        orca.registerSystemView(NS_PERF, "events_statements_current", new PerfEventsStatementsCurrent());
+        orca.registerSystemView(NS_PERF, "events_waits_history_long", new PerfWaitsHistoryLong());
+        orca.registerSystemView(NS_PERF, "threads", new PerfThreads());
     }
 
     @Override

@@ -73,28 +73,15 @@ class FakeResponse {
             return false;
         }
         boolean result = false;
-        String sql = cbuf.toString();
-        if (sql.equalsIgnoreCase("SHOW COLUMNS FROM `test`.`test`")) {
-            // result = writePackets(0x2a51, out);
+        String sql = cbuf.toString().trim();
+        if (sql.equalsIgnoreCase("1show create table `test`.`test`")) {
+            result = writePackets(0x3c85d, out);
         }
-        /*else if (sql.equalsIgnoreCase("SHOW TABLE STATUS LIKE 'test'")) {
-            result = writePackets(0x2c71, out);
+        else if (sql.equalsIgnoreCase("1SHOW FULL FIELDS FROM `test`.`test`")) {
+            result = writePackets(0x7e23e, out);
         }
-        else if (sql.equalsIgnoreCase("SHOW CREATE TABLE `test`.`test`")) {
-            result = writePackets(0x22c9, out);
-        }
-        else if (sql.equalsIgnoreCase("SELECT SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA")) {
-            result = writePackets(0x326, out);
-        }
-        else if (sql.equalsIgnoreCase("SHOW FULL TABLES WHERE Table_type != 'VIEW'")) {
-            result = writePackets(0x1606, out);
-        }
-        else if (sql.equalsIgnoreCase("SHOW TABLE STATUS")) {
-            result = writePackets(0x1733, out);
-        }
-        */
-        else if (sql.equalsIgnoreCase("SELECT * FROM `test`.`test` LIMIT 0,1000")) {
-            result = writePackets(0x2836, out);
+        else if (sql.equalsIgnoreCase("1SHOW TABLE STATUS FROM `test` LIKE 'test'")) {
+            result = writePackets(0x7d13e, out);
         }
         if (result) {
             _log.info("faked: {}", sql);

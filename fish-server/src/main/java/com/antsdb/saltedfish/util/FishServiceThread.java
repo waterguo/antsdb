@@ -63,9 +63,7 @@ public abstract class FishServiceThread implements Runnable {
                 break;
             }
             catch (Exception x) {
-                if (this.error == null) {
-                    log.warn("{} failed with error. retry later", getName(), x);
-                }
+                log.warn("{} failed with error. retry later", getName(), x);
                 this.error = x;
                 UberUtil.sleep(RETRY_WAIT);
                 continue;

@@ -16,6 +16,7 @@ package com.antsdb.saltedfish.sql;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.antsdb.saltedfish.beluga.Pod;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
 import com.antsdb.saltedfish.sql.vdm.View;
@@ -31,8 +32,9 @@ public class SystemViewClusterStatus extends View {
         public String ENDPOINT;
         public String STATE;
         public Long SERVER_ID;
-        public Long LOG_POINTER;
         public Boolean LEADER;
+        public Boolean ONLINE;
+        public Long LOG_POINTER;
         public String OPTIONS = "";
         public String GOSSIP;
     }
@@ -44,35 +46,45 @@ public class SystemViewClusterStatus extends View {
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
         List<Line> result = new ArrayList<>();
-        long temp = ctx.getHumpback().getServerId();
+        Long temp = null;
         try {
             temp = ctx.getOrca().getBelugaPod().getLeaderId();
         }
         catch (Exception x) {};
-        final long leaderId = temp;
-        
-        // add local node
-        
-        Line line = new Line();
-        line.ENDPOINT = ctx.getHumpback().getEndpoint();
-        line.SERVER_ID = ctx.getHumpback().getServerId();
-        line.STATE = ctx.getOrca().getBelugaPod().isInCluster() ? "CLUSTER" : "SINGLE";
-        line.LEADER = line.SERVER_ID == leaderId;
-        result.add(line);
+        Long leaderId = temp;
         
         // the rest
-        
-        ctx.getOrca().getBelugaPod().getMembers().forEach((it)->{
-           Line ii = new Line();
-           ii.ENDPOINT = it.endpoint;
-           ii.STATE = it.getState().toString();
-           ii.GOSSIP = it.getGossip();
-           ii.LOG_POINTER = it.getLogPointer();
-           ii.SERVER_ID = it.serverId;
-           ii.LEADER = ii.SERVER_ID == leaderId;
-           ii.OPTIONS = it.getOptions();
-           result.add(ii);
-        });
+        try {
+            Pod pod = ctx.getOrca().getBelugaPod();
+            /*
+            pod.getMembers().forEach((it)->{
+               Line ii = new Line();
+               ii.ENDPOINT = it.getEndpoint();
+               ii.STATE = String.valueOf(it.getState());
+               ii.GOSSIP = it.getGossip();
+               ii.LOG_POINTER = it.getLogPointer();
+               ii.SERVER_ID = it.getServerId();
+               ii.LEADER = ii.SERVER_ID == leaderId;
+               ii.OPTIONS = it.getOptions();
+               result.add(ii);
+            });
+            */
+            pod.getQuorum().getNodes().values().forEach((it)->{
+                Line ii = new Line();
+                ii.ENDPOINT = it.endpoint;
+                ii.STATE = it.state.toString();
+                //ii.GOSSIP = it.getGossip();
+                //ii.LOG_POINTER = it.getLogPointer();
+                ii.SERVER_ID = it.serverId;
+                ii.ONLINE = it.online;
+                ii.LEADER = leaderId == null ? null : (long)ii.SERVER_ID == (long)leaderId;
+                //ii.OPTIONS = it.getOptions();
+                result.add(ii);
+             });
+        }
+        catch (Exception e) {
+            throw new OrcaException(e);
+        }
         
         return CursorUtil.toCursor(this.meta, result);
     }

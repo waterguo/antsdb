@@ -17,6 +17,7 @@ import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.meta.ColumnId;
+import com.antsdb.saltedfish.sql.meta.OrcaTableType;
 
 public class SysTableRow {
     Row row;
@@ -35,9 +36,31 @@ public class SysTableRow {
     }
     
     public int getId() {
-    	return (Integer)this.row.get(1);
+        return (Integer)this.row.get(1);
     }
-
+    
+    public int getType() {
+        Integer result = (Integer)row.get(ColumnId.systable_table_type.getId());
+        return result == null ? OrcaTableType.TABLE : result.intValue();
+    }
+    
+    /**
+     * get the humpback table id
+     * @return
+     */
+    public int getHtableId() {
+        Integer result = (Integer)row.get(ColumnId.systable_htable_id.getId());
+        return (result != null) ? result : getId();
+    }
+    
+    public boolean isTemproray() {
+        return !getNamespace().equals("#") && getHtableId() < 0;
+    }
+    
+    public String getComment() {
+        return (String)row.get(ColumnId.systable_comment.getId());
+    }
+    
     public String dump() {
         StringBuilder buf = new StringBuilder();
         buf.append(toString());
@@ -57,8 +80,9 @@ public class SysTableRow {
         return buf.toString();
     }
     
-	@Override
-	public String toString() {
-		return String.format("%s.%s [id=%d]", getNamespace(), getTableName(), getId());
-	}
+    @Override
+    public String toString() {
+        return String.format("%s.%s [id=%d]", getNamespace(), getTableName(), getId());
+    }
+
 }

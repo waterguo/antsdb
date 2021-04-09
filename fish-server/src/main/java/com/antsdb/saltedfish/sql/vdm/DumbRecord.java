@@ -19,28 +19,24 @@ package com.antsdb.saltedfish.sql.vdm;
  */
 public final class DumbRecord extends Record {
 
-	@Override
-	public Object get(int field) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    public Object get(int field) {
+        return null;
+    }
 
-	@Override
-	public Record set(int field, Object val) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    public Record set(int field, Object val) {
+        return null;
+    }
 
-	@Override
-	public byte[] getKey() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    public byte[] getKey() {
+        return null;
+    }
 
-	@Override
-	public int size() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+    @Override
+    public int size() {
+        return 0;
+    }
 
 }

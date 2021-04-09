@@ -28,6 +28,6 @@ public enum FilterOp {
     LESSEQUAL,
     LIKE,
     MATCH,
-    /* anything that cannot be processed */ 
-    UNKNOWN,
+    /* other than the above types */
+    OTHER,
 }

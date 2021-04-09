@@ -13,7 +13,7 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.slave;
 
-import java.io.File;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -28,11 +28,10 @@ import java.util.List;
 
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.HColumnRow;
-import com.antsdb.saltedfish.nosql.RepFailScene;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.SysMetaRow;
-import com.antsdb.saltedfish.server.SaltedFish;
 import com.antsdb.saltedfish.sql.vdm.BlobReference;
 import com.antsdb.saltedfish.util.UberFormatter;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -42,9 +41,8 @@ import com.antsdb.saltedfish.util.UberUtil;
  * @author *-xguo0<@
  */
 class CudHandler {
-    @SuppressWarnings("unused")
     private static Logger _log = UberUtil.getThisLogger();
-    
+
     List<ReplicatorColumnMeta> columns = new ArrayList<>();
     List<String> key = new ArrayList<>();
     PreparedStatement insert;
@@ -59,9 +57,8 @@ class CudHandler {
     boolean isBlobTable;
     private SysMetaRow table;
     Connection conn;
-    
-    CudHandler() {
-    }
+    private String replaceSql;
+    private boolean isPendingBlob = false;
     
     public void prepare(Connection conn, SysMetaRow table, List<HColumnRow> hcolumns) throws SQLException {
         this.conn = conn;
@@ -95,6 +92,7 @@ class CudHandler {
                 table.getNamespace(), 
                 table.getTableName(),
                 repeat(this.columns.size()));
+        this.replaceSql= sql;
         this.replace = conn.prepareStatement(sql);
         this.replaceParams = this.columns;
         
@@ -146,9 +144,16 @@ class CudHandler {
                 columnMeta.nullable = rs.getInt(11);
                 columnMeta.defaultValue = rs.getString(13);
                 for (HColumnRow j:hcolumns) {
-                    if (columnMeta.columnName.equals(j.getColumnName())) {
+                    if (columnMeta.columnName.equalsIgnoreCase(j.getColumnName())) {
                         columnMeta.hcolumnPos = j.getColumnPos();
                     }
+                }
+                if (columnMeta.hcolumnPos == 0) {
+                    String name = String.format("%s.%s.%s", 
+                                                table.getNamespace(), 
+                                                table.getTableName(), 
+                                                columnMeta.columnName);
+                    throw new IllegalArgumentException("column " + name + " not found");
                 }
                 this.columns.add(columnMeta);
             }
@@ -177,58 +182,82 @@ class CudHandler {
         return buf.toString();
     }
 
-    public void insert(long trxid, Row row, boolean isBlobRow) throws SQLException {
+    public void insert(long trxid, Row row, boolean isBlobRow, long lp, int tableId) throws SQLException {
+        if (!this.isPendingBlob && isBlobRow) {
+            // if incoming row is blob there is no pending updates, just return
+            return;
+        }
         boolean hasBlobRef = false;
-        boolean nullRow = true;
         for (int i=0; i<this.replaceParams.size(); i++) {
             Object value = getValue(row, replaceParams.get(i), isBlobRow);
             if (isBlobRow) {
                 if (value != null) {
                     this.replace.setObject(i+1, value);
-                    nullRow = false;
                 }
             }
             else {
                 if (value instanceof BlobReference) {
                     hasBlobRef = true;
+                    this.replace.setObject(i+1, null);
                 }
                 else {
                     this.replace.setObject(i+1, value);
-                    nullRow = false;
                 }
             }
         }
-        if (!hasBlobRef) {
-            if (!nullRow) {
-                int result = this.replace.executeUpdate();
-                if (result < 1) {
-                    throw new IllegalArgumentException();
-                }
-            }
+        if (hasBlobRef) {
+            // if current row has blob reference, wait for the blob row to come
+            this.isPendingBlob = true;
+            return;
+        }
+        this.isPendingBlob = false;
+        int result = this.replace.executeUpdate();
+        if (_log.isTraceEnabled()) {
+            String key = KeyBytes.toString(row.getKeyAddress());
+            _log.trace("replace lp={} tableId={} key={} result={}", lp, tableId, key, result);
+        }
+        if (result != 1 && result != 2) {
+            // 1 means an INSERT. 2 means an UPDATE
+            log(result, this.replaceSql, replaceParams, row);
         }
     }
 
-    public void update(long trxid, Row row, boolean isBlobRow) throws SQLException {
-        insert(trxid, row, isBlobRow);
+    public void update(long trxid, Row row, boolean isBlobRow, long lp, int tableId) throws SQLException {
+        insert(trxid, row, isBlobRow, lp, tableId);
     }
     
-    public void delete(Row row) throws SQLException {
+    public void delete(Row row, long lp, int tableId) throws SQLException {
         for (int i=0; i<this.deleteParams.size(); i++) {
             Object value = getValue(row, this.deleteParams.get(i), false);
             this.delete.setObject(i+1, value);
         }
         int result = this.delete.executeUpdate();
-        if (result < 1) {
-            debugDelete(row);
-            RepFailScene scene = new RepFailScene("delete", this.table.getTableName(), this.deleteSql, row);
-            try {
-                scene.save(getCrimeSceneFile());
-            }
-            catch (Exception x) {}
-            throw new IllegalArgumentException();
+        if (_log.isTraceEnabled()) {
+            String key = KeyBytes.toString(row.getKeyAddress());
+            _log.trace("delete lp={} tableId={} key={} result={}", lp, tableId, key, result);
+        }
+        if (result != 1) {
+            log(result, this.deleteSql, this.deleteParams, row);
         }
     }
     
+    private void log(int result, String sql, List<ReplicatorColumnMeta> params, Row row) {
+        if (JdbcReplicator._jdbclog != null) {
+            Object[] args = new Object[params.size()];
+            for (int i=0; i<params.size(); i++) {
+                Object value = getValue(row, params.get(i), false);
+                args[i] = value;
+            }
+            try {
+                JdbcReplicator._jdbclog.write(result, sql, args);
+            }
+            catch (IOException x) {
+                _log.warn("unable to log to jdbc log", x);
+            }
+        }
+    }
+
+    @SuppressWarnings("unused")
     private void debugDelete(Row row) throws SQLException {
         for (int i=this.deleteParams.size(); i>0; i--) {
             StringBuilder sql = new StringBuilder();
@@ -300,10 +329,4 @@ class CudHandler {
     public String toString() {
         return this.table.toString();
     }
-    
-    private File getCrimeSceneFile() {
-        File home = SaltedFish.getInstance().getOrca().getHome();
-        return new File(home, "logs/rep-fail-scene.dat");
-    }
-
 }

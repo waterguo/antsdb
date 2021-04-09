@@ -23,6 +23,6 @@ import com.antsdb.saltedfish.cpp.Value;
  */
 public class TypeBoolean extends DataType {
 	public TypeBoolean(String name) {
-		super(name, 0, 0, Types.BOOLEAN, Boolean.class, Value.TYPE_BOOL);
+		super(name, 0, 0, Types.BOOLEAN, Boolean.class, Value.TYPE_BOOL, Weight.OTHER);
 	}
 }

@@ -40,7 +40,7 @@ public class SystemViewMinkePages extends View {
         public String CONVERAGE;
     }
     
-    SystemViewMinkePages() {
+    SystemViewMinkePages(int a) {
         super(CursorUtil.toMeta(Line.class));
     }
     

@@ -18,15 +18,37 @@ package com.antsdb.saltedfish.nosql;
  * 
  * @author wgu0
  */
-public enum HumpbackError {
-    /** mission accomplished go ahead */
-    SUCCESS,
+public interface HumpbackError {
+    /** operation is completed without logging activities */
+    public static int NONE = 0;
     /** the record is locked by another pending trx */
-    LOCK_COMPETITION,
+    public static int LOCK_COMPETITION = 1;
     /** the record is updated/deleted by a concurrent trx */
-    CONCURRENT_UPDATE,
+    public static int CONCURRENT_UPDATE = 2;
     /** the record is missing for update/delete/lock operation */
-    MISSING,
+    public static int MISSING = 3;
     /** the record already exists for insert operation */
-    EXISTS,
+    public static int EXISTS = 4;
+    
+    public static boolean isSuccess(long error) {
+        return (error <= 0) || (error > 10);
+    }
+    
+    public static String toString(long error) {
+        if (error == LOCK_COMPETITION) {
+            return "LOCK_COMPETITION: {}";
+        }
+        else if (error == CONCURRENT_UPDATE) {
+            return "CONCURRENT_UPDATE: {}";
+        }
+        else if (error == MISSING) {
+            return "MISSING: {}";
+        }
+        else if (error == EXISTS) {
+            return "EXISTS: {}";
+        }
+        else {
+            return "HumpbackError " + error + ": {}"; 
+        }
+    }
 }

@@ -20,6 +20,7 @@ import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.GetOptions;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -46,9 +47,20 @@ public class FieldValue extends Operator {
             this.isEnum = true;
         }
     }
+
+    public void set(PlannerField pf) {
+        this.field = pf;
+    }
+    
+    public void set(FieldMeta field, int pos) {
+        this.field = new PlannerField(field, pos);
+    }
     
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        if (pRecord == 0) {
+            return 0;
+        }
         long pValue = Record.get(pRecord, this.field.getIndex());
         if ((pValue != 0) && (this.fishType == Value.TYPE_CLOB)) {
             return getClobValue(ctx, pValue);
@@ -78,7 +90,8 @@ public class FieldValue extends Operator {
         GTable blobTable = ctx.getHumpback().getTable(table.getBlobTableId());
         Transaction trx = ctx.getTransaction();
         long pKey = ref.getRowKeyAddress();
-        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        long options = this.field.isNoCache() ? GetOptions.noCache(0) : 0;
+        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey, options);
         if (pRow == 0) {
             return 0;
         }
@@ -93,7 +106,8 @@ public class FieldValue extends Operator {
         GTable blobTable = ctx.getHumpback().getTable(table.getBlobTableId());
         Transaction trx = ctx.getTransaction();
         long pKey = ref.getRowKeyAddress();
-        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey);
+        long options = this.field.isNoCache() ? GetOptions.noCache(0) : 0;
+        long pRow = blobTable.get(trx.getTrxId(), trx.getTrxTs(), pKey, options);
         if (pRow == 0) {
             return 0;
         }

@@ -56,7 +56,7 @@ public class OpInSelect extends BinaryOperator {
     }
 
     public void explain(int level, List<ExplainRecord> records) {
-        ExplainRecord rec = new ExplainRecord(-1, level, getClass().getSimpleName());
+        ExplainRecord rec = new ExplainRecord(-1, level, getClass().getSimpleName(), 0);
         records.add(rec);
         this.select.explain(level+1, records);
     }

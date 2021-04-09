@@ -13,8 +13,12 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.util.CodingError;
 
@@ -27,21 +31,40 @@ public class ToLong extends UnaryOperator {
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long addrVal = this.upstream.eval(ctx, heap, params, pRecord);
-        Object val = FishObject.get(heap, addrVal);
+        final Object val = FishObject.get(heap, addrVal);
+        Long result = null;
         if (val == null) {
         }
         else if (val instanceof Long) {
+            result = (Long)val;
         }
         else if (val instanceof Integer) {
-            val = Long.valueOf((Integer)val);
+            result = Long.valueOf((Integer)val);
         }
         else if (val instanceof String) {
-            val = Long.valueOf((String)val);
+            result = ctx.strict(()-> { return Long.parseLong((String)val); });
+            if (result == null) result = 0l;
+        }
+        else if (val instanceof BigInteger) {
+            try {
+                result = ((BigInteger)val).longValueExact();
+            }
+            catch (ArithmeticException x) {
+                throw new ErrorMessage(22003, "Out of range value " + val.toString());
+            }
+        }
+        else if (val instanceof BigDecimal) {
+            try {
+                result = ((BigDecimal)val).longValueExact();
+            }
+            catch (ArithmeticException x) {
+                throw new ErrorMessage(22003, "Out of range value " + val.toString());
+            }
         }
         else {
             throw new CodingError();
         }
-        return FishObject.allocSet(heap, val);
+        return FishObject.allocSet(heap, result);
     }
 
     @Override

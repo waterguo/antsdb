@@ -25,8 +25,8 @@ public class OpLessEqual extends BinaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        Integer result = ctx.compare(heap, params, pRecord, this.left, this.right);
-        if (result == null) {
+        int result = ctx.compare(heap, params, pRecord, this.left, this.right);
+        if (result == Integer.MIN_VALUE) {
             return 0;
         }
         return FishBool.allocSet(heap, result <= 0);
@@ -37,9 +37,9 @@ public class OpLessEqual extends BinaryOperator {
         return DataType.bool();
     }
 
-	@Override
-	public String toString() {
-		return this.left.toString() + " <= " + this.right.toString();
-	}
+    @Override
+    public String toString() {
+        return this.left.toString() + " <= " + this.right.toString();
+    }
     
 }

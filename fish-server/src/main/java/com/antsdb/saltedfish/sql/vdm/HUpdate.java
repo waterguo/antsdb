@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.HumpbackError;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
 import com.antsdb.saltedfish.sql.OrcaException;
 
@@ -49,14 +50,14 @@ public class HUpdate extends Statement{
         try (Heap heap = new BluntHeap()) {
             for (long pRecord = c.next();pRecord != 0;pRecord = c.next()) {
                 long pKey = Record.getKey(pRecord);
-                Row row = this.gtable.getRow(0, Long.MAX_VALUE, pKey);
+                Row row = this.gtable.getRow(0, Long.MAX_VALUE, pKey, 0);
                 if (row == null) {
                     throw new OrcaException("unable to find row {}", KeyBytes.toString(pKey));
                 }
                 VaporizingRow vrow = createVRow(ctx, heap, row);
-                vrow.setVersion(ctx.getHumpback().getTrxMan().getNewVersion());
-                HumpbackError error = this.gtable.update(ctx.getHSession(), vrow, row.getVersion(), 0);
-                if (error != HumpbackError.SUCCESS) {
+                vrow.setVersion(TrxMan.getNewVersion());
+                long error = this.gtable.update(ctx.getHSession(), vrow, row.getVersion(), 0);
+                if (!HumpbackError.isSuccess(error)) {
                     throw new OrcaException("unable to update row {} due to {}", KeyBytes.toString(pKey), error); 
                 }
                 count++;

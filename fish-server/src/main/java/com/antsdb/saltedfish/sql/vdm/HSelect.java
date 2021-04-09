@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.RowIterator;
+import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
@@ -43,7 +44,18 @@ public class HSelect extends View {
         CursorMeta result = new CursorMeta();
         for (int i=0; i<columns.size(); i++) {
             int columnId = columns.get(i);
-            String name = (columnId == -1) ? "00" : String.valueOf(columns.get(i));
+            String name;
+            switch (columnId) {
+            case -1:
+                name = "00";
+                break;
+            case -2:
+                name = "01";
+                break;
+            default:
+                name = String.valueOf(columns.get(i));
+                break;
+            }
             FieldMeta ii = new FieldMeta(name, DataType.varchar());
             result.addColumn(ii);
         }
@@ -54,7 +66,7 @@ public class HSelect extends View {
         ExprCursor result = new ExprCursor(meta, upstream, params, new AtomicLong());
         result.exprs = new ArrayList<>();
         for (FieldMeta field:meta.getColumns()) {
-            ToString op = new ToString(new FieldValue(field, result.exprs.size()));
+            Operator op = new ToString(new FieldValue(field, result.exprs.size()));
             result.exprs.add(op);
         }
         return result;
@@ -62,8 +74,8 @@ public class HSelect extends View {
     
     @Override
     public Object run(VdmContext ctx, Parameters params, long pMaster) {
-        RowIterator i = this.gtable.scan(0, Long.MAX_VALUE, true);
-        Cursor scan = new DumbCursor(ctx.getSpaceManager(), meta, i, this.mapping, new AtomicLong());
+        RowIterator i = this.gtable.scan(0, Long.MAX_VALUE, 0, 0, ScanOptions.NO_CACHE);
+        Cursor scan = new DumbCursor(meta, i, this.mapping, new AtomicLong());
         ExprCursor result = wrap(scan, params);
         return result;
     }

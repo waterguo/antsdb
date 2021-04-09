@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.storage;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.HashMap;
@@ -39,6 +40,7 @@ import org.apache.hadoop.hbase.io.compress.Compression.Algorithm;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 
+import com.antsdb.saltedfish.cpp.BigInt;
 import com.antsdb.saltedfish.cpp.BluntHeap;
 import com.antsdb.saltedfish.cpp.FastDecimal;
 import com.antsdb.saltedfish.cpp.FishObject;
@@ -49,6 +51,7 @@ import com.antsdb.saltedfish.cpp.KeyBytes;
 import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.IndexEntry2;
 import com.antsdb.saltedfish.nosql.IndexLine;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.nosql.VaporizingRow;
@@ -77,6 +80,7 @@ final class Helper {
     public static final byte[] SYS_COLUMN_MISC_BYTES = Bytes.toBytes("*misc");    
     public static final byte[] SYS_COLUMN_SIZE_BYTES = Bytes.toBytes("*size");
     public static final byte[] SYS_COLUMN_HASH_BYTES = Bytes.toBytes("*hash");
+    public static final byte[] SYS_COLUMN_LOG_POINTER_BYTES = Bytes.toBytes("*lp");
 
     public static Map<String, byte[]> toMap(Result r) {
         Map<String, byte[]> row = new HashMap<>();
@@ -94,13 +98,20 @@ final class Helper {
     }
 
     public static Put toPut(Mapping mapping, Row row) {
+        return toPut(mapping, row, 0, 0);
+    }
+    
+    public static Put toPut(Mapping mapping, Row row, long lpLogEntry, long version) {
         byte[] key = Helper.antsKeyToHBase(row.getKeyAddress());
         Put put = new Put(key);
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(row.getLength()));
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_HASH_BYTES, Bytes.toBytes(row.getHash()));
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_VERSION_BYTES, Bytes.toBytes(version));
+        if (lpLogEntry != 0) {
+            put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_LOG_POINTER_BYTES, Bytes.toBytes(lpLogEntry));
+        }
         
         // populate fields
-        
         int maxColumnId = row.getMaxColumnId();
         byte[] types = new byte[maxColumnId+1];
         for (int i=0; i<=maxColumnId; i++) {
@@ -112,7 +123,10 @@ final class Helper {
                 put.addColumn(mapping.getUserFamily(), mapping.getColumn(i), value);
             }
             else if (pValue != 0) {
-                String msg = String.format("%d:%s", mapping.tableId, KeyBytes.toString(row.getKeyAddress()));
+                String msg = String.format("tableId=%d key=%s lp=%x",
+                        mapping.tableId, 
+                        KeyBytes.toString(row.getKeyAddress()),
+                        lpLogEntry);
                 throw new IllegalArgumentException(msg);
             }
         }
@@ -122,15 +136,22 @@ final class Helper {
         return put;
     }
     
-    public static Put toPut(IndexLine line) {
-        byte[] key = Helper.antsKeyToHBase(line.getKey());
-        byte[] rowKey = Helper.antsKeyToHBase(line.getRowKey());
+    public static Put toPut(IndexEntry2 entry, long version) {
+        return toPut(entry, entry.getSpacePointer(), version);
+    }
+    
+    public static Put toPut(IndexEntry2 entry, long lpLogEntry, long version) {
+        byte[] key = Helper.antsKeyToHBase(entry.getIndexKeyAddress());
+        byte[] rowKey = Helper.antsKeyToHBase(entry.getRowKeyAddress());
         byte[] misc = new byte[1];
-        misc[0] = line.getMisc();
+        misc[0] = entry.getMisc();
         Put put = new Put(key);
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_INDEXKEY_BYTES, rowKey);
         put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_MISC_BYTES, misc);
-        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_SIZE_BYTES, Bytes.toBytes(line.getRawSize()));
+        put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_VERSION_BYTES, Bytes.toBytes(version));
+        if (lpLogEntry != 0) {
+            put.addColumn(DATA_COLUMN_FAMILY_BYTES, SYS_COLUMN_LOG_POINTER_BYTES, Bytes.toBytes(lpLogEntry));
+        }
         return put;
     }
 
@@ -231,7 +252,7 @@ final class Helper {
     }
     
     public static boolean existsTable(Connection conn, String ns, String name) {
-            return existsTable(conn, TableName.valueOf(ns, name));            
+        return existsTable(conn, TableName.valueOf(ns, name));            
     }
 
     public static void createNamespace(Connection connection, String namespace) {        
@@ -369,6 +390,9 @@ final class Helper {
     public static long getVersion(Result r) {
         NavigableMap<byte[], byte[]> sys = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
         byte[] versionBytes = sys.get(SYS_COLUMN_VERSION_BYTES);
+        if (versionBytes == null) {
+            return 0;
+        }
         long version = Bytes.toLong(versionBytes);
         return version;
     }
@@ -393,14 +417,14 @@ final class Helper {
         }
 
         // some preparation
-        
         NavigableMap<byte[], byte[]> dataFamilyMap = r.getFamilyMap(DATA_COLUMN_FAMILY_BYTES);
         byte[] colDataType = dataFamilyMap.get(SYS_COLUMN_DATATYPE_BYTES);
         byte[] sizeBytes = dataFamilyMap.get(SYS_COLUMN_SIZE_BYTES);
         int size = Bytes.toInt(sizeBytes);
+        byte[] versionBytes = dataFamilyMap.get(SYS_COLUMN_VERSION_BYTES);
+        long version = versionBytes == null ? 1 : Bytes.toLong(versionBytes);
         
         // populate the row. system table doesn't come with metadata
-        
         VaporizingRow row = null;
         byte[] key = hbaseKeyToAnts(r.getRow());
         if (table != null) {
@@ -412,7 +436,7 @@ final class Helper {
         else {
             throw new OrcaHBaseException("metadata not found for table " + tableId);
         }
-        row.setVersion(1);
+        row.setVersion(version);
         long pRow = Row.from(heap, row);
         return pRow;
     }
@@ -605,6 +629,10 @@ final class Helper {
         else if (dataType == Value.FORMAT_TIME) {
             length = 8;
         }
+        else if (dataType == Value.FORMAT_BIGINT) {
+            BigInteger bi = BigInt.get(null, pValue);
+            return Bytes.toBytes(new BigDecimal(bi));
+        }
         else if (dataType == Value.FORMAT_DECIMAL) {
             BigDecimal bigDecimal = (BigDecimal)FishObject.get(null, pValue);
             return Bytes.toBytes(bigDecimal);
@@ -662,8 +690,9 @@ final class Helper {
         byte[] indexKey = r.getRow();
         byte[] rowKey = sys.get(SYS_COLUMN_INDEXKEY_BYTES);
         byte misc = sys.get(SYS_COLUMN_MISC_BYTES)[0];
+        long version = Bytes.toLong(sys.get(SYS_COLUMN_VERSION_BYTES));
         indexKey = hbaseKeyToAnts(indexKey);
         rowKey = hbaseKeyToAnts(rowKey);
-        return IndexLine.alloc(heap, indexKey, rowKey, misc).getAddress();
+        return IndexLine.alloc(heap, version, indexKey, rowKey, misc).getAddress();
     }
 }

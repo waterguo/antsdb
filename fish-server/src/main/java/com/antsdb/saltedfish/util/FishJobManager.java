@@ -14,7 +14,6 @@
 package com.antsdb.saltedfish.util;
 
 import java.lang.reflect.Field;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledFuture;
@@ -63,35 +62,31 @@ public class FishJobManager {
         return poolOneTime.schedule(callable, delay, unit);
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     public void close() {
         // shutdown periodic futures
+        this.poolPeriodic.shutdownNow();
+        this.poolOneTime.shutdownNow();
         
-        this.poolPeriodic.shutdown();
+        // shut
         try {
-            this.poolPeriodic.awaitTermination(30, TimeUnit.SECONDS);
+            this.poolPeriodic.awaitTermination(10, TimeUnit.SECONDS);
         }
         catch (InterruptedException e) {
         }
         
         // shutdown one-shot futures. we need to complete these futures
-        
-        List<ScheduledFuture<?>> futures = (List)this.poolOneTime.shutdownNow();
         try {
-            this.poolOneTime.awaitTermination(30, TimeUnit.SECONDS);
+            this.poolOneTime.awaitTermination(10, TimeUnit.SECONDS);
         }
         catch (InterruptedException e) {
         }
-        for (ScheduledFuture<?> i:futures) {
-            try {
-                Callable<?> callable = (Callable)_hiddenField.get(i);
-                callable.call();
-            }
-            catch (InterruptedException e) {
-            }
-            catch (Exception e) {
-                _log.error("", e);
-            }
+        
+        // log stuck jobs
+        for (Runnable i:this.poolPeriodic.getQueue()) {
+            _log.warn("stuck job: {}", i);
+        }
+        for (Runnable i:this.poolOneTime.getQueue()) {
+            _log.warn("stuck job: {}", i);
         }
     }
 }

@@ -62,7 +62,7 @@ public class ShowProcesslist extends View {
         Line result = new Line();
         result.Id = (long)session.getId();
         result.User = session.getUser();
-        result.Host = session.remote;
+        result.Host = session.getHSession().getEndpoint();
         result.db = session.getCurrentNamespace();
         result.Info = session.getSql();
         return result;

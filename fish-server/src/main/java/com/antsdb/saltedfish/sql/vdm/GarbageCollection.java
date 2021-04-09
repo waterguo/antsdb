@@ -21,7 +21,6 @@ public class GarbageCollection extends Statement {
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        // TODO Auto-generated method stub
         return null;
     }
 

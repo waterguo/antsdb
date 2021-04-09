@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
+import com.antsdb.saltedfish.util.UberUtil;
+
 /**
  * 
  * @author *-xguo0<@
@@ -41,4 +43,9 @@ public class ChannelWriterNio extends ChannelWriter {
         }
     }
 
+    @Override
+    public void close() {
+        UberUtil.quiet(()->{super.close();});
+        UberUtil.quiet(()->{this.channel.close();});
+    }
 }

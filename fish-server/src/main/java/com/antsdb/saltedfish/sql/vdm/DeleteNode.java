@@ -13,21 +13,28 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import com.antsdb.saltedfish.sql.OrcaException;
+
 /**
  * 
  * @author *-xguo0<@
  */
 public class DeleteNode extends Statement {
-    String endpoint;
+    long serverId;
     
-    public DeleteNode(String endpoint) {
-        this.endpoint = endpoint;
+    public DeleteNode(long serverId) {
+        this.serverId = serverId;
     }
 
     @Override
     public Object run(VdmContext ctx, Parameters params) {
-        ctx.getOrca().getBelugaPod().delete(this.endpoint);
-        return null;
+        try {
+            ctx.getOrca().getBelugaPod().delete(this.serverId);
+            return null;
+        }
+        catch (Exception x) {
+            throw new OrcaException(x);
+        }
     }
 
 }

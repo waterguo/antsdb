@@ -47,6 +47,14 @@ public abstract class Function extends Operator {
 
     @Override
     public String toString() {
-        return getClass().getSimpleName().substring(4);
+        StringBuilder buf = new StringBuilder();
+        buf.append(getClass().getSimpleName().substring(4));
+        buf.append("(");
+        for (Operator i:this.parameters) {
+            buf.append(i.toString());
+            buf.append(",");
+        }
+        buf.append(")");
+        return buf.toString();
     }
 }

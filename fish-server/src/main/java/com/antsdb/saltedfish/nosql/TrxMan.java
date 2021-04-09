@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.IdGenerator;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -32,10 +31,10 @@ public final class TrxMan {
     final static int MARK_ROW_LOCK = -3;
     
     Map<Long, Long> trx = new ConcurrentHashMap<Long, Long>(1000);
-    AtomicLong trxid = new AtomicLong(-IdGenerator.getId());
-    AtomicLong version = new AtomicLong(IdGenerator.getId());
+    private static AtomicLong _trxid = new AtomicLong(-IdGenerator.getId());
+    private static AtomicLong _version = new AtomicLong(IdGenerator.getId());
     private boolean isClosed;
-    private long oldest = -10;
+    private volatile long oldest = -10;
     
     public TrxMan(SpaceManager sm) {
     }
@@ -50,6 +49,14 @@ public final class TrxMan {
         if (trx >= MARK_ROLLED_BACK) {
             return trx;
         }
+        
+        // if we know the trx is committed , return the version
+        Long timestamp = this.trx.get(trx);
+        if (timestamp != null) {
+            return timestamp;
+        }
+        
+        // this is not supposed to happen unless in recovery mode.
         if (trx > this.oldest) {
             if (this.isClosed) {
                 // recoverer is depending this logic. if there are unfinished transaction in the log
@@ -57,11 +64,9 @@ public final class TrxMan {
             }
             throw new IllegalArgumentException("oldest=" + this.oldest + " trx=" + trx);
         }
-        Long timestamp = this.trx.get(trx);
-        if (timestamp != null) {
-            return timestamp;
-        }
-        return this.isClosed ? MARK_ROLLED_BACK : trx;
+        
+        // transaction hasnt been committed, return the trxid
+        return trx;
     }
 
     public void commit(long trxid, long trxts) {
@@ -70,6 +75,11 @@ public final class TrxMan {
         }
         if (trxid > this.oldest) {
             throw new IllegalArgumentException("oldest=" + this.oldest + " trx=" + trxid);
+        }
+        // reset version if incoming version is greater than version counter. this could happen in slave receiving 
+        // replication data 
+        if (trxts > _version.get()) {
+            _version.set(trxts);
         }
         this.trx.put(trxid, trxts);
     }
@@ -85,28 +95,25 @@ public final class TrxMan {
     }
 
     
-    public long getNewTrxId() {
-        if (this.isClosed) {
-            throw new CodingError();
-        }
-        long trxId = this.trxid.decrementAndGet();
+    public static long getNewTrxId() {
+        long trxId = _trxid.decrementAndGet();
         if (_log.isTraceEnabled()) {
             _log.trace("new trxid={}", trxId);
         }
         return trxId;
     }
     
-    public long getLastTrxId() {
-        long trxId = this.trxid.get();
+    public static long getLastTrxId() {
+        long trxId = _trxid.get();
         return trxId;
     }
     
     public long getCurrentVersion() {
-        return this.version.get();
+        return _version.get();
     }
     
-    public long getNewVersion() {
-        return this.version.incrementAndGet();
+    public static long getNewVersion() {
+        return _version.incrementAndGet();
     }
 
     /**
@@ -125,7 +132,7 @@ public final class TrxMan {
     }
 
     /**
-     * release transaction older (larger) than the specified
+     * release transaction older (larger) than or equal to the specified
      * 
      * @param trxid
      */

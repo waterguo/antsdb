@@ -19,82 +19,87 @@ package com.antsdb.saltedfish.nosql;
  * @author wgu0
  */
 class TombstoneEliminator implements RowIterator {
-	RowIterator upstream;
-	
-	TombstoneEliminator(RowIterator upstream) {
-		this.upstream = upstream;
-	}
-	
-	@Override
-	public boolean next() {
-		for (;;) {
-			if (this.upstream.next() == false) {
-				return false;
-			}
-			long pRow = this.upstream.getRowPointer();
-			if (!Row.isTombStone(pRow)) {
-				return true;
-			}
-		}
-	}
+    RowIterator upstream;
+    
+    TombstoneEliminator(RowIterator upstream) {
+        this.upstream = upstream;
+    }
+    
+    @Override
+    public boolean next() {
+        for (;;) {
+            if (this.upstream.next() == false) {
+                return false;
+            }
+            long pRow = this.upstream.getRowPointer();
+            if (!Row.isTombStone(pRow)) {
+                return true;
+            }
+        }
+    }
 
-	@Override
-	public long getRowKeyPointer() {
-		return this.upstream.getRowKeyPointer();
-	}
+    @Override
+    public long getRowKeyPointer() {
+        return this.upstream.getRowKeyPointer();
+    }
 
-	@Override
-	public long getRowPointer() {
-		return this.upstream.getRowPointer();
-	}
+    @Override
+    public long getRowPointer() {
+        return this.upstream.getRowPointer();
+    }
 
-	@Override
-	public long getVersion() {
-		return this.upstream.getVersion();
-	}
+    @Override
+    public long getVersion() {
+        return this.upstream.getVersion();
+    }
 
-	@Override
-	public long getRowScanned() {
-		return this.upstream.getRowScanned();
-	}
+    @Override
+    public long getRowScanned() {
+        return this.upstream.getRowScanned();
+    }
 
-	@Override
-	public void rewind() {
-		this.upstream.rewind();
-	}
+    @Override
+    public void rewind() {
+        this.upstream.rewind();
+    }
 
-	@Override
-	public Row getRow() {
-		return this.upstream.getRow();
-	}
+    @Override
+    public Row getRow() {
+        return this.upstream.getRow();
+    }
 
-	@Override
-	public void close() {
-		this.upstream.close();
-	}
+    @Override
+    public void close() {
+        this.upstream.close();
+    }
 
-	@Override
-	public long getKeyPointer() {
-		return this.upstream.getKeyPointer();
-	}
+    @Override
+    public long getKeyPointer() {
+        return this.upstream.getKeyPointer();
+    }
 
-	@Override
-	public long getIndexSuffix() {
-		return this.upstream.getIndexSuffix();
-	}
+    @Override
+    public long getIndexSuffix() {
+        return this.upstream.getIndexSuffix();
+    }
 
-	@Override
-	public boolean eof() {
-		return this.upstream.eof();
-	}
+    @Override
+    public boolean eof() {
+        return this.upstream.eof();
+    }
 
-	@Override
-	public byte getMisc() {
-		return this.upstream.getMisc();
-	}
+    @Override
+    public byte getMisc() {
+        return this.upstream.getMisc();
+    }
 
-	@Override
-	public String toString() {
-	    return this.upstream.toString();
-	}
+    @Override
+    public String getLocation() {
+        return this.upstream.getLocation();
+    }
+
+    @Override
+    public String toString() {
+        return this.upstream.toString();
+    }
 }

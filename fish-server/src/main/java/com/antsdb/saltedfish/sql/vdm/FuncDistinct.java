@@ -13,10 +13,10 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import java.util.HashSet;
-
-import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.OffHeapSkipList;
+import com.antsdb.saltedfish.cpp.RecyclableHeap;
+import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
@@ -28,43 +28,48 @@ import com.antsdb.saltedfish.sql.DataType;
  *
  */
 public class FuncDistinct extends UnaryOperator {
-    int variableId;
-    
-    private static class Data {
-        HashSet<Object> values = new HashSet<Object>();
-    }
+    private int variableId;
+    private KeyMaker keymaker;
     
     public FuncDistinct(Operator expr, int variableId) {
         super(expr);
         this.variableId = variableId;
+        this.keymaker = new KeyMaker(new DataType[] {DataType.varchar()});
     }
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	Data data = (Data)ctx.getVariable(this.variableId);
-    	if (data == null) {
-    		data = new Data();
-    		ctx.setVariable(variableId, data);
-    	}
-    	
-        // end of group by, reset
-        
-        if (Record.isGroupEnd(pRecord)) {
-            data.values.clear();
-            this.upstream.eval(ctx, heap, params, pRecord);
-            return 0;
+        RecyclableHeap rheap = ctx.getGroupHeap();
+        long pCurrentUnit = rheap.getCurrentUnit();
+        try {
+            long pList = ctx.getGroupVariable(this.variableId);
+            OffHeapSkipList list;
+            if (pList != 0) {
+                rheap.restoreUnit(pList);
+                list = new OffHeapSkipList(rheap, pList);
+            }
+            else  {
+                rheap.markNewUnit(60);
+                list = OffHeapSkipList.alloc(rheap);
+                pList = list.getAddress();
+                ctx.setGroupVariable(this.variableId, pList);
+            }
+            long pResult = 0;
+            if (pRecord != 0) {
+                long pValue = this.upstream.eval(ctx, heap, params, pRecord);
+                if (pValue != 0) {
+                    long pKey = this.keymaker.make(heap, pValue);
+                    long pEntry = list.put(pKey);
+                    if (Unsafe.getLong(pEntry) == 0) {
+                        pResult = pValue;
+                        Unsafe.putLong(pEntry, 1);
+                    }
+                }
+            }
+            return pResult;
         }
-        
-        // check uniqueness
-        
-        long addrValue = this.upstream.eval(ctx, heap, params, pRecord);
-        Object value = FishObject.get(heap, addrValue);
-        if (data.values.contains(value)) {
-            return 0;
-        }
-        else {
-            data.values.add(value);
-            return addrValue;
+        finally {
+            rheap.restoreUnit(pCurrentUnit);
         }
     }
 

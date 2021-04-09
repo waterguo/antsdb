@@ -51,71 +51,32 @@ class TransactionCollector implements Runnable {
     }
 
     static void collect(Humpback humpback) {
-        long safePoint = renderOldest(humpback);
-        if (safePoint >= 0) {
+        TrxMan trxman = humpback.getTrxMan();
+        long lastClosedTrxId = humpback.getLastClosedTransactionId();
+        
+        // save the time consuming collecting if there is not much to collect
+        if (-(lastClosedTrxId - trxman.getStartTrxId()) < 1000) {
             return;
         }
-        _log.trace("schedule trx release up to {}", safePoint);
-        TransactionCollector collector = new TransactionCollector(humpback, safePoint);
-        humpback.getJobManager().schedule(2, TimeUnit.SECONDS, collector);
+        if (trxman.size() < 5000) {
+            return;
+        }
+        
+        // proceed
+        collect(humpback, lastClosedTrxId);
     }
     
-    static long renderOldest(Humpback humpback) {
-        // find out system wide last closed trxid
-        
-        long activeSessionStartTrxId = humpback.getLastClosedTransactionId() - 1;
-        
-        // find out the oldest tablet and the second oldest. we only collect one tablet one at a time
-        
-        MemTable oldest = null;
-        long oldestTrxId = Long.MIN_VALUE;
-        long secondOldestTrxId = Long.MIN_VALUE;
+    static void collect(Humpback humpback, long lastClosedTrxId) {
+        // render all tables up to the point
+        int count = 0;
+        _log.trace("start rendering up to {}", lastClosedTrxId);
         for (GTable i:humpback.getTables()) {
-            long startTrxId = i.getMemTable().getStartTrxId();
-            if (startTrxId == 0) {
-                continue;
-            }
-            if (startTrxId >= oldestTrxId) {
-                secondOldestTrxId = oldestTrxId; 
-                oldestTrxId = startTrxId;
-                oldest = i.getMemTable();
-            }
-            else if (startTrxId > secondOldestTrxId) {
-                secondOldestTrxId = startTrxId; 
-            }
+            count += i.memtable.render(lastClosedTrxId);
         }
-        
-        // render the tablet
-        
-        if (oldest == null) {
-            return 0;
-        }
-        if (oldestTrxId <= activeSessionStartTrxId) {
-            return 0;
-        }
-        // _log.debug("start rendering {} ", oldest.getId());
-        oldest.render(humpback.getLastClosedTransactionId());
-        long currentStartTrxId = oldest.getStartTrxId();
-        _log.trace(
-            "activeSessionStartTrxId={} currentStartTrxId={} oldestTrxId={} secondOldestTrxId={}",
-            activeSessionStartTrxId,
-            currentStartTrxId,
-            oldestTrxId,
-            secondOldestTrxId);
-        long startTrxId = max(activeSessionStartTrxId, currentStartTrxId, secondOldestTrxId);
+        _log.trace("{} tablets have been rendered", count);
 
-        // now the transactions between the oldest and endpoint are safe to free. keep in mind there
-        // could be mutltiple tablets have the same start point
-        
-        long endpoint = startTrxId + 1;
-        if (endpoint > oldestTrxId) {
-            // multiple tables share the same start point, don't free transactions at this case
-            return 0;
-        }
-        return endpoint;
-    }
-
-    private static long max(long n1, long n2, long n3) {
-        return Math.max(n1, Math.max(n2, n3));
+        // free transactions a little later in case there are concurrent trxman calls
+        TransactionCollector collector = new TransactionCollector(humpback, lastClosedTrxId);
+        humpback.getJobManager().schedule(2, TimeUnit.SECONDS, collector);
     }
 }

@@ -16,7 +16,7 @@ package com.antsdb.saltedfish.sql;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.antsdb.saltedfish.nosql.SysMetaRow;
+import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.sql.vdm.Cursor;
 import com.antsdb.saltedfish.sql.vdm.Parameters;
 import com.antsdb.saltedfish.sql.vdm.VdmContext;
@@ -28,48 +28,48 @@ import com.antsdb.saltedfish.util.CursorUtil;
  * @author wgu0
  */
 public class SystemViewLocks extends View {
-	Orca orca;
-	
+    Orca orca;
+    
     public static class Item {
-    	public int SESSION;
-    	public String LOCK_TYPE;
-    	public Integer OBJECT_ID;
-    	public String OBJECT;
+        public int SESSION;
+        public String LOCK_TYPE;
+        public Integer OBJECT_ID;
+        public String OBJECT;
     }
     
-	public SystemViewLocks(Orca orca) {
-	    super(CursorUtil.toMeta(Item.class));
-		this.orca = orca;
-	}
+    public SystemViewLocks(Orca orca) {
+        super(CursorUtil.toMeta(Item.class));
+        this.orca = orca;
+    }
 
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
         List<Item> list = new ArrayList<>();
-	    for (Session session:ctx.getOrca().getSessions()) {
-	        for (TableLock lock:session.tableLocks.values()) {
-	            if (lock.getLevel() == LockLevel.EXCLUSIVE_BY_OTHER) {
-	                continue;
-	            }
+        for (Session session:ctx.getOrca().getSessions()) {
+            for (TableLock lock:session.tableLocks.values()) {
+                if (lock.getLevel() == LockLevel.EXCLUSIVE_BY_OTHER) {
+                    continue;
+                }
                 if (lock.getLevel() == LockLevel.NONE) {
                     continue;
                 }
-	            list.add(add(ctx, lock));
-	        }
-	    }
+                list.add(add(ctx, lock));
+            }
+        }
 
-	    // done
+        // done
         
         Cursor c = CursorUtil.toCursor(meta, list);
         return c;
-	}
+    }
 
-	private Item add(VdmContext ctx, TableLock lock) {
-	    SysMetaRow tableInfo = ctx.getHumpback().getTableInfo(lock.tableId);
-		Item item = new Item();
-		item.SESSION = lock.owner;
-		item.LOCK_TYPE = LockLevel.toString(lock.level.get());
-		item.OBJECT_ID = tableInfo.getTableId();
-		item.OBJECT = tableInfo.getNamespace() + "." + tableInfo.getTableName();
-		return item;
-	}
+    private Item add(VdmContext ctx, TableLock lock) {
+        GTable table = ctx.getHumpback().getTable(lock.tableId);
+        Item item = new Item();
+        item.SESSION = lock.owner;
+        item.LOCK_TYPE = LockLevel.toString(lock.level.get());
+        item.OBJECT_ID = table.getId();
+        item.OBJECT = table.getNamespace() + "." + table.getName();
+        return item;
+    }
 }

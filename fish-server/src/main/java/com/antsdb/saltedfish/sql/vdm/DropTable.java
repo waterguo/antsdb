@@ -14,7 +14,9 @@
 package com.antsdb.saltedfish.sql.vdm;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -35,11 +37,23 @@ public class DropTable extends Statement {
     
     List<ObjectName> tableNames;
     boolean ifExist;
+    private Predicate<TableMeta> call;
+    
+    public DropTable(ObjectName table, boolean ifExist) {
+        this(Collections.singletonList(table), ifExist);
+    }
     
     public DropTable(List<ObjectName> tables, boolean ifExist) {
         super();
         this.tableNames = tables;
         this.ifExist = ifExist;
+    }
+
+    public DropTable(List<ObjectName> tables, boolean ifExist, Predicate<TableMeta> call) {
+        super();
+        this.tableNames = tables;
+        this.ifExist = ifExist;
+        this.call = call;
     }
 
     @Override
@@ -50,31 +64,32 @@ public class DropTable extends Statement {
             if (StringUtils.isEmpty(tblName.getNamespace())) {
                 throw new OrcaException("No database selected");
             }
-            TableMeta table = ctx.getOrca().getMetaService().getTable(ctx.getTransaction(), tblName);
+            TableMeta table = ctx.getSession().getTable(tblName);
             if (table == null) {
                 if (!this.ifExist) {
                     failTbls.add(tblName);
                 }
                 continue;
             }
+            if (this.call != null) {
+                if (!this.call.test(table)) {
+                    failTbls.add(tblName);
+                }
+            }
 
             try {
                 // acquire exclusive lock
-                
                 Transaction trx = ctx.getTransaction();
                 ctx.getSession().lockTable(table.getId(), LockLevel.EXCLUSIVE, false);
                 
                 // refetch the table metadata to avoid concurrency
-                
                 table = ctx.getMetaService().getTable(trx, table.getId());
                 check(ctx, table);
                 
                 // indexes blah blah
-                
                 dropDependents(ctx, table, params);
                 
                 // drop physical table
-                
                 Humpback humpback = ctx.getOrca().getHumpback();
                 humpback.dropTable(ctx.getHSession(), tblName.getNamespace(), table.getHtableId());
                 if (humpback.getTable(table.getBlobTableId()) != null) {
@@ -82,7 +97,6 @@ public class DropTable extends Statement {
                 }
                 
                 // remove metadata
-                
                 MetadataService meta = ctx.getOrca().getMetaService();
                 if (table.findAutoIncrementColumn() != null) {
                     SequenceMeta seq = meta.getSequence(trx, table.getAutoIncrementSequenceName());
@@ -91,26 +105,31 @@ public class DropTable extends Statement {
                     }
                 }
                 ctx.getOrca().getMetaService().dropTable(ctx.getHSession(), trx, table);
+                if (table.isTemproray()) {
+                    ctx.getSession().removeTemporaryTable(table);
+                }
             }
             finally {
                 ctx.getSession().unlockTable(table.getId());
             }
         }
         if (failTbls.size()>0) {
-            throw new OrcaException(failTbls.toString() + "table doesn't exist");
+            throw new OrcaException(failTbls.toString() + "table/view doesn't exist");
         };
         return null;
     }
 
     private void check(VdmContext ctx, TableMeta table) {
         Humpback humpback = ctx.getHumpback();
-        SysMetaRow meta = humpback.getTableInfo(table.getId());
-        if (meta != null) {
-            if (!meta.isDeleted()) {
-                return;
+        if (table.getHtableId() >= 0) {
+            SysMetaRow meta = humpback.getTableInfo(table.getHtableId());
+            if (meta != null) {
+                if (!meta.isDeleted()) {
+                    return;
+                }
             }
+            _log.warn("table {} is out of sync between orca and humpback", table.getId());
         }
-        _log.warn("table {} is out of sync between orca and humpback", table.getId());
     }
 
     private void dropDependents(VdmContext ctx, TableMeta table, Parameters params) {

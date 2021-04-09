@@ -130,6 +130,9 @@ public abstract class Packet {
         else if (type == PacketType.FISH_RESTORE_END) {
             return new PacketFishRestoreEnd(addr, length);
         }
+        else if (type == PacketType.FISH_LOG_REPLICATE) {
+            return new PacketLogReplicate(addr, length);
+        }
         else {
             return new PacketUnknown(addr, length);
         }

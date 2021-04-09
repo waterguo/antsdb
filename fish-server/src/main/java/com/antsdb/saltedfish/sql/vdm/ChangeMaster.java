@@ -20,22 +20,22 @@ import com.antsdb.saltedfish.nosql.CheckPoint;
  * @author wgu0
  */
 public class ChangeMaster extends Instruction {
-	String logfile;
-	long logpos;
-	
-	@Override
-	public Object run(VdmContext ctx, Parameters params, long pMaster) {
-		CheckPoint cp = ctx.getOrca().getHumpback().getCheckPoint();
-		cp.setSlaveLogFile(this.logfile);
-		cp.setSlaveLogPosition(this.logpos);
-		return null;
-	}
+    String logfile;
+    long logpos;
+    
+    @Override
+    public Object run(VdmContext ctx, Parameters params, long pMaster) {
+        CheckPoint cp = ctx.getOrca().getHumpback().getCheckPoint();
+        cp.setSlaveLogFile(this.logfile);
+        cp.setSlaveLogPosition(this.logpos);
+        return null;
+    }
 
-	public void setLogFile(String value) {
-		this.logfile = value;
-	}
-	
-	public void setLogPos(long value) {
-		this.logpos = value;
-	}
+    public void setLogFile(String value) {
+        this.logfile = value;
+    }
+    
+    public void setLogPos(long value) {
+        this.logpos = value;
+    }
 }

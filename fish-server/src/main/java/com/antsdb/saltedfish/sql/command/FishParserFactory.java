@@ -39,9 +39,9 @@ import com.antsdb.saltedfish.sql.vdm.VdmContext;
 public class FishParserFactory extends SqlParserFactory {
 
     @Override
-    public Script parse(Session session, CharStream cs) {
+    public Script parse(GeneratorContext ctx, Session session, CharStream cs) {
         ScriptContext scriptCtx = parse(cs);
-        GeneratorContext ctx = new GeneratorContext(session);
+        if (ctx == null) ctx = new GeneratorContext(session);
         Instruction code = (Instruction)InstructionGenerator.generate(ctx, scriptCtx);
         Script script = new Script(code, ctx.getParameterCount(), ctx.getVariableCount(), cs.toString());
         return script;

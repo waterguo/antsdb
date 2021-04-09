@@ -16,18 +16,21 @@ package com.antsdb.saltedfish.sql.vdm;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.RecyclableHeap;
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.Humpback;
 import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.SpaceManager;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.Session;
+import com.antsdb.saltedfish.sql.SystemParameters;
 import com.antsdb.saltedfish.sql.meta.MetadataService;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 
-public class VdmContext {
+public final class VdmContext {
     Session session;
     long readTrxTs;
     long writeTrx;
@@ -35,6 +38,9 @@ public class VdmContext {
     private Transaction trx;
     List<AtomicLong> cursorStats;
     private VdmComparator comp;
+    private long pGroup;
+    private Profiler profiler;
+    private RecyclableHeap gheap;
 
     public VdmContext(Session session, int nVariables) {
         super();
@@ -106,14 +112,106 @@ public class VdmContext {
         return this.cursorStats.get(makerId);
     }
     
-    public Integer compare(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
+    /**
+     * 
+     * @param heap
+     * @param params
+     * @param pRecord
+     * @param x
+     * @param y
+     * @return Integer.MIN_VALUE if one of the two values is null
+     */
+    public int compare(Heap heap, Parameters params, long pRecord, Operator x, Operator y) {
         if (this.comp == null) {
             this.comp = new VdmComparator(this);
         }
         return this.comp.comp(heap, params, pRecord, x, y); 
     }
 
+    /**
+     * 
+     * @param heap
+     * @param pRecord
+     * @param px
+     * @param py
+     * @return Integer.MIN_VALUE if one of the two values is null
+     */
+    public int compare(Heap heap, long px, long py) {
+        if (this.comp == null) {
+            this.comp = new VdmComparator(this);
+        }
+        return this.comp.comp(heap, px, py); 
+    }
+
     public HumpbackSession getHSession() {
         return this.session.getHSession();
+    }
+    
+    /**
+     * perform a conversion which is affect by mysql strict sql mode
+     * 
+     * @see https://dev.mysql.com/doc/refman/5.7/en/sql-mode.html#sql-mode-strict
+     * @param call a conversion function
+     * @return null if conversion failed and strict is on
+     */
+    <T> T strict(Supplier<T> call) {
+        if (this.session.getConfig().isStrict()) {
+            return call.get();
+        }
+        else {
+            try {
+                return call.get();
+            }
+            catch (Exception x) {
+                return null;
+            }
+        }
+    }
+
+    public SystemParameters getConfig() {
+        return this.session.getConfig();
+    }
+    
+    public int getvariableCount() {
+        return this.variables.length;
+    }
+
+    public void setGroupContext(long pGroup) {
+        this.pGroup = pGroup;
+    }
+    
+    public long getGroupContext() {
+        return this.pGroup;
+    }
+    
+    public long getGroupVariable(int variableId) {
+        long pGroup = getGroupContext();
+        GroupContext group = pGroup != 0 ? new GroupContext(pGroup) : null;
+        return group != null ? group.getVarialbe(variableId) : 0;
+    }
+
+    public void setGroupVariable(int variableId, long value) {
+        long pGroup = getGroupContext();
+        if (pGroup == 0) {
+            throw new IllegalArgumentException();
+        }
+        GroupContext group = new GroupContext(pGroup);
+        group.setVariable(variableId, value);
+    }
+
+    public void setProfiler(Profiler profiler) {
+        this.profiler = profiler;
+    }
+    
+    public CursorStats getProfiler(int makerId) {
+        return this.profiler != null ? this.profiler.getStats(makerId) : null;
+    }
+    
+    public RecyclableHeap getGroupHeap() {
+        return this.gheap;
+    }
+    
+    public void setGroupHeap(RecyclableHeap gheap) {
+        this.gheap = gheap;
     }
 }

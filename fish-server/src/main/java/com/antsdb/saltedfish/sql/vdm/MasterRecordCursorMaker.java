@@ -49,4 +49,8 @@ public class MasterRecordCursorMaker extends CursorMaker {
         return false;
     }
 
+    @Override
+    public float getScore() {
+        return 0;
+    }
 }

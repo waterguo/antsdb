@@ -27,7 +27,7 @@ class Ping_stmtGenerator extends Generator<Ping_stmtContext> {
 
     @Override
     public Instruction gen(GeneratorContext ctx, Ping_stmtContext rule) throws OrcaException {
-        return ctx.getSession().parse("SELECT version()").getRoot();
+        return ctx.getSession().parse(ctx, "SELECT version()").getRoot();
     }
 
 }

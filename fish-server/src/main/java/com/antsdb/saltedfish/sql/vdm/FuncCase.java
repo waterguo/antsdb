@@ -19,21 +19,20 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
 public class FuncCase extends Function {
-	
-	@Override
-	public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-		throw new NotImplementedException();
-	}
+    
+    @Override
+    public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        throw new NotImplementedException();
+    }
 
-	@Override
-	public DataType getReturnType() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    public DataType getReturnType() {
+        return null;
+    }
 
-	@Override
-	public int getMinParameters() {
-		return -1;
-	}
+    @Override
+    public int getMinParameters() {
+        return -1;
+    }
 
 }

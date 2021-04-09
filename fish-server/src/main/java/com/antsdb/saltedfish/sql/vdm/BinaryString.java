@@ -34,19 +34,11 @@ import com.antsdb.saltedfish.sql.DataType;
 public class BinaryString extends Operator {
     
     private byte[] bytes;
-    private boolean isBinary;
+    private Decoder decoder;
 
-    public BinaryString(byte[] bytes, boolean isBinary) {
+    public BinaryString(byte[] bytes, Decoder decoder) {
         this.bytes = bytes;
-        this.isBinary = isBinary;
-    }
-
-    public boolean isBinary() {
-        return isBinary;
-    }
-
-    public void setBinary(boolean isBinary) {
-        this.isBinary = isBinary;
+        this.decoder = decoder;
     }
 
     @Override
@@ -54,36 +46,30 @@ public class BinaryString extends Operator {
         if (this.bytes == null) {
             return 0;
         }
-        if (this.isBinary) {
-            return Bytes.allocSet(heap, this.bytes);
-        }
-        else {
-            Decoder decoder = ctx.getSession().getConfig().getRequestDecoder();
-            IntSupplier supplier = decoder.mapDecode(new IntSupplier() {
-                int idx=0;
-                @Override
-                public int getAsInt() {
-                    if (idx >= bytes.length) {
-                        return -1;
-                    }
-                    return bytes[this.idx++] & 0xff;
+        IntSupplier supplier = decoder.mapDecode(new IntSupplier() {
+            int idx=0;
+            @Override
+            public int getAsInt() {
+                if (idx >= bytes.length) {
+                    return -1;
                 }
-            });
-            long pBuffer = heap.alloc(this.bytes.length * 4);
-            AtomicInteger idx = new AtomicInteger();
-            IntConsumer consumer = new IntConsumer() {
-                @Override
-                public void accept(int value) {
-                    Unsafe.putByte(pBuffer + idx.getAndIncrement(), (byte)value);
-                }
-            };
-            Utf8.encode(supplier, consumer);
-            if (idx.get() > (this.bytes.length * 4)) {
-                throw new IllegalArgumentException();
+                return bytes[this.idx++] & 0xff;
             }
-            long pResult = FishUtf8.allocSet(heap, pBuffer, idx.get());
-            return pResult;
+        });
+        long pBuffer = heap.alloc(this.bytes.length * 4);
+        AtomicInteger idx = new AtomicInteger();
+        IntConsumer consumer = new IntConsumer() {
+            @Override
+            public void accept(int value) {
+                Unsafe.putByte(pBuffer + idx.getAndIncrement(), (byte)value);
+            }
+        };
+        Utf8.encode(supplier, consumer);
+        if (idx.get() > (this.bytes.length * 4)) {
+            throw new IllegalArgumentException();
         }
+        long pResult = FishUtf8.allocSet(heap, pBuffer, idx.get());
+        return pResult;
     }
 
     public long getBytes(Heap heap) {
@@ -92,7 +78,7 @@ public class BinaryString extends Operator {
     
     @Override
     public DataType getReturnType() {
-        return this.isBinary ? DataType.blob() : DataType.varchar();
+        return DataType.varchar();
     }
 
     @Override

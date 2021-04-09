@@ -18,6 +18,7 @@ package com.antsdb.saltedfish.server.mysql;
  * @author wgu0
  */
 public interface MysqlConstant {
+    // https://dev.mysql.com/doc/internals/en/capability-flags.html
     public static final int    CLIENT_LONG_PASSWORD        = 0x00000001; /* new more secure passwords */
     public static final int    CLIENT_FOUND_ROWS            = 0x00000002;
     public static final int    CLIENT_LONG_FLAG            = 0x00000004; /* Get all column flags */

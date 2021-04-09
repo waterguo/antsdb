@@ -32,51 +32,45 @@ import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
+import com.antsdb.saltedfish.sql.meta.OrcaTableType;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
+import com.antsdb.saltedfish.sql.vdm.AggregationFunction;
 import com.antsdb.saltedfish.sql.vdm.Aggregator;
+import com.antsdb.saltedfish.sql.vdm.BrutalGrouper;
 import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.CursorMeta;
 import com.antsdb.saltedfish.sql.vdm.CursorPrimaryKeySeek;
 import com.antsdb.saltedfish.sql.vdm.DumbDistinctFilter;
-import com.antsdb.saltedfish.sql.vdm.DumbGrouper;
 import com.antsdb.saltedfish.sql.vdm.DumbSorter;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Filter;
 import com.antsdb.saltedfish.sql.vdm.FullTextIndexMergeScan;
-import com.antsdb.saltedfish.sql.vdm.FuncAvg;
 import com.antsdb.saltedfish.sql.vdm.FuncCount;
 import com.antsdb.saltedfish.sql.vdm.FuncGroupConcat;
 import com.antsdb.saltedfish.sql.vdm.FuncMax;
 import com.antsdb.saltedfish.sql.vdm.FuncMin;
 import com.antsdb.saltedfish.sql.vdm.FuncSum;
-import com.antsdb.saltedfish.sql.vdm.GroupByPostProcesser;
-import com.antsdb.saltedfish.sql.vdm.IndexRangeScan;
+import com.antsdb.saltedfish.sql.vdm.IndexedTableScan;
+import com.antsdb.saltedfish.sql.vdm.Limiter;
 import com.antsdb.saltedfish.sql.vdm.MasterRecordCursorMaker;
 import com.antsdb.saltedfish.sql.vdm.NestedJoin;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
 import com.antsdb.saltedfish.sql.vdm.OpAnd;
 import com.antsdb.saltedfish.sql.vdm.OpEqual;
-import com.antsdb.saltedfish.sql.vdm.OpEqualNull;
-import com.antsdb.saltedfish.sql.vdm.OpInSelect;
-import com.antsdb.saltedfish.sql.vdm.OpInValues;
-import com.antsdb.saltedfish.sql.vdm.OpLarger;
-import com.antsdb.saltedfish.sql.vdm.OpLargerEqual;
-import com.antsdb.saltedfish.sql.vdm.OpLess;
-import com.antsdb.saltedfish.sql.vdm.OpLessEqual;
-import com.antsdb.saltedfish.sql.vdm.OpLike;
 import com.antsdb.saltedfish.sql.vdm.OpMatch;
 import com.antsdb.saltedfish.sql.vdm.OpOr;
 import com.antsdb.saltedfish.sql.vdm.Operator;
-import com.antsdb.saltedfish.sql.vdm.RangeScannable;
+import com.antsdb.saltedfish.sql.vdm.Ordered;
 import com.antsdb.saltedfish.sql.vdm.RecordLocker;
 import com.antsdb.saltedfish.sql.vdm.RowKeyValue;
-import com.antsdb.saltedfish.sql.vdm.TableRangeScan;
 import com.antsdb.saltedfish.sql.vdm.TableScan;
-import com.antsdb.saltedfish.sql.vdm.ThroughGrouper;
+import com.antsdb.saltedfish.sql.vdm.AllInOneGrouper;
+import com.antsdb.saltedfish.sql.vdm.ToString;
 import com.antsdb.saltedfish.sql.vdm.Union;
+import com.antsdb.saltedfish.sql.vdm.Vector;
 import com.antsdb.saltedfish.sql.vdm.View;
 import com.antsdb.saltedfish.util.CodingError;
 import com.antsdb.saltedfish.util.UberUtil;
@@ -110,14 +104,19 @@ public class Planner {
     private Node current;
     private boolean noCache = false;
     private Analyzer analyzer = new Analyzer();
+    private long offset;
+    private long count;
+    private CursorMeta outputMeta = new CursorMeta();
+    private boolean freeze = false;
+    private ArrayList<AggregationFunction> aggregates;
 
     static {
         KEY.setColumnId(-1);
         KEY.setColumnName("*key");
-        KEY.setType(DataType.binary());
+        KEY.setType(DataType.varchar());
         ROWID.setColumnId(0);
         ROWID.setColumnName("*rowid");
-        ROWID.setType(DataType.longtype());
+        ROWID.setType(DataType.binary());
     }
 
     public Planner(GeneratorContext ctx) {
@@ -145,6 +144,9 @@ public class Planner {
     }
 
     public ObjectName addTable(String alias, TableMeta table, boolean left, boolean isOuter) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
         Node node = new Node();
         node.table = table;
         if (alias == null) {
@@ -183,16 +185,7 @@ public class Planner {
         return node.alias;
     }
 
-    public ObjectName addCursor(String alias, CursorMaker maker, boolean left, boolean isOuter) {
-        View view = (maker instanceof View) ? (View)maker : null;
-        Node node = new Node();
-        node.maker = maker;
-        if ((alias == null) && (view != null)) {
-            node.alias = view.getName();
-        }
-        else {
-            node.alias = new ObjectName(null, alias);
-        }
+    private void addCursor(Node node, CursorMeta meta, ObjectName sourceName, boolean left, boolean isOuter) {
         if (left) {
             node.isOuter = isOuter;
         }
@@ -202,16 +195,43 @@ public class Planner {
             node.isOuter = false;
         }
         this.nodes.put(node.alias, node);
-        for (FieldMeta i : maker.getCursorMeta().getFields()) {
+        for (FieldMeta i : meta.getFields()) {
             PlannerField field = new PlannerField(node, i);
-            if (view != null) {
-                field.setSourceTable(view.getName());
-            }
+            field.setSourceTable(sourceName);
+            field.index = this.rawMeta.getColumnCount();
             node.fields.add(field);
             this.rawMeta.addColumn(field);
         }
         this.last = this.current;
         this.current = node;
+    }
+    
+    public ObjectName addCursor(String alias, Planner planner, boolean left, boolean isOuter) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
+        Node node = new Node();
+        node.planner = planner;
+        node.alias = new ObjectName(null, alias);
+        addCursor(node, planner.getOutputMeta(), null, left, isOuter);
+        return node.alias;
+    }
+    
+    public ObjectName addCursor(String alias, CursorMaker maker, boolean left, boolean isOuter) {
+        if (this.freeze) {
+            throw new IllegalArgumentException("freezed");
+        }
+        View view = (maker instanceof View) ? (View)maker : null;
+        Node node = new Node();
+        node.maker = maker;
+        ObjectName sourceName = (view != null) ? view.getName() : null;
+        if ((alias == null) && (view != null)) {
+            node.alias = view.getName();
+        }
+        else {
+            node.alias = new ObjectName(null, alias);
+        }
+        addCursor(node, maker.getCursorMeta(), sourceName, left, isOuter);
         return node.alias;
     }
 
@@ -233,25 +253,109 @@ public class Planner {
     }
 
     public void addJoinCondition(ObjectName alias, Operator expr, boolean left) {
+        Node node = null;
         if (left) {
-            Node node = this.nodes.get(alias);
+            node = this.nodes.get(alias);
             if (node == null) {
                 throw new OrcaException("alias is not found: " + alias);
             }
-            node.joinCondition = expr;
         }
         else {
-            this.last.joinCondition = expr;
+            node = this.last;
         }
+        node.joinCondition = expr;
+        if (node.planner != null) {
+            pushDown(node.planner, expr);
+        }
+    }
+
+    /**
+     * push down the provided condition to subquery so it can take advantage of indexes potentially. 
+     * 
+     * @param planner subquery
+     * @param expr condition
+     */
+    private void pushDown(Planner subquery, Operator expr) {
+        if (!(expr instanceof OpEqual)) {
+            // for now, we only handle a single =
+            return;
+        }
+        OpEqual equal = (OpEqual)expr;
+        if (!(equal.left instanceof FieldValue) || !(equal.right instanceof FieldValue)) {
+            // both operands of the = must be field name
+            return;
+        }
+        FieldValue x = findField(this, subquery, (FieldValue)equal.left);
+        FieldValue y = findField(this, subquery, (FieldValue)equal.right);
+        if ((x == null) || (y == null)) return;
+        OpEqual z = new OpEqual(x, y);
+        if (subquery.where == null) {
+            subquery.where = z;
+        }
+        else {
+            subquery.where = new OpAnd(subquery.where, z);
+        }
+    }
+
+    private FieldValue findField(Planner planner, Planner subquery, FieldValue fv) {
+        if (fv.getField().owner.planner == subquery) {
+            for (int i=0; i<subquery.getOutputMeta().getColumnCount(); i++) {
+                if (subquery.getOutputMeta().getColumn(i) == fv.getField().field) {
+                    if (subquery.getOutputFields().get(i).expr instanceof FieldValue) {
+                        return (FieldValue)subquery.getOutputFields().get(i).expr;
+                    }
+                }
+            }
+        }
+        else {
+            PlannerField result = subquery.findField(it->{
+                return it.getColumn() == fv.getField().getColumn();
+            });
+            if (result != null) {
+                return new FieldValue(result);
+            }
+        }
+        return null;
     }
 
     public OutputField addOutputField(String name, Operator expr) {
+        // remove the system column prefix if it is wanted in the query result. it is because 
+        // Helper.getColumnCount() will hide the columns start with '*'
+        if (name.startsWith("*")) {
+            name = name.substring(1);
+            if (name.equals("key")) {
+                // pure hacks
+                expr = new ToString(expr);
+            }
+        }
+        
         adjustOpMatch(expr);
         OutputField field = new OutputField(name, expr);
         this.fields.add(field);
+        FieldMeta fm = new FieldMeta(field.name, field.expr.getReturnType());
+        if (field.expr instanceof FieldValue) {
+            PlannerField pf = ((FieldValue)field.expr).getField();
+            fm.setSourceTable(pf.getSourceTable());
+            fm.setSourceColumnName(pf.getSourceName());
+            fm.setTableAlias(pf.getTableAlias());
+            fm.setColumn(pf.column);
+            fm.setKeyColumn(pf.isKeyColumn());
+        }
+        this.outputMeta.addColumn(fm);
+        findAggregationFunction(expr);
         return field;
     }
 
+    private void findAggregationFunction(Operator expr) {
+        expr.visit((Operator i)->{
+           if (i instanceof AggregationFunction) {
+               if (this.aggregates == null) {
+                   this.aggregates = new ArrayList<>();
+               }
+               this.aggregates.add((AggregationFunction) i);
+           }
+        });
+    }
     /**
      * inform OpMatch that it is not in where clause. this same expression in
      * where clause returns a boolean but in aggregator returns a float
@@ -266,25 +370,41 @@ public class Planner {
         });
     }
 
+    public CursorMeta getOutputMeta() {
+        return this.outputMeta;
+    }
+    
     public CursorMaker run() {
+        return run(0);
+    }
+    
+    /**
+     * 
+     * @param isParentAvailable if parent is available in a subquery. parent query could be unavailable if the subquery 
+     * is the first one to execute. 
+     * @return
+     */
+    public CursorMaker run(int parentWidth) {
         if ((this.groupBy == null) && scanAggregationFunctions(getOutputFields())) {
             this.groupBy = Collections.emptyList();
         }
         
         analyze();
-        Link path = build();
+        
+        // optimization
+        leftJoinOptimize();
+        
+        // build query path
+        Link path = build(parentWidth);
 
         // build join
-
         CursorMaker maker = buildJoin(path);
 
         // reindex fields. planner might adjust the order of participating
         // tables;
-
         reindexFields(path);
 
         // where clause
-
         Operator condition = null;
         if (this.where != null) {
             condition = this.where;
@@ -294,56 +414,66 @@ public class Planner {
             maker = new Filter(maker, condition, false, ctx.getNextMakerId());
         }
 
-        // order by
-
-        maker = buildOrderby(maker);
-
         // group by
-
         CursorMaker grouper = buildGroupBy(maker, path);
-        boolean hasGrouper = grouper != maker;
         maker = grouper;
         
+        // add order by fields
+        int posOrderBy = addOrderByFields(maker);
+        
         // aggregation
-
         if (this.fields.size() > 0) {
-            CursorMeta meta = new CursorMeta();
             List<Operator> exprs = new ArrayList<>();
             for (OutputField i : this.fields) {
                 exprs.add(i.expr);
-                FieldMeta field = new FieldMeta(i.name, i.expr.getReturnType());
-                if (i.expr instanceof FieldValue) {
-                    PlannerField pf = ((FieldValue) i.expr).getField();
-                    field.setSourceTable(pf.getSourceTable());
-                    field.setSourceColumnName(pf.getSourceName());
-                    field.setTableAlias(pf.getTableAlias());
-                    field.setColumn(pf.column);
-                    field.setKeyColumn(pf.isKeyColumn());
-                }
-                meta.addColumn(field);
             }
-            maker = new Aggregator(maker, meta, exprs, this.ctx.getNextMakerId());
+            if (grouper instanceof BrutalGrouper) {
+                ((BrutalGrouper)grouper).setOutput(this.outputMeta, exprs);
+            }
+            else {
+                maker = new Aggregator(maker, this.outputMeta, exprs, this.ctx.getNextMakerId());
+            }
         }
 
-        // group by post process
-
-        if (hasGrouper) {
-            maker = new GroupByPostProcesser(maker);
+        // order by
+        if (posOrderBy > 0) {
+            maker = new DumbSorter(maker, this.orderBy, this.orderByDirections, ctx.getNextMakerId(), posOrderBy);
         }
 
         // having
-
         if (this.having != null) {
             maker = new Filter(maker, this.having, false, ctx.getNextMakerId());
         }
 
         // distinct
-
         if (this.isDistinct) {
             maker = new DumbDistinctFilter(maker);
         }
 
+        // limit
+        if ((this.count != 0) || (this.offset != 0)) {
+            maker = new Limiter(maker, this.offset, this.count);
+        }
+        
         return maker;
+    }
+
+    // some of the left joins can be converted to cross joins
+    private void leftJoinOptimize() {
+        for (Node i:this.nodes.values()) {
+            if (!i.isOuter) continue;
+            if (i.union.size() != 1) {
+                // lets dont deal too much complexity for now
+                continue;
+            }
+            RowSet rs = i.union.get(0);
+            for (ColumnFilter j:rs.conditions) {
+                if (!j.isJoin) {
+                    i.isOuter = false;
+                    break;
+                }
+            }
+        }
     }
 
     private CursorMaker buildGroupBy(CursorMaker maker, Link path) {
@@ -351,9 +481,8 @@ public class Planner {
             return maker;
         }
         if (this.groupBy.size() == 0) {
-            // group the enter result set. happends when query has aggregation
-            // function but no group by clause
-            maker = new ThroughGrouper(maker);
+            // group the enter result set. happens when query has aggregation function but no group by clause
+            maker = new BrutalGrouper(maker, null, this.aggregates, ctx.getNextMakerId());
             return maker;
         }
         List<PlannerField> groupKey = getGroupKey(this.groupBy);
@@ -361,10 +490,12 @@ public class Planner {
             // result is unique by the key. no grouping is needed
             return maker;
         }
-        maker = new DumbGrouper(maker, this.groupBy, ctx.getNextMakerId());
+        // maker = new DumbGrouper(maker, this.groupBy, ctx.getNextMakerId());
+        maker = new BrutalGrouper(maker, this.groupBy, this.aggregates, ctx.getNextMakerId());
         return maker;
     }
 
+    @SuppressWarnings("unused")
     private List<PlannerField> getGroupKey(List<Operator> expr) {
         List<PlannerField> result = new ArrayList<>();
         for (Operator op : expr) {
@@ -377,24 +508,27 @@ public class Planner {
         return result;
     }
 
-    private CursorMaker buildOrderby(CursorMaker maker) {
+    private int addOrderByFields(CursorMaker maker) {
         if (this.orderBy == null) {
-            return maker;
+            return 0;
         }
         if (hasImplicitGroupBy(maker)) {
             // skip order by if there is implicit group by clause
-            return maker;
+            return 0;
         }
         List<SortKey> sortKey = toSortKey(this.orderBy, this.orderByDirections);
         if (sortKey != null) {
             if (maker.setSortingOrder(sortKey)) {
-                return maker;
+                return 0;
             }
         }
-        maker = new DumbSorter(maker, this.orderBy, this.orderByDirections, ctx.getNextMakerId());
-        return maker;
+        int result = this.fields.size();
+        for (Operator i:this.orderBy) {
+            addOutputField("#", i);
+        }
+        return result;
     }
-
+    
     private List<SortKey> toSortKey(List<Operator> ops, List<Boolean> directions) {
         List<SortKey> result = new ArrayList<>();
         for (int i=0; i<ops.size(); i++) {
@@ -423,7 +557,7 @@ public class Planner {
         return this.groupBy != null && (this.groupBy.size() == 0);
     }
 
-    private boolean doesComplyOrder(TableScan maker, List<Operator> orderBy, List<Boolean> direction) {
+    private boolean doesComplyOrder(Ordered maker, List<Operator> orderBy, List<Boolean> direction) {
         List<ColumnMeta> order = maker.getOrder();
         int idx = 0;
         for (int i = 0; i < order.size(); i++) {
@@ -431,16 +565,17 @@ public class Planner {
             Operator op = orderBy.get(idx);
 
             // match the key column with orderby column
-
             if (op instanceof FieldValue) {
                 FieldMeta field = ((FieldValue) op).getField();
-                if ((field.getColumn() == column) && direction.get(idx)) {
-                    idx++;
-                    if (idx == orderBy.size()) {
-                        // all matched, perfect
-                        return true;
+                if (field.getColumn() == column) {
+                    if (direction == null || direction.get(idx)) {
+                        idx++;
+                        if (idx == orderBy.size()) {
+                            // all matched, perfect
+                            return true;
+                        }
+                        continue;
                     }
-                    continue;
                 }
             }
             return false;
@@ -448,46 +583,18 @@ public class Planner {
         return false;
     }
     
-    private boolean doesComplyOrder(RangeScannable maker, List<Operator> orderBy, List<Boolean> direction) {
-        List<ColumnMeta> order = maker.getOrder();
-        int idx = 0;
-        for (int i = 0; i < order.size(); i++) {
-            ColumnMeta column = order.get(i);
-            Operator op = orderBy.get(idx);
-
-            // match the key column with orderby column
-
-            if (op instanceof FieldValue) {
-                FieldMeta field = ((FieldValue) op).getField();
-                if ((field.getColumn() == column) && direction.get(idx)) {
-                    idx++;
-                    if (idx == orderBy.size()) {
-                        // all matched, perfect
-                        return true;
-                    }
-                    continue;
-                }
-            }
-            return false;
-        }
-        return false;
-    }
-
     private boolean doesComplyOrder(CursorMaker maker, List<Operator> orderBy, List<Boolean> direction) {
-        if (maker instanceof ThroughGrouper) {
-            return doesComplyOrder(((ThroughGrouper) maker).getUpstream(), orderBy, direction);
+        if (maker instanceof AllInOneGrouper) {
+            return doesComplyOrder(((AllInOneGrouper) maker).getUpstream(), orderBy, direction);
         }
         else if (maker instanceof Aggregator) {
             return doesComplyOrder(((Aggregator) maker).getUpstream(), orderBy, direction);
         }
-        else if (maker instanceof TableScan) {
-            return doesComplyOrder((TableScan) maker, orderBy, direction);
+        else if (maker instanceof Ordered) {
+            return doesComplyOrder((Ordered) maker, orderBy, direction);
         }
-        else if (maker instanceof TableRangeScan) {
-            return doesComplyOrder((RangeScannable) maker, orderBy, direction);
-        }
-        else if (maker instanceof IndexRangeScan) {
-            return doesComplyOrder((RangeScannable) maker, orderBy, direction);
+        else if (maker instanceof NestedJoin) {
+            return doesComplyOrder(((NestedJoin)maker).getLeft(), orderBy, direction);
         }
         return false;
     }
@@ -497,13 +604,20 @@ public class Planner {
             return 0;
         }
         if (path.to.isParent) {
-            return path.to.fields.size();
+            return path.to.getWidth();
         }
         int pos = indexFields(path.previous);
-        for (PlannerField i : path.to.fields) {
-            i.index = pos++;
+        for (int i=0; i<path.to.fields.size(); i++) {
+            PlannerField ii = path.to.fields.get(i);
+            ii.noCache = this.noCache;
+            if (ii.column != null) {
+                ii.index = pos + ii.column.getColumnId() + 1;
+            }
+            else {
+                ii.index = pos + i;
+            }
         }
-        return pos;
+        return pos + path.to.fields.size();
     }
 
     // assign the field position
@@ -524,12 +638,19 @@ public class Planner {
         CursorMaker makerRight = path.maker;
         // join condition doesnt make sense if node order is changed
         Operator condition = path.to.isOuter ? path.to.joinCondition : buildAnd(path.to.joinCondition, path.join);
-        NestedJoin join = new NestedJoin(makerLeft, makerRight, condition, path.to.isOuter, this.ctx.getNextMakerId());
+        NestedJoin join = new NestedJoin(
+                makerLeft, 
+                makerRight,
+                path.previous.getWidth(),
+                path.to.getWidth(),
+                condition, 
+                path.to.isOuter, 
+                this.ctx.getNextMakerId());
         return join;
     }
 
-    Link build() {
-        Link link = build(null);
+    Link build(int parentWidth) {
+        Link link = build(null, parentWidth);
         if (link.getLevels() != nodes.size()) {
             if (this.parent != null) {
                 if (link.getLevels() != nodes.size()-1) {
@@ -541,18 +662,21 @@ public class Planner {
         return link;
     }
 
-    Link build(Link previous) {
+    Link build(Link previous, int parentWidth) {
         Link link = null;
         for (Node node : this.nodes.values()) {
+            // skip the parent node if we are building the driver
+            if (node.isParent && parentWidth==0) continue;
+            
+            // skip the parent node if we are building the driver
+            if (node.isParent && parentWidth==0) continue;
             
             // skip the parent node if it is not used
-            
             if (node.isParent && !node.isUsed) {
                 continue;
             }
             
             // if node already been in the path, next
-
             if (previous != null) {
                 if (previous.exists(node)) {
                     continue;
@@ -560,23 +684,19 @@ public class Planner {
             }
 
             // outer join node cant start the query
-            
             if (node.isOuter && (previous == null)) {
                 continue;
             }
             
             // outer join node can't replace existing one
-
             if (node.isOuter && (link != null)) {
                 continue;
             }
 
             // build the link
-
-            Link result = build(previous, node);
+            Link result = build(previous, node, parentWidth);
 
             // keep the link with lowest score
-
             if (link == null) {
                 link = result;
             }
@@ -585,22 +705,19 @@ public class Planner {
             }
 
             // don't score the rest if this is the parent query node
-
             if (node.isParent) {
                 break;
             }
         }
 
         // end of nodes
-
         if (link == null) {
             return null;
         }
 
         // if not eof go deeper
-
         link.previous = previous;
-        Link result = build(link);
+        Link result = build(link, parentWidth);
         return (result != null) ? result : link;
     }
 
@@ -611,8 +728,8 @@ public class Planner {
      * @param link
      * @param filters
      */
-    private void buildNodeJoinConditions(Link previous, Link link, List<ColumnFilter> filters) {
-        for (ColumnFilter i : filters) {
+    private void buildNodeJoinConditions(Link previous, Link link, RowSet tqs) {
+        for (ColumnFilter i : tqs.conditions) {
             if (i.isConstant) {
                 continue;
             }
@@ -645,21 +762,37 @@ public class Planner {
         return new OpAnd(x, y);
     }
 
-    private Operator buildNodeFilters(Link link, List<ColumnFilter> filters) {
-        List<ColumnFilter> result = new ArrayList<>();
-        for (ColumnFilter i : filters) {
-            if (i.isConstant && !link.consumed.contains(i)) {
-                result.add(i);
+    private Operator buildNodeFilters(Link link, RowSet tqs) {
+        Operator result = null;
+        for (ColumnFilter i : tqs.conditions) {
+            if (!i.isConstant) continue;
+            if (link.consumed.contains(i)) continue;
+            if (result == null) {
+                result = createOperator(link.to, i);
+            }
+            else {
+                result = new OpAnd(result, createOperator(link.to, i));
             }
         }
-        if (!result.isEmpty()) {
-            return createFilterExpression(link, result);
-        }
-        return null;
+        return result;
     }
 
-    @SuppressWarnings("unchecked")
-    private Operator createOperator(Node node, ColumnFilter filter) {
+    private Operator createOperator(Node owner, ColumnFilter filter) {
+        filter.source.visit((Operator it)->{
+            if (it instanceof FieldValue) {
+                FieldValue fv = (FieldValue)it;
+                int pos = owner.findFieldPos(fv.getField());
+                if (pos >= 0) {
+                    PlannerField pf = new PlannerField(owner, fv.getField());
+                    pf.column = fv.getField().column;
+                    pf.field = fv.getField().field;
+                    pf.index = pos;
+                    fv.set(pf);
+                }
+            }
+        });
+        return filter.source;
+        /* old implementation, wait a little before deleting
         PlannerField pf = new PlannerField(node, filter.field.field);
         pf.column = filter.field.column;
         pf.field = filter.field.field;
@@ -700,8 +833,10 @@ public class Planner {
             throw new NotImplementedException();
         }
         return op;
+        */
     }
 
+    /* deprecated wait a little before deleting
     private Operator createFilterExpression(Link link, List<ColumnFilter> filters) {
         // combine all filters into a AND
 
@@ -717,11 +852,12 @@ public class Planner {
         }
         return filter;
     }
+    */
 
-    Link buildTableScan(Link previous, Node node) {
-        Link result = build_(previous, node, Collections.emptyList());
+    Link buildTableScan(Link previous, Node node, int parentWidth) {
+        Link result = build_(previous, node, null, parentWidth);
         Operator filter = null;
-        for (List<ColumnFilter> i:node.union) {
+        for (RowSet i:node.union) {
             filter = buildOr(filter, buildNodeFilters(result, i));
             buildNodeJoinConditions(previous, result, i);
         }
@@ -731,43 +867,59 @@ public class Planner {
         return result;
     }
     
-    Link build(Link previous, Node node) {
+    CursorMaker createTableScan(Node node, Link previous) {
+        if (node.table != null) {
+            TableScan ts = new TableScan(node.table, ctx.getNextMakerId());
+            ts.setNoCache(this.noCache);
+            return ts;
+        }
+        else {
+            return node.getCursorMaker(previous != null ? previous.getWidth() : 0);
+        }
+    }
+    
+    Link build(Link previous, Node node, int parentWidth) {
         Link result = null;
         
         // no columns filters found, just build the full table scan
-        
         if (node.union.size() <= 0) {
-            return build_(previous, node, Collections.emptyList());
+            return build_(previous, node, null, parentWidth);
         }
         
         // union node, only proceed is it produced two non table scan
-
         List<Link> union = new ArrayList<>();
-        
-        for (List<ColumnFilter> i:node.union) {
-            Link ii = build_(previous, node, i);
-            
-            // table level filter. only for those not used in seek/scan and the
-            // right operand is constant
-
-            Operator filter = buildNodeFilters(ii, i);
-            if (filter != null) {
-                ii.maker = new Filter(ii.maker, filter, ctx.getNextMakerId());
+        boolean foundFullTableScan = false;
+        for (RowSet i:node.union) {
+            if (i.conditions.isEmpty()) {
+                foundFullTableScan = true;
             }
-
-            // join conditions
-
-            buildNodeJoinConditions(previous, ii, i);
-            
-            // build  union
-            
-            union.add(ii);
+        }
+        if (!foundFullTableScan) {
+            for (RowSet i:node.union) {
+                // skip if this is a full table scan, we will produce full table scan anyway
+                if (i.conditions.isEmpty()) {
+                    continue;
+                }
+                Link ii = build_(previous, node, i, parentWidth);
+                
+                // table level filter. only for those not used in seek/scan and the
+                // right operand is constant
+                Operator filter = buildNodeFilters(ii, i);
+                if (filter != null) {
+                    ii.maker = new Filter(ii.maker, filter, ctx.getNextMakerId());
+                }
+    
+                // join conditions
+                buildNodeJoinConditions(previous, ii, i);
+                
+                // build  union
+                union.add(ii);
+            }
         }
 
         // find the better plan between full table scan and union
-        
-        Link tablescan = buildTableScan(previous, node);
-        if (tablescan.getScore() <= getScore(union)) {
+        Link tablescan = buildTableScan(previous, node, parentWidth);
+        if (union.isEmpty() || tablescan.getScore() <= getScore(union)) {
             result = tablescan;
         }
         else {
@@ -826,41 +978,33 @@ public class Planner {
         return result;
     }
     
-    Link build_(Link previous, Node node, List<ColumnFilter> filters) {
+    Link build_(Link previous, Node node, RowSet tqs, int parentWidth) {
         Link link = null;
 
         // node is a record from outer query
-
         if (node.isParent) {
             link = new Link(node);
+            link.width = parentWidth;
             link.maker = new MasterRecordCursorMaker(this.rawMeta.parent, ctx.getNextMakerId());
         }
 
         // try all keys/indexes
-
         if (link == null) {
-            link = tryKeys(previous, node, filters);
+            link = tryKeys(previous, node, tqs);
         }
 
+        // try indexed table scan
+        if (link == null) {
+            link = tryIndexTableScan(previous, node, tqs);
+        }
+        
         // fall back to full table scan
-
         if (link == null) {
             link = new Link(node);
-            if (node.table != null) {
-                TableScan ts = new TableScan(node.table, ctx.getNextMakerId());
-                ts.setNoCache(this.noCache);
-                link.maker = ts;
-            }
-            else if (node.maker != null) {
-                link.maker = node.maker;
-            }
-            else {
-                throw new CodingError();
-            }
+            link.maker = createTableScan(node, previous);
         }
 
         // alias support
-
         /*
          * if ((node.table == null) ||
          * !node.alias.equals(node.table.getObjectName())) { link.maker = new
@@ -868,30 +1012,64 @@ public class Planner {
          */
 
         // select for update support
-
         if (this.forUpdate) {
             GTable gtable = this.orca.getHumpback().getTable(node.table.getHtableId());
             link.maker = new RecordLocker(link.maker, node.table, gtable);
         }
 
         // all done
-
         return link;
     }
 
-    private Link tryKeys(Link previous, Node node, List<ColumnFilter> filters) {
+    /*
+     * build a just in time index for table scan in order to speed up joins
+     */
+    private Link tryIndexTableScan(Link previous, Node node, RowSet rs) {
+        // on filters
+        if (rs == null) return null;
+        
+        // not applicable if this is the driver table
+        if (previous == null) return null;
+        
+        // not applicable if there is no join condition
+        List<ColumnFilter> qualified = new ArrayList<>();
+        List<Operator> values = new ArrayList<>();
+        for (ColumnFilter i:rs.conditions) {
+            if (i.op != FilterOp.EQUAL && i.op != FilterOp.EQUALNULL) continue;
+            if (!checkColumnReference(previous, node, i.operand)) continue;
+            qualified.add(i);
+            values.add((Operator)i.operand);
+        }
+        if (qualified.size() <= 0) return null;
+        
+        // done finish up
+        int[] keyFields = new int[qualified.size()];
+        for (int i=0; i<keyFields.length; i++) {
+            keyFields[i] = node.findFieldPos(qualified.get(i).field);
+        }
+        Vector v = new Vector(values, true, true);
+        CursorMaker upstream = createTableScan(node, previous);
+        Link result = new Link(node);
+        result.consumed.addAll(qualified);
+        result.maker = new IndexedTableScan(upstream, keyFields, v, ctx.getNextMakerId());
+        return result;
+    }
+
+    private Link tryKeys(Link previous, Node node, RowSet tqs) {
         if (node.table == null) {
             return null;
         }
 
         // no filters, can't do table range scan
-
+        if (tqs == null) {
+            return null;
+        }
+        List<ColumnFilter> filters = tqs.conditions;
         if (filters.size() <= 0) {
             return null;
         }
 
         // no primary key, can't do table range scan
-
         Link best = null;
         PrimaryKeyMeta pk = node.table.getPrimaryKey();
         if (pk != null) {
@@ -917,6 +1095,12 @@ public class Planner {
             if (link.getScore() < best.getScore()) {
                 best = link;
             }
+            else if (link.getScore() == best.getScore()) {
+                // if multiple indexes can be applied, we pick the one that matches first in the where clause
+                if (link.pos < best.pos) {
+                    best = link;
+                }
+            }
         }
         return best;
     }
@@ -928,26 +1112,25 @@ public class Planner {
                         boolean isUnique, 
                         boolean isFullText) {
         // no filters, can't do table range scan
-
         if (filters.size() <= 0) {
             return null;
         }
 
         // match the key columns with the table filters one by one following the
         // sequence defined in the key.
-
         Link link = new Link(node);
         List<ColumnMeta> columns = key.getColumns(node.table);
         if (columns.size() < 1) {
             return null;
         }
         Range range = new Range(columns.size());
+        int filterPos = -1;
         for (int i = 0; i < columns.size(); i++) {
             ColumnMeta column = columns.get(i);
             boolean found = false;
-            for (ColumnFilter filter : filters) {
+            for (int j=0; j<filters.size(); j++) {
+                ColumnFilter filter = filters.get(j);
                 // is full text
-
                 if (filter.op == FilterOp.MATCH) {
                     if (isFullText) {
                         link.maker = createFullTextScanner(node.table, (IndexMeta) key, filter);
@@ -961,20 +1144,20 @@ public class Planner {
                 }
 
                 // is the same column?
-
-                if (filter.field.column != column) {
+                if (filter.field == null || filter.field.column != column) {
                     continue;
                 }
 
                 // continue only if the column is renderable
-
                 if (!checkColumnReference(previous, node, filter.operand)) {
                     continue;
                 }
 
                 //
-
                 found = true;
+                if (filterPos == -1) {
+                    filterPos = j;
+                }
                 if (range.addFilter(i, filter)) {
                     link.consumed.add(filter);
                 }
@@ -985,8 +1168,8 @@ public class Planner {
         }
 
         // create the cursor maker if it is still null
-
         link.maker = range.createMaker(node.table, key, ctx);
+        link.pos = filterPos;
         return (link.maker == null) ? null : link;
     }
 
@@ -1052,9 +1235,8 @@ public class Planner {
         }
     }
 
-    void analyze() {
+    public void analyze() {
         // analyze conditions
-
         if (this.where != null) {
             if (this.analyzer.analyzeWhere(this, this.where)) {
                 this.where = null;
@@ -1062,7 +1244,6 @@ public class Planner {
         }
 
         // analyze join conditions
-
         for (Node i : this.nodes.values()) {
             if (i.isOuter) {
                 this.analyzer.analyzeJoin(this, i.joinCondition, i);
@@ -1127,7 +1308,17 @@ public class Planner {
     public ObjectName addTableOrView(String alias, Object table, boolean left, boolean isOuter) {
         ObjectName name = null;
         if (table instanceof TableMeta) {
-            name = addTable(alias, (TableMeta) table, left, isOuter);
+            TableMeta meta = (TableMeta)table;
+            if (meta.getType() == OrcaTableType.VIEW) {
+                CursorMaker maker = (CursorMaker)this.ctx.getSession().parse(this.ctx, meta.getViewSql()).getRoot();
+                for (int i=0; i<meta.getColumns().size(); i++) {
+                    maker.getCursorMeta().getColumns().get(i).setName(meta.getColumns().get(i).getColumnName());
+                }
+                name = addCursor(alias==null ? meta.getTableName() : alias, maker, left, isOuter);
+            }
+            else {
+                name = addTable(alias, meta, left, isOuter);
+            }
         }
         else if (table instanceof CursorMaker) {
             name = addCursor(alias, (CursorMaker) table, left, isOuter);
@@ -1221,9 +1412,6 @@ public class Planner {
                 else if (it instanceof FuncSum) {
                     result.set(true);
                 }
-                else if (it instanceof FuncAvg) {
-                    result.set(true);
-                }
                 else if (it instanceof FuncCount) {
                     result.set(true);
                 }
@@ -1233,5 +1421,42 @@ public class Planner {
             });
         }
         return result.get();
+    }
+    
+    public Map<ObjectName, Node> getNodes() {
+        return this.nodes;
+    }
+    
+    public Operator getWhere() {
+        return this.where;
+    }
+
+    public void setLimit(long offset, long count) {
+        this.offset = offset;
+        this.count = count;
+    }
+
+    public void addAllFields() {
+        this.freeze = true;
+        if (this.nodes.size() == 1) {
+            Node node = nodes.values().iterator().next();
+            if (node.maker != null) {
+                this.outputMeta = node.maker.getCursorMeta();
+                return;
+            }
+            else if (node.planner != null) {
+                this.outputMeta = node.planner.getOutputMeta();
+                return;
+            }
+        }
+        throw new IllegalArgumentException();
+    }
+
+    public int getWidth() {
+        int result = 0;
+        for (Node i:this.nodes.values()) {
+            result += i.getWidth();
+        }
+        return result;
     }
 }

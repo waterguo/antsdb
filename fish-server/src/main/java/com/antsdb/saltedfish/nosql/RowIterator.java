@@ -49,7 +49,7 @@ public interface RowIterator extends Closeable {
      * @return
      */
     public abstract long getRowPointer();
-	
+    
     /**
      * pointer to the key
      * 
@@ -64,21 +64,32 @@ public interface RowIterator extends Closeable {
      */
     public abstract byte getMisc();
     
-	default public long getVersion() {
-	    long pRow = getRowPointer();
-	    if (pRow < 10) {
-	        throw new IllegalArgumentException();
-	    }
-		return Row.getVersion(getRowPointer());
-	}
-	
-	public abstract long getRowScanned();
+    /**
+     * get the location of the row 
+     * 
+     * @return
+     */
+    public abstract String getLocation();
     
-	public abstract void rewind();
+    default public long getVersion() {
+        long pRow = getRowPointer();
+        if (pRow < 10) {
+            throw new IllegalArgumentException();
+        }
+        return Row.getVersion(getRowPointer());
+    }
     
-	default Row getRow() {
-    	return Row.fromMemoryPointer(getRowPointer(), getVersion());
+    public abstract long getRowScanned();
+    
+    public abstract void rewind();
+    
+    default Row getRow() {
+        return Row.fromMemoryPointer(getRowPointer(), getVersion());
     }
     
     public abstract void close();
+    
+    public default long getLogPointer() {
+        return 0;
+    }
 }

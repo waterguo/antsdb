@@ -45,6 +45,20 @@ public class ConfigService {
         }
     }
 
+    /**
+     * port used to intercommunications in a cluster
+     * @return
+     */
+    public Integer getAuxPort() {
+        try {
+            String value = props.getProperty("fish.aux-port");
+            return value != null ? Integer.valueOf(value.trim()) : null;
+        }
+        catch (Exception x) {
+            return 2007;
+        }
+    }
+    
     public String getAuthPlugin() {
         return props.getProperty("fish.auth_plugin");
     }
@@ -110,4 +124,12 @@ public class ConfigService {
         return result==null ? "nio" : result;
     }
 
+    public boolean isClusterEnabled() {
+        return this.props.getProperty("cluster.name") != null;
+    }
+    
+    public String getClusterName() {
+        return this.props.getProperty("cluster.name", null);
+    }
+    
 }

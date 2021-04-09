@@ -26,6 +26,7 @@ import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.antlr.v4.runtime.tree.TerminalNodeImpl;
+import org.apache.commons.lang.NotImplementedException;
 import org.apache.commons.lang.StringUtils;
 
 import com.antsdb.saltedfish.lexer.MysqlParser;
@@ -41,7 +42,8 @@ import com.antsdb.saltedfish.lexer.MysqlParser.From_clause_standardContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.From_itemContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.From_item_odbcContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.IdentifierContext;
-import com.antsdb.saltedfish.lexer.MysqlParser.Join_itemContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Join_constraintContext;
+import com.antsdb.saltedfish.lexer.MysqlParser.Join_exprContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Join_operatorContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Result_columnContext;
 import com.antsdb.saltedfish.lexer.MysqlParser.Result_column_exprContext;
@@ -67,6 +69,8 @@ import com.antsdb.saltedfish.sql.vdm.Function;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.NullIfEmpty;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.sql.vdm.OpAnd;
+import com.antsdb.saltedfish.sql.vdm.OpEqual;
 import com.antsdb.saltedfish.sql.vdm.Operator;
 import com.antsdb.saltedfish.sql.vdm.ToString;
 import com.antsdb.saltedfish.util.CodingError;
@@ -99,10 +103,9 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
      * @return
      * @throws OrcaException
      */
-    public CursorMaker genSubquery(GeneratorContext ctx, Select_stmtContext rule, Planner parent) 
+    public static Planner genSubquery(GeneratorContext ctx, Select_stmtContext rule, Planner parent) 
     throws OrcaException {
-        CursorMaker subquery = Select_stmtGenerator.gen(ctx, rule, parent);
-        return subquery;
+        return Select_stmtGenerator.gen(ctx, rule, parent);
     }
     
     static Planner gen(GeneratorContext ctx, Select_or_valuesContext rule, Planner parent) 
@@ -115,26 +118,22 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         genFrom(ctx, rule.from_clause(), planner);
         
         // prevent null cursor. in case of 'select 1'.
-        
         if (planner.isEmpty()) {
             planner.addCursor("", new Dual(), true, false); 
         }
         
         // where
-        
         if (rule.where_clause() != null) {
             Operator filter = ExprGenerator.gen(ctx, planner, rule.where_clause().expr());
             planner.setWhere(filter);
         }
         
         // final values  
-        
         Map<String, Operator> exprByAlias = new HashMap<>();
         for (Result_columnContext it:rule.select_columns().result_column()) {
-            ParseTree child = it.getChild(0);
             // process *
-            if (child instanceof Result_column_starContext) {
-                Result_column_starContext star = (Result_column_starContext)child;
+            if (it.result_column_star() != null) {
+                Result_column_starContext star = it.result_column_star();
                 ObjectName tableAlias = TableName.parse(ctx, star.table_name_());
                 for (PlannerField ii:planner.getFields()) {
                     if (tableAlias != null) {
@@ -152,8 +151,8 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                 }
             }
             // expressions
-            else if (child instanceof Result_column_exprContext) {
-                Result_column_exprContext expr = (Result_column_exprContext)child;
+            else if (it.result_column_expr() != null) {
+                Result_column_exprContext expr = it.result_column_expr();
                 Operator op = ExprGenerator.gen(ctx, planner, expr.expr());
                 // field type cannot be null. if it is null, which means type cannot be predicated, converts it to 
                 // varchar. varchar fits all data types
@@ -163,7 +162,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
                 String fieldName = getFieldName(expr, op);
                 planner.addOutputField(fieldName, op);
                 if (expr.column_alias() != null) {
-                        exprByAlias.put(fieldName.toLowerCase(), op);
+                    exprByAlias.put(fieldName.toLowerCase(), op);
                 }
             }
             else {
@@ -172,12 +171,11 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         };
         
         // group by, prevent empty cursor if aggregate functions are used
-        
         if ((rule.group_by_clause()!=null)) {
             List<Operator> groupbys = new ArrayList<Operator>();
             if (rule.group_by_clause() != null) {
                 for (ExprContext i:rule.group_by_clause().expr()) {
-                    Operator op = Utils.findInPlannerOutputFields(planner, i.getText());
+                    Operator op = Utils.findInPlannerOutputFieldsForOrderBy(planner, i.getText());
                     if (op == null) {
                         op = ExprGenerator.gen(ctx, planner, i);
                     }
@@ -188,22 +186,20 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         }
         
         // having clause
-        
         if (rule.having_clause() != null) {
             ExprContext rewritten = rewriteHaving(ctx, planner, rule.having_clause().expr());
             Planner newone = new Planner(ctx);
             newone.addCursor("", planner.run(), true, false);
+            newone.addAllFields();
             Operator filter = ExprGenerator.gen(ctx, newone, rewritten);
             newone.setWhere(filter);
             planner = newone;
         }
         
         // distinct
-        
         planner.setDistinct(rule.K_DISTINCT() != null);
         
         // done
-        
         return planner;
     }
     
@@ -230,7 +226,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             Join_operatorContext joinop = rule.join_operator();
             outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
             left = joinop.K_RIGHT() == null;
-            addTableToPlanner(ctx, planner, rule.from_item(), rule.join_constraint().expr(), left, outer);
+            addTableToPlanner(ctx, planner, rule.from_item(), rule.join_constraint(), left, outer);
         }
         else if (rule.from_item() != null) {
             addTableToPlanner(ctx, planner, rule.from_item(), null, left, outer);
@@ -241,26 +237,36 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
     }
 
     private static void genFrom(GeneratorContext ctx, From_clause_standardContext rule, Planner planner) {
-        // from items
-        
-        for (From_itemContext i:rule.from_item()) {
-            addTableToPlanner(ctx, planner, i, null, true, false);
+        if (rule.join_expr() != null) {
+            genJoinExpr(ctx, rule.join_expr(), planner, true, false);
         }
-        
-        // joins
-        
-        if (rule.join_clause() != null) {
-            for (Join_itemContext i:rule.join_clause().join_item()) {
-                boolean outer = false;
-                boolean left = true;
-                if (i.join_operator() != null) {
-                    Join_operatorContext joinop = i.join_operator();
-                    outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
-                    left = joinop.K_RIGHT() == null;
-                }
-                addTableToPlanner(ctx, planner, i.from_item(), i.join_constraint().expr(), left, outer);
-            }
+    }
+
+    private static 
+    ObjectName genJoinExpr(GeneratorContext ctx, Join_exprContext rule, Planner planner, boolean left, boolean outer) {
+        ObjectName result;
+        if (rule.from_item() != null) {
+            result = addTableToPlanner(ctx, planner, rule.from_item(), null, left, outer);
         }
+        else if (rule.join_operator() != null) {
+            genJoinExpr(ctx, rule.join_expr(0), planner, left, outer);
+            Join_operatorContext joinop = rule.join_operator();
+            outer = (joinop.K_LEFT() != null) || (joinop.K_RIGHT() != null);
+            left = joinop.K_RIGHT() == null;
+            result = genJoinExpr(ctx, rule.join_expr(1), planner, left, outer);
+            gen(ctx, planner, rule.join_constraint(), result, left);
+        }
+        else if (rule.COMMA() != null) {
+            result = genJoinExpr(ctx, rule.join_expr(0), planner, left, outer);
+            result = genJoinExpr(ctx, rule.join_expr(1), planner, left, outer);
+        }
+        else if (rule.OPEN_PAR() != null) {
+            result = genJoinExpr(ctx, rule.join_expr(0), planner, left, outer);
+        }
+        else {
+            throw new NotImplementedException();
+        }
+        return result;
     }
 
     private static ExprContext rewriteHaving(GeneratorContext ctx, Planner planner, ExprContext expr) {
@@ -399,11 +405,50 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         return field != null;
     }
 
-    static void addTableToPlanner(
+    static void gen(
+            GeneratorContext ctx, 
+            Planner planner, 
+            Join_constraintContext condition, 
+            ObjectName name, 
+            boolean left) {
+        if (condition.K_ON() != null) {
+            Operator expr = ExprGenerator.gen(ctx, planner, condition.expr());
+            planner.addJoinCondition(name, expr, left);
+        }
+        else if (condition.K_USING() != null) {
+            Operator expr = null;
+            String table = name.toString();
+            for (Column_nameContext i:condition.column_name()) {
+                String columnName = i.getText();
+                PlannerField x=null, y=null;
+                for (PlannerField j:planner.getFields()) {
+                    if (!j.getName().equalsIgnoreCase(columnName)) {
+                        continue;
+                    }
+                    if (j.getTableAlias().equals(table)) {
+                        y = j;
+                    }
+                    else if (x == null) {
+                        x = j;
+                    }
+                }
+                Operator equal = new OpEqual(new FieldValue(x), new FieldValue(y));
+                if (expr == null) {
+                    expr = equal;   
+                }
+                else {
+                    expr = new OpAnd(expr, equal);
+                }
+            }
+            planner.addJoinCondition(name, expr, left);
+        }
+    }
+    
+    static ObjectName addTableToPlanner(
             GeneratorContext ctx, 
             Planner planner, 
             From_itemContext rule, 
-            ExprContext condition,
+            Join_constraintContext condition,
             boolean left,
             boolean isOuter) {
         String alias = null;
@@ -413,10 +458,7 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
         }
         if (rule.from_subquery() != null) {
             // add sub query to planner
-            CursorMaker subquery = (CursorMaker)new Select_or_valuesGenerator().genSubquery(
-                    ctx, 
-                    rule.from_subquery().select_stmt(),
-                    planner);
+            Planner subquery = genSubquery(ctx, rule.from_subquery().select_stmt(), planner);
             name = planner.addCursor(alias, subquery, left, isOuter);
         }
         else if (rule.from_table() != null) {
@@ -426,9 +468,9 @@ public class Select_or_valuesGenerator extends Generator<Select_or_valuesContext
             name = planner.addTableOrView(alias, table, left, isOuter);
         }
         if (condition != null) {
-            Operator expr = ExprGenerator.gen(ctx, planner, condition);
-            planner.addJoinCondition(name, expr, left);
+            gen(ctx, planner, condition, name, left);
         }
+        return name;
     }
 
     String getAlias(Column_aliasContext any_name) {

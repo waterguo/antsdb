@@ -23,7 +23,6 @@ import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.planner.Planner;
 import com.antsdb.saltedfish.sql.planner.PlannerField;
 import com.antsdb.saltedfish.sql.vdm.Checks;
-import com.antsdb.saltedfish.sql.vdm.CursorMaker;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldValue;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
@@ -39,7 +38,6 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
         Select_or_valuesGenerator.genFrom(ctx, rule.from_clause(), planner);
         
         // find the table to work on
-        
         TableMeta table = null;
         if (rule.table_name_() != null) {
             String name = rule.table_name_().getText();
@@ -64,24 +62,21 @@ public class Delete_stmtGenerator extends Generator<Delete_stmtContext>{
         }
         else {
             From_clause_standardContext fromStandard = rule.from_clause().from_clause_standard();
-            ObjectName name = TableName.parse(ctx, fromStandard.from_item(0).from_table().table_name_());
+            ObjectName name = TableName.parse(ctx, fromStandard.join_expr().from_item().from_table().table_name_());
             table = Checks.tableExist(ctx.getSession(), name);
         }
         
         // apply where clause
-        
         if (rule.expr() != null) {
             Operator filter = ExprGenerator.gen(ctx, planner, rule.expr());
             planner.setWhere(filter);
         }
         
         // done
-        
-        CursorMaker maker = planner.run();
         if (rule.limit_clause() != null) {
-            maker = CursorMaker.createLimiter(maker, rule.limit_clause());
+            Select_stmtGenerator.setLimit(planner, rule.limit_clause());
         }
-        return GeneratorUtil.genDelete(ctx, table, maker);
+        return GeneratorUtil.genDelete(ctx, table, planner.run());
     }
 
 }

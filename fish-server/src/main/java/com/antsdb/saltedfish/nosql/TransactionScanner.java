@@ -15,24 +15,6 @@ package com.antsdb.saltedfish.nosql;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.JumpException;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -40,90 +22,20 @@ import com.antsdb.saltedfish.util.UberUtil;
  * 
  * @author *-xguo0<@
  */
-class TransactionScanner implements ReplayHandler {
+class TransactionScanner {
     private static final Logger _log = UberUtil.getThisLogger();
     
     private TrxMan trxman;
     private long stopId;
-    private long lp;
+    private SequentialLogReader reader;
 
-    TransactionScanner(TrxMan trxman, long lp) {
+    TransactionScanner(Gobbler gobbler, TrxMan trxman, long lp) {
         this.trxman = trxman;
-        this.lp = lp;
+        this.reader = new SequentialLogReader(gobbler);
+        this.reader.setPosition(lp, false);
     }
     
-    @Override
-    public void insert(InsertEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void insert(InsertEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void update(UpdateEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void put(PutEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void put(PutEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void delete(DeleteEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void delete(DeleteEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void deleteRow(DeleteRowEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void index(IndexEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void index(IndexEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void message(MessageEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void message(MessageEntry2 entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
-    @Override
-    public void commit(CommitEntry entry) throws Exception {
+    void commit(CommitEntry entry) throws Exception {
         long trxid = entry.getTrxid();
         try {
             this.trxman.commit(trxid, entry.getVersion());
@@ -131,24 +43,21 @@ class TransactionScanner implements ReplayHandler {
         catch (IllegalArgumentException ignored) {
             // there is a chance TransactionScanner is falling behind TransactionReplayer. See TestTransactionReplayer
         }
-        this.lp = entry.getSpacePointer();
         if (trxid == this.stopId) {
             throw new JumpException();
         }
     }
 
-    @Override
-    public void rollback(RollbackEntry entry) throws Exception {
+    void rollback(RollbackEntry entry) throws Exception {
         long trxid = entry.getTrxid();
         this.trxman.rollback(trxid);
-        this.lp = entry.getSpacePointer();
         if (trxid == this.stopId) {
             throw new JumpException();
         }
     }
 
-    @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
+        this.trxman.setOldest(entry.getTrxid());
         if (entry.getTrxid() <= this.stopId) {
             throw new JumpException();
         }
@@ -157,7 +66,19 @@ class TransactionScanner implements ReplayHandler {
     public void scan(Gobbler gobbler, long trxid) {
         try {
             this.stopId = trxid;
-            gobbler.replay(this.lp, false, this);
+            for (;;) {
+                LogEntry i = this.reader.read();
+                if (i == null) break;
+                if (i instanceof CommitEntry) {
+                    commit((CommitEntry) i);
+                }
+                else if (i instanceof RollbackEntry) {
+                    rollback((RollbackEntry) i);
+                }
+                else if (i instanceof TransactionWindowEntry) {
+                    transactionWindow((TransactionWindowEntry) i);
+                }
+            }
         }
         catch (JumpException x) {
         }
@@ -165,10 +86,4 @@ class TransactionScanner implements ReplayHandler {
             _log.error("error", x);
         }
     }
-
-    @Override
-    public void ddl(DdlEntry entry) throws Exception {
-        this.lp = entry.getSpacePointer();
-    }
-
 }

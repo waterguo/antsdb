@@ -26,6 +26,7 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.ForeignKeyMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
+import com.antsdb.saltedfish.sql.meta.OrcaTableType;
 import com.antsdb.saltedfish.sql.meta.PrimaryKeyMeta;
 import com.antsdb.saltedfish.sql.meta.RuleMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -47,7 +48,7 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
     public static class Item {
         @MysqlColumnMeta(column="")
         public String Table;
-        @MysqlColumnMeta(alias="Create Table", column="")
+        @MysqlColumnMeta(alias="Create Table")
         public String Create_Table;
     }
 
@@ -76,6 +77,9 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
 
     private String gen(GeneratorContext ctx, TableMeta table) {
         StringBuilder buf = new StringBuilder();
+        if (table.getType() == OrcaTableType.VIEW) {
+            return String.format("CREATE VIEW `%s` AS %s", table.getTableName(), table.getViewSql());
+        }
         buf.append("CREATE TABLE `");
         buf.append(table.getTableName());
         buf.append("` (\n");
@@ -103,7 +107,7 @@ public class Show_create_table_stmtGenerator extends Generator<Show_create_table
                 // fucking weird, TEXT and BLOB types doesn't need to append NULL
                 int sqlType = column.getDataType().getSqlType();
                 if ((sqlType != Types.CLOB) && (sqlType != Types.BLOB)) {
-                    buf.append(" NULL");
+                    buf.append(" DEFAULT NULL");
                 }
             }
             if (column.isAutoIncrement()) {

@@ -33,7 +33,6 @@ public class CreateColumn extends Statement implements ColumnAttributes {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         // create metadata
-        
         Transaction trx = ctx.getTransaction();
         TableMeta table = Checks.tableExist(ctx.getSession(), this.tableName);
         ColumnMeta columnMeta = new ColumnMeta(
@@ -50,11 +49,9 @@ public class CreateColumn extends Statement implements ColumnAttributes {
         columnMeta.setEnumValues(this.enumValues);
 
         // special table for blob data
-        
         addBlobTableIfNecessary(ctx.getHumpback(), ctx.getHSession(), table, columnMeta);
 
         // after. if there is after, sequence number of the new column is between the after and after after column
-        
         if (this.after != null) {
             ColumnMeta afterColumn = Checks.columnExist(table, this.after);
             int idxAfterAfter = table.getColumns().indexOf(afterColumn) + 1;
@@ -118,7 +115,7 @@ public class CreateColumn extends Statement implements ColumnAttributes {
 
     @Override
     public boolean isAutoIncrement() {
-        return this.isAutoIncrement();
+        return this.autoIncrement;
     }
 
     @Override

@@ -25,7 +25,6 @@ public class Value {
     public static final byte TYPE_CLOB = (byte)0xb0;
     public static final byte TYPE_BLOB = (byte)0xc0;
     public static final byte TYPE_UNKNOWN = (byte)0xd0;
-    public static final byte FORMAT_RECORD = (byte)0xf0;
     
     /** 0xd0 - 0xff are reserved */
 
@@ -69,12 +68,14 @@ public class Value {
     /** blob reference */
     public static final byte FORMAT_BLOB_REF = TYPE_UNKNOWN + 3;
     public static final byte FORMAT_ROW = TYPE_UNKNOWN + 0x10;
+    public static final byte FORMAT_INDEX_ROW = TYPE_UNKNOWN + 0x11;
+    public static final byte FORMAT_RECORD = TYPE_UNKNOWN + 0x12;
     
     public final static byte getFormat(Heap heap, long address) {
         if (address == 0) {
             return 0;
         }
-        byte n = Unsafe.getByte(address);
+        byte n = Unsafe.getByteVolatile(address);
         return n;
     }
     

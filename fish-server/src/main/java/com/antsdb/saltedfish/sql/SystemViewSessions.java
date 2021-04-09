@@ -58,9 +58,9 @@ public class SystemViewSessions extends View {
         Item item = new Item();
         list.add(item);
         item.ID = session.getId();
-        Transaction trx = session.getTransaction_();
-        item.TRX = (trx != null) ? trx.getTrxId() : 0;
+        Transaction trx = session.getTransaction();
+        item.TRX = trx.getTrxId();
         item.USER = session.getUser();
-        item.REMOTE = session.remote;
+        item.REMOTE = session.getHSession().getEndpoint();
     }
 }

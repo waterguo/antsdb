@@ -13,12 +13,12 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.function.Consumer;
 
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
-import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.util.Pair;
 
 /**
@@ -30,21 +30,24 @@ public class OpCase extends Operator {
     private List<Pair<Operator, Operator>> whens;
     private Operator alse;
     private Operator value;
-    private DataType returnType = DataType.integer();
+    private DataType returnType;
 
     public OpCase(Operator value, List<Pair<Operator, Operator>> whens, Operator alse) {
         this.whens = whens;
         this.alse = alse;
         this.value = value;
-        for (Pair<Operator,Operator> i:this.whens) {
-            if (i.y.getReturnType().getFishType() > this.returnType.getFishType()) {
-                this.returnType = i.y.getReturnType();
+        Iterator<Pair<Operator, Operator>> i =this.whens.iterator();
+        this.returnType = DataType.getUpCast(()->{
+            if (i.hasNext()) {
+                Pair<Operator, Operator> ii = i.next();
+                return ii.y.getReturnType();
             }
-        }
+            else {
+                return null;
+            }
+        });
         if (this.alse != null) {
-            if (this.alse.getReturnType().getFishType() > this.returnType.getFishType()) {
-                this.returnType = this.alse.getReturnType();
-            }
+            this.returnType = DataType.getUpCast(this.returnType, this.alse.getReturnType());
         }
     }
     
@@ -55,11 +58,22 @@ public class OpCase extends Operator {
     }
 
     private long eval_(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        long pValue = this.value.eval(ctx, heap, params, pRecord);
-        if (pValue != 0) {
+        if (this.value != null) {
+            long pValue = this.value.eval(ctx, heap, params, pRecord);
+            if (pValue != 0) {
+                for (Pair<Operator,Operator> i:this.whens) {
+                    long pWhen = i.x.eval(ctx, heap, params, pRecord);
+                    if (AutoCaster.equals(heap, pValue, pWhen)) {
+                        return i.y.eval(ctx, heap, params, pRecord);
+                    }
+                }
+            }
+        }
+        else {
             for (Pair<Operator,Operator> i:this.whens) {
                 long pWhen = i.x.eval(ctx, heap, params, pRecord);
-                if (AutoCaster.equals(heap, pValue, pWhen)) {
+                Boolean when = AutoCaster.getBoolean(pWhen);
+                if ((when != null) && when) {
                     return i.y.eval(ctx, heap, params, pRecord);
                 }
             }
@@ -67,9 +81,7 @@ public class OpCase extends Operator {
         if (this.alse != null) {
             return this.alse.eval(ctx, heap, params, pRecord);
         }
-        else {
-            throw new OrcaException("Case not found for CASE statement");
-        }
+        return 0;
     }
 
     @Override
@@ -79,7 +91,9 @@ public class OpCase extends Operator {
 
     @Override
     public void visit(Consumer<Operator> visitor) {
-        this.value.visit(visitor);
+        if (this.value != null) {
+            this.value.visit(visitor);
+        }
         for (Pair<Operator,Operator> i:this.whens) {
             i.x.visit(visitor);
             i.y.visit(visitor);

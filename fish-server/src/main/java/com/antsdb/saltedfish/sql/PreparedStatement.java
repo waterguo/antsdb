@@ -50,7 +50,7 @@ public class PreparedStatement {
     
     private void parse(Session session) {
         this.version = session.getOrca().getMetaService().getVersion();
-        this.script = session.parse(this.sql);
+        this.script = session.parse(null, this.sql);
     }
 
     public CharBuffer getSql() {

@@ -21,7 +21,7 @@ import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
- * 
+ * @see https://dev.mysql.com/doc/refman/8.0/en/comparison-operators.html#operator_equal-to
  * @author *-xguo0<@
  */
 public class OpSafeEqual extends BinaryOperator {
@@ -36,8 +36,8 @@ public class OpSafeEqual extends BinaryOperator {
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        Integer result = ctx.compare(heap, params, pRecord, this.left, this.right);
-        if (result == null) {
+        int result = ctx.compare(heap, params, pRecord, this.left, this.right);
+        if (result == Integer.MIN_VALUE) {
             return FishBool.allocSet(heap, false);
         }
         return FishBool.allocSet(heap, result == 0);

@@ -13,18 +13,6 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.util;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Preconditions;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.sun.management.OperatingSystemMXBean;
-
-import sun.misc.Unsafe;
-
-import org.apache.commons.io.HexDump;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.ByteArrayOutputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
@@ -46,14 +34,31 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
+import org.apache.commons.io.HexDump;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.helpers.MessageFormatter;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.Preconditions;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.sun.management.OperatingSystemMXBean;
+
+import sun.misc.Unsafe;
+
 /**
  * Created by wguo on 15-01-06.
  */
-@SuppressWarnings("restriction")
 public class UberUtil {
+    static Logger _log = UberUtil.getThisLogger();
 
     private static final Unsafe unsafe;
     private static Field ADDRESS_FIELD;
+    
+    public static interface MyRunable {
+        public abstract void run() throws Exception;
+    }
 
     static {
         try {
@@ -311,10 +316,43 @@ public class UberUtil {
      * @return
      */
     public static String toJson(Object obj) {
-        Gson gson = new GsonBuilder().disableHtmlEscaping().create();
+        Gson gson = new GsonBuilder()//.disableHtmlEscaping().create();
+//                .setDateFormat("yyyy-MM-dd")
+//                .generateNonExecutableJson()
+//                .disableHtmlEscaping()
+//                .enableComplexMapKeySerialization()
+//                .create();
+                .serializeNulls()
+                .setDateFormat("yyyy-MM-dd")
+                .disableInnerClassSerialization()
+                .generateNonExecutableJson()
+                .disableHtmlEscaping()
+                .setPrettyPrinting()
+                .enableComplexMapKeySerialization()
+                .registerTypeHierarchyAdapter(byte[].class, new ByteArrayTypeAdapter())
+                .create();
         return gson.toJson(obj);
     }
 
+    public static <T> T toObject(String json, Class<T> klass) {
+        Gson gson = new GsonBuilder()//.disableHtmlEscaping().create();
+//                .setDateFormat("yyyy-MM-dd")
+//                .generateNonExecutableJson()
+//                .disableHtmlEscaping()
+//                .enableComplexMapKeySerialization()
+//                .create();
+                .serializeNulls()
+                .setDateFormat("yyyy-MM-dd")
+                 .disableInnerClassSerialization()
+                .generateNonExecutableJson()
+                .disableHtmlEscaping()
+                .setPrettyPrinting()
+                .enableComplexMapKeySerialization()
+                .registerTypeHierarchyAdapter(byte[].class, new ByteArrayTypeAdapter())
+                .create();
+        return gson.fromJson(json, klass);
+    }
+    
     /**
      * warning, this method has no consideration of performance. it is written
      * to help logging objects
@@ -438,6 +476,9 @@ public class UberUtil {
     }
 
     public static void sleep(long ms) {
+        if (Thread.currentThread().isInterrupted()) {
+            return;
+        }
         try {
             Thread.sleep(ms);
         }
@@ -457,5 +498,19 @@ public class UberUtil {
     
     public static boolean between(long value, long min, long max) {
         return (value >= min) && (value <= max);
+    }
+    
+    public static void error(String message, Object... args) {
+        String msg = MessageFormatter.arrayFormat(message, args).getMessage();
+        throw new IllegalArgumentException(msg);
+    }
+    
+    public static void quiet(MyRunable run) {
+        try {
+            run.run();
+        }
+        catch (Exception x) {
+            _log.warn("error ignored", x);
+        }
     }
 }

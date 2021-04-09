@@ -34,6 +34,10 @@ public class ClearEvictor {
         int count = 0;
         for (MinkeCacheTable table:this.cache.tableById.values()) {
             MinkeTable mtable = table.mtable;
+            if (table.getId() < 0) {
+                // dont evict temporary table
+                continue;
+            }
             for (MinkePage page:mtable.getPages()) {
                 if (mtable.deletePage(page)) {
                     count++;

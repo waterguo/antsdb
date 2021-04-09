@@ -15,25 +15,6 @@ package com.antsdb.saltedfish.nosql;
 
 import org.slf4j.Logger;
 
-import com.antsdb.saltedfish.nosql.Gobbler.CommitEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DdlEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.DeleteRowEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.IndexEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.InsertEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.LogEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.MessageEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.PutEntry2;
-import com.antsdb.saltedfish.nosql.Gobbler.RollbackEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.TransactionWindowEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry;
-import com.antsdb.saltedfish.nosql.Gobbler.UpdateEntry2;
 import com.antsdb.saltedfish.util.JumpException;
 import com.antsdb.saltedfish.util.UberUtil;
 
@@ -45,172 +26,141 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class TransactionReplayer implements ReplayHandler {
     private static Logger _log = UberUtil.getThisLogger();
     
-    private ReplayHandler downstream;
+    private ReplicationHandler2 downstream;
     private long sp;
     private TrxMan trxman;
     private TransactionScanner trxScanner;
     private Gobbler gobbler;
     private long lpLastTrxWindow;
     
-    public TransactionReplayer(Gobbler gobbler, ReplayHandler downstream) {
+    public TransactionReplayer(Gobbler gobbler, ReplicationHandler2 downstream) {
         this.gobbler = gobbler;
         this.trxman = new TrxMan(null);
+        this.trxman.close();
         this.downstream = downstream;
     }
     
     @Override
-    public void insert(InsertEntry entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.insert(entry);
-    }
-
-    @Override
     public void insert(InsertEntry2 entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.insert(entry);
-    }
-
-    @Override
-    public void update(UpdateEntry entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.update(entry);
+        putRow(entry);
     }
 
     @Override
     public void update(UpdateEntry2 entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.update(entry);
-    }
-
-    @Override
-    public void put(PutEntry entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.put(entry);
+        putRow(entry);
     }
 
     @Override
     public void put(PutEntry2 entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.put(entry);
+        putRow(entry);
     }
 
-    @Override
-    public void index(IndexEntry entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxid())) {
+    private void putRow(RowUpdateEntry2 entry) throws Exception {
+        long version = getTrxVersion(entry.getSpacePointer(), entry.getTrxId());
+        if (version == TrxMan.MARK_ROLLED_BACK) {
             return;
         }
-        this.downstream.index(entry);
+        int tableId = entry.getTableId();
+        this.downstream.putRow(tableId, entry.getRowPointer(), version, entry.getAddress(), entry.getSpacePointer());
     }
-
+    
     @Override
     public void index(IndexEntry2 entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxid())) {
+        long version = getTrxVersion(entry.getSpacePointer(), entry.getTrxid());
+        if (version == TrxMan.MARK_ROLLED_BACK) {
             return;
         }
-        this.downstream.index(entry);
-    }
-
-    @Override
-    public void deleteRow(DeleteRowEntry entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
-            return;
-        }
-        this.downstream.deleteRow(entry);
+        long pIndexKey = entry.getIndexKeyAddress();
+        long pIndex = entry.getRowKeyAddress();
+        int tableId = entry.getTableId();
+        this.downstream.putIndex(tableId, pIndexKey, pIndex, version, entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void deleteRow(DeleteRowEntry2 entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxId())) {
+        long version = getTrxVersion(entry.getSpacePointer(), entry.getTrxId());
+        if (version == TrxMan.MARK_ROLLED_BACK) {
             return;
         }
-        this.downstream.deleteRow(entry);
-    }
-
-    @Override
-    public void delete(DeleteEntry entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxid())) {
-            return;
-        }
-        this.downstream.delete(entry);
+        int tableId = entry.getTableId();
+        long pRow = entry.getRowPointer();
+        Row row = Row.fromMemoryPointer(pRow, version);
+        this.downstream.deleteRow(tableId, row.getKeyAddress(), version, entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void delete(DeleteEntry2 entry) throws Exception {
-        if (isTrxRolledBack(entry.getSpacePointer(), entry.getTrxid())) {
+        long version = getTrxVersion(entry.getSpacePointer(), entry.getTrxid());
+        if (version == TrxMan.MARK_ROLLED_BACK) {
             return;
         }
-        this.downstream.delete(entry);
+        int tableId = entry.getTableId();
+        long pKey = entry.getKeyAddress();
+        this.downstream.deleteIndex(tableId, pKey, version, entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void all(LogEntry entry) throws Exception {
-        this.downstream.all(entry);
+        this.downstream.all(entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void commit(CommitEntry entry) throws Exception {
-        this.downstream.commit(entry);
+        this.downstream.commit(entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void rollback(RollbackEntry entry) throws Exception {
-        this.downstream.rollback(entry);
+        this.downstream.rollback(entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void message(MessageEntry entry) throws Exception {
-        this.downstream.message(entry);
+        this.downstream.message(entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void message(MessageEntry2 entry) throws Exception {
-        this.downstream.message(entry);
+        this.downstream.message(entry.getAddress(), entry.getSpacePointer());
     }
 
     @Override
     public void transactionWindow(TransactionWindowEntry entry) throws Exception {
-        this.downstream.transactionWindow(entry);
+        this.downstream.transactionWindow(entry.getAddress(), entry.getSpacePointer());
         _log.debug("trx window @ {}", Long.toHexString(entry.getSpacePointer()));
         this.trxman.freeTo(entry.getTrxid());
         this.lpLastTrxWindow = entry.sp;
     }
 
-    private boolean isTrxRolledBack(long lp, long trxid) {
+    @Override
+    public void ddl(DdlEntry entry) throws Exception {
+        this.downstream.ddl(entry.getAddress(), entry.getSpacePointer());
+    }
+    
+    private long getTrxVersion(long lp, long trxid) {
         for (int i=0; i<2; i++) {
             long version = trxman.getTimestamp(trxid);
             if (version >= 0) {
-                return false;
+                return version;
             }
             if (version == TrxMan.MARK_ROLLED_BACK) {
-                return true;
+                return version;
             }
             if (this.trxScanner == null) {
-                this.trxScanner = new TransactionScanner(this.trxman, lp);
+                this.trxScanner = new TransactionScanner(this.gobbler, this.trxman, lp);
             }
             else if (lp < this.lpLastTrxWindow) {
                 // last replay wasnt total success. this replay is before the last trx window position. 
                 // we might have lost some useful transactions. reset the scanner so we can recover
                 _log.warn("lp {} is smaller than last trx window {}", lp, this.lpLastTrxWindow);
-                this.trxScanner = new TransactionScanner(this.trxman, lp);
+                this.trxScanner = new TransactionScanner(this.gobbler, this.trxman, lp);
             }
             this.trxScanner.scan(this.gobbler, trxid);
         }
         throw new InvalidTransactionIdException(trxid);
     }
 
-    public static long replay(Humpback humpback, long spStart, boolean inclusive, ReplayHandler handler) 
+    public static long replay(Humpback humpback, long spStart, boolean inclusive, ReplicationHandler2 handler) 
     throws Exception {
         Gobbler gobbler = humpback.getGobbler();
         if (gobbler == null) {
@@ -220,7 +170,9 @@ public class TransactionReplayer implements ReplayHandler {
         TransactionReplayer replayer = new TransactionReplayer(humpback.getGobbler(), handler);
         replayer.sp = spStart;
         try {
-            return humpback.getGobbler().replay(spStart, inclusive, replayer);
+            SequentialLogReader reader = new SequentialLogReader(humpback.getGobbler());
+            reader.setPosition(spStart, inclusive);
+            return reader.replay(replayer);
         }
         catch (JumpException x) {
             return replayer.sp;
@@ -231,8 +183,4 @@ public class TransactionReplayer implements ReplayHandler {
         this.trxman.setOldest(-10);
     }
 
-    @Override
-    public void ddl(DdlEntry entry) throws Exception {
-        this.downstream.ddl(entry);
-    }
 }

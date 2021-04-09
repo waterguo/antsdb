@@ -118,4 +118,8 @@ public class Union extends CursorMaker {
         return String.format("UNION (%d - %d)", this.left.makerId, this.right.makerId);
     }
 
+    @Override
+    public float getScore() {
+        return this.left.getScore() + this.right.getScore();
+    }
 }

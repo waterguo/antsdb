@@ -141,9 +141,9 @@ public final class BindValueUtil {
         return pValue;
     }
     
-    public static long read(Heap heap, ByteBuffer buf, int type) {
+    public static long read(Heap heap, ByteBuffer buf, byte type) {
         long pValue = 0;
-        switch (type & 0xff) {
+        switch (type) {
         case Fields.FIELD_TYPE_TINY:
             pValue = Int4.allocSet(heap, buf.get());
             break;

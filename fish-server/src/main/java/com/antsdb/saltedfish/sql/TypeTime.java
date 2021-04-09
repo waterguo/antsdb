@@ -23,7 +23,7 @@ import com.antsdb.saltedfish.cpp.Value;
  * @author wgu0
  */
 public class TypeTime extends DataType {
-	public TypeTime(String name) {
-		super(name, 0, 0, Types.TIME, Time.class, Value.TYPE_TIME);
-	}
+    public TypeTime(String name) {
+        super(name, 0, 0, Types.TIME, Time.class, Value.FORMAT_TIME, Weight.TIME);
+    }
 }

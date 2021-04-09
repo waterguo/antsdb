@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.antsdb.saltedfish.nosql.GTable;
+import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.ScanOptions;
 import com.antsdb.saltedfish.sql.Orca;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -53,12 +54,8 @@ public class HumpbackTableScan extends CursorMaker {
         long options = 0;
         options = this.isAsc ? options : ScanOptions.descending(options);
         options = this.noCache ? ScanOptions.noCache(options) : options;
-        Cursor cursor = new DumbCursor(
-                ctx.getSpaceManager(),
-                this.cursorMeta, 
-                table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), 0, 0, options), 
-                mapping,
-                ctx.getCursorStats(makerId));
+        RowIterator scan = table.scan(ctx.getTransaction().getTrxId(), ctx.getTransaction().getTrxTs(), 0, 0, options);
+        Cursor cursor = new HumpbackCursor(this.cursorMeta, scan, ctx.getCursorStats(makerId));
         return cursor;
     }
 
@@ -77,7 +74,6 @@ public class HumpbackTableScan extends CursorMaker {
             mapping[i] = column.getColumnId();
         }
         Cursor cursor = new DumbCursor(
-                session.getOrca().getSpaceManager(), 
                 meta, 
                 table.scan(trx.getTrxId(), trx.getTrxTs(), true), 
                 mapping,
@@ -135,4 +131,10 @@ public class HumpbackTableScan extends CursorMaker {
     public void setNoCache(boolean value) {
         this.noCache = value;
     }
+
+    @Override
+    public float getScore() {
+        return 100;
+    }
+
 }

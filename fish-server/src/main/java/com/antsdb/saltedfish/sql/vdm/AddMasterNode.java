@@ -40,24 +40,23 @@ public class AddMasterNode extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Member member = parse();
-        if (member.endpoint.indexOf(':') < 0) {
+        if (member.getEndpoint().indexOf(':') < 0) {
             throw new OrcaException("port is not specified");
         }
         if (ctx.getHumpback().getServerId() >= 2) {
             throw new OrcaException("this server id must be less than 2 to add another master");
         }
-        long serverId = initTarget(ctx, member);
         Pod pod = ctx.getOrca().getBelugaPod();
-        member.serverId = serverId;
+        //member.serverId = serverId;
         pod.add(member);
         
         return null;
     }
 
     private Member parse() {
-        Member result = new Member();
+        Member result = new Member(null);
         result.init = true;
-        result.endpoint = this.props.getProperty("endpoint");
+        //result.endpoint = this.props.getProperty("endpoint");
         result.user = this.props.getProperty("user");
         result.password = this.props.getProperty("password");
         result.load = Boolean.parseBoolean(this.props.getProperty("load", "false"));

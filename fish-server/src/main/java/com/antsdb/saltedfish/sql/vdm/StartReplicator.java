@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.nosql.Replicable;
 import com.antsdb.saltedfish.nosql.Replicator;
+import com.antsdb.saltedfish.server.mysql.ErrorMessage;
 
 /**
  * 
@@ -25,6 +26,12 @@ public class StartReplicator extends Statement {
     @Override
     public Object run(VdmContext ctx, Parameters params) {
         Replicator<Replicable> rep = ctx.getOrca().getReplicator();
+        if (rep == null) {
+            throw new ErrorMessage(0, "Replicator is not found");
+        }
+        if (ctx.getOrca().isSlave()) {
+            throw new ErrorMessage(0, "Cant start replicator in slave mode");
+        }
         rep.pause(false);
         return null;
     }

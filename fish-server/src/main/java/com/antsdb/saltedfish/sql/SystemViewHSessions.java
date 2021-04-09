@@ -30,7 +30,9 @@ public class SystemViewHSessions extends View {
     public static class Line {
         public Integer ID;
         public String ENDPOINT;
-        public Long TRXTS;
+        public Long OPEN_TIME;
+        public Long DIRTY_LOG_POINTER;
+        public Long TRX_ID;
     }
     
     public SystemViewHSessions() {
@@ -44,7 +46,9 @@ public class SystemViewHSessions extends View {
             Line line = new Line();
             line.ID = i.getId();
             line.ENDPOINT = i.getEndpoint();
-            line.TRXTS = i.getOpenTime();
+            line.OPEN_TIME = i.getOpenTime();
+            line.DIRTY_LOG_POINTER = i.getStartLp();
+            line.TRX_ID = i.getTransaction().getTrxId();
             result.add(line);
         }
         return CursorUtil.toCursor(this.meta, result);

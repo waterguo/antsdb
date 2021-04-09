@@ -25,6 +25,7 @@ import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.IndexMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.Checks;
+import com.antsdb.saltedfish.sql.vdm.Commit;
 import com.antsdb.saltedfish.sql.vdm.CreateColumn;
 import com.antsdb.saltedfish.sql.vdm.CreateIndex;
 import com.antsdb.saltedfish.sql.vdm.CreatePrimaryKey;
@@ -32,6 +33,7 @@ import com.antsdb.saltedfish.sql.vdm.CreateTable;
 import com.antsdb.saltedfish.sql.vdm.Flow;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
 import com.antsdb.saltedfish.sql.vdm.ObjectName;
+import com.antsdb.saltedfish.sql.vdm.PostSchemaChange;
 import com.antsdb.saltedfish.util.Pair;
 
 /**
@@ -57,6 +59,8 @@ public class Create_table_like_stmtGenerator extends Generator<Create_table_like
         createPrimaryKey(ctx, flow, table, name);
         createIndexes(ctx, flow, table, name);
         flow.add(new SyncTableSequence(name, Collections.emptyMap()));
+        flow.add(new Commit());
+        flow.add(new PostSchemaChange(name));
     }
 
     private void createColumns(GeneratorContext ctx, Flow flow, TableMeta table, ObjectName name) {

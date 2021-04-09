@@ -32,7 +32,7 @@ import com.antsdb.saltedfish.sql.vdm.Operator;
  *  
  * @author wgu0
  */
-class Node {
+public class Node {
     boolean freeze = false;
     TableMeta table;
     CursorMaker maker;
@@ -41,11 +41,11 @@ class Node {
     boolean isOuter;
     boolean isParent = false;
     Operator joinCondition;
-    LinkedList<List<ColumnFilter>> union = new LinkedList<>();
+    LinkedList<RowSet> union = new LinkedList<>();
     public boolean isUsed = false;
+    Planner planner;
     
     // below are fields related to union
-    
     Operator where;
     
     PlannerField findField(FieldMeta field) {
@@ -58,12 +58,17 @@ class Node {
     }
 
     int findFieldPos(PlannerField field) {
-        for (int i=0; i<this.fields.size(); i++) {
-            if (this.fields.get(i) == field) {
-                return i;
-            }
+        if (field.column != null) {
+            return field.column.getColumnId() + 1;
         }
-        return -1;
+        else {
+            for (int i=0; i<this.fields.size(); i++) {
+                if (this.fields.get(i) == field) {
+                    return i;
+                }
+            }
+            return -1;
+        }
     }
 
     @Override
@@ -114,5 +119,28 @@ class Node {
     
     boolean isCursor() {
         return this.table == null;
+    }
+    
+    public List<RowSet> getUnion() {
+        return this.union;
+    }
+    
+    CursorMaker getCursorMaker(int parentWidth) {
+        return (this.maker != null) ? this.maker : this.planner.run(parentWidth);
+    }
+    
+    /**
+     * width, in most of cases is number of fields from the node. but if the node is a table, width is
+     * the max column_id + 2 because we need to consider deleted columns.  
+     *  
+     * @return
+     */
+    public int getWidth() {
+        if (this.table != null) {
+            return this.table.getMaxColumnId() + 2;
+        }
+        else {
+            return this.fields.size();
+        }
     }
 }

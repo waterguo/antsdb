@@ -23,11 +23,11 @@ import com.antsdb.saltedfish.sql.vdm.Script;
 
 public class Show_databasesGenerator extends Generator<Show_databasesContext> {
 
-	@Override
-	public Instruction gen(GeneratorContext ctx, Show_databasesContext rule) throws OrcaException {
+    @Override
+    public Instruction gen(GeneratorContext ctx, Show_databasesContext rule) throws OrcaException {
         String sql = "SELECT schema_name `Database` FROM information_schema.SCHEMATA";
-        Script script = ctx.getSession().parse(sql);
+        Script script = ctx.getSession().parse(ctx, sql);
         return new NestedScript(script, new Object[] {});
-	}
+    }
 
 }

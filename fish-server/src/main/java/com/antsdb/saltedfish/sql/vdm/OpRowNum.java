@@ -20,24 +20,24 @@ import com.antsdb.saltedfish.cpp.Int4;
 import com.antsdb.saltedfish.sql.DataType;
 
 public class OpRowNum extends Operator {
-	int variableId;
+    int variableId;
 
     private static class Wrapper {
-    	int counter = 1;
+        int counter = 1;
     }
     
     public OpRowNum(int variableId) {
-    	this.variableId = variableId;
+        this.variableId = variableId;
     }
     
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-    	Wrapper wrapper = (Wrapper)ctx.getVariable(this.variableId);
-    	if (wrapper == null) {
-    		wrapper = new Wrapper();
-    		ctx.setVariable(this.variableId, wrapper);
-    	}
-    	return Int4.allocSet(heap, wrapper.counter++);
+        Wrapper wrapper = (Wrapper)ctx.getVariable(this.variableId);
+        if (wrapper == null) {
+            wrapper = new Wrapper();
+            ctx.setVariable(this.variableId, wrapper);
+        }
+        return Int4.allocSet(heap, wrapper.counter++);
     }
 
     @Override

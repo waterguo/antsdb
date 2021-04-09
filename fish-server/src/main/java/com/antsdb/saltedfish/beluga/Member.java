@@ -21,8 +21,6 @@ import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
 
-import com.antsdb.saltedfish.nosql.Humpback;
-import com.antsdb.saltedfish.nosql.HumpbackSession;
 import com.antsdb.saltedfish.nosql.LogDependency;
 import com.antsdb.saltedfish.slave.DbUtils;
 import com.antsdb.saltedfish.sql.OrcaException;
@@ -33,24 +31,30 @@ import com.antsdb.saltedfish.util.MysqlJdbcUtil;
  * @author *-xguo0<@
  */
 public class Member implements LogDependency {
-    public String endpoint;
     public String user;
     public String password;
-    private BelugaState state = BelugaState.DISCONNECTED;
     private String gossip;
     public BelugaThread thread;
-    public long serverId;
     public boolean load = false;
     public boolean init = false;
     public int nThreads = 4;
     public boolean warmer = false;
+    QuorumNode qnode;
+    volatile long lp;
+    private Pod pod;
     
-    public void setState(BelugaState state, String gossip) {
-        this.state = state;
+    public Member(Pod pod) {
+        this.pod = pod;
+    }
+    
+    public void setState(BelugaState state, String gossip) throws Exception {
+        this.pod.getQuorum().setState(qnode.serverId, state);
+        this.qnode.state = state;
         this.gossip = gossip;
     }
     
     public BelugaState getState() {
+        /*
         if (this.state != BelugaState.LIVE) {
             return this.state;
         }
@@ -60,10 +64,12 @@ public class Member implements LogDependency {
         else {
             return BelugaState.LIVE;
         }
+        */
+        return this.qnode.state;
     }
 
     public String getGossip() {
-        if (this.state != BelugaState.LIVE) {
+        if (getState() != BelugaState.ACTIVE) {
             return this.gossip;
         }
         if (this.thread.replicator.getError() != null) {
@@ -74,13 +80,17 @@ public class Member implements LogDependency {
         }
     }
     
+    public String getEndpoint() {
+        return this.qnode.endpoint;
+    }
+    
     public String getHost() {
-        String[] result = StringUtils.split(endpoint, ':');
+        String[] result = StringUtils.split(getEndpoint(), ':');
         return result[0];
     }
     
     public int getPort() {
-        String[] result = StringUtils.split(endpoint, ':');
+        String[] result = StringUtils.split(getEndpoint(), ':');
         return result.length == 0 ? 3306 : Integer.parseInt(result[1]);
     }
 
@@ -90,6 +100,7 @@ public class Member implements LogDependency {
         }
         if (this.thread.isAlive()) {
             this.thread.replicator.close();
+            this.thread.interrupt();
             try {
                 this.thread.join(5000);
             }
@@ -102,21 +113,6 @@ public class Member implements LogDependency {
         this.thread = null;
     }
 
-    public void save(Humpback humpback, HumpbackSession hsession, String prefix) {
-        humpback.setConfig(hsession, prefix + this.serverId + "/endpoint", this.endpoint);
-        humpback.setConfig(hsession, prefix + this.serverId + "/user", this.user);
-        humpback.setConfig(hsession, prefix + this.serverId + "/password", this.password);
-        humpback.setConfig(hsession, prefix + this.serverId + "/warmer", this.warmer);
-    }
-
-    public void load(Humpback humpback, String prefix) {
-        prefix = prefix + this.serverId;
-        this.endpoint = humpback.getConfig(prefix + "/endpoint");
-        this.user = humpback.getConfig(prefix + "/user");
-        this.password = humpback.getConfig(prefix + "/password");
-        this.warmer = humpback.getConfigAsBoolean(prefix + "/warmer", false);
-    }
-    
     public Connection createConnection() throws SQLException {
         String url = MysqlJdbcUtil.getUrl(this.getHost(), this.getPort(), null);
         Connection result = DriverManager.getConnection(url, this.user, this.password);
@@ -136,7 +132,7 @@ public class Member implements LogDependency {
 
     @Override
     public String getName() {
-        return this.endpoint;
+        return this.getEndpoint();
     }
 
     @Override
@@ -150,5 +146,9 @@ public class Member implements LogDependency {
             buf.append("warmer");
         }
         return buf.toString();
+    }
+
+    public long getServerId() {
+        return this.qnode.serverId;
     }
 }

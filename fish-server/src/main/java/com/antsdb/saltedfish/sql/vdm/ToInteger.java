@@ -35,14 +35,14 @@ public class ToInteger extends UnaryOperator {
         pValue = AutoCaster.toNumber(heap, pValue);
         byte format = Value.getFormat(heap, pValue);
         if (format == Value.FORMAT_INT4) {
-        	    return pValue;
+            return pValue;
         }
         else if (format == Value.FORMAT_INT8) {
-        	    long value = Int8.get(heap, pValue);
-            	if ((value > Integer.MAX_VALUE) || (value < Integer.MIN_VALUE)) {
-            		throw new IllegalArgumentException(String.valueOf(value));
-            	}
-            	return Int4.allocSet(heap, (int)value);
+            long value = Int8.get(heap, pValue);
+            if ((value > Integer.MAX_VALUE) || (value < Integer.MIN_VALUE)) {
+                throw new IllegalArgumentException(String.valueOf(value));
+            }
+            return Int4.allocSet(heap, (int)value);
         }
         Object val = FishObject.get(heap, pValue);
         Object result = null;
@@ -52,18 +52,18 @@ public class ToInteger extends UnaryOperator {
             result = val;
         }
         else if (val instanceof Long) {
-        	    long n = (Long)val;
-            	if ((n > Integer.MAX_VALUE) || (n < Integer.MIN_VALUE)) {
-            		throw new IllegalArgumentException(String.valueOf(n));
-            	}
-            	result = (int)n;
+            long n = (Long)val;
+            if ((n > Integer.MAX_VALUE) || (n < Integer.MIN_VALUE)) {
+                throw new IllegalArgumentException(String.valueOf(n));
+            }
+            result = (int)n;
         }
         else if (val instanceof BigDecimal) {
             BigDecimal value = (BigDecimal)val;
             result = value.intValueExact();
         }
         else if (val instanceof Double) {
-        	    val = ((Double)val).intValue();
+            val = ((Double)val).intValue();
         }
         else {
             throw new CodingError(val.getClass().toGenericString());

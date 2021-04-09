@@ -46,8 +46,8 @@ public class NettyServer extends TcpServer {
     
     @Override
     public void start(int port) throws Exception {
-        this.bossGroup = new NioEventLoopGroup(this.bossGroupSize);
-        this.workerGroup = new NioEventLoopGroup(this.workerGroupSize);
+        this.bossGroup = new NioEventLoopGroup(this.bossGroupSize, new FishWorkerFactory());
+        this.workerGroup = new NioEventLoopGroup(this.workerGroupSize, new FishWorkerFactory());
         _log.info("netty worker pool size: {}", workerGroup.executorCount());
 
         ServerBootstrap b = new ServerBootstrap();

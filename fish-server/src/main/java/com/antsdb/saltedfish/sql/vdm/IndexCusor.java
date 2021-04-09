@@ -64,7 +64,7 @@ class IndexCursor extends CursorWithHeap {
             if (pRowKey == 0) {
                 return 0;
             }
-            Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey);
+            Row row = gtable.getRow(trx.getTrxId(), trx.getTrxTs(), pRowKey, 0);
             if (row == null) {
                 // at rare occasions, row cannot be found. we just ignore it. it could happen for example full text 
                 // index. indexing rows are not deleted completely due to analyzer change

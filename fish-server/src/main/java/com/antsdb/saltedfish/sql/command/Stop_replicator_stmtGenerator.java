@@ -18,7 +18,7 @@ import com.antsdb.saltedfish.sql.Generator;
 import com.antsdb.saltedfish.sql.GeneratorContext;
 import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.vdm.Instruction;
-import com.antsdb.saltedfish.sql.vdm.StoptReplicator;
+import com.antsdb.saltedfish.sql.vdm.StopReplicator;
 
 /**
  * 
@@ -28,7 +28,7 @@ public class Stop_replicator_stmtGenerator extends Generator<Stop_replicator_stm
 
     @Override
     public Instruction gen(GeneratorContext ctx, Stop_replicator_stmtContext rule) throws OrcaException {
-        return new StoptReplicator();
+        return new StopReplicator();
     }
 
 }

@@ -105,7 +105,16 @@ public final class MysqlString {
             else if (ch == '\'') {
                 int pos = buf.position();
                 cbuf.mark();
-                if (readLiteral(buf, cbuf)) {
+                if (readLiteral(buf, cbuf, ch)) {
+                    continue;
+                }
+                buf.position(pos);
+                cbuf.reset();
+            }
+            else if (ch == '"') {
+                int pos = buf.position();
+                cbuf.mark();
+                if (readLiteral(buf, cbuf, ch)) {
                     continue;
                 }
                 buf.position(pos);
@@ -214,7 +223,7 @@ public final class MysqlString {
         return true;
     }
 
-    private static boolean readLiteral(Buffer buf, CharBuffer cbuf) {
+    private static boolean readLiteral(Buffer buf, CharBuffer cbuf, int end) {
         while (buf.remaining() > 0) {
             // mysql uses binary string
             char ch = (char)(buf.getByte() & 0xff);
@@ -222,7 +231,7 @@ public final class MysqlString {
             if (ch == '\\') {
                 readByte(buf, cbuf);
             }
-            else if (ch == '\'') {
+            else if (ch == end) {
                 break;
             }
         }

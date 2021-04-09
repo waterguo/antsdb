@@ -32,7 +32,7 @@ import com.antsdb.saltedfish.util.Pair;
 public class CreateIndex extends Statement {
     String indexName;
     ObjectName tableName;
-    List<Pair<String, Integer>> columns;
+    public List<Pair<String, Integer>> columns;
     boolean isUnique;
     boolean createIfNotExists;
     private boolean isFullText;
@@ -128,10 +128,12 @@ public class CreateIndex extends Statement {
         index.setFullText(isFullText);
         index.setRuleColumns(columns);
         index.setPrefix(prefix);
+        if (table.isTemproray()) {
+            index.setIndexTableId(-index.getIndexTableId());
+        }
         ctx.getMetaService().addRule(ctx.getHSession(), ctx.getTransaction(), index);
         
         // create physical table
-
         Humpback humpback = ctx.getOrca().getHumpback();
         humpback.createTable(
                 ctx.getHSession(),
@@ -141,13 +143,11 @@ public class CreateIndex extends Statement {
                 TableType.INDEX);
         
         // if table is not empty, lots of shit to do
-        
         if (rebuild) {
             buildIndex(ctx, table, index);
         }
         
         //
-        
         return index;
     }
     

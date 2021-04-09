@@ -27,6 +27,7 @@ public class TableStats {
     static final int COLUMN_MIN_ROW_SIZE = 5;
     static final int COLUMN_MAX_ROW_SIZE = 6;
     static final int COLUMN_AVERAGE_ROW_SIZE = 7;
+    static final int COLUMN_SERVER_ID = 8;
     
     public int tableId;
     public long sp;
@@ -37,6 +38,7 @@ public class TableStats {
     public double averageRowSize;
     public ConcurrentHashMap<Integer, ColumnStats> columnStats = new ConcurrentHashMap<>();
     public boolean isDirty = false;
+    public long serverId;
     
     SlowRow save() {
         SlowRow row = new SlowRow(this.tableId);
@@ -47,6 +49,7 @@ public class TableStats {
         row.set(COLUMN_MIN_ROW_SIZE, this.minRowSize);
         row.set(COLUMN_MAX_ROW_SIZE, this.maxRowSize);
         row.set(COLUMN_AVERAGE_ROW_SIZE, this.averageRowSize);
+        row.set(COLUMN_SERVER_ID, this.serverId);
         this.isDirty = false;
         return row;
     }
@@ -59,6 +62,8 @@ public class TableStats {
         this.minRowSize = (Integer)row.get(COLUMN_MIN_ROW_SIZE);
         this.maxRowSize = (Integer)row.get(COLUMN_MAX_ROW_SIZE);
         this.averageRowSize = (Double)row.get(COLUMN_AVERAGE_ROW_SIZE);
+        Long value = (Long)row.get(COLUMN_SERVER_ID);
+        this.serverId = value==null ? Long.MIN_VALUE : (long)value;
         return this;
     }
     

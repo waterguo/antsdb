@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
@@ -48,41 +49,49 @@ public abstract class HBaseCommandLine extends CommandLineHelper {
         Options options = getOptions();
         options.addOption(null, "server", true, "hbase quorum name");
         options.addOption(null, "config", true, "hbase config file (hbase-site.xml)");
+        options.addOption(null, "keytab", true, "kerberos keytab");
+        options.addOption(null, "principal", true, "kerberos principal");
+        options.addOption(null, "krb5conf", true, "kerberos configuration file");
         this.parser = parse(options, args);
     }
     
     public Connection getConnection() throws IOException {
         if (this.conn == null) {
-            this.conn = ConnectionFactory.createConnection(getConfiguration());
-            
+            Configuration conf = getConfiguration();
+            this.conn = ConnectionFactory.createConnection(conf);
         }
         return this.conn;
     }
     
-    protected Configuration getConfiguration() {
+    public Configuration getConfiguration() throws IOException {
         if (this.conf == null) {
             if (this.parser.hasOption("config")) {
-                this.conf = HBaseConfiguration.create();
                 this.conf = HBaseConfiguration.create();
                 this.conf.addResource(new Path(this.parser.getOptionValue("config")));
             }
             else if (this.parser.hasOption("server")) {
                 this.conf = HBaseConfiguration.create();
                 this.conf.set("hbase.zookeeper.quorum", this.parser.getOptionValue("server"));
-                this.conf.set("hbase.client.retries.number", "1");
-                this.conf.set("zookeeper.recovery.retry", "1");
             }
             else if (new File("/etc/hbase/conf/hbase-site.xml").exists()) {
-                this.conf = HBaseConfiguration.create();
                 this.conf = HBaseConfiguration.create();
                 this.conf.addResource(new Path("/etc/hbase/conf/hbase-site.xml"));
             }
             else {
                 this.conf = HBaseConfiguration.create();
                 this.conf.set("hbase.zookeeper.quorum", "localhost");
-                this.conf.set("hbase.client.retries.number", "1");
-                this.conf.set("zookeeper.recovery.retry", "1");
             }
+            if (this.parser.hasOption("krb5conf")) {
+                String principal = this.parser.getOptionValue("principal");
+                String keytab = this.parser.getOptionValue("keytab");
+                System.setProperty("java.security.krb5.conf", this.parser.getOptionValue("krb5conf"));
+                // System.setProperty("sun.security.krb5.debug", "true");
+                conf.set("hadoop.security.authentication", "kerberos");
+                UserGroupInformation.setConfiguration(conf);
+                UserGroupInformation.loginUserFromKeytab(principal, keytab);
+            }
+            this.conf.set("hbase.client.retries.number", "2");
+            this.conf.set("hbase.client.operation.timeout", "3000");
         }
         return this.conf;
     }

@@ -21,6 +21,7 @@ import com.antsdb.saltedfish.cpp.FishTimestamp;
 import com.antsdb.saltedfish.cpp.FishUtf8;
 import com.antsdb.saltedfish.cpp.Int4Array;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.IndexRow;
 import com.antsdb.saltedfish.nosql.Row;
 import com.antsdb.saltedfish.sql.vdm.Record;
 import com.antsdb.saltedfish.util.BytesUtil;
@@ -30,20 +31,24 @@ import com.antsdb.saltedfish.util.BytesUtil;
  * @author wgu0
  */
 public class debug {
-	public static String dump(long p) {
-	    if (p <= 0x10) {
-	        return "illegal memory address: " + p;
-	    }
-		byte type = Value.getFormat(null, p);
-		if (type == Value.FORMAT_RECORD) {
-			return Record.dump(p);
-		}
-		else if (type == Value.FORMAT_UTF8) {
-			String s = FishUtf8.get(p);
-			return s;
-		}
+    public static String dump(long p) {
+        if (p <= 0x10) {
+            return "illegal memory address: " + p;
+        }
+        byte type = Value.getFormat(null, p);
+        if (type == Value.FORMAT_RECORD) {
+            return Record.dump(p);
+        }
+        else if (type == Value.FORMAT_UTF8) {
+            String s = FishUtf8.get(p);
+            return s;
+        }
         else if (type == Value.FORMAT_ROW) {
             String s = Row.fromMemoryPointer(p, Row.getVersion(p)).toString();
+            return s;
+        }
+        else if (type == Value.FORMAT_INDEX_ROW) {
+            String s = new IndexRow(p).toString();
             return s;
         }
         else if (type == Value.FORMAT_TIMESTAMP) {
@@ -53,26 +58,26 @@ public class debug {
         else if (type == Value.FORMAT_INT4_ARRAY) {
             return "[" + Integer.toHexString(Value.FORMAT_INT4_ARRAY & 0xff) + "]" + new Int4Array(p).toString();
         }
-		return FishObject.debug(p);
-	}
-	
-	public static String dumpHex(CharBuffer buf) {
-	    StringBuilder s = new StringBuilder();
-	    buf = buf.duplicate();
-	    buf.position(0);
-	    for (int i=0; buf.hasRemaining(); i++) {
-	        char ch = buf.get();
-	        String hex = BytesUtil.toHex(ch);
-	        s.append(hex);
-	        s.append(' ');
-	        if ((i > 0) && (i % 8 == 0)) {
-	           buf.append("\n"); 
-	        }
-	    }
-	    return s.toString();
-	}
-	
-	public String dumpHex(String s) {
-	    return dumpHex(CharBuffer.wrap(s));
-	}
+        return FishObject.debug(p);
+    }
+    
+    public static String dumpHex(CharBuffer buf) {
+        StringBuilder s = new StringBuilder();
+        buf = buf.duplicate();
+        buf.position(0);
+        for (int i=0; buf.hasRemaining(); i++) {
+            char ch = buf.get();
+            String hex = BytesUtil.toHex(ch);
+            s.append(hex);
+            s.append(' ');
+            if ((i > 0) && (i % 8 == 0)) {
+               buf.append("\n"); 
+            }
+        }
+        return s.toString();
+    }
+    
+    public String dumpHex(String s) {
+        return dumpHex(CharBuffer.wrap(s));
+    }
 }

@@ -25,6 +25,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -53,14 +54,12 @@ public class JdbcRestoreMain extends BetterCommandLine {
     
     private String host;
     private String port;
-    private Connection conn;
     private long nRows;
     private long start;
     private long end;
     private String user;
     private String password;
     private int batchSize;
-    private RestoreThreadPool pool;
     private int nThreads = 4;
     private String rename;
     private boolean skipCreateTable;
@@ -68,7 +67,125 @@ public class JdbcRestoreMain extends BetterCommandLine {
     private int nErrors;
     private String filter;
     private boolean isReplication = false;
+    private boolean useAutoCommit = false;
+    private RestoreRunner runner;
+    
+    private class RestoreRunner {
+        private RestoreThreadPool pool;
+        private Connection conn;
+        
+        void connect() throws SQLException {
+            this.conn = createConnection();
+            this.pool = new RestoreThreadPool(JdbcRestoreMain.this.nThreads, JdbcRestoreMain.this.batchSize);
+            this.pool.start(()-> {
+                try {
+                    Connection conn =  createConnection();
+                    conn.setAutoCommit(JdbcRestoreMain.this.useAutoCommit);
+                    return conn;
+                }
+                catch (SQLException x) {
+                    throw new RuntimeException(x);
+                }
+            });
+        }
 
+        public void restoreTable(TableBackupInfo table) throws SQLException {
+            String sql = null;
+            try {
+                DbUtils.execute(conn, "USE " + table.catalog);
+                if (JdbcRestoreMain.this.skipCreateTable) {
+                    sql = "TRUNCATE `" + table.table + "`";
+                    DbUtils.execute(conn, sql);
+                }
+                else {
+                    DbUtils.execute(conn, "DROP TABLE IF EXISTS `" + table.table + "`");
+                    sql = table.create;
+                    DbUtils.execute(conn,sql );
+                }
+            }
+            catch (Exception x) {
+                throw new OrcaException(x, "unable to restore table {} : {},{}", 
+                        table.getFullName(), 
+                        x.getMessage(),
+                        sql) ; 
+            }
+        }
+
+        public void restoreDatabase(TableBackupInfo table) throws SQLException {
+            String sql = "CREATE DATABASE IF NOT EXISTS " + table.catalog;
+            DbUtils.execute(conn, sql);
+        }
+
+        public void prepare(String sql) throws SQLException {
+            this.pool.clear();
+            this.pool.prepare(sql);
+        }
+
+        public void send(Object[] row) throws InterruptedException {
+            this.pool.send(row);
+        }
+
+        public void flush() throws InterruptedException {
+            this.pool.flush();
+            this.pool.waitForCompletion();
+        }
+
+        public long getCount() {
+            return this.pool.getCount(); 
+        }
+
+        public void close() throws InterruptedException {
+            this.pool.close();
+            DbUtils.closeQuietly(this.conn);
+            try {
+                if (this.conn != null) {
+                    this.conn.close();
+                    this.conn = null;
+                }
+            }
+            catch (Exception x) {}
+        }
+    }
+    
+    private class FakeRunner extends RestoreRunner {
+
+        @Override
+        void connect() throws SQLException {
+        }
+
+        @Override
+        public void restoreTable(TableBackupInfo table) throws SQLException {
+        }
+
+        @Override
+        public void restoreDatabase(TableBackupInfo table) throws SQLException {
+        }
+
+        @Override
+        public void prepare(String sql) throws SQLException {
+            println(sql);
+        }
+
+        @Override
+        public void send(Object[] row) throws InterruptedException {
+            println(Arrays.toString(row));
+            if (row[0] instanceof Number) {
+                long value = ((Number)row[0]).longValue();
+                if (value == 26671138 || value == 27053138) {
+                }
+            }
+        }
+
+        @Override
+        public void flush() throws InterruptedException {
+        }
+
+        @Override
+        public long getCount() {
+            return 0;
+        }
+    }
+    
     public JdbcRestoreMain() {
     }
     
@@ -92,7 +209,7 @@ public class JdbcRestoreMain extends BetterCommandLine {
         options.addOption(null, "user", true, "user");
         options.addOption(null, "password", true, "password");
         options.addOption(null, "batch-size", true, "jdbc batch size");
-        options.addOption(null, "auto-commit", false, "use auto-commit or not");
+        options.addOption(null, "auto-commit", false, "use auto-commit");
         options.addOption(null, "threads", true, "number of threads");
         options.addOption(null, "rename", true, "rename namespace <new name>=<old name>");
         options.addOption(null, "skip-create-table", false, "skip create table statement. use truncate instead");
@@ -100,6 +217,7 @@ public class JdbcRestoreMain extends BetterCommandLine {
         options.addOption("u", "user", true, "user");
         options.addOption("p", "password", true, "password");
         options.addOption(null, "filter", true, "table filter using java patterns");
+        options.addOption(null, "dry-run", false, "dry run");
     }
 
     @Override
@@ -114,6 +232,7 @@ public class JdbcRestoreMain extends BetterCommandLine {
         this.skipCreateTable = this.cmdline.hasOption("skip-create-table");
         this.ignoreError = this.cmdline.hasOption("ignore-error");
         this.filter = this.cmdline.getOptionValue("filter");
+        this.useAutoCommit = this.cmdline.hasOption("auto-commit");
         
         InputStream in;
         if (this.cmdline.hasOption("file")) {
@@ -123,11 +242,13 @@ public class JdbcRestoreMain extends BetterCommandLine {
             in = System.in;
         }
         
-        connect();
+        this.runner = this.cmdline.hasOption("dry-run") ? new FakeRunner() : new RestoreRunner(); 
+        this.runner.connect();
         run(new BufferedInputStream(in, 1024 * 1024 * 16));
     }
         
     private void run(InputStream in) throws Exception {
+        println("auto-commit: %b", this.useAutoCommit);
         println("number of threads: %d", this.nThreads);
         println("batch-size: %d", this.batchSize);
         if (this.rename != null) {
@@ -138,24 +259,23 @@ public class JdbcRestoreMain extends BetterCommandLine {
         this.start = System.currentTimeMillis();
         rename(backup);
         for (TableBackupInfo table:backup.tables) {
+            println(table.table);
             boolean pass = isTableFiltered(table);
             if (!pass) {
                 System.out.print("restoring " + table.getFullName() + " .");
-                restoreDatabase(table);
+                this.runner.restoreDatabase(table);
                 System.out.print(".");
-                restoreTable(table);
+                this.runner.restoreTable(table);
                 System.out.print(".");
             }
-            this.conn.setAutoCommit(false);
             restoreContent(din, table, pass);
-            this.conn.commit();
         }
         this.end = System.currentTimeMillis();
         report(backup);
     }
 
     private boolean isTableFiltered(TableBackupInfo table) {
-        if (table.catalog.equalsIgnoreCase("antsdb_")) {
+        if (table.catalog != null && table.catalog.equalsIgnoreCase("antsdb_")) {
             return true;
         }
         if (this.filter == null) {
@@ -177,7 +297,7 @@ public class JdbcRestoreMain extends BetterCommandLine {
         String newname = temp[0];
         String oldname = temp[1];
         for (TableBackupInfo i:backup.tables) {
-            if (i.catalog.equals(oldname)) {
+            if (String.valueOf(i.catalog).equals(oldname)) {
                 i.catalog = newname;
             }
         }
@@ -254,8 +374,6 @@ public class JdbcRestoreMain extends BetterCommandLine {
     public long restoreContent(TableBackupInfo table, Supplier<Object[]> reader) 
     throws Exception {
         // prepare sql
-        
-        this.pool.clear();
         InsertBuilder builder = new InsertBuilder();
         builder.catalog = table.catalog;
         builder.table = table.table;
@@ -263,10 +381,9 @@ public class JdbcRestoreMain extends BetterCommandLine {
             builder.columns.add(column.name);
         }
         String sql = builder.toString();
-        this.pool.prepare(sql);
+        this.runner.prepare(sql);
         
         // send rows to restore threads  
-
         long count;
         try {
             for (;;) {
@@ -274,10 +391,9 @@ public class JdbcRestoreMain extends BetterCommandLine {
                 if (row == null) {
                     break;
                 }
-                this.pool.send(row);
+                this.runner.send(row);
             }
-            this.pool.flush();
-            this.pool.waitForCompletion();
+            this.runner.flush();
         }
         catch (Exception x) {
             if (this.ignoreError) {
@@ -289,31 +405,10 @@ public class JdbcRestoreMain extends BetterCommandLine {
                 throw x;
             }
         }
-        count = this.pool.getCount(); 
+        count = this.runner.getCount();
         this.nRows += count;
         
         return count;
-    }
-
-    public void restoreTable(TableBackupInfo table) throws SQLException {
-        try {
-            DbUtils.execute(conn, "USE " + table.catalog);
-            if (this.skipCreateTable) {
-                DbUtils.execute(conn, "TRUNCATE `" + table.table + "`");
-            }
-            else {
-                DbUtils.execute(conn, "DROP TABLE IF EXISTS `" + table.table + "`");
-                DbUtils.execute(conn, table.create);
-            }
-        }
-        catch (Exception x) {
-            throw new OrcaException(x, "unable to restore table {} : {}", table.getFullName(), x.getMessage()); 
-        }
-    }
-
-    public void restoreDatabase(TableBackupInfo table) throws SQLException {
-        String sql = "CREATE DATABASE IF NOT EXISTS " + table.catalog;
-        DbUtils.execute(conn, sql);
     }
 
     private Object readValue(DataInputStream din) throws IOException {
@@ -391,32 +486,12 @@ public class JdbcRestoreMain extends BetterCommandLine {
         return conn;
     }
     
-    public void connect() throws SQLException {
-        this.conn = createConnection();
-        this.pool = new RestoreThreadPool(this.nThreads, this.batchSize);
-        this.pool.start(()-> {
-            try {
-                return createConnection();
-            }
-            catch (SQLException x) {
-                throw new RuntimeException(x);
-            }
-        });
-    }
-
     public void close() {
         try {
-            this.pool.close();
+            this.runner.close();
         }
         catch (InterruptedException e) {
         }
-        try {
-            if (this.conn != null) {
-                this.conn.close();
-                this.conn = null;
-            }
-        }
-        catch (Exception x) {}
     }
     
     public long getRowsCount() {
@@ -431,10 +506,6 @@ public class JdbcRestoreMain extends BetterCommandLine {
     
     public void setThreads(int value) {
         this.nThreads = value;
-    }
-
-    public Connection getConnection() {
-        return this.conn;
     }
 
     /**

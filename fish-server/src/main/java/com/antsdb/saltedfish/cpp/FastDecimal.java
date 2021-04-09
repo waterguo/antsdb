@@ -16,7 +16,7 @@ package com.antsdb.saltedfish.cpp;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-public class FastDecimal {
+public final class FastDecimal extends BrutalMemoryObject {
     /**
      * Sentinel value for {@link #intCompact} indicating the
      * significand information is only available from {@code intVal}.
@@ -70,6 +70,10 @@ public class FastDecimal {
     static final BigInteger MAX_VALUE = BigInteger.valueOf(Long.MAX_VALUE);
     static final BigInteger MIN_VALUE = BigInteger.valueOf(Long.MIN_VALUE);
     
+    public FastDecimal(long addr) {
+        super(addr);
+    }
+
     public final static BigDecimal get(Heap heap, long addr) {
         int type = Unsafe.getByte(addr);
         if (type != Value.FORMAT_FAST_DECIMAL) {
@@ -197,6 +201,10 @@ public class FastDecimal {
         long y_digits;
         int y_scale;
         switch (type2) {
+        case Value.FORMAT_BIGINT:
+            y_digits = BigInt.get(null, addr2).longValue();
+            y_scale=0;
+            break;
         case Value.FORMAT_INT8:
             y_digits = Int8.get(null, addr2);
             y_scale = 0;
@@ -253,5 +261,15 @@ public class FastDecimal {
     public static long negate(Heap heap, long pValue) {
         long unscaled = getUnscaledLong(heap, pValue);
         return allocSet(heap, -unscaled, getScale(heap, pValue));
+    }
+
+    @Override
+    public int getByteSize() {
+        return 10;
+    }
+
+    @Override
+    public int getFormat() {
+        return Value.FORMAT_FAST_DECIMAL;
     }
 }

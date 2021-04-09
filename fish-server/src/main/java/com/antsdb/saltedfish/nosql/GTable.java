@@ -22,15 +22,17 @@ import com.antsdb.saltedfish.util.LongLong;
 
 public final class GTable implements AutoCloseable, LogSpan {
     String namespace;
+    String name;
     MemTable memtable;
     int id;
     Humpback humpback;
     private TableType type;
 
-    public GTable(Humpback owner, String namespace, int id, int fileSize, TableType type) 
+    public GTable(Humpback owner, String namespace, String name, int id, int fileSize, TableType type) 
     throws IOException {
         this.id = id;
         this.namespace = namespace;
+        this.name = name;
         this.humpback = owner;
         this.memtable = new MemTable(owner, new File(owner.data, namespace), id, fileSize);
         this.type = type;
@@ -44,13 +46,18 @@ public final class GTable implements AutoCloseable, LogSpan {
         return namespace;
     }
 
-    public HumpbackError insert(HumpbackSession hsession, SlowRow row, int timeout) {
+    public String getName() {
+        return this.name;
+    }
+    
+    public long insert(HumpbackSession hsession, SlowRow row, int timeout) {
         try (BluntHeap heap = new BluntHeap()) {
             return insert(hsession, row.toVaporisingRow(heap), timeout);
         }
     }
     
-    public HumpbackError insert(HumpbackSession hsession, VaporizingRow row, int timeout) {
+    public long insert(HumpbackSession hsession, VaporizingRow row, int timeout) {
+        hsession.prepareUpdates();
         return this.memtable.insert(hsession, row, timeout);
     }
 
@@ -61,17 +68,18 @@ public final class GTable implements AutoCloseable, LogSpan {
      * @param pKey
      * @return
      */
-    public HumpbackError insertIndex(
+    public long insertIndex(
             HumpbackSession hsession, 
             long trxid, 
             long pIndexKey, 
             long pRowKey, 
             byte misc, 
             int timeout) {
+        hsession.prepareUpdates();
         return this.memtable.insertIndex(hsession, trxid, pIndexKey, pRowKey, misc, timeout);
     }
     
-    public HumpbackError insertIndex(
+    public long insertIndex(
             HumpbackSession hsession, 
             long trxid, 
             byte[] indexKey, 
@@ -85,17 +93,7 @@ public final class GTable implements AutoCloseable, LogSpan {
         }
     }
     
-    public HumpbackError insertIndex_nologging(
-            long trxid, 
-            long pIndexKey, 
-            long pRowKey, 
-            long sp, 
-            byte misc, 
-            int timeout) {
-        return this.memtable.recoverIndexInsert(trxid, pIndexKey, pRowKey, sp, misc, timeout);
-    }
-    
-    public HumpbackError update(HumpbackSession hsession, long trxid, SlowRow row, int timeout) {
+    public long update(HumpbackSession hsession, long trxid, SlowRow row, int timeout) {
         try (BluntHeap heap = new BluntHeap()) {
             VaporizingRow vrow = row.toVaporisingRow(heap);
             long oldVersion = vrow.getVersion();
@@ -104,11 +102,12 @@ public final class GTable implements AutoCloseable, LogSpan {
         }
     }
     
-    public HumpbackError update(HumpbackSession hsession, VaporizingRow row, long oldVersion, int timeout) {
+    public long update(HumpbackSession hsession, VaporizingRow row, long oldVersion, int timeout) {
+        hsession.prepareUpdates();
         return this.memtable.update(hsession, row, oldVersion, timeout);
     }
     
-    public HumpbackError put(HumpbackSession hsession, long trxid, SlowRow row, int timeout) {
+    public long put(HumpbackSession hsession, long trxid, SlowRow row, int timeout) {
         try (BluntHeap heap = new BluntHeap()) {
             VaporizingRow vrow = row.toVaporisingRow(heap);
             vrow.setVersion(trxid);
@@ -116,22 +115,25 @@ public final class GTable implements AutoCloseable, LogSpan {
         }
     }
     
-    public HumpbackError put(HumpbackSession hsession, VaporizingRow row, int timeout) {
+    public long put(HumpbackSession hsession, VaporizingRow row, int timeout) {
+        hsession.prepareUpdates();
         return this.memtable.put(hsession, row, timeout);
     }
     
-    public HumpbackError delete(HumpbackSession hsession, long trxid, byte[] key, int timeout) {
+    public long delete(HumpbackSession hsession, long trxid, byte[] key, int timeout) {
         try (BluntHeap heap = new BluntHeap()) {
             long pKey = KeyBytes.allocSet(heap, key).getAddress();
             return delete(hsession, trxid, pKey, timeout);
         }
     }
     
-    public HumpbackError delete(HumpbackSession hsession, long trxid, long pKey, int timeout) {
+    public long delete(HumpbackSession hsession, long trxid, long pKey, int timeout) {
+        hsession.prepareUpdates();
         return this.memtable.delete(hsession, trxid, pKey, timeout);
     }
     
-    public HumpbackError deleteRow(HumpbackSession hsession, long trxid, long pRow, int timeout) {
+    public long deleteRow(HumpbackSession hsession, long trxid, long pRow, int timeout) {
+        hsession.prepareUpdates();
         return this.memtable.deleteRow(hsession, trxid, pRow, timeout);
     }
     
@@ -150,13 +152,13 @@ public final class GTable implements AutoCloseable, LogSpan {
     public long get(long trxid, long trxts, byte[] key) {
         try (BluntHeap heap = new BluntHeap()) {
             long pKey = KeyBytes.allocSet(heap, key).getAddress();
-            long row = this.memtable.get(trxid, trxts, pKey);
+            long row = this.memtable.get(trxid, trxts, pKey, 0);
             return row;
         }
     }
     
-    public long get(long trxid, long trxts, long pKey) {
-        long row = this.memtable.get(trxid, trxts, pKey);
+    public long get(long trxid, long trxts, long pKey, long options) {
+        long row = this.memtable.get(trxid, trxts, pKey, options);
         return row;
     }
     
@@ -164,7 +166,7 @@ public final class GTable implements AutoCloseable, LogSpan {
         Row row = null;
         try (BluntHeap heap = new BluntHeap()) {
             long pKey = KeyBytes.allocSet(heap, key).getAddress();
-            row = this.memtable.getRow(trxid, trxts, pKey);
+            row = this.memtable.getRow(trxid, trxts, pKey, 0);
             /*
             if ((row == null) && (this.humpback.getHBaseService() != null)) {
                 row = this.humpback.getHBaseService().get(this.id, trxid, trxts, pKey);
@@ -174,8 +176,8 @@ public final class GTable implements AutoCloseable, LogSpan {
         }
     }
     
-    public Row getRow(long trxid, long trxts, long pKey) {
-        return this.memtable.getRow(trxid, trxts, pKey);
+    public Row getRow(long trxid, long trxts, long pKey, long options) {
+        return this.memtable.getRow(trxid, trxts, pKey, 0);
     }
     
     public RowIterator scan(long trxid, long trxts, byte[] from, byte[] to, long options) {
@@ -233,7 +235,7 @@ public final class GTable implements AutoCloseable, LogSpan {
         return this.memtable.isPureEmpty();
     }
 
-    public HumpbackError lock(long trxid, long pKey, int timeout) {
+    public long lock(long trxid, long pKey, int timeout) {
         return this.memtable.lock(trxid, pKey, timeout);
     }
     

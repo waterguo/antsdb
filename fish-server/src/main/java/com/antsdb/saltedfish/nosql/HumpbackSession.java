@@ -16,7 +16,10 @@ package com.antsdb.saltedfish.nosql;
 import java.io.Closeable;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import com.antsdb.saltedfish.sql.vdm.Transaction;
 import com.antsdb.saltedfish.util.UberTime;
+import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * represents a humpback session
@@ -24,13 +27,19 @@ import com.antsdb.saltedfish.util.UberTime;
  * @author *-xguo0<@
  */
 public final class HumpbackSession implements Closeable{
+    static Logger _log = UberUtil.getThisLogger();
     static AtomicInteger _nextId = new AtomicInteger(1);
     
     String endpoint;
-    long ts;
+    volatile long ts;
     int id = 0;
+    private volatile Transaction trx = new Transaction();
+    private Humpback humpback;
+    private volatile long lpStart;
+    private long lastLp;
     
-    public HumpbackSession(String endpoint) {
+    public HumpbackSession(Humpback humpback, String endpoint) {
+        this.humpback = humpback;
         this.endpoint = endpoint;
         // make sure id > 0
         for (;;) {
@@ -51,6 +60,7 @@ public final class HumpbackSession implements Closeable{
     
     @Override
     public void close() {
+        this.lpStart = 0;
         this.ts = 0;
     }
 
@@ -73,5 +83,72 @@ public final class HumpbackSession implements Closeable{
 
     public void negateId() {
         this.id = -this.id;
+    }
+    
+    public Transaction getTransaction() {
+        return this.trx;
+    }
+    
+    /**
+     * commit current active transaction
+     */
+    public long commit() {
+        long trxts = 0;
+        Transaction trx = getTransaction();
+        long trxid = trx.getTrxId();
+        if (trxid < 0) {
+            trxts = TrxMan.getNewVersion();
+            Gobbler gobbler = this.humpback.getGobbler();
+            if (gobbler != null) {
+                _log.trace("commit trxid={} trxts={}", trxid, trxts);
+                gobbler.logCommit(this, trxid, trxts);
+            }
+            this.humpback.trxMan.commit(trxid, trxts);
+        }
+        trx.reset();
+        this.lpStart = 0;
+        return trxts;
+    }
+
+    /**
+     * roll back current active transaction
+     */
+    public void rollback() {
+        Gobbler gobbler = this.humpback.getGobbler();
+        long trxid = trx.getTrxId();
+        if (trxid < 0) {
+            _log.trace("rollback trxid={}", trxid);
+            if (gobbler != null) {
+                gobbler.logRollback(this, trxid);
+            }
+            this.humpback.trxMan.rollback(trxid);
+        }
+        trx.reset();
+        this.lpStart = 0;
+    }
+    
+    /**
+     * start log pointer of the potential upcoming updates
+     * @return
+     */
+    public long getStartLp() {
+        return this.lpStart;
+    }
+
+    /**
+     * prepare for any potential upcoming database updates
+     */
+    public void prepareUpdates() {
+        if (this.lpStart == 0) {
+            this.lpStart = this.humpback.getSpaceManager().getAllocationPointer();
+        }
+    }
+
+    public void setLastLp(long lp) {
+        this.lastLp = lp;
+    }
+    
+    public long getLastLp() {
+        return this.lastLp;
     }
 }

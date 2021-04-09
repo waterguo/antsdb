@@ -27,11 +27,11 @@ import com.antsdb.saltedfish.sql.DataType;
 public class FuncMonth  extends Function {
 
     @SuppressWarnings("deprecation")
-	@Override
+    @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
         long pValue = this.parameters.get(0).eval(ctx, heap, params, pRecord);
         if (pValue == 0) {
-        	return 0;
+            return 0;
         }
         pValue = AutoCaster.toTimestamp(heap, pValue);
         Timestamp ts = FishTimestamp.get(heap, pValue);
@@ -43,9 +43,9 @@ public class FuncMonth  extends Function {
         return DataType.integer();
     }
 
-	@Override
-	public int getMinParameters() {
-		return 1;
-	}
+    @Override
+    public int getMinParameters() {
+        return 1;
+    }
 
 }

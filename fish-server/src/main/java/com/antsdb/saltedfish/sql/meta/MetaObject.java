@@ -14,7 +14,7 @@
 package com.antsdb.saltedfish.sql.meta;
 
 class MetaObject {
-    boolean isAged = false;
+    volatile boolean isAged = false;
 
     /**
      * aged means there is a newer version of this object exists. anything depending on this object is now illegitimate

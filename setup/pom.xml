@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.antsdb</groupId>
 		<artifactId>fish-root</artifactId>
-		<version>18.12.29-beyond</version>
+		<version>21.04.09</version>
 	</parent>
 
 	<modelVersion>4.0.0</modelVersion>
@@ -74,18 +74,50 @@
 							<id>antsdb-restore</id>
 							<mainClass>com.antsdb.saltedfish.backup.JdbcRestoreMain</mainClass>
 						</program>
+						<program>
+							<id>parquet-WriteBenchmark</id>
+							<mainClass>com.antsdb.saltedfish.parquet.ParquetWriteBenchmarkMain</mainClass>
+						</program>
+						<program>
+							<id>s3-Benchmark</id>
+							<mainClass>com.antsdb.saltedfish.obs.s3.S3BenchmarkMain</mainClass>
+						</program>
+						<program>
+							<id>antsdb-obs-relink</id>
+							<mainClass>com.antsdb.saltedfish.obs.ObjectStoreRelinkMain</mainClass>
+							<commandLineArguments>
+								<commandLineArgument>--home</commandLineArgument>
+								<commandLineArgument>$BASEDIR</commandLineArgument>
+							</commandLineArguments>
+						</program>
+						<program>
+							<id>antsdb-obs-dataReader</id>
+							<mainClass>com.antsdb.saltedfish.obs.ObsDataReaderMain</mainClass>
+							<commandLineArguments>
+								<commandLineArgument>--home</commandLineArgument>
+								<commandLineArgument>$BASEDIR</commandLineArgument>
+							</commandLineArguments>
+						</program>
+						<program>
+							<id>antsdb-obs-diff</id>
+							<mainClass>com.antsdb.saltedfish.obs.ObsDataDiffMain</mainClass>
+						</program>
 					</programs>
 					<daemons>
 						<daemon>
 							<id>antsdb</id>
+							<preWrapperConf>${project.basedir}/src/wrapper.conf</preWrapperConf>
 							<mainClass>com.antsdb.saltedfish.server.SaltedFishMain</mainClass>
 							<commandLineArguments>
 								<commandLineArgument>.</commandLineArgument>
-                            </commandLineArguments>
-                            <wrapperLogFile>logs/wrapper.log</wrapperLogFile>
+							</commandLineArguments>
+							<wrapperLogFile>logs/wrapper.log</wrapperLogFile>
 							<jvmSettings>
 								<initialMemorySize>1024</initialMemorySize>
 								<maxMemorySize>4096</maxMemorySize>
+								<extraArguments>
+									<extraArgument>-server</extraArgument>
+								</extraArguments>
 							</jvmSettings>
 							<platforms>
 								<platform>jsw</platform>
@@ -118,7 +150,13 @@
 		<dependency>
 			<groupId>com.antsdb</groupId>
 			<artifactId>antsdb</artifactId>
-            <version>all</version>
+			<version>all</version>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 	</dependencies>
 </project>

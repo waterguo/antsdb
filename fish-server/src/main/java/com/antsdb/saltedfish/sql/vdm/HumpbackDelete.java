@@ -15,6 +15,7 @@ package com.antsdb.saltedfish.sql.vdm;
 
 import com.antsdb.saltedfish.nosql.GTable;
 import com.antsdb.saltedfish.nosql.HumpbackError;
+import com.antsdb.saltedfish.nosql.TrxMan;
 import com.antsdb.saltedfish.sql.OrcaException;
 
 /**
@@ -36,11 +37,11 @@ public class HumpbackDelete extends Instruction {
         if (table == null) {
             throw new OrcaException("table {} is not found", tableId);
         }
-        long trxid = ctx.getHumpback().getTrxMan().getNewVersion();
+        long trxid = TrxMan.getNewVersion();
         int timeout = ctx.getSession().getConfig().getLockTimeout();
-        HumpbackError error = table.delete(ctx.getHSession(), trxid, key, timeout);
-        if (error != HumpbackError.SUCCESS) {
-            throw new OrcaException(error);
+        long error = table.delete(ctx.getHSession(), trxid, key, timeout);
+        if (!HumpbackError.isSuccess(error)) {
+            throw new OrcaException(HumpbackError.toString(error));
         }
         return 1;
     }

@@ -21,7 +21,7 @@ import com.antsdb.saltedfish.sql.meta.ColumnId;
  * @author wgu0
  */
 public class SysRuleRow {
-	Row row;
+    Row row;
 
     public SysRuleRow(Row row) {
         this.row = row;

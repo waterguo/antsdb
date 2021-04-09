@@ -18,9 +18,12 @@ import org.apache.commons.lang.NotImplementedException;
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
 import com.antsdb.saltedfish.cpp.KeyBytes;
+import com.antsdb.saltedfish.cpp.Unicode16;
 import com.antsdb.saltedfish.cpp.Unsafe;
 import com.antsdb.saltedfish.cpp.Value;
+import com.antsdb.saltedfish.nosql.GetInfo;
 import com.antsdb.saltedfish.nosql.Row;
+import com.antsdb.saltedfish.nosql.RowIterator;
 import com.antsdb.saltedfish.nosql.SlowRow;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
@@ -33,8 +36,6 @@ import com.antsdb.saltedfish.util.BytesUtil;
  *
  */
 public abstract class Record {
-    public final static long GROUP_END = Unsafe.allocateMemory(16);
-    
     final static byte TYPE_RECORD = Value.FORMAT_RECORD;
     final static int OFFSET_SIZE = 2;
     final static int OFFSET_KEY = OFFSET_SIZE + 2;
@@ -45,11 +46,6 @@ public abstract class Record {
     public abstract byte[] getKey();
     public abstract int size();
 
-    static {
-        Unsafe.putByte(GROUP_END, TYPE_RECORD);
-        Unsafe.putShort(GROUP_END + OFFSET_SIZE, (short)0);
-    }
-    
     public Object getString(int i) {
         return (String)get(i);
     }
@@ -98,10 +94,18 @@ public abstract class Record {
     }
     
     public final static long clone(Heap heap, long pRecord) {
-        int nFields = Record.size(pRecord);
-        int bytes = OFFSET_FIELDS + nFields * 8;
-        long pResult = heap.alloc(bytes);
-        Unsafe.copyMemory(pRecord, pResult, bytes);
+        byte format = Value.getFormat(null, pRecord);
+        long pResult = 0;
+        switch (format) {
+        case Value.FORMAT_RECORD:
+            pResult = RecordMutable.clone(heap, pRecord);
+            break;
+        case Value.FORMAT_ROW:
+            pResult = RecordFromRow.clone(heap, pRecord);
+            break;
+        default:
+            throw new IllegalArgumentException();
+        }
         return pResult;
     }
     
@@ -126,14 +130,19 @@ public abstract class Record {
     }
     
     public final static long get(long pRecord, int field) {
-        checkType(pRecord);
-        int size = size(pRecord);
-        if ((field < 0) || (field >=size)) {
-            return 0;
+        byte format = Value.getFormat(null, pRecord);
+        long pResult = 0;
+        switch (format) {
+        case Value.FORMAT_RECORD:
+            pResult = RecordMutable.get(pRecord, field);
+            break;
+        case Value.FORMAT_ROW:
+            pResult = RecordFromRow.get(pRecord, field);
+            break;
+        default:
+            throw new IllegalArgumentException();
         }
-        long pField = pRecord + OFFSET_FIELDS + field * 8;
-        long pValue = Unsafe.getLong(pField);
-        return pValue;
+        return pResult;
     }
     
     public final static void set(long pRecord, int field, long pValue) {
@@ -144,16 +153,35 @@ public abstract class Record {
     }
     
     public final static int size(long pRecord) {
-        checkType(pRecord);
-        long pSize = pRecord + OFFSET_SIZE;
-        int size = Unsafe.getShort(pSize);
-        return size;
+        byte format = Value.getFormat(null, pRecord);
+        int result = 0;
+        switch (format) {
+        case Value.FORMAT_RECORD:
+            result = RecordMutable.size(pRecord);
+            break;
+        case Value.FORMAT_ROW:
+            result = RecordFromRow.size(pRecord);
+            break;
+        default:
+            throw new IllegalArgumentException();
+        }
+        return result;
     }
     
     public final static long getKey(long pRecord) {
-        checkType(pRecord);
-        long pKey = Unsafe.getLong(pRecord + OFFSET_KEY);
-        return pKey;
+        byte format = Value.getFormat(null, pRecord);
+        long pResult = 0;
+        switch (format) {
+        case Value.FORMAT_RECORD:
+            pResult = RecordMutable.getKey(pRecord);
+            break;
+        case Value.FORMAT_ROW:
+            pResult = RecordFromRow.getKey(pRecord);
+            break;
+        default:
+            throw new IllegalArgumentException();
+        }
+        return pResult;
     }
     
     public final static byte[] getKeyBytes(long pRecord) {
@@ -199,10 +227,6 @@ public abstract class Record {
         }
     }
     
-    public final static boolean isGroupEnd(long pRecord) {
-        return pRecord == GROUP_END;
-    }
-    
     public static boolean isEmpty(long pRecord) {
         return getKey(pRecord) == 0;
     }
@@ -215,6 +239,46 @@ public abstract class Record {
             rec.set(i, value);
         }
         return rec;
+    }
+    
+    public static void copy(Heap heap, RowIterator iter, long pRecord, int[] columnIds) {
+        Row row = iter.getRow();
+        Record.setKey(pRecord, row.getKeyAddress());
+        for (int i = 0; i < columnIds.length; i++) {
+            int columnId = columnIds[i];
+            if (columnId == -2) {
+                long pValue = Unicode16.allocSet(heap, iter.getLocation());
+                Record.set(pRecord, i, pValue);
+            }
+            else {
+                long pValue = row.getFieldAddress(columnId);
+                Record.set(pRecord, i, pValue);
+            }
+        }
+    }
+    
+    public static void copy(Heap heap, GetInfo info, long pRecord, int[] columnIds) {
+        Row row = Row.fromMemoryPointer(info.pData, info.version);
+        Record.setKey(pRecord, row.getKeyAddress());
+        for (int i = 0; i < columnIds.length; i++) {
+            int columnId = columnIds[i];
+            if (columnId == -2) {
+                long pValue = Unicode16.allocSet(heap, info.location);
+                Record.set(pRecord, i, pValue);
+            }
+            else {
+                long pValue = row.getFieldAddress(columnId);
+                Record.set(pRecord, i, pValue);
+            }
+        }
+    }
+    
+    public static void copy(Row row, long pRecord, int[] columnIds) {
+        Record.setKey(pRecord, row.getKeyAddress());
+        for (int i = 0; i < columnIds.length; i++) {
+            long pValue = row.getFieldAddress(columnIds[i]);
+            Record.set(pRecord, i, pValue);
+        }
     }
     
     public static long fromRow(Heap heap, TableMeta table, SlowRow row) {
@@ -232,6 +296,13 @@ public abstract class Record {
             set(pRecord, i++, pValue);
         }
         return pRecord;
+    }
+    
+    public static void validate(long pRecord) {
+        String result = dump(pRecord);
+        if ("not a record".equals(result)) {
+            throw new IllegalArgumentException();
+        }
     }
     
     public static String dump(long pRecord) {

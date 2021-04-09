@@ -226,4 +226,9 @@ class MinkeCacheTableScanner extends ScanResult implements FindNextRangeAndDoShi
         ScanVerifier.check(this.mctable, this.input, this.ascending);
     }
 
+    @Override
+    public String getLocation() {
+        return this.upstream.getLocation();
+    }
+
 }

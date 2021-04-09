@@ -17,7 +17,8 @@ import com.antsdb.saltedfish.sql.OrcaException;
 import com.antsdb.saltedfish.sql.Session;
 
 /**
- * 
+ * stop any running query and close the connection
+ *  
  * @author *-xguo0<@
  */
 public class KillSession extends Statement {
@@ -33,7 +34,7 @@ public class KillSession extends Statement {
         if (session == null) {
             throw new OrcaException("session {} is not found", this.sessionId);
         }
-        session.kill();
+        ctx.getOrca().killSession(session);
         return null;
     }
 

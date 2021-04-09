@@ -17,7 +17,6 @@ import com.antsdb.saltedfish.sql.DataType;
 import com.antsdb.saltedfish.sql.meta.ColumnMeta;
 import com.antsdb.saltedfish.sql.meta.TableMeta;
 import com.antsdb.saltedfish.sql.vdm.FieldMeta;
-import com.antsdb.saltedfish.util.UberUtil;
 
 /**
  * 
@@ -28,6 +27,8 @@ public class PlannerField extends FieldMeta {
     ColumnMeta column;
     FieldMeta field;
     int index;
+    /** dont cache the value if it is a clob/blob field */
+    boolean noCache;
     
     PlannerField(Node owner, ColumnMeta column) {
         this.owner = owner;
@@ -77,7 +78,12 @@ public class PlannerField extends FieldMeta {
 
     @Override
     public String getTableAlias() {
-        return UberUtil.ifNotNull(owner.alias, it->{return it.getTableName();});
+        if (this.owner != null) {
+            if (this.owner.alias != null) {
+                return this.owner.alias.getTableName();
+            }
+        }
+        return null;
     }
 
     @Override
@@ -117,5 +123,10 @@ public class PlannerField extends FieldMeta {
     
     public TableMeta getTable() {
         return this.owner.table;
+    }
+
+    /** dont cache the value if it is a clob/blob field */
+    public boolean isNoCache() {
+        return this.noCache;
     }
 }

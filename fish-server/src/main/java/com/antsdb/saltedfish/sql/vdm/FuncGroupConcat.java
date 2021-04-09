@@ -13,96 +13,161 @@
 -------------------------------------------------------------------------------------------------*/
 package com.antsdb.saltedfish.sql.vdm;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.PriorityQueue;
-import java.util.TreeSet;
-
-import org.apache.commons.lang.StringUtils;
-
 import com.antsdb.saltedfish.cpp.FishObject;
 import com.antsdb.saltedfish.cpp.Heap;
+import com.antsdb.saltedfish.cpp.Int8;
+import com.antsdb.saltedfish.cpp.OffHeapSkipList;
+import com.antsdb.saltedfish.cpp.OffHeapSkipListScanner;
+import com.antsdb.saltedfish.cpp.RecyclableHeap;
+import com.antsdb.saltedfish.cpp.Unicode16;
+import com.antsdb.saltedfish.cpp.Unsafe;
+import com.antsdb.saltedfish.cpp.Value;
 import com.antsdb.saltedfish.sql.DataType;
 
 /**
  * 
  * @author wgu0
  */
-public class FuncGroupConcat extends Function {
+public class FuncGroupConcat extends AggregationFunction {
     int variableId;
     Boolean asc;
     boolean distinct;
-
-    private static class Data {
-        String seprator = ",";
-        Collection<String> words;
-    }
+    private Operator separator;
+    private KeyMaker keymaker;
 
     public FuncGroupConcat(int variableId, boolean distinct, Boolean asc) {
         this.variableId = variableId;
         this.distinct = distinct;
         this.asc = asc;
-    }
-
-    private Data createData(String separator) {
-        Data result = new Data();
-        result.seprator = separator;
-        if (this.distinct) {
-            if (this.asc == null) {
-                result.words = new ArrayList<>();
-            }
-            else {
-                result.words = new TreeSet<>(createComparator());
+        if (distinct) {
+            this.keymaker = new KeyMaker(new DataType[] {DataType.varchar()});
+            if (asc != null && !asc) {
+                this.keymaker.setNegate(new boolean[] {true});
             }
         }
         else {
-            if (this.asc == null) {
-                result.words = new ArrayList<>();
+            if (asc == null) {
+                this.keymaker = new KeyMaker(new DataType[] {DataType.longtype(), DataType.varchar()});
             }
             else {
-                result.words = new PriorityQueue<>(createComparator());
+                this.keymaker = new KeyMaker(new DataType[] {DataType.varchar(), DataType.longtype()});
+                if (!asc) {
+                    this.keymaker.setNegate(new boolean[] {true, false});
+                }
             }
         }
-        return result;
     }
-    
-    private Comparator<String> createComparator() {
-        boolean asc = this.asc;
-        Comparator<String> result = new Comparator<String>() {
-            @Override
-            public int compare(String o1, String o2) {
-                return asc ? o1.compareTo(o2) : o2.compareTo(o1);
+
+    @Override
+    public void feed(VdmContext ctx, RecyclableHeap rheap, Heap theap, Parameters params, long pRecord) {
+        long pCurrentUnit = rheap.getCurrentUnit();
+        try {
+            long pCounter = ctx.getGroupVariable(this.variableId);
+            OffHeapSkipList list;
+            if (pCounter != 0) {
+                rheap.restoreUnit(pCounter);
+                list = new OffHeapSkipList(rheap, pCounter + Int8.getSize());
             }
-        };
-        return result;
+            else  {
+                rheap.markNewUnit(60);
+                pCounter = Int8.allocSet(rheap, 0);
+                list = OffHeapSkipList.alloc(rheap);
+                ctx.setGroupVariable(this.variableId, pCounter);
+            }
+            if (pRecord != 0) {
+                long pValue = getValue(ctx, rheap, params, pRecord);
+                Int8.set(rheap, pCounter, Int8.get(rheap, pCounter)+1);
+                if (pValue != 0) {
+                    long pKey = getKey(ctx, rheap, pValue); 
+                    long pEntry = list.put(pKey);
+                    Unsafe.putLong(pEntry, pValue);
+                }
+            }
+        }
+        finally {
+            rheap.restoreUnit(pCurrentUnit);
+        }
+    }
+
+    private long getKey(VdmContext ctx, RecyclableHeap heap, long pValue) {
+        long pCounter = ctx.getGroupVariable(this.variableId);
+        if (this.distinct) {
+            return this.keymaker.make(heap, pValue);
+        }
+        else {
+            if (this.asc == null) {
+                return this.keymaker.make(heap, pCounter, pValue);
+            }
+            else {
+                return this.keymaker.make(heap, pValue, pCounter);
+            }
+        }
     }
 
     @Override
     public long eval(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
-        // initialize
-
-        Data data = (Data) ctx.getVariable(this.variableId);
-        if (data == null) {
-            String separator = ",";
-            if (this.parameters.size() >= 2) {
-                long pSeparator = this.parameters.get(1).eval(ctx, heap, params, pRecord);
-                separator = AutoCaster.getString(heap, pSeparator);
+        long pList = ctx.getGroupVariable(this.variableId);
+        if (pList == 0) return 0;
+        long pSeparator = getSeparator(ctx, heap, params, pRecord);
+        OffHeapSkipList list = new OffHeapSkipList(heap, pList + Int8.getSize());
+        OffHeapSkipListScanner scanner = new OffHeapSkipListScanner(list);
+        scanner.reset(0, 0, 0);
+        long pResult = 0;
+        for (long pEntry = scanner.next(); pEntry != 0; pEntry = scanner.next()) {
+            long pValue = Unsafe.getLong(pEntry);
+            if (pResult != 0) {
+                pResult = concat(heap, pResult, pSeparator);
             }
-            data = createData(separator);
-            ctx.setVariable(variableId, data);
+            pResult = concat(heap, pResult, pValue);
         }
-        if (Record.isGroupEnd(pRecord)) {
-            data.words.clear();
-            return 0;
+        return pResult;
+    }
+
+    private long getSeparator(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pSeparator;
+        if (this.separator == null) {
+            pSeparator = Unicode16.allocSet(heap, ",");
         }
-        long addrVal = this.parameters.get(0).eval(ctx, heap, params, pRecord);
-        addrVal = AutoCaster.toString(heap, addrVal);
-        String val = (String) FishObject.get(heap, addrVal);
-        if (val != null) {
-            data.words.add(val);
+        else {
+            pSeparator = this.separator.eval(ctx, heap, params, pRecord);
         }
-        return FishObject.allocSet(heap, StringUtils.join(data.words, data.seprator));
+        return pSeparator;
+    }
+    
+    private long concat(Heap heap, long px, long py) {
+        long pResult = 0;
+        px = AutoCaster.toUnicode(heap, px);
+        py = AutoCaster.toUnicode(heap, py);
+        if (px != 0) {
+            if (py != 0) {
+                pResult = Unicode16.concat(heap, Value.FORMAT_UNICODE16, px, Value.FORMAT_UNICODE16, py);
+            }
+            else {
+                pResult = px;
+            }
+        }
+        else {
+            if (py != 0) {
+                pResult = py;
+            }
+        }
+        return pResult;
+    }
+    
+    private long getValue(VdmContext ctx, Heap heap, Parameters params, long pRecord) {
+        long pResult = 0;
+        for (Operator i:this.parameters) {
+            long pValue = i.eval(ctx, heap, params, pRecord);
+            if (pValue == 0) {
+                return 0;
+            }
+            pResult = concat(heap, pResult, pValue);
+        }
+        if (this.parameters.size() == 1) {
+            // prevents drifting memory
+            pResult = FishObject.clone(heap, pResult);
+        }
+        return pResult;
     }
 
     @Override
@@ -117,6 +182,10 @@ public class FuncGroupConcat extends Function {
 
     @Override
     public int getMaxParameters() {
-        return 2;
+        return Integer.MAX_VALUE;
+    }
+
+    public void setSeparator(Operator separator) {
+        this.separator = separator;
     }
 }

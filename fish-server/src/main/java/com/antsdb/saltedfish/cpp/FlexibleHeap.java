@@ -27,20 +27,29 @@ import com.antsdb.saltedfish.util.UberUtil;
 public class FlexibleHeap extends Heap implements AutoCloseable {
     static final int DEFAULT_SIZE = 1024 * 1024;
     
-    Node head;
-    Node current;
+    Block head;
+    Block tail;
+    Block current;
     int blockSize;
     
-    private class Node {
-        Node(int blockSize) {
-            this.buffer = MemoryManager.alloc(blockSize);
-            this.address = UberUtil.getAddress(this.buffer);
-        }
-        
+    protected static class Block {
         ByteBuffer buffer;
-        Node next;
+        Block next;
         long address;
         long startPosition;
+        boolean isFromMemoryManager;
+        
+        Block(int blockSize) {
+            this.buffer = MemoryManager.alloc(blockSize);
+            this.address = UberUtil.getAddress(this.buffer);
+            this.isFromMemoryManager = true;
+        }
+        
+        Block(ByteBuffer buffer) {
+            this.buffer = buffer;
+            this.address = UberUtil.getAddress(this.buffer);
+            this.isFromMemoryManager = false;
+        }
     }
 
     /* keep it for debug purpose
@@ -59,7 +68,8 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
     
     public FlexibleHeap (int blockSize) {
         this.blockSize = blockSize;
-        this.head = new Node(this.blockSize);
+        this.head = new Block(this.blockSize);
+        this.tail = this.head;
         this.head.startPosition = 0;
         this.current = this.head;
     }
@@ -73,10 +83,7 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
     public final long alloc(int size, boolean zero) {
         if (this.current.buffer.remaining() < (size)) {
             int allocSize = Math.max(size, this.blockSize);
-            Node node = allocNode(allocSize);
-            node.startPosition = this.current.startPosition + this.current.buffer.capacity();
-            this.current.next = node;
-            this.current = node;
+            allocNode(allocSize);
         }
         ByteBuffer buf = this.current.buffer;
         int pos = buf.position();
@@ -88,37 +95,41 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
         return address;
     }
     
-    private Node allocNode(int size) {
-        Node result = null;
-        
+    protected Block allocNode(int size) {
         // first try to reuse existing buffer
-        
+        Block result = null;
         if (this.current.next != null) {
-            Node next = this.current.next;
+            Block next = this.current.next;
             if (next.buffer.capacity() >= size) {
                 next.buffer.clear();
                 result = next;
             }
         }
         
+        // if not allocate a new block
         if (result == null) {
-            result = new Node(size);
-            if (this.current.next != null) {
-                // chain the reusable blocks
-                result.next = this.current.next;
-            }
+            result = createBlock(size);
         }
         
         // done
-        
+        result.startPosition = getCapacity();
+        this.current.next = result;
+        this.current = result;
+        this.tail = result;
+        return result;
+    }
+
+    protected Block createBlock(int size) {
+        Block result = new Block(size);
         return result;
     }
 
     public final void reset(long pos) {
         this.current = this.head;
-        for (Node i=this.head; i!=null; i=i.next) {
+        for (Block i=this.head; i!=null; i=i.next) {
             long posInBuffer = pos - i.startPosition;
             if ((posInBuffer >= 0) && (posInBuffer < i.buffer.capacity())) {
+                this.current = i;
                 i.buffer.position((int)posInBuffer);
                 return;
             }
@@ -138,7 +149,8 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
     }
     
     public long position() {
-        return this.current.buffer.position();
+        Block block = this.current;
+        return block.startPosition + this.current.buffer.position();
     }
 
     public ByteBuffer getBytes() {
@@ -149,14 +161,21 @@ public class FlexibleHeap extends Heap implements AutoCloseable {
 
     @Override
     public void free() {
-        for (Node i=this.head; i!=null; i=i.next) {
+        for (Block i=this.head; i!=null; i=i.next) {
             MemoryManager.free(i.buffer);
         }
         this.head = null;
+        this.tail = null;
+        this.current = null;
     }
 
     @Override
     public void close() {
         free();
+    }
+    
+    @Override
+    public long getCapacity() {
+        return this.tail.startPosition + this.tail.buffer.capacity();
     }
 }

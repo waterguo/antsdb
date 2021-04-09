@@ -22,18 +22,25 @@ public class ErrorMessage extends RuntimeException {
     
     public static final int ZK_NOT_ENABLED = 50000;
     public static final int ZK_NODE_ALREADY_REGISTERED = 50001;
+    public static final int ORCA_CANT_START_REPLICATOR = 20000;
     
     private int error;
     private String message;
+    private String state;
 
-    public ErrorMessage(int error, String message) {
+    public ErrorMessage(int error, String message, Object... args) {
         this.error = error;
-        this.message = message;
+        this.message = String.format(message, args);
+    }
+    
+    @Override
+    public String getMessage() {
+        return "#" + this.state + " " + message;
     }
 
     @Override
     public String toString() {
-        return "error " + this.error + " " + message;
+        return getMessage();
     }
 
     public int getError() {
